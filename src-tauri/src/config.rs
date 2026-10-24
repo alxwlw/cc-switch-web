@@ -309,8 +309,19 @@ pub fn get_claude_settings_path() -> PathBuf {
     settings
 }
 
-/// 获取应用配置目录路径 (~/.cc-switch)
+/// 获取应用配置目录路径 (default ~/.cc-switch)
+///
+/// Fork override: if `CC_SWITCH_CONFIG_DIR` is set to a non-empty path it
+/// wins over everything, including the Tauri Store override (which is
+/// unavailable in headless web-server mode). Set it to isolate this fork's
+/// database/settings/skills, e.g. `CC_SWITCH_CONFIG_DIR=~/.cc-switch-web`.
 pub fn get_app_config_dir() -> PathBuf {
+    if let Ok(custom) = std::env::var("CC_SWITCH_CONFIG_DIR") {
+        let trimmed = custom.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
     if let Some(custom) = crate::app_store::get_app_config_dir_override() {
         return custom;
     }

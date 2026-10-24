@@ -44,12 +44,13 @@ mod proxy;
 mod services;
 mod session_manager;
 mod settings;
-mod store;
+pub mod store;
 
 mod tray;
 mod tray_panel;
 mod usage_events;
 mod usage_script;
+pub mod web_api;
 
 pub use app_config::{AppType, InstalledSkill, McpApps, McpServer, MultiAppConfig, SkillApps};
 pub use codex_config::{

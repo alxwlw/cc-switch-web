@@ -1,0 +1,17 @@
+upstream_repository = "farion1231/cc-switch"
+upstream_tag = "v4.0.20"
+upstream_commit = "85ad4969b3399500baaea9d46b1e08f87aba80e1"
+forked_at = "2026-10-24"
+
+# Branch policy (mirrors xiaoY233/cc-switch-remote):
+# - `upstream-main`: clean mirror of upstream, fast-forward only.
+# - `main`: product branch. Keep fork-specific code behind adapters
+#   (src-tauri/src/web_api/, examples/server.rs, scripts/deploy-*)
+#   so upstream merges stay mechanical.
+product_branch = "main"
+mirror_branch = "upstream-main"
+
+# Sync cadence: every 2-4 weeks.
+# 1. git fetch upstream -> upstream-main (ff-only)
+# 2. merge upstream-main into main, resolve only in fork-owned files
+# 3. cargo test + stream-check + tag v*
