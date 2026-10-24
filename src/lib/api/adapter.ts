@@ -316,6 +316,7 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
     cmd === "take_tray_navigation" ||
     cmd === "peek_pending_deeplink" ||
     cmd === "ack_pending_deeplink" ||
+    cmd === "check_for_updates" ||
     cmd.startsWith("plugin:")
   ) {
     return null as T;
