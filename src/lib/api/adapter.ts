@@ -18,6 +18,8 @@ interface Endpoint {
   method: "GET" | "POST" | "PUT" | "DELETE";
   url: string;
   body?: unknown;
+  /** When set, resolve with `data[pick]` instead of the whole payload. */
+  pick?: string;
 }
 
 const enc = encodeURIComponent;
@@ -286,10 +288,6 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
   }
 }
 
-interface MappedEndpoint extends Endpoint {
-  pick?: string;
-}
-
 export class WebUnsupportedError extends Error {
   readonly command: string;
   constructor(command: string) {
@@ -303,7 +301,7 @@ export class WebUnsupportedError extends Error {
 
 /** Drop-in replacement for Tauri's `invoke` used by every `src/lib/api/*` module. */
 export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
-  const mapped = mapCommand(cmd, args) as (Endpoint & { pick?: string }) | null;
+  const mapped = mapCommand(cmd, args);
   if (!mapped) throw new WebUnsupportedError(cmd);
   const init: RequestInit = {
     method: mapped.method,
