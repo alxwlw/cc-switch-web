@@ -125,6 +125,7 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/usage/request-logs", post(request_logs))
         .route("/api/usage/request-detail/:id", get(request_detail))
         .route("/api/usage/model-pricing", get(model_pricing))
+        .route("/api/usage/sync", post(sync_session_usage))
         // settings & environment
         .route(
             "/api/settings",
@@ -840,8 +841,22 @@ async fn request_detail(
     }
 }
 
-async fn model_pricing(State(state): State<SharedState>) -> ApiResult {
+async fn sync_session_usage(State(state): State<SharedState>) -> ApiResult {
     let db = state.db.clone();
+    let _guard = crate::services::session_usage::session_sync_mutex()
+        .lock()
+        .await;
+    match tokio::task::spawn_blocking(move || {
+        crate::services::session_usage::sync_all_unlocked(&db)
+    })
+    .await
+    {
+        Ok(result) => ok(result),
+        Err(e) => fail(format!("sync task failed: {e}")),
+    }
+}
+
+async fn model_pricing(State(state): State<SharedState>) -> ApiResult {    let db = state.db.clone();
     match tokio::task::spawn_blocking(move || {
         db.ensure_model_pricing_seeded()?;
         crate::services::model_pricing::sync_local_model_pricing(&db)?;
