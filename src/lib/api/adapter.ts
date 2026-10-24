@@ -96,6 +96,17 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: `${appBase(a.app)}/providers/live-remove`,
         body: { id: a.id },
       };
+    case "get_provider_editor_view":
+      return {
+        method: "POST",
+        url: `${appBase(a.app)}/providers/editor-view`,
+        body: {
+          settingsConfig: a.settingsConfig,
+          category: a.category ?? null,
+          providerId: a.providerId ?? null,
+          meta: a.meta ?? null,
+        },
+      };
 
     // ---------- prompts ----------
     case "get_prompts":

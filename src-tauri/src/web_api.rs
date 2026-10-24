@@ -76,6 +76,7 @@ pub fn router(state: SharedState) -> Router {
             "/api/:app/providers/import-default",
             post(import_default_providers),
         )
+        .route("/api/:app/providers/editor-view", post(provider_editor_view))
         .route("/api/:app/providers/live-add", post(live_add_provider))
         .route(
             "/api/:app/providers/live-remove",
@@ -324,8 +325,35 @@ async fn live_remove_provider(
     }
 }
 
-async fn delete_provider(
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EditorViewReq {
+    settings_config: Value,
+    category: Option<String>,
+    provider_id: Option<String>,
+    meta: Option<crate::provider::ProviderMeta>,
+}
+
+async fn provider_editor_view(
     State(state): State<SharedState>,
+    Path(app): Path<String>,
+    Json(body): Json<EditorViewReq>,
+) -> ApiResult {
+    let app_type = app_type!(&app);
+    match ProviderService::editor_view_with_meta(
+        &state,
+        app_type,
+        &body.settings_config,
+        body.category.as_deref(),
+        body.provider_id.as_deref(),
+        body.meta.as_ref(),
+    ) {
+        Ok(view) => ok(view),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+async fn delete_provider(    State(state): State<SharedState>,
     Path((app, id)): Path<(String, String)>,
 ) -> ApiResult {
     let app_type = app_type!(&app);
@@ -910,10 +938,20 @@ async fn get_settings() -> ApiResult {
     ok(crate::settings::get_settings_for_frontend())
 }
 
+#[derive(Deserialize)]
+struct SaveSettingsReq {
+    settings: crate::settings::AppSettings,
+}
+
 async fn save_settings(
     State(state): State<SharedState>,
-    Json(body): Json<crate::settings::AppSettings>,
+    Json(body): Json<SaveSettingsReq>,
 ) -> ApiResult {
+    // NOTE: `{ settings: … }` wrapper mirrors the Tauri `save_settings` arg
+    // shape the console sends. A bare AppSettings here would silently
+    // deserialize to defaults (serde ignores unknown fields) and the save
+    // would look successful while changing nothing.
+    let body = body.settings;
     let existing = crate::settings::get_settings();
     let merged = crate::commands::settings::merge_settings_for_save(body, &existing);
     let stack_changed = merged.codex_stack_classic_tools != existing.codex_stack_classic_tools
