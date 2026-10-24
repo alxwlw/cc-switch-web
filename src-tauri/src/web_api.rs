@@ -62,6 +62,7 @@ macro_rules! app_type {
 pub fn router(state: SharedState) -> Router {
     Router::new()
         .route("/api/health", get(health))
+        .route("/favicon.ico", get(favicon))
         .route("/api/capabilities", get(capabilities))
         // providers (per app)
         .route(
@@ -133,6 +134,8 @@ pub fn router(state: SharedState) -> Router {
         )
         .route("/api/paths", get(paths))
         .route("/api/env/tools", post(tool_versions))
+        .route("/api/env/conflicts", get(env_conflicts))
+        .route("/api/migrations/status", get(migrations_status))
         .with_state(state)
 }
 
@@ -962,6 +965,31 @@ struct ToolVersionsReq {
 async fn tool_versions(Json(body): Json<ToolVersionsReq>) -> ApiResult {
     match crate::commands::misc::get_tool_versions(body.tools, body.wsl_shell_by_tool).await {
         Ok(versions) => ok(versions),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+async fn favicon() -> impl axum::response::IntoResponse {
+    (StatusCode::NO_CONTENT, "")
+}
+
+/// One-shot startup migration flags (same semantics as the desktop commands:
+/// each flag is reported once, then cleared).
+async fn migrations_status() -> ApiResult {
+    ok(json!({
+        "migration": crate::init_status::take_migration_success(),
+        "skills": crate::init_status::take_skills_migration_result(),
+    }))
+}
+
+#[derive(Deserialize)]
+struct EnvConflictsQuery {
+    app: String,
+}
+
+async fn env_conflicts(Query(q): Query<EnvConflictsQuery>) -> ApiResult {
+    match crate::services::env_checker::check_env_conflicts(&q.app) {
+        Ok(conflicts) => ok(conflicts),
         Err(e) => fail(e.to_string()),
     }
 }

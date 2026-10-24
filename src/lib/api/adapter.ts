@@ -282,6 +282,14 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: "/api/env/tools",
         body: { tools: a.tools ?? null, wslShellByTool: a.wslShellByTool ?? null },
       };
+    case "check_env_conflicts":
+      return { method: "GET", url: `/api/env/conflicts${query({ app: a.app })}` };
+
+    // ---------- startup one-shots ----------
+    case "get_migration_result":
+      return { method: "GET", url: "/api/migrations/status", pick: "migration" };
+    case "get_skills_migration_result":
+      return { method: "GET", url: "/api/migrations/status", pick: "skills" };
 
     default:
       return null;
@@ -301,6 +309,17 @@ export class WebUnsupportedError extends Error {
 
 /** Drop-in replacement for Tauri's `invoke` used by every `src/lib/api/*` module. */
 export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
+  // Silent local noops: desktop-only fire-and-forget calls that must not
+  // spam the console in web mode (tray, deep links, plugin internals).
+  if (
+    cmd === "tray_app_page_seen" ||
+    cmd === "take_tray_navigation" ||
+    cmd === "peek_pending_deeplink" ||
+    cmd === "ack_pending_deeplink" ||
+    cmd.startsWith("plugin:")
+  ) {
+    return null as T;
+  }
   const mapped = mapCommand(cmd, args);
   if (!mapped) throw new WebUnsupportedError(cmd);
   const init: RequestInit = {
