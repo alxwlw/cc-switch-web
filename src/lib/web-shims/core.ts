@@ -1,6 +1,11 @@
 /** Web-build shim for `@tauri-apps/api/core` (see vite.config.web.mts alias). */
-export { invoke, isWeb as isTauri, WebUnsupportedError } from "../api/adapter";
+export { invoke, WebUnsupportedError } from "../api/adapter";
 export { isWeb } from "../api/adapter";
+
+/** Real Tauri API exposes `isTauri()` as a function — keep that shape. */
+export function isTauri(): boolean {
+  return false;
+}
 
 /** Minimal `Channel` stub: construction and handler assignment work, but the
  *  streaming commands that need a real channel are unsupported in web mode. */
