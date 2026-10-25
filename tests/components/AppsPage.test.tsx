@@ -691,7 +691,16 @@ describe("AppsPage concurrent CLI upgrades", () => {
     await renderApps();
     expect(mocks.desktopStatusCalls).toBe(0);
     expect(mocks.listToolInstallations).not.toHaveBeenCalled();
-    expect(rowApps("appsPage.sectionNotInstalled")).toContain("claude-desktop");
+    // статус неизвестен: плоский список без групп, Desktop не объявлен «не установленным»
+    expect(
+      screen.queryByRole("region", { name: "appsPage.sectionNotInstalled" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "appsPage.sectionInstalled" }),
+    ).toBeNull();
+    expect(
+      card("Claude Desktop").getByText("Claude Desktop"),
+    ).toBeInTheDocument();
   });
 
   it("puts Claude Desktop under not installed when it is not on this machine", async () => {

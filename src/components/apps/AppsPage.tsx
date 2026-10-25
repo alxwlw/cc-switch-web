@@ -190,10 +190,8 @@ export function AppsPage() {
   // 首次探测还没出结果时不分组，免得各行探完一个跳一个；之后重新检查时沿用上次结果，位置不动。
   const rowInstalled = (row: Row): boolean | null => {
     if (row.kind === "desktop") {
-      // WEB-00: в web запрос выключен и вечно pending — не ждём его — снимет WEB-19
-      return isDesktopStatusPending && !isWeb
-        ? null
-        : Boolean(desktopStatus?.installed);
+      // WEB-00: в web запрос выключен и остаётся pending => null, список без групп — снимет WEB-19
+      return isDesktopStatusPending ? null : Boolean(desktopStatus?.installed);
     }
     const info = tools.toolVersionByName.get(row.tool);
     if (!info && tools.isLoadingTools) return null;
