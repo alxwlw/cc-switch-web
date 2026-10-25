@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { openclawApi } from "@/lib/api/openclaw";
 import { providersApi } from "@/lib/api/providers";
+import { isWeb } from "@/lib/api/adapter";
 import type {
   OpenClawEnvConfig,
   OpenClawToolsConfig,
@@ -33,7 +34,8 @@ export function useOpenClawLiveProviderIds(enabled: boolean) {
   return useQuery({
     queryKey: openclawKeys.liveProviderIds,
     queryFn: () => providersApi.getOpenClawLiveProviderIds(),
-    enabled,
+    // WEB-00: openclaw-команды не поддержаны — снимет WEB-15
+    enabled: enabled && !isWeb,
   });
 }
 
@@ -45,7 +47,8 @@ export function useOpenClawDefaultModel(enabled: boolean) {
   return useQuery({
     queryKey: openclawKeys.defaultModel,
     queryFn: () => openclawApi.getDefaultModel(),
-    enabled,
+    // WEB-00: openclaw-команды не поддержаны — снимет WEB-15
+    enabled: enabled && !isWeb,
   });
 }
 
@@ -57,6 +60,8 @@ export function useOpenClawEnv() {
     queryKey: openclawKeys.env,
     queryFn: () => openclawApi.getEnv(),
     staleTime: 30_000,
+    // WEB-00: openclaw-команды не поддержаны — снимет WEB-15
+    enabled: !isWeb,
   });
 }
 
@@ -68,6 +73,8 @@ export function useOpenClawTools() {
     queryKey: openclawKeys.tools,
     queryFn: () => openclawApi.getTools(),
     staleTime: 30_000,
+    // WEB-00: openclaw-команды не поддержаны — снимет WEB-15
+    enabled: !isWeb,
   });
 }
 
@@ -79,6 +86,8 @@ export function useOpenClawAgentsDefaults() {
     queryKey: openclawKeys.agentsDefaults,
     queryFn: () => openclawApi.getAgentsDefaults(),
     staleTime: 30_000,
+    // WEB-00: openclaw-команды не поддержаны — снимет WEB-15
+    enabled: !isWeb,
   });
 }
 
@@ -87,7 +96,8 @@ export function useOpenClawHealth(enabled: boolean) {
     queryKey: openclawKeys.health,
     queryFn: () => openclawApi.scanHealth(),
     staleTime: 30_000,
-    enabled,
+    // WEB-00: openclaw-команды не поддержаны — снимет WEB-15
+    enabled: enabled && !isWeb,
   });
 }
 

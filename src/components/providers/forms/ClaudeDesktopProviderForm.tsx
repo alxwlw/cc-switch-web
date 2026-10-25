@@ -64,6 +64,7 @@ import {
 } from "@/lib/api/providers";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import type { ManagedAuthProvider } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { useCopilotAuth, useCodexOauth, useXaiOauth } from "./hooks";
 import { isOAuthProviderType } from "@/config/constants";
 
@@ -320,6 +321,8 @@ export function ClaudeDesktopProviderForm({
   const { data: defaultRoutes = [] } = useQuery({
     queryKey: ["claudeDesktopDefaultRoutes"],
     queryFn: () => providersApi.getClaudeDesktopDefaultRoutes(),
+    // WEB-00: get_claude_desktop_default_routes не поддержан — снимет WEB-19
+    enabled: !isWeb,
   });
   const defaultProxyRouteRows = useMemo(
     () =>

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { authApi, settingsApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { CODEX_OAUTH_DUPLICATE_ACCOUNT_ERROR } from "@/lib/api/auth";
 import type { CodexLoginMethod } from "@/lib/api/auth";
 import { copyText } from "@/lib/clipboard";
@@ -56,6 +57,8 @@ export function useManagedAuth(
     // proxy hot path. Periodically refresh local status so an already-open Auth
     // Center stops showing the account as logged in without requiring a reload.
     refetchInterval: authProvider === "xai_oauth" ? 15_000 : false,
+    // WEB-00: auth_get_status не поддержан — снимет WEB-02
+    enabled: !isWeb,
   });
 
   const stopPolling = useCallback(() => {

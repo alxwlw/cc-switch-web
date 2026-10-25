@@ -10,6 +10,7 @@ import { toast } from "@/lib/toast";
 import { hermesApi } from "@/lib/api/hermes";
 import { providersApi } from "@/lib/api/providers";
 import { settingsApi } from "@/lib/api/settings";
+import { isWeb } from "@/lib/api/adapter";
 import type { HermesMemoryKind } from "@/types";
 import { extractErrorMessage } from "@/utils/errorUtils";
 
@@ -53,7 +54,8 @@ export function useHermesLiveProviderIds(enabled: boolean) {
   return useQuery({
     queryKey: hermesKeys.liveProviderIds,
     queryFn: () => providersApi.getHermesLiveProviderIds(),
-    enabled,
+    // WEB-00: hermes-команды не поддержаны — снимет WEB-16
+    enabled: enabled && !isWeb,
   });
 }
 
@@ -61,7 +63,8 @@ export function useHermesModelConfig(enabled: boolean) {
   return useQuery({
     queryKey: hermesKeys.modelConfig,
     queryFn: () => hermesApi.getModelConfig(),
-    enabled,
+    // WEB-00: hermes-команды не поддержаны — снимет WEB-16
+    enabled: enabled && !isWeb,
   });
 }
 
@@ -69,7 +72,8 @@ export function useHermesMemory(kind: HermesMemoryKind, enabled: boolean) {
   return useQuery({
     queryKey: hermesKeys.memory(kind),
     queryFn: () => hermesApi.getMemory(kind),
-    enabled,
+    // WEB-00: hermes-команды не поддержаны — снимет WEB-16
+    enabled: enabled && !isWeb,
   });
 }
 
@@ -78,7 +82,8 @@ export function useHermesMemoryLimits(enabled: boolean) {
     queryKey: hermesKeys.memoryLimits,
     queryFn: () => hermesApi.getMemoryLimits(),
     staleTime: 60_000,
-    enabled,
+    // WEB-00: hermes-команды не поддержаны — снимет WEB-16
+    enabled: enabled && !isWeb,
   });
 }
 

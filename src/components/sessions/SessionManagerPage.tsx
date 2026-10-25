@@ -23,6 +23,7 @@ import {
   useSettingsQuery,
 } from "@/lib/query";
 import { piApi, sessionsApi, type AppId } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import type { SessionMeta } from "@/types";
 import { DEFAULT_VISIBLE_APPS } from "@/config/appConfig";
 import { Button } from "@/components/ui/button";
@@ -189,7 +190,8 @@ export function SessionManagerPage({
   const piSessionDiscovery = useQuery({
     queryKey: piKeys.sessionDiscovery,
     queryFn: () => piApi.getSessionDiscovery(),
-    enabled: appFilter === "pi",
+    // WEB-00: get_pi_session_discovery не поддержан — снимет WEB-17
+    enabled: appFilter === "pi" && !isWeb,
     staleTime: 30 * 1000,
   });
 

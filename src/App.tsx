@@ -35,6 +35,7 @@ import {
   type ProviderSwitchEvent,
 } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
+import { isWeb } from "@/lib/api/adapter";
 import { useProviderActions } from "@/hooks/useProviderActions";
 import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
 import { hermesKeys, useOpenHermesWebUI } from "@/hooks/useHermes";
@@ -262,6 +263,8 @@ function App() {
     StartupAttachFailure[]
   >([]);
   useEffect(() => {
+    // WEB-00: take_startup_attach_failures не поддержан (mount-вызов) — снимет WEB-01
+    if (isWeb) return;
     proxyApi
       .takeStartupAttachFailures()
       .then((failures) => {

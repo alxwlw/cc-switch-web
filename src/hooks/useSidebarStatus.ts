@@ -5,6 +5,7 @@ import * as authApi from "@/lib/api/auth";
 import type { ManagedAuthProvider } from "@/lib/api/auth";
 import { useProxyStatusQuery } from "@/lib/query/proxy";
 import { proxyApi } from "@/lib/api/proxy";
+import { isWeb } from "@/lib/api/adapter";
 import { useUsageSummary } from "@/lib/query/usage";
 import { MODE_APP_IDS, isModeAppId } from "@/config/appConfig";
 import { parseFiniteNumber } from "@/components/usage/format";
@@ -34,6 +35,8 @@ export function useSidebarStatus() {
     queries: MODE_APP_IDS.map((app) => ({
       queryKey: ["providers", app, "mode"],
       queryFn: () => proxyApi.getAppMode(app),
+      // WEB-00: get_app_mode не поддержан; режим -> direct (фоллбэк ниже) — снимет WEB-01
+      enabled: !isWeb,
     })),
   });
   const { data: todaySummary } = useUsageSummary(TODAY, undefined, {
@@ -45,6 +48,8 @@ export function useSidebarStatus() {
       queryKey: ["managed-auth-status", provider],
       queryFn: () => authApi.authGetStatus(provider),
       staleTime: 60_000,
+      // WEB-00: auth_get_status не поддержан; точка в sidebar не горит — снимет WEB-02
+      enabled: !isWeb,
     })),
   });
 

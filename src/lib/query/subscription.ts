@@ -9,6 +9,7 @@ import { resolveManagedAccountId } from "@/lib/authBinding";
 import { PROVIDER_TYPES } from "@/config/constants";
 import { resolveDisplayUsage, type LastGoodSnapshot } from "./queries";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { isWeb } from "@/lib/api/adapter";
 
 const REFETCH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
@@ -91,7 +92,9 @@ export function useSubscriptionQuota(
   const query = useQuery({
     queryKey: subscriptionKeys.quota(appId),
     queryFn: () => subscriptionApi.getQuota(appId),
+    // WEB-00: quota-запросы (get_subscription_quota и др.) не поддержаны — снимет WEB-02/04
     enabled:
+      !isWeb &&
       enabled &&
       ["claude", "codex", "gemini", "grokbuild", "agy"].includes(appId),
     refetchInterval,
@@ -138,7 +141,8 @@ export function useCodexOauthQuotaByAccountId(
   const query = useQuery({
     queryKey: ["codex_oauth", "quota", accountId ?? "default"],
     queryFn: () => subscriptionApi.getCodexOauthQuota(accountId),
-    enabled,
+    // WEB-00: quota-запросы не поддержаны — снимет WEB-02/04
+    enabled: enabled && !isWeb,
     refetchInterval,
     refetchIntervalInBackground: Boolean(refetchInterval),
     refetchOnWindowFocus: Boolean(refetchInterval),
@@ -194,7 +198,8 @@ export function useXaiOauthQuotaByAccountId(
   const query = useQuery({
     queryKey: ["xai_oauth", "quota", accountId ?? "default"],
     queryFn: () => subscriptionApi.getXaiOauthQuota(accountId),
-    enabled,
+    // WEB-00: quota-запросы не поддержаны — снимет WEB-02/04
+    enabled: enabled && !isWeb,
     refetchInterval: autoQuery ? REFETCH_INTERVAL : false,
     refetchIntervalInBackground: autoQuery,
     refetchOnWindowFocus: autoQuery,
@@ -225,7 +230,8 @@ export function useAgyAccountQuota(
   const query = useQuery({
     queryKey: ["agy_oauth", "quota", accountId],
     queryFn: () => subscriptionApi.getAgyAccountQuota(accountId),
-    enabled,
+    // WEB-00: quota-запросы не поддержаны — снимет WEB-02/04
+    enabled: enabled && !isWeb,
     refetchInterval,
     refetchIntervalInBackground: Boolean(refetchInterval),
     refetchOnWindowFocus: Boolean(refetchInterval),
@@ -256,7 +262,8 @@ export function useKimiAccountQuota(
   const query = useQuery({
     queryKey: ["kimi_oauth", "quota", accountId],
     queryFn: () => kimiOAuthApi.quota(accountId),
-    enabled,
+    // WEB-00: quota-запросы не поддержаны — снимет WEB-02/04
+    enabled: enabled && !isWeb,
     refetchInterval,
     refetchIntervalInBackground: Boolean(refetchInterval),
     refetchOnWindowFocus: Boolean(refetchInterval),

@@ -23,6 +23,7 @@ import type { OpenClawProviderConfig, Provider } from "@/types";
 import { getOpencodeDeclaredModels } from "@/components/providers/forms/helpers/opencodeFormUtils";
 import type { AppId } from "@/lib/api";
 import { providersApi } from "@/lib/api/providers";
+import { isWeb } from "@/lib/api/adapter";
 import {
   extractErrorMessage,
   translatePiProviderMutationError,
@@ -133,12 +134,14 @@ export function ProviderList({
     useQuery({
       queryKey: ["opencodeLiveProviderIds"],
       queryFn: () => providersApi.getOpenCodeLiveProviderIds(),
-      enabled: appId === "opencode",
+      // WEB-00: get_opencode_live_provider_ids не поддержан — снимет WEB-14
+      enabled: appId === "opencode" && !isWeb,
     });
   const { data: opencodeDefaultModel } = useQuery({
     queryKey: ["opencodeDefaultModel"],
     queryFn: () => providersApi.getOpenCodeDefaultModel(),
-    enabled: appId === "opencode",
+    // WEB-00: get_opencode_default_model не поддержан — снимет WEB-14
+    enabled: appId === "opencode" && !isWeb,
   });
   const { data: openclawLiveIds, isPending: isOpenclawLiveIdsPending } =
     useOpenClawLiveProviderIds(appId === "openclaw");
@@ -162,11 +165,13 @@ export function ProviderList({
   // 累加式应用要等 live 里有哪些供应商读回来（成功或失败）才知道卡片该进哪个分区；
   // 在那之前按加载中画骨架，不然卡片先全落进「可添加」，读回来再整体搬到「已添加」。
   // 一张卡都没有时不用等，直接出空状态
+  // WEB-00: в web эти запросы выключены и вечно pending — скелетон не рисуем — снимет WEB-14
   const isLiveMembershipPending =
-    (appId === "opencode" && isOpencodeLiveIdsPending) ||
-    (appId === "openclaw" && isOpenclawLiveIdsPending) ||
-    (appId === "hermes" && isHermesLiveIdsPending) ||
-    (isPiFamilyApp(appId) && isPiCurrentStatePending);
+    !isWeb &&
+    ((appId === "opencode" && isOpencodeLiveIdsPending) ||
+      (appId === "openclaw" && isOpenclawLiveIdsPending) ||
+      (appId === "hermes" && isHermesLiveIdsPending) ||
+      (isPiFamilyApp(appId) && isPiCurrentStatePending));
 
   const isInConfig = useCallback(
     (provider: Provider): boolean => {

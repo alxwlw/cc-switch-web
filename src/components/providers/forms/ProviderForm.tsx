@@ -13,6 +13,7 @@ import {
   formatRequestOverrideObject,
 } from "@/lib/requestOverrides";
 import { providersApi, type AppId, type AuthCenterTarget } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import type { ProviderEditorInactiveField } from "@/lib/api/providers";
 import {
   overlayClaudeProviderFields,
@@ -1103,7 +1104,8 @@ function ProviderFormFull({
   } = useQuery({
     queryKey: ["opencodeLiveProviderIds"],
     queryFn: () => providersApi.getOpenCodeLiveProviderIds(),
-    enabled: appId === "opencode" && !isAnyOmoCategory,
+    // WEB-00: get_opencode_live_provider_ids не поддержан — снимет WEB-14
+    enabled: appId === "opencode" && !isAnyOmoCategory && !isWeb,
   });
 
   const opencodeForm = useOpencodeFormState({

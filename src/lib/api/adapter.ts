@@ -439,13 +439,15 @@ function openExternalInBrowser(url: unknown): boolean {
 /** Drop-in replacement for Tauri's `invoke` used by every `src/lib/api/*` module. */
 export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
   // Silent local noops: desktop-only fire-and-forget calls that must not
-  // spam the console in web mode (tray, deep links, plugin internals).
+  // spam the console in web mode (tray, window theme, deep links, plugin internals).
   if (
     cmd === "tray_app_page_seen" ||
     cmd === "take_tray_navigation" ||
     cmd === "peek_pending_deeplink" ||
     cmd === "ack_pending_deeplink" ||
     cmd === "check_for_updates" ||
+    cmd === "update_tray_menu" ||
+    cmd === "set_window_theme" ||
     cmd.startsWith("plugin:")
   ) {
     return null as T;

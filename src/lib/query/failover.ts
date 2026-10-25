@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { proxyKeys } from "@/lib/query/proxy";
 import { getAppLabel } from "@/config/appConfig";
+import { isWeb } from "@/lib/api/adapter";
 
 // ========== 熔断器 Hooks ==========
 
@@ -19,7 +20,8 @@ export function useProviderHealth(
   return useQuery({
     queryKey: ["providerHealth", providerId, appType],
     queryFn: () => failoverApi.getProviderHealth(providerId, appType),
-    enabled: enabled && !!providerId && !!appType,
+    // WEB-00: failover-команды не поддержаны — снимет WEB-01
+    enabled: enabled && !!providerId && !!appType && !isWeb,
     refetchInterval: 5000, // 每 5 秒刷新一次
     retry: false,
   });
@@ -66,6 +68,8 @@ export function useCircuitBreakerConfig() {
   return useQuery({
     queryKey: ["circuitBreakerConfig"],
     queryFn: () => failoverApi.getCircuitBreakerConfig(),
+    // WEB-00: failover-команды не поддержаны — снимет WEB-01
+    enabled: !isWeb,
   });
 }
 
@@ -90,7 +94,8 @@ export function useCircuitBreakerStats(providerId: string, appType: string) {
   return useQuery({
     queryKey: ["circuitBreakerStats", providerId, appType],
     queryFn: () => failoverApi.getCircuitBreakerStats(providerId, appType),
-    enabled: !!providerId && !!appType,
+    // WEB-00: failover-команды не поддержаны — снимет WEB-01
+    enabled: !!providerId && !!appType && !isWeb,
     refetchInterval: 5000, // 每 5 秒刷新一次
   });
 }
@@ -104,7 +109,8 @@ export function useFailoverQueue(appType: string, enabled = true) {
   return useQuery({
     queryKey: ["failoverQueue", appType],
     queryFn: () => failoverApi.getFailoverQueue(appType),
-    enabled: enabled && !!appType,
+    // WEB-00: failover-команды не поддержаны — снимет WEB-01
+    enabled: enabled && !!appType && !isWeb,
   });
 }
 
@@ -115,7 +121,8 @@ export function useAvailableProvidersForFailover(appType: string) {
   return useQuery({
     queryKey: ["availableProvidersForFailover", appType],
     queryFn: () => failoverApi.getAvailableProvidersForFailover(appType),
-    enabled: !!appType,
+    // WEB-00: failover-команды не поддержаны — снимет WEB-01
+    enabled: !!appType && !isWeb,
   });
 }
 
@@ -212,7 +219,8 @@ export function useAutoFailoverEnabled(appType: string, enabled = true) {
   return useQuery({
     queryKey: ["autoFailoverEnabled", appType],
     queryFn: () => failoverApi.getAutoFailoverEnabled(appType),
-    enabled: enabled && !!appType,
+    // WEB-00: failover-команды не поддержаны — снимет WEB-01
+    enabled: enabled && !!appType && !isWeb,
     // 默认值为 false（与后端保持一致）
     placeholderData: false,
   });

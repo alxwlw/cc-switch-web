@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useKimiAccountQuota } from "@/lib/query/subscription";
 import { kimiOAuthApi } from "@/lib/api/kimiOAuth";
+import { isWeb } from "@/lib/api/adapter";
 import { SubscriptionQuotaView } from "@/components/SubscriptionQuotaFooter";
 import { useQuotaDisplay } from "@/components/quota/useQuotaDisplay";
 import { KIMI_OAUTH_STATUS_KEY } from "@/components/providers/forms/hooks/useKimiOAuth";
@@ -44,6 +45,8 @@ const KimiAccountQuotaFooter: React.FC<KimiAccountQuotaFooterProps> = ({
     queryKey: KIMI_OAUTH_STATUS_KEY,
     queryFn: kimiOAuthApi.status,
     staleTime: 5 * 60_000,
+    // WEB-00: kimi_oauth_status не поддержан — снимет WEB-02
+    enabled: !isWeb,
   });
   const nickname = status?.accounts.find(
     (account) => account.id === accountId,

@@ -14,6 +14,7 @@ import type {
 import type { Provider } from "@/types";
 import type { AppId } from "@/lib/api";
 import { authApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { cn } from "@/lib/utils";
 import { ProviderIconBox } from "@/components/ProviderIconBox";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -204,7 +205,9 @@ export function ProviderCard({
   } = useQuery({
     queryKey: ["managed-auth-status", "codex_oauth"],
     queryFn: () => authApi.authGetStatus("codex_oauth"),
+    // WEB-00: auth_get_status не поддержан — снимет WEB-02
     enabled:
+      !isWeb &&
       codexOfficialIdentity === "managed_account" &&
       Boolean(managedCodexAccountId),
     staleTime: 30_000,
