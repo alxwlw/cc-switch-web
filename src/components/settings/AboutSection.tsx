@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { WhatsNewDialog } from "@/components/WhatsNewDialog";
 import { WHATS_NEW_ENTRIES, entriesUpTo } from "@/lib/whatsNew";
 import ccswitchLogo from "@/assets/icons/logo.svg";
+import { WebModeInfo } from "@/components/web/WebModeInfo";
 import { extractErrorMessage } from "@/utils/errorUtils";
 
 interface AboutSectionProps {
@@ -283,6 +284,8 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
           )}
         </div>
       )}
+
+      <WebModeInfo />
 
       <div className="flex flex-wrap items-center gap-2 px-5 py-4">
         {starPromptDismissed && (

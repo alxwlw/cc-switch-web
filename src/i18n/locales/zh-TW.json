@@ -5042,6 +5042,12 @@
     "liveUnknownTitle": "供應商（Web 模式下無法讀取實際設定狀態）",
     "removeUnverifiable": "Web 模式下無法確認它是否為預設／目前供應商，因此無法從設定中移除",
     "sessionImage": "Web 模式下無法顯示圖片",
-    "sessionResumeCopied": "已複製恢復指令。請在伺服器主機上的專案目錄下，貼到終端機執行"
+    "sessionResumeCopied": "已複製恢復指令。請在伺服器主機上的專案目錄下，貼到終端機執行",
+    "hostNotice": "檔案、CLI 工具和代理位於伺服器主機上，而不是執行此瀏覽器的電腦上。",
+    "hostNoticeDismiss": "關閉",
+    "mode": {
+      "title": "Web 模式",
+      "serverVersion": "伺服器版本"
+    }
   }
 }

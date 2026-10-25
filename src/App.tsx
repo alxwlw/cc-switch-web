@@ -96,6 +96,7 @@ import {
   useToolUpdatesAvailable,
 } from "@/components/apps/useToolManagement";
 import { UsagePage } from "@/components/usage/UsagePage";
+import { WebHostBanner } from "@/components/web/WebHostBanner";
 import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
 import { SwitchModePanel } from "@/components/providers/mode/SwitchModePanel";
 import { proxyApi } from "@/lib/api/proxy";
@@ -1772,6 +1773,7 @@ function App() {
           id="content-area"
           className="relative isolate flex min-w-0 flex-1 flex-col overflow-hidden bg-app"
         >
+          <WebHostBanner />
           {showEnvBanner && envConflicts.length > 0 && (
             <EnvWarningBanner
               conflicts={envConflicts}

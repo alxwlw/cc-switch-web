@@ -5041,6 +5041,12 @@
     "liveUnknownTitle": "供应商（Web 模式下无法读取实际配置状态）",
     "removeUnverifiable": "Web 模式下无法确认它是否是默认/当前供应商，因此不能从配置中移除",
     "sessionImage": "Web 模式下无法显示图片",
-    "sessionResumeCopied": "已复制恢复命令。请在服务器主机上的项目目录下，粘贴到终端运行"
+    "sessionResumeCopied": "已复制恢复命令。请在服务器主机上的项目目录下，粘贴到终端运行",
+    "hostNotice": "文件、CLI 工具和代理位于服务器主机上，而不是运行此浏览器的电脑上。",
+    "hostNoticeDismiss": "关闭",
+    "mode": {
+      "title": "Web 模式",
+      "serverVersion": "服务器版本"
+    }
   }
 }

@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AboutSection } from "@/components/settings/AboutSection";
 import { UpdateProvider } from "@/contexts/UpdateContext";
 import { setWeb } from "../helpers/web";
@@ -28,17 +29,31 @@ vi.mock("@/lib/api", () => ({
 
 function renderAbout() {
   return render(
-    <UpdateProvider>
-      <AboutSection isPortable={false} />
-    </UpdateProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <UpdateProvider>
+        <AboutSection isPortable={false} />
+      </UpdateProvider>
+    </QueryClientProvider>,
   );
 }
+
+const fetchMock = vi.fn();
 
 describe("AboutSection · update controls", () => {
   beforeEach(() => {
     mocks.check.mockReset().mockResolvedValue(null);
     mocks.checkUpdates.mockReset();
+    fetchMock.mockReset().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        mode: "web",
+        version: "9.9.9",
+        runtime_boundaries: "server host only",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
   });
+  afterEach(() => vi.unstubAllGlobals());
 
   it("desktop: shows the check-for-updates button", async () => {
     renderAbout();
@@ -58,5 +73,33 @@ describe("AboutSection · update controls", () => {
     expect(screen.queryByText("settings.upToDate")).toBeNull();
     expect(mocks.check).not.toHaveBeenCalled();
     expect(mocks.checkUpdates).not.toHaveBeenCalled();
+  });
+
+  it("desktop: no web block and no capabilities request", async () => {
+    renderAbout();
+    await screen.findByText("settings.checkForUpdates");
+    expect(screen.queryByText("web.mode.title")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("web: shows statement, server version and runtime_boundaries", async () => {
+    setWeb(true);
+    renderAbout();
+    expect(screen.getByText("web.mode.title")).toBeInTheDocument();
+    expect(screen.getByText("web.hostNotice")).toBeInTheDocument();
+    expect(
+      await screen.findByText("web.mode.serverVersion v9.9.9"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("server host only")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/api/capabilities");
+  });
+
+  it("web: capabilities failure keeps the statement, drops version", async () => {
+    setWeb(true);
+    fetchMock.mockRejectedValue(new Error("down"));
+    renderAbout();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(screen.getByText("web.hostNotice")).toBeInTheDocument();
+    expect(screen.queryByText(/web\.mode\.serverVersion/)).toBeNull();
   });
 });
