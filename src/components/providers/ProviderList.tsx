@@ -66,6 +66,17 @@ import {
 /** 切换式应用（Claude Code / Codex / Gemini CLI / Grok Build）的模式状态和动作，由供应商页传入。 */
 export type SwitchModeProps = Omit<SwitchModeInput, "app" | "t" | "providers">;
 
+/** Приложения, у которых «в конфиге ли» берётся из живого конфига (команды вне mapCommand). */
+const WEB_LIVE_MEMBERSHIP_APPS: AppId[] = ["opencode", "openclaw", "hermes"];
+
+/** Приложения, у которых «импорт текущего» читает живой конфиг (import_*_from_live вне mapCommand). */
+const WEB_LIVE_IMPORT_APPS: AppId[] = [
+  "opencode",
+  "openclaw",
+  "hermes",
+  "claude-desktop",
+];
+
 const verticalDragModifiers: Modifier[] = [
   ({ transform }) => ({ ...transform, x: 0 }),
 ];
@@ -344,6 +355,8 @@ export function ProviderList({
         t,
         providers: filteredProviders,
         openTerminal: (provider) => onOpenTerminal?.(provider),
+        // WEB-00: open_provider_terminal не поддержан — снимет WEB-17
+        terminalUnavailableReason: isWeb ? t("web.unavailable") : undefined,
       });
     }
     const defaultPrimary =
@@ -385,6 +398,10 @@ export function ProviderList({
         isHermesReadOnlyProvider(provider.settingsConfig),
       piStateUnavailable: isPiFamilyApp(appId) && !isPiStateReady,
       kimiCurrentId: currentProviderId,
+      // WEB-00: живой конфиг в web не читается — членство неизвестно, set_*_default_model не поддержан
+      // — снимет WEB-14/15/16
+      membershipUnknown: isWeb && WEB_LIVE_MEMBERSHIP_APPS.includes(appId),
+      webUnavailableReason: isWeb ? t("web.unavailable") : undefined,
       actions: {
         add: onSwitch,
         remove: (provider) =>
@@ -465,6 +482,8 @@ export function ProviderList({
               ? undefined
               : () => importMutation.mutate()
           }
+          // WEB-00: import_*_from_live не поддержан (import_default_config — работает) — снимет WEB-14/15/16/19
+          importUnavailable={isWeb && WEB_LIVE_IMPORT_APPS.includes(appId)}
         />
       </div>
     );

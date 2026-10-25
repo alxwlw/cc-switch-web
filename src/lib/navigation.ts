@@ -63,9 +63,17 @@ export function resolveSettingsSection(
   return isSettingsSectionAvailable(section) ? section : "general";
 }
 
-/** WEB-00: центр авторизации целиком desktop-only (OAuth, auth_*) — снимет WEB-02. */
+// WEB-00: экраны целиком из desktop-only команд скрыты в web: центр авторизации (OAuth, auth_*) —
+// снимет WEB-02; workspace/openclawConfig/hermesMemory (openclaw/hermes-команды) — WEB-15/16/17.
+const WEB_HIDDEN_VIEWS: View[] = [
+  "auth",
+  "workspace",
+  "openclawConfig",
+  "hermesMemory",
+];
+
 export function isViewAvailable(view: View): boolean {
-  return !(isWeb && view === "auth");
+  return !(isWeb && WEB_HIDDEN_VIEWS.includes(view));
 }
 
 const APP_PAGES: AppPage[] = [

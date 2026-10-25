@@ -22,3 +22,16 @@ export function WebUnavailableTip({
     </HoverTip>
   );
 }
+
+/**
+ * WEB-00: вход в аккаунт (OAuth) в формах провайдера недоступен в web (auth_* не поддержаны,
+ * статус не загружается) — вместо вечного «загрузка» объясняем причину. Снимет WEB-02.
+ */
+export function WebAccountLoginNotice({ className }: { className?: string }) {
+  const { t } = useTranslation();
+  return (
+    <p role="status" className={className ?? "text-body text-fg-2"}>
+      {t("web.accountLogin")}
+    </p>
+  );
+}

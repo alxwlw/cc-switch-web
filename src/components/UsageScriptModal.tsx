@@ -1,3 +1,5 @@
+import { isWeb } from "@/lib/api/adapter";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import React, { useState } from "react";
 import { Play, Wand2, Eye, EyeOff, Save, ExternalLink } from "lucide-react";
 import { toast } from "@/lib/toast";
@@ -885,15 +887,18 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
   const footer = (
     <>
       <div className="flex gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={handleTest}
-          disabled={!script.enabled || testing}
-        >
-          <Play size={14} className="mr-1" />
-          {testing ? t("usageScript.testing") : t("usageScript.testScript")}
-        </Button>
+        {/* WEB-00: test_usage_script/get_balance/get_coding_plan_quota/quota не поддержаны — снимет WEB-04 */}
+        <WebUnavailableTip active={isWeb}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleTest}
+            disabled={!script.enabled || testing || isWeb}
+          >
+            <Play size={14} className="mr-1" />
+            {testing ? t("usageScript.testing") : t("usageScript.testScript")}
+          </Button>
+        </WebUnavailableTip>
         <Button
           variant="outline"
           size="sm"

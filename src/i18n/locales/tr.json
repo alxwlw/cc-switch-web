@@ -5013,6 +5013,9 @@
     "serverPath": "Yollar elle girilir ve bu cihazı değil sunucu ana makinesini gösterir",
     "update": {
       "unsupported": "Web modunda güncellemeler kullanılamaz: sunucuyu operatör günceller"
-    }
+    },
+    "accountLogin": "Web modunda hesap girişi (OAuth) kullanılamaz",
+    "needsRouting": "Bu sağlayıcı yönlendirme proxy'sini gerektirir; Web modunda kullanılamaz",
+    "liveUnknownTitle": "Sağlayıcılar (Web modunda canlı yapılandırma durumu bilinmiyor)"
   }
 }

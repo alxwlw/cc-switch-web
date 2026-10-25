@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import { toast } from "@/lib/toast";
+import { isWeb } from "@/lib/api/adapter";
 import { Button } from "@/components/ui/button";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
 import { APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
@@ -64,7 +65,9 @@ export function AddProviderDialog({
 }: AddProviderDialogProps) {
   const { t } = useTranslation();
   // OpenCode and OpenClaw don't support universal providers
+  // WEB-00: get_universal_providers/upsert/sync не поддержаны — вкладка скрыта в web — снимет WEB-07
   const showUniversalTab =
+    !isWeb &&
     appId !== "opencode" &&
     appId !== "openclaw" &&
     appId !== "hermes" &&

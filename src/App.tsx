@@ -1126,8 +1126,12 @@ function App() {
     ) {
       let liveProviderIds: string[] = [];
       try {
-        liveProviderIds =
-          activeApp === "opencode"
+        // WEB-00: live-ids (get_*_live_provider_ids / get_*_current_state) не поддержаны. Шаг только
+        // проверяет коллизию ключа копии с записями живого конфига; в web копия получает ключ,
+        // свободный среди провайдеров БД (addToLive=false, в живой конфиг не пишется) — снимет WEB-14/15/16
+        liveProviderIds = isWeb
+          ? []
+          : activeApp === "opencode"
             ? await queryClient.ensureQueryData({
                 queryKey: ["opencodeLiveProviderIds"],
                 queryFn: () => providersApi.getOpenCodeLiveProviderIds(),
@@ -1374,13 +1378,16 @@ function App() {
       }
       actions={
         <>
-          {currentView === "providers" &&
+          {/* WEB-00: профили (list/apply_profile) не поддержаны — переключатель скрыт — снимет WEB-06 */}
+          {!isWeb &&
+            currentView === "providers" &&
             activeApp !== "mcode" &&
             activeApp !== "kimi" &&
             (settingsData?.showProfileSwitcher ?? false) && (
               <ProfileSwitcher activeApp={activeApp} />
             )}
-          {activeApp === "hermes" && (
+          {/* WEB-00: запуск Hermes Web UI/dashboard — desktop-only (launch_hermes_dashboard) — снимет WEB-16 */}
+          {activeApp === "hermes" && !isWeb && (
             <Button
               variant="quiet"
               size="regular"
@@ -1429,6 +1436,8 @@ function App() {
   // OpenClaw / Hermes 没有模式 tab，那一行放它们自己的页面导航。
   // 换整块内容的是页面导航，用下划线页签；分段控件只留给模式和页内筛选。
   const renderAppSegments = () => {
+    // WEB-00: единственная доступная вкладка — providers (workspace/config/memory скрыты) — снимет WEB-15/16/17
+    if (isWeb) return null;
     if (activeApp === "openclaw") {
       return (
         <div className="shrink-0 px-6 pt-2">

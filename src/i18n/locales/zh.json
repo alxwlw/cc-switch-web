@@ -5035,6 +5035,9 @@
     "serverPath": "路径需手动输入，指的是服务器主机上的路径，而不是当前设备",
     "update": {
       "unsupported": "Web 模式下无法检查更新：服务器由运维人员负责升级"
-    }
+    },
+    "accountLogin": "Web 模式下无法使用账号登录（OAuth）",
+    "needsRouting": "该供应商需要路由代理，Web 模式下不可用",
+    "liveUnknownTitle": "供应商（Web 模式下无法读取实际配置状态）"
   }
 }

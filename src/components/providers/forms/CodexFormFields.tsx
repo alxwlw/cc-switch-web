@@ -1,3 +1,5 @@
+import { isWeb } from "@/lib/api/adapter";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import {
   useCallback,
   useEffect,
@@ -1903,24 +1905,27 @@ export function CodexFormFields({
             className="flex-1"
           />
           {/* 有模型列表时用列表上的「获取模型列表」，这里不再放一个。 */}
+          {/* WEB-00: fetch_models_for_config/copilot_get_models не поддержаны — кнопка disabled — снимет WEB-03 */}
           {!canEditCatalog && (
-            <HoverTip content={t("providerForm.fetchModels")}>
-              <Button
-                aria-label={t("providerForm.fetchModels")}
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={handleFetchModels}
-                disabled={isFetchingModels}
-                className="shrink-0"
-              >
-                {isFetchingModels ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-              </Button>
-            </HoverTip>
+            <WebUnavailableTip active={isWeb}>
+              <HoverTip content={t("providerForm.fetchModels")}>
+                <Button
+                  aria-label={t("providerForm.fetchModels")}
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleFetchModels}
+                  disabled={isFetchingModels || isWeb}
+                  className="shrink-0"
+                >
+                  {isFetchingModels ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                </Button>
+              </HoverTip>
+            </WebUnavailableTip>
           )}
           {defaultModelSuggestions.length > 0 && (
             <ModelDropdown

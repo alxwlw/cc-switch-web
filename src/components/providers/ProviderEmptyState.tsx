@@ -2,12 +2,15 @@ import { Download, Plus, Server } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Button } from "@/components/ui/button";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import type { AppId } from "@/lib/api/types";
 
 interface ProviderEmptyStateProps {
   appId: AppId;
   onCreate?: () => void;
   onImport?: () => void;
+  /** WEB-00: импорт читает живой конфиг сервера, которого в web нет — кнопка disabled + подсказка */
+  importUnavailable?: boolean;
 }
 
 /**
@@ -18,6 +21,7 @@ export function ProviderEmptyState({
   appId,
   onCreate,
   onImport,
+  importUnavailable = false,
 }: ProviderEmptyStateProps) {
   const { t } = useTranslation();
   // Pi / MiniMax Code / Oh My Pi 的"当前供应商"可以是原生应用自管的内置账号（不在可管理的
@@ -57,12 +61,19 @@ export function ProviderEmptyState({
       {(onImport || onCreate) && (
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           {onImport && (
-            <Button variant="neutral" size="regular" onClick={onImport}>
-              <Download className="h-4 w-4" />
-              {appId === "claude-desktop"
-                ? t("provider.importFromClaude")
-                : t("provider.importCurrent")}
-            </Button>
+            <WebUnavailableTip active={importUnavailable}>
+              <Button
+                variant="neutral"
+                size="regular"
+                onClick={onImport}
+                disabled={importUnavailable}
+              >
+                <Download className="h-4 w-4" />
+                {appId === "claude-desktop"
+                  ? t("provider.importFromClaude")
+                  : t("provider.importCurrent")}
+              </Button>
+            </WebUnavailableTip>
           )}
           {onCreate && (
             <Button variant="neutral" size="regular" onClick={onCreate}>

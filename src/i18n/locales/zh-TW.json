@@ -5036,6 +5036,9 @@
     "serverPath": "路徑需手動輸入，指的是伺服器主機上的路徑，而非目前裝置",
     "update": {
       "unsupported": "Web 模式下無法檢查更新：伺服器由維運人員負責升級"
-    }
+    },
+    "accountLogin": "Web 模式下無法使用帳號登入（OAuth）",
+    "needsRouting": "此供應商需要路由代理，Web 模式下無法使用",
+    "liveUnknownTitle": "供應商（Web 模式下無法讀取實際設定狀態）"
   }
 }
