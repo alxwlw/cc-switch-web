@@ -5,7 +5,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 
 Каждая фаза = одна задача Plane = один PR. Порядок: быстрые S-задачи (меньше риск конфликтов и сразу видимый parity), затем честный gating (меньше поверхность, которую прятать), затем инфраструктурные. Все файлы/CLI/proxy — на серверном хосте, не в браузере.
 
-- [ ] [Phase 1 — WEB-30 / DX-88: открытие внешних HTTP(S) ссылок](2026-10-25-web-parity-m5/phase-1.md)
+- [x] [Phase 1 — WEB-30 / DX-88: открытие внешних HTTP(S) ссылок](2026-10-25-web-parity-m5/phase-1.md) — PR #2, merged `50790b7f` → main 2026-10-25, live на cc-switch-web.service; DX-88 Done.
 - [ ] [Phase 2 — WEB-31 / DX-89: import prompt из файла](2026-10-25-web-parity-m5/phase-2.md)
 - [ ] [Phase 3 — WEB-08 / DX-66: пользовательская библиотека иконок](2026-10-25-web-parity-m5/phase-3.md)
 - [ ] [Phase 4 — WEB-22 / DX-80: env conflicts cleanup с backup/restore](2026-10-25-web-parity-m5/phase-4.md)
