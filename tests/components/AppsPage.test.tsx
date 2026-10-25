@@ -703,6 +703,62 @@ describe("AppsPage concurrent CLI upgrades", () => {
     ).toBeInTheDocument();
   });
 
+  it.each([true, false])(
+    "lifecycle actions are disabled only in web (web=%s) while versions and update check keep working",
+    async (web) => {
+      setWeb(web);
+      missing.add("hermes");
+      const user = userEvent.setup();
+      await renderApps();
+
+      // версии (get_tool_versions) видны в обоих режимах
+      expect(card("Claude Code").getByText("1.0.0")).toBeInTheDocument();
+
+      expect(updateButton("Claude Code")).toHaveProperty("disabled", web);
+      expect(
+        card("Hermes").getByRole("button", { name: "settings.toolInstall" }),
+      ).toHaveProperty("disabled", web);
+      expect(updateAllButton()).toHaveProperty("disabled", web);
+
+      await user.click(rowMenu("Claude Code"));
+      expect(
+        (
+          await screen.findByRole("menuitem", {
+            name: "settings.toolUninstall",
+          })
+        ).getAttribute("aria-disabled") === "true",
+      ).toBe(web);
+      await user.keyboard("{Escape}");
+
+      await user.click(
+        screen.getByRole("button", { name: "appsPage.moreActions" }),
+      );
+      expect(
+        (
+          await screen.findByRole("menuitem", { name: "settings.toolDiagnose" })
+        ).getAttribute("aria-disabled") === "true",
+      ).toBe(web);
+      await user.keyboard("{Escape}");
+
+      if (web) {
+        await user.click(updateButton("Claude Code"));
+        await user.click(updateAllButton());
+        expect(mocks.runToolLifecycleAction).not.toHaveBeenCalled();
+        expect(mocks.probeToolInstallations).not.toHaveBeenCalled();
+        expect(mocks.prepareToolUninstall).not.toHaveBeenCalled();
+      }
+
+      // проверка версий (get_tool_versions) работает и в web
+      const before = mocks.getToolVersions.mock.calls.length;
+      await user.click(
+        screen.getByRole("button", { name: /appsPage\.checkUpdates/ }),
+      );
+      await waitFor(() =>
+        expect(mocks.getToolVersions.mock.calls.length).toBeGreaterThan(before),
+      );
+    },
+  );
+
   it("puts Claude Desktop under not installed when it is not on this machine", async () => {
     mocks.desktopStatus = {
       supported: true,

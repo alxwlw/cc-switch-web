@@ -518,6 +518,24 @@ describe("SessionManagerPage", () => {
     launch.mockRestore();
   });
 
+  it("web: the list row's copy-resume button explains where to run the command", async () => {
+    setWeb(true);
+    platform.mac = true;
+    renderPage("codex");
+    await screen.findByText("Alpha Session");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "复制「Alpha Session」的恢复命令" }),
+    );
+
+    await waitFor(() =>
+      expect(toastSuccessMock).toHaveBeenCalledWith("web.sessionResumeCopied"),
+    );
+    expect(
+      screen.queryByRole("button", { name: /中恢复 Alpha Session$/ }),
+    ).toBeNull();
+  });
+
   it("deletes the open session after confirming and returns to the list", async () => {
     renderPage("codex");
     await screen.findByText("Alpha Session");

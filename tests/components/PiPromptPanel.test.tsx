@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setWeb } from "../helpers/web";
 
 import PromptPanel from "@/components/prompts/PromptPanel";
 import { promptsApi, type Prompt } from "@/lib/api";
@@ -121,6 +122,25 @@ describe("Pi prompts page", () => {
       screen.getAllByRole("button", { name: "pi.prompts.newTemplate" }).length,
     ).toBeGreaterThan(0);
     expect(screen.getByText("~/.pi/agent/prompts/")).toBeInTheDocument();
+  });
+
+  it("web: only the library is offered, native system/template tabs are hidden and not queried", async () => {
+    setWeb(true);
+    renderWithClient(
+      <PromptPanel appId="pi" apps={["claude", "pi"]} onAppChange={vi.fn()} />,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "prompts.add" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "pi.prompts.systemTab" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "pi.prompts.templatesTab" }),
+    ).toBeNull();
+    expect(promptsApi.listPiPromptTemplates).not.toHaveBeenCalled();
+    expect(promptsApi.getPiPromptFile).not.toHaveBeenCalled();
   });
 
   it("locks navigation while a system prompt or template editor is saving", async () => {
