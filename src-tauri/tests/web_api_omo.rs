@@ -146,11 +146,7 @@ async fn disable_clears_current_and_deletes_the_file_idempotently(v: &Variant, o
     let (router, db) = router_with_db();
     seed(&db, v.provider_id, v.category);
     seed(&db, other.provider_id, other.category);
-    db.set_omo_provider_current("opencode", v.provider_id, v.category)
-        .unwrap();
-    db.set_omo_provider_current("opencode", other.provider_id, other.category)
-        .unwrap();
-    // set_omo_provider_current deactivates the opposite category: re-activate `v` only.
+    // set_omo_provider_current deactivates the opposite category, so `other` is never current.
     db.set_omo_provider_current("opencode", v.provider_id, v.category)
         .unwrap();
     assert!(db
