@@ -5,6 +5,7 @@ import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ClaudeDesktopProviderForm } from "@/components/providers/forms/ClaudeDesktopProviderForm";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 const authState = vi.hoisted(() => ({
   codexReauthRequired: false,
@@ -12,6 +13,7 @@ const authState = vi.hoisted(() => ({
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),
 }));
+const defaultRoutesMock = vi.hoisted(() => vi.fn());
 const modelFetchMocks = vi.hoisted(() => ({
   fetchCodexOauthModels: vi.fn(),
 }));
@@ -73,7 +75,8 @@ vi.mock("@/components/providers/forms/XaiOAuthSection", () => ({
 
 vi.mock("@/lib/api/providers", () => ({
   providersApi: {
-    getClaudeDesktopDefaultRoutes: () => Promise.resolve([]),
+    getClaudeDesktopDefaultRoutes: (...args: unknown[]) =>
+      defaultRoutesMock(...args),
   },
 }));
 
@@ -100,6 +103,19 @@ describe("ClaudeDesktopProviderForm", () => {
     authState.codexReauthRequired = false;
     toastMocks.error.mockReset();
     modelFetchMocks.fetchCodexOauthModels.mockReset();
+    defaultRoutesMock.mockReset().mockResolvedValue([]);
+  });
+
+  it("web: не запрашивает get_claude_desktop_default_routes", async () => {
+    setWeb(true);
+    renderForm(undefined);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(defaultRoutesMock).not.toHaveBeenCalled();
+  });
+
+  it("desktop: запрашивает get_claude_desktop_default_routes", async () => {
+    renderForm(undefined);
+    await waitFor(() => expect(defaultRoutesMock).toHaveBeenCalledTimes(1));
   });
 
   it("托管 OAuth 供应商也能获取模型并在映射行里选择（#8426）", async () => {

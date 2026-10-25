@@ -25,6 +25,7 @@ import type {
 } from "@/lib/api/settings";
 import type { DndContextProps, DragEndEvent } from "@dnd-kit/core";
 import { APP_IDS } from "@/config/appConfig";
+import { setWeb } from "../helpers/web";
 
 type ToolVersions = Awaited<ReturnType<typeof settingsApi.getToolVersions>>;
 
@@ -44,12 +45,16 @@ const mocks = vi.hoisted(() => ({
   autoSaveSettings: vi.fn(async () => null),
   dragEndHandlers: [] as ((event: DragEndEvent) => void)[],
   desktopStatus: { supported: true, installed: true, configured: true },
+  desktopStatusCalls: 0,
 }));
 
 vi.mock("@/lib/api", () => ({ settingsApi: mocks }));
 vi.mock("@/lib/api/providers", () => ({
   providersApi: {
-    getClaudeDesktopStatus: async () => mocks.desktopStatus,
+    getClaudeDesktopStatus: async () => {
+      mocks.desktopStatusCalls += 1;
+      return mocks.desktopStatus;
+    },
   },
 }));
 vi.mock("@/hooks/useSettings", () => ({
@@ -678,6 +683,15 @@ describe("AppsPage concurrent CLI upgrades", () => {
     expect(
       card("Claude Desktop").getByText("appsPage.desktopNotConnected"),
     ).toBeInTheDocument();
+  });
+
+  it("web: не опрашивает статус Claude Desktop и не оставляет его вечно в загрузке", async () => {
+    setWeb(true);
+    mocks.desktopStatusCalls = 0;
+    await renderApps();
+    expect(mocks.desktopStatusCalls).toBe(0);
+    expect(mocks.listToolInstallations).not.toHaveBeenCalled();
+    expect(rowApps("appsPage.sectionNotInstalled")).toContain("claude-desktop");
   });
 
   it("puts Claude Desktop under not installed when it is not on this machine", async () => {

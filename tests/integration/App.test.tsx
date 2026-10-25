@@ -20,6 +20,7 @@ import {
 } from "../msw/state";
 import { emitTauriEvent } from "../msw/tauriMocks";
 import { server } from "../msw/server";
+import { setWeb } from "../helpers/web";
 
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -496,6 +497,30 @@ describe("App integration with MSW", () => {
     expect(screen.getByTestId("mcp-editor")).toBeInTheDocument();
   }, 10_000);
 
+  describe.each([
+    ["desktop", false, 1],
+    ["web", true, 0],
+  ])("startup attach failures on mount (%s)", (_label, web, expectedCalls) => {
+    it(`requests take_startup_attach_failures ${expectedCalls} time(s)`, async () => {
+      setWeb(web);
+      let calls = 0;
+      server.use(
+        http.post("http://tauri.local/take_startup_attach_failures", () => {
+          calls += 1;
+          return HttpResponse.json([]);
+        }),
+      );
+      const { default: App } = await import("@/App");
+      renderApp(App);
+      await waitFor(() =>
+        expect(screen.getByTestId("provider-list").textContent).toContain(
+          "claude-1",
+        ),
+      );
+      expect(calls).toBe(expectedCalls);
+    });
+  });
+
   it("shows toast when auto sync fails in background", async () => {
     const { default: App } = await import("@/App");
     renderApp(App);
@@ -882,7 +907,9 @@ describe("App integration with MSW", () => {
     await waitFor(() =>
       expect(toastErrorMock).toHaveBeenCalledWith(
         "notifications.removeFromConfigFailed",
-        expect.objectContaining({ description: "kimi.error.defaultModelInUse" }),
+        expect.objectContaining({
+          description: "kimi.error.defaultModelInUse",
+        }),
       ),
     );
     await waitFor(() =>

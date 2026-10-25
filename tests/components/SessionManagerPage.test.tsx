@@ -13,6 +13,7 @@ import { UNKNOWN_PROJECT_DIR_KEY } from "@/components/sessions/utils";
 import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 import { piApi } from "@/lib/api/pi";
 import { sessionsApi } from "@/lib/api/sessions";
+import { setWeb } from "../helpers/web";
 import type { SessionMessage, SessionMeta } from "@/types";
 import { setSessionFixtures, setSettings } from "../msw/state";
 
@@ -218,6 +219,17 @@ describe("SessionManagerPage", () => {
 
     expect(await screen.findByText(".pi/sessions")).toBeInTheDocument();
     expect(discovery).toHaveBeenCalledTimes(1);
+    discovery.mockRestore();
+  });
+
+  it("web: не зовёт get_pi_session_discovery для Pi", async () => {
+    setWeb(true);
+    const discovery = vi.spyOn(piApi, "getSessionDiscovery");
+
+    renderPage("pi");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(discovery).not.toHaveBeenCalled();
     discovery.mockRestore();
   });
 

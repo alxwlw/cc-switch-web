@@ -9,6 +9,7 @@ import {
   type SwitchModeProps,
 } from "@/components/providers/ProviderList";
 import { server } from "../msw/server";
+import { setWeb } from "../helpers/web";
 
 vi.mock("sonner", () => ({
   toast: {
@@ -361,6 +362,34 @@ describe("ProviderList Component", () => {
     expect(onRemoveFromConfig).toHaveBeenCalledWith(live);
     fireEvent.click(screen.getByTestId("add-a"));
     expect(onSwitch).toHaveBeenCalledWith(providerA);
+  });
+
+  it("web: opencode не ждёт выключенный запрос live ids и рисует карточки, а не скелетон", async () => {
+    setWeb(true);
+    const providerA = createProvider({ id: "a", name: "A" });
+    let liveIdsRequests = 0;
+    useDragSortMock.mockReturnValue({
+      sortedProviders: [providerA],
+      sensors: [],
+      handleDragEnd: vi.fn(),
+    });
+    server.use(
+      http.post(`${TAURI_ENDPOINT}/get_opencode_live_provider_ids`, () => {
+        liveIdsRequests += 1;
+        return HttpResponse.json([]);
+      }),
+    );
+
+    renderWithQueryClient(
+      <ProviderList
+        {...baseProps}
+        providers={{ a: providerA }}
+        appId="opencode"
+      />,
+    );
+
+    expect(await screen.findByTestId("add-a")).toBeInTheDocument();
+    expect(liveIdsRequests).toBe(0);
   });
 
   it.each(["mcode"] as const)(
