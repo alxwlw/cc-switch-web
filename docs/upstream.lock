@@ -1,7 +1,8 @@
 upstream_repository = "farion1231/cc-switch"
-upstream_tag = "v4.0.20"
-upstream_commit = "85ad4969b3399500baaea9d46b1e08f87aba80e1"
+upstream_tag = "v4.0.20+"
+upstream_commit = "de0a235ad6389ce4afa333b472cdee615a3f3987"
 forked_at = "2026-10-24"
+last_sync = "2026-10-25: merged de0a235a (codex proxy fix) into main"
 
 # Branch policy (mirrors xiaoY233/cc-switch-remote):
 # - `upstream-main`: clean mirror of upstream, fast-forward only.
