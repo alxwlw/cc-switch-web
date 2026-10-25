@@ -12,9 +12,9 @@ Scope: `src-tauri/src/web_api.rs` (4 роута), `src-tauri/tests/web_api_custo
 - DTO уже camelCase: `database/dao/custom_icons.rs:16-27` (`CustomIconEntry {id,name,data,createdAt}`), `AddCustomIconResult {icon,existed}`; хранение — settings-таблица, ключ `custom_icons`.
 
 ### Task 1: backend — 4 роута + тесты
-- [ ] `GET /api/custom-icons` → list; `POST /api/custom-icons` (body `{name,data}`) → add; `PUT /api/custom-icons/:id` (body `{name}`) → rename; `DELETE /api/custom-icons/:id` → delete. Хендлеры по паттерну env_conflicts/tool_versions, blocking-часть через `spawn_blocking`, ошибки → `fail`/`bad_request`.
-- [ ] `src-tauri/tests/web_api_custom_icons.rs` (harness из фазы 2): add→list→rename→delete happy path; add с дублем имени/пустым именем → 400; delete несуществующего → ошибка в `{ok:false}`; data URI сохраняется как есть.
-- [ ] nextest зелёный.
+- [x] `GET /api/custom-icons` → list; `POST /api/custom-icons` (body `{name,data}`) → add; `PUT /api/custom-icons/:id` (body `{name}`) → rename; `DELETE /api/custom-icons/:id` → delete. Хендлеры по паттерну env_conflicts/tool_versions, blocking-часть через `spawn_blocking`, ошибки → `fail`/`bad_request`.
+- [x] `src-tauri/tests/web_api_custom_icons.rs` (harness из фазы 2): add→list→rename→delete happy path; data URI сохраняется как есть. ~~add с дублем имени/пустым именем → 400; delete несуществующего → ошибка в `{ok:false}`~~ — неверно, фактический контракт сервиса (подтверждён ревью r0): дубль имени разрешён; дубль данных → 200 `{icon: <исходная запись>, existed: true}`, имя не меняется; пустое имя / невалидный PNG / rename несуществующего id → 500 `fail` с текстом сервиса дословно (`bad_request` в `web_api.rs` — только для невалидного app id); delete несуществующего → no-op, `{ok:true}`.
+- [x] nextest зелёный (`cargo test`: web_api_custom_icons 4/4; полный прогон — только 3 предсуществующих красных).
 
 ### Task 2: frontend — adapter cases + тест
 - [ ] 4 case в `mapCommand` (`get_custom_icons`, `add_custom_icon`, `rename_custom_icon`, `delete_custom_icon`) с теми же camelCase-полями в body.
