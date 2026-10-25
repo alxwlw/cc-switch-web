@@ -25,6 +25,12 @@ const settingsState = vi.hoisted(() => ({
   updateDirectory: vi.fn(),
 }));
 
+const platform = vi.hoisted(() => ({ linux: false }));
+vi.mock("@/lib/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/platform")>()),
+  isLinux: () => platform.linux,
+}));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -131,6 +137,7 @@ const SECTIONS: SettingsSection[] = [
 const WEB_HIDDEN: SettingsSection[] = ["routing", "network", "data"];
 
 beforeEach(() => {
+  platform.linux = false;
   settingsState.value = {
     language: "en",
     minimizeToTrayOnClose: true,
@@ -157,14 +164,17 @@ const renderPage = (section: SettingsSection) =>
     </QueryClientProvider>,
   );
 
-const renderSidebar = (view: "usage" | "settings") =>
+const renderSidebar = (
+  view: "usage" | "settings",
+  settingsSection: SettingsSection = "general",
+) =>
   render(
     <QueryClientProvider client={createTestQueryClient()}>
       <Sidebar
         activeApp="claude"
         view={view}
         visibleApps={{} as VisibleApps}
-        settingsSection="general"
+        settingsSection={settingsSection}
         onSelectApp={vi.fn()}
         onSelectPage={vi.fn()}
         onSelectSettingsSection={vi.fn()}
@@ -233,6 +243,25 @@ describe("Sidebar · WEB-00", () => {
   });
 });
 
+describe("Sidebar settings highlight · WEB-00", () => {
+  const current = () =>
+    within(screen.getByRole("group", { name: "nav.settings" }))
+      .getAllByRole("button")
+      .filter((b) => b.getAttribute("aria-current") === "page")
+      .map((b) => b.textContent);
+
+  it("web: a requested hidden section highlights general", () => {
+    setWeb(true);
+    renderSidebar("settings", "routing");
+    expect(current()).toEqual(["settings.sections.general"]);
+  });
+
+  it("desktop: routing highlights routing", () => {
+    renderSidebar("settings", "routing");
+    expect(current()).toEqual(["settings.sections.routing"]);
+  });
+});
+
 describe("SettingsPage · WEB-00", () => {
   it.each(WEB_HIDDEN)(
     "web: requested hidden section %s lands on general",
@@ -273,7 +302,7 @@ describe("SettingsPage · WEB-00", () => {
     ).toBeDisabled();
     // рабочие тоглы остаются активными
     expect(
-      screen.getByRole("switch", { name: "settings.minimizeToTray" }),
+      screen.getByRole("switch", { name: "settings.general.checkToolUpdates" }),
     ).toBeEnabled();
   });
 
@@ -281,6 +310,58 @@ describe("SettingsPage · WEB-00", () => {
     renderPage("general");
     expect(
       screen.getByRole("switch", { name: "settings.launchOnStartup" }),
+    ).toBeEnabled();
+  });
+
+  it("web: tray, window-control and terminal settings are disabled", () => {
+    setWeb(true);
+    renderPage("general");
+    expect(
+      screen.getByRole("switch", { name: "settings.minimizeToTray" }),
+    ).toBeDisabled();
+    for (const name of [
+      "settings.general.trayStylePanel",
+      "settings.general.trayStyleMenu",
+    ]) {
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+    }
+    expect(
+      screen.getByRole("combobox", { name: "settings.terminal.title" }),
+    ).toBeDisabled();
+  });
+
+  it("desktop: tray and terminal settings are enabled", () => {
+    renderPage("general");
+    expect(
+      screen.getByRole("switch", { name: "settings.minimizeToTray" }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "settings.general.trayStyleMenu" }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("combobox", { name: "settings.terminal.title" }),
+    ).toBeEnabled();
+  });
+
+  it("web + Linux: the app window controls switch is disabled with the tip", async () => {
+    setWeb(true);
+    platform.linux = true;
+    renderPage("general");
+    const sw = screen.getByRole("switch", {
+      name: "settings.useAppWindowControls",
+    });
+    expect(sw).toBeDisabled();
+    await userEvent.hover(sw.parentElement as HTMLElement);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "web.unavailable",
+    );
+  });
+
+  it("desktop + Linux: the app window controls switch is enabled", () => {
+    platform.linux = true;
+    renderPage("general");
+    expect(
+      screen.getByRole("switch", { name: "settings.useAppWindowControls" }),
     ).toBeEnabled();
   });
 

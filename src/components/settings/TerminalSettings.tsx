@@ -77,12 +77,14 @@ function getDefaultTerminal(): string {
 export interface TerminalSettingsProps {
   value?: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
 }
 
 /** 首选终端的下拉框（设置 → 通用 → 窗口与终端那一行的控件）。 */
 export function TerminalSelect({
   value,
   onChange,
+  disabled,
   className,
 }: TerminalSettingsProps & { className?: string }) {
   const { t } = useTranslation();
@@ -90,7 +92,7 @@ export function TerminalSelect({
   const currentValue = value || getDefaultTerminal();
 
   return (
-    <Select value={currentValue} onValueChange={onChange}>
+    <Select value={currentValue} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger
         className={className ?? "w-[200px]"}
         aria-label={t("settings.terminal.title")}

@@ -18,7 +18,7 @@ export function WebUnavailableTip({
   if (!active) return children;
   return (
     <HoverTip content={t("web.unavailable")}>
-      <span className="inline-flex">{children}</span>
+      <span className="inline-flex [&>*]:pointer-events-none">{children}</span>
     </HoverTip>
   );
 }

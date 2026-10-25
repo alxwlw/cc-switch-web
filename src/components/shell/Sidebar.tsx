@@ -29,6 +29,7 @@ import {
   isAppPage,
   isSettingsSectionAvailable,
   isViewAvailable,
+  resolveSettingsSection,
 } from "@/lib/navigation";
 import { SkillsIcon } from "@/components/BrandIcons";
 import { useUpdate } from "@/contexts/UpdateContext";
@@ -759,7 +760,8 @@ function SettingsDirectory({
           <NavItem
             key={section}
             collapsed={collapsed}
-            selected={settingsSection === section}
+            // WEB-00: запрошенная скрытая секция подсвечивает general (её и рисует SettingsPage)
+            selected={resolveSettingsSection(settingsSection) === section}
             icon={icon}
             label={t(`settings.sections.${section}`)}
             dot={section === "about" && hasUpdate}

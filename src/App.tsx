@@ -62,7 +62,6 @@ import {
   appPageBelongsTo,
   isAppPage,
   readStoredView,
-  resolveSettingsSection,
   sharedFeatureAppOf,
   storeView,
   type GlobalPage,
@@ -836,11 +835,9 @@ function App() {
   };
 
   const openSettings = (
-    requestedSection: SettingsSection = "general",
+    section: SettingsSection = "general",
     appConfigTarget?: AppId,
   ) => {
-    // WEB-00: скрытая в web секция открывается как general — снимет WEB-01/23/26
-    const section = resolveSettingsSection(requestedSection);
     if (managementBusyRef.current) return;
     if (confirmLeave(() => openSettings(section, appConfigTarget))) return;
     closeProviderPanels();
@@ -1749,12 +1746,12 @@ function App() {
           activeApp={activeApp}
           view={currentView}
           visibleApps={visibleApps}
-          settingsSection={resolveSettingsSection(settingsSection)}
+          settingsSection={settingsSection}
           onSelectApp={selectApp}
           onSelectPage={openPageFromNav}
           onSelectSettingsSection={(section) => {
             setAppConfigScrollTarget(undefined);
-            setSettingsSection(resolveSettingsSection(section));
+            setSettingsSection(section);
           }}
           onExitSettings={exitSettings}
           appsUpdateAvailable={
