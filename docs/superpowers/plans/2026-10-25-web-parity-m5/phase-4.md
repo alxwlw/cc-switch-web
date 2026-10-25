@@ -13,9 +13,9 @@ Scope: `src-tauri/src/web_api.rs` (2 роута), `src-tauri/tests/web_api_env.r
 - Существующие env-роуты: `/api/env/tools` (POST), `/api/env/conflicts` (GET) — web_api.rs:137-138,1003-1033.
 
 ### Task 1: backend — cleanup/restore роуты + тесты
-- [ ] `POST /api/env/conflicts/cleanup` (body `{conflicts:[EnvConflict]}`) → `spawn_blocking(env_manager::delete_env_vars)` → `ok(BackupInfo)`; `POST /api/env/restore` (body `{backupPath}`) → `restore_from_backup` → `ok(null)`.
-- [ ] `src-tauri/tests/web_api_env.rs`: cleanup на фиктивных sourcePath-файлах создаёт backup и удаляет переменные; restore восстанавливает; невалидный body → 400; restore с несуществующим backupPath → `{ok:false}`. Проверить unix-поведение (если unix-ветка не реализована — зафиксировать в Notes и gates-поведение: честная ошибка, не паника).
-- [ ] nextest зелёный.
+- [x] `POST /api/env/conflicts/cleanup` (body `{conflicts:[EnvConflict]}`) → `spawn_blocking(env_manager::delete_env_vars)` → `ok(BackupInfo)`; `POST /api/env/restore` (body `{backupPath}`) → `restore_from_backup` → `ok(null)`.
+- [x] `src-tauri/tests/web_api_env.rs` (6 тестов): cleanup на фиктивных sourcePath-файлах создаёт backup и удаляет переменные; restore восстанавливает; невалидный body → 400 (битый JSON) / 422 (не та форма — axum `Json` rejection); restore с несуществующим backupPath → 500 `{ok:false}` с дословной ошибкой сервиса. Unix-ветка реализована (см. Notes).
+- [x] cargo test зелёный (кроме предсуществующих и flaky `forwarder::bookkeeping`, см. Notes). Коммит `0eb17d6b`, review r0 approved.
 
 ### Task 2: frontend — adapter + warning в UI
 - [ ] `mapCommand`: `delete_env_vars` → POST cleanup с `{conflicts}`; `restore_env_backup` → POST restore с `{backupPath}`.
@@ -28,4 +28,8 @@ Scope: `src-tauri/src/web_api.rs` (2 роута), `src-tauri/tests/web_api_env.r
 
 ## Notes for next phase
 
-- (заполнить по итогам)
+- **Контракт ошибок роутов** (сверено с кодом, не с планом): битый JSON → 400, не та форма/нет поля → 422 — это дефолтный rejection axum `Json<T>`, как у остальных роутов `web_api.rs`; ошибка сервиса → 500 `{ok:false}` с дословным китайским текстом (`读取备份文件失败…`), как `Err(e.to_string())` Tauri-команды.
+- **Unix-поведение env_manager**: `sourceType:"file"` правит rc-файл из `sourcePath` (берётся часть до `:`); `"system"` при delete — no-op, но в backup попадает, а restore такой записи падает; неизвестный тип — ошибка, backup остаётся. Сервис переписывает rc-файл без завершающего `\n` — существующее поведение, не меняли. `backup_dir()` = `dirs::home_dir()/.cc-switch/backups` → в тестах под test home. Тест-файл `cfg(not(windows))`.
+- **Flaky вне диффа**: 3 теста `forwarder::bookkeeping` падают в полном `cargo test` нестабильно (1–4 падения от прогона к прогону на одном HEAD), в одиночку 17/17. Ревьюер воспроизвёл без связи с этой фазой. Итог Task 1: cargo test 4245 passed / 6 failed (3 baseline + 3 flaky).
+- `clippy --all-targets` ругается `await_holding_lock` в тестах prompts/custom-icons (и в новом по тому же шаблону) — предсуществующее, CI гоняет clippy без `--all-targets`.
+- NIT ревью (DP-024, отложен): в `web_api_env.rs` локальный `raw_post` для не-JSON ответов axum (`web_call` паникует на plain-text rejection). Перенести raw-вариант в `support.rs`, когда он понадобится второму тест-файлу.
