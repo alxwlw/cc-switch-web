@@ -363,6 +363,30 @@ export class WebUnsupportedError extends Error {
   }
 }
 
+/** WEB-30: external HTTP(S) links open in the browser — no backend needed.
+ *  Scheme validation mirrors the desktop command (misc.rs validate_external_url),
+ *  restricted to http/https like settingsApi.openExternal. */
+function openExternalInBrowser(url: unknown): boolean {
+  if (typeof url !== "string" || !url.trim()) throw new Error("Invalid URL");
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("Invalid URL");
+  }
+  const scheme = parsed.protocol.replace(":", "").toLowerCase();
+  if (scheme !== "http" && scheme !== "https") throw new Error("Invalid URL");
+  if (typeof window === "undefined") throw new Error("Invalid URL");
+  const opened = window.open(
+    parsed.toString(),
+    "_blank",
+    "noopener,noreferrer",
+  );
+  if (!opened)
+    throw new Error("Браузер заблокировал открытие ссылки (popup blocker)");
+  return true;
+}
+
 /** Drop-in replacement for Tauri's `invoke` used by every `src/lib/api/*` module. */
 export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
   // Silent local noops: desktop-only fire-and-forget calls that must not
@@ -376,6 +400,10 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
     cmd.startsWith("plugin:")
   ) {
     return null as T;
+  }
+  // Browser-side commands with no HTTP endpoint.
+  if (cmd === "open_external") {
+    return openExternalInBrowser(args.url) as T;
   }
   const mapped = mapCommand(cmd, args);
   if (!mapped) throw new WebUnsupportedError(cmd);
