@@ -143,6 +143,24 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "get_prompt_file_location":
       return { method: "GET", url: `${appBase(a.app)}/prompt-location` };
 
+    // ---------- custom icon library ----------
+    case "get_custom_icons":
+      return { method: "GET", url: "/api/custom-icons" };
+    case "add_custom_icon":
+      return {
+        method: "POST",
+        url: "/api/custom-icons",
+        body: { name: a.name, data: a.data },
+      };
+    case "rename_custom_icon":
+      return {
+        method: "PUT",
+        url: `/api/custom-icons/${enc(a.id)}`,
+        body: { name: a.name },
+      };
+    case "delete_custom_icon":
+      return { method: "DELETE", url: `/api/custom-icons/${enc(a.id)}` };
+
     // ---------- mcp ----------
     case "get_mcp_servers":
       return { method: "GET", url: "/api/mcp/servers" };
