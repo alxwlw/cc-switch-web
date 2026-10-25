@@ -76,7 +76,10 @@ pub fn router(state: SharedState) -> Router {
             "/api/:app/providers/import-default",
             post(import_default_providers),
         )
-        .route("/api/:app/providers/editor-view", post(provider_editor_view))
+        .route(
+            "/api/:app/providers/editor-view",
+            post(provider_editor_view),
+        )
         .route("/api/:app/providers/live-add", post(live_add_provider))
         .route(
             "/api/:app/providers/live-remove",
@@ -90,6 +93,10 @@ pub fn router(state: SharedState) -> Router {
             put(upsert_prompt).delete(delete_prompt),
         )
         .route("/api/:app/prompts/:id/enable", post(enable_prompt))
+        .route(
+            "/api/:app/prompts/import-from-file",
+            post(import_prompt_from_file),
+        )
         .route("/api/:app/prompt-content", get(prompt_content))
         .route("/api/:app/prompt-location", get(prompt_location))
         // mcp (unified store)
@@ -109,10 +116,7 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/skills/resync", post(resync_skills))
         .route("/api/skills/uninstall", post(uninstall_skill))
         // sessions
-        .route(
-            "/api/sessions",
-            get(list_sessions).delete(delete_sessions),
-        )
+        .route("/api/sessions", get(list_sessions).delete(delete_sessions))
         .route("/api/sessions/one", delete(delete_session))
         .route("/api/sessions/messages", get(session_messages))
         .route("/api/sessions/block", post(session_block))
@@ -129,10 +133,7 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/usage/model-pricing", get(model_pricing))
         .route("/api/usage/sync", post(sync_session_usage))
         // settings & environment
-        .route(
-            "/api/settings",
-            get(get_settings).put(save_settings),
-        )
+        .route("/api/settings", get(get_settings).put(save_settings))
         .route("/api/paths", get(paths))
         .route("/api/env/tools", post(tool_versions))
         .route("/api/env/conflicts", get(env_conflicts))
@@ -164,10 +165,7 @@ async fn list_providers(State(state): State<SharedState>, Path(app): Path<String
     }
 }
 
-async fn current_provider(
-    State(state): State<SharedState>,
-    Path(app): Path<String>,
-) -> ApiResult {
+async fn current_provider(State(state): State<SharedState>, Path(app): Path<String>) -> ApiResult {
     let app_type = app_type!(&app);
     match ProviderService::current(&state, app_type) {
         Ok(id) => ok(id),
@@ -353,7 +351,8 @@ async fn provider_editor_view(
     }
 }
 
-async fn delete_provider(    State(state): State<SharedState>,
+async fn delete_provider(
+    State(state): State<SharedState>,
     Path((app, id)): Path<(String, String)>,
 ) -> ApiResult {
     let app_type = app_type!(&app);
@@ -372,6 +371,22 @@ async fn list_prompts(State(state): State<SharedState>, Path(app): Path<String>)
     match PromptService::get_prompts(&state, app_type) {
         Ok(map) => ok(map),
         Err(e) => fail(e.to_string()),
+    }
+}
+
+/// Imports the app's live prompt file (on the server host) as a disabled prompt;
+/// returns the new prompt id, same as the desktop command.
+async fn import_prompt_from_file(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+) -> ApiResult {
+    let app_type = app_type!(&app);
+    match tokio::task::spawn_blocking(move || PromptService::import_from_file(&state, app_type))
+        .await
+    {
+        Ok(Ok(id)) => ok(id),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("import prompt task failed: {e}")),
     }
 }
 
@@ -457,10 +472,7 @@ async fn upsert_mcp_server(
     }
 }
 
-async fn delete_mcp_server(
-    State(state): State<SharedState>,
-    Path(id): Path<String>,
-) -> ApiResult {
+async fn delete_mcp_server(State(state): State<SharedState>, Path(id): Path<String>) -> ApiResult {
     match McpService::delete_server(&state, &id) {
         Ok(v) => ok(v),
         Err(e) => fail(e.to_string()),
@@ -490,7 +502,10 @@ struct McpConfigQuery {
     app: String,
 }
 
-async fn mcp_config(State(state): State<SharedState>, Query(q): Query<McpConfigQuery>) -> ApiResult {
+async fn mcp_config(
+    State(state): State<SharedState>,
+    Query(q): Query<McpConfigQuery>,
+) -> ApiResult {
     let app_type = app_type!(&q.app);
     let config_path = crate::config::get_app_config_path()
         .to_string_lossy()
@@ -678,8 +693,7 @@ async fn session_block(Json(body): Json<SessionBlockReq>) -> ApiResult {
         limit,
     } = body;
     match tokio::task::spawn_blocking(move || {
-        let source =
-            session_manager::content::validate_source(&provider_id, &source_path)?;
+        let source = session_manager::content::validate_source(&provider_id, &source_path)?;
         let full = session_manager::content::resolve_content_ref(&source, &content_ref)?;
         Ok::<_, String>(session_manager::content::paginate(&full, offset, limit))
     })
@@ -702,10 +716,7 @@ struct UsageQuery {
     model: Option<String>,
 }
 
-async fn usage_summary(
-    State(state): State<SharedState>,
-    Query(q): Query<UsageQuery>,
-) -> ApiResult {
+async fn usage_summary(State(state): State<SharedState>, Query(q): Query<UsageQuery>) -> ApiResult {
     let db = state.db.clone();
     match tokio::task::spawn_blocking(move || {
         db.get_usage_summary(
@@ -724,10 +735,7 @@ async fn usage_summary(
     }
 }
 
-async fn usage_by_app(
-    State(state): State<SharedState>,
-    Query(q): Query<UsageQuery>,
-) -> ApiResult {
+async fn usage_by_app(State(state): State<SharedState>, Query(q): Query<UsageQuery>) -> ApiResult {
     let db = state.db.clone();
     match tokio::task::spawn_blocking(move || {
         db.get_usage_summary_by_app(q.start, q.end, q.provider.as_deref(), q.model.as_deref())
@@ -847,7 +855,10 @@ struct RequestLogsReq {
     page_size: u32,
 }
 
-async fn request_logs(State(state): State<SharedState>, Json(body): Json<RequestLogsReq>) -> ApiResult {
+async fn request_logs(
+    State(state): State<SharedState>,
+    Json(body): Json<RequestLogsReq>,
+) -> ApiResult {
     let db = state.db.clone();
     match tokio::task::spawn_blocking(move || {
         db.get_request_logs(&body.filters, body.page, body.page_size)
@@ -860,10 +871,7 @@ async fn request_logs(State(state): State<SharedState>, Json(body): Json<Request
     }
 }
 
-async fn request_detail(
-    State(state): State<SharedState>,
-    Path(id): Path<String>,
-) -> ApiResult {
+async fn request_detail(State(state): State<SharedState>, Path(id): Path<String>) -> ApiResult {
     let db = state.db.clone();
     match tokio::task::spawn_blocking(move || db.get_request_detail(&id)).await {
         Ok(Ok(detail)) => ok(detail),
@@ -887,7 +895,8 @@ async fn sync_session_usage(State(state): State<SharedState>) -> ApiResult {
     }
 }
 
-async fn model_pricing(State(state): State<SharedState>) -> ApiResult {    let db = state.db.clone();
+async fn model_pricing(State(state): State<SharedState>) -> ApiResult {
+    let db = state.db.clone();
     match tokio::task::spawn_blocking(move || {
         db.ensure_model_pricing_seeded()?;
         crate::services::model_pricing::sync_local_model_pricing(&db)?;
@@ -959,26 +968,23 @@ async fn save_settings(
         || merged.codex_stack_subagent_reasoning_effort
             != existing.codex_stack_subagent_reasoning_effort
         || merged.codex_stack_auto_review_model != existing.codex_stack_auto_review_model;
-    let unify_changed =
-        merged.unify_codex_session_history != existing.unify_codex_session_history;
+    let unify_changed = merged.unify_codex_session_history != existing.unify_codex_session_history;
     if let Err(e) = crate::settings::update_settings(merged) {
         return fail(e.to_string());
     }
     // NOTE: desktop tray restyle skipped headless (no AppHandle).
     if stack_changed {
-        if let Err(err) =
-            crate::mode::controller::resync_codex_stack_catalog(&state).await
-        {
+        if let Err(err) = crate::mode::controller::resync_codex_stack_catalog(&state).await {
             log::warn!("Codex stack resync failed after settings save: {err}");
             return fail(format!("settings saved but Codex resync failed: {err}"));
         }
     }
     if unify_changed {
-        if let Err(err) =
-            crate::services::provider::reapply_current_codex_official_live(&state)
-        {
+        if let Err(err) = crate::services::provider::reapply_current_codex_official_live(&state) {
             log::warn!("Codex live reapply failed after settings save: {err}");
-            return fail(format!("settings saved but Codex live reapply failed: {err}"));
+            return fail(format!(
+                "settings saved but Codex live reapply failed: {err}"
+            ));
         }
     }
     ok(true)
@@ -995,9 +1001,8 @@ async fn paths() -> ApiResult {
 #[serde(rename_all = "camelCase")]
 struct ToolVersionsReq {
     tools: Option<Vec<String>>,
-    wsl_shell_by_tool: Option<
-        std::collections::HashMap<String, crate::commands::misc::WslShellPreferenceInput>,
-    >,
+    wsl_shell_by_tool:
+        Option<std::collections::HashMap<String, crate::commands::misc::WslShellPreferenceInput>>,
 }
 
 async fn tool_versions(Json(body): Json<ToolVersionsReq>) -> ApiResult {
