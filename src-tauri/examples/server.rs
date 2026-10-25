@@ -74,22 +74,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         api.fallback_service(
             tower_http::services::ServeDir::new(&web_dist)
                 .append_index_html_on_directories(true)
-                .not_found_service(tower::service_fn(move |_req: axum::http::Request<axum::body::Body>| {
-                    let index = index.clone();
-                    async move {
-                        let (status, body) = match tokio::fs::read(&index).await {
-                            Ok(html) => (200u16, html),
-                            Err(_) => (500u16, b"console unavailable".to_vec()),
-                        };
-                        Ok::<_, std::convert::Infallible>(
-                            axum::http::Response::builder()
-                                .status(status)
-                                .header("content-type", "text/html")
-                                .body(axum::body::Body::from(body))
-                                .unwrap_or_default(),
-                        )
-                    }
-                })),
+                .not_found_service(tower::service_fn(
+                    move |_req: axum::http::Request<axum::body::Body>| {
+                        let index = index.clone();
+                        async move {
+                            let (status, body) = match tokio::fs::read(&index).await {
+                                Ok(html) => (200u16, html),
+                                Err(_) => (500u16, b"console unavailable".to_vec()),
+                            };
+                            Ok::<_, std::convert::Infallible>(
+                                axum::http::Response::builder()
+                                    .status(status)
+                                    .header("content-type", "text/html")
+                                    .body(axum::body::Body::from(body))
+                                    .unwrap_or_default(),
+                            )
+                        }
+                    },
+                )),
         )
     } else {
         log::info!(
