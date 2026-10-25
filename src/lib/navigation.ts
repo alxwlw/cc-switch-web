@@ -64,9 +64,11 @@ export function resolveSettingsSection(
 }
 
 // WEB-00: экраны целиком из desktop-only команд скрыты в web: центр авторизации (OAuth, auth_*) —
-// снимет WEB-02; workspace/openclawConfig/hermesMemory (openclaw/hermes-команды) — WEB-15/16/17.
+// снимет WEB-02; workspace/openclawConfig/hermesMemory (openclaw/hermes-команды) — WEB-15/16/17;
+// skillsDiscovery (discover/skills.sh/репозитории) — WEB-05.
 const WEB_HIDDEN_VIEWS: View[] = [
   "auth",
+  "skillsDiscovery",
   "workspace",
   "openclawConfig",
   "hermesMemory",

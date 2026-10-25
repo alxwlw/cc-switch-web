@@ -10,6 +10,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
+import { isWeb } from "@/lib/api/adapter";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -254,39 +256,42 @@ export function UsageSettingsSheet({
               </SettingsRow>
 
               {/* 只读状态 + 去别处修改：整行就是入口（「已开启 ›」），不再单放一个按钮 */}
-              <div className="relative">
-                {onOpenRoutingSettings && (
-                  <button
-                    type="button"
-                    aria-label={t("usage.sources.editLogging")}
-                    className="absolute inset-0 transition-colors hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                    onClick={() => {
-                      onOpenChange(false);
-                      onOpenRoutingSettings();
-                    }}
-                  />
-                )}
-                <div className="pointer-events-none relative px-4 py-3.5">
-                  <RowHeader
-                    title={t("routingSettings.logging")}
-                    help={{
-                      title: t("usage.sources.loggingHelpTitle"),
-                      body: t("usage.sources.loggingHelp"),
-                    }}
-                    trailing={
-                      <span className="flex items-center gap-0.5">
-                        {open ? <LoggingStatus /> : null}
-                        {onOpenRoutingSettings && (
-                          <ChevronRight
-                            aria-hidden="true"
-                            className="h-4 w-4 text-fg-3"
-                          />
-                        )}
-                      </span>
-                    }
-                  />
+              {/* WEB-00: статус логирования (get_global_proxy_config) неизвестен, а секция «routing», куда ведёт ссылка, скрыта — строка скрыта в web — снимет WEB-01 */}
+              {!isWeb && (
+                <div className="relative">
+                  {onOpenRoutingSettings && (
+                    <button
+                      type="button"
+                      aria-label={t("usage.sources.editLogging")}
+                      className="absolute inset-0 transition-colors hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      onClick={() => {
+                        onOpenChange(false);
+                        onOpenRoutingSettings();
+                      }}
+                    />
+                  )}
+                  <div className="pointer-events-none relative px-4 py-3.5">
+                    <RowHeader
+                      title={t("routingSettings.logging")}
+                      help={{
+                        title: t("usage.sources.loggingHelpTitle"),
+                        body: t("usage.sources.loggingHelp"),
+                      }}
+                      trailing={
+                        <span className="flex items-center gap-0.5">
+                          {open ? <LoggingStatus /> : null}
+                          {onOpenRoutingSettings && (
+                            <ChevronRight
+                              aria-hidden="true"
+                              className="h-4 w-4 text-fg-3"
+                            />
+                          )}
+                        </span>
+                      }
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <SettingsRow
                 title={t("usage.rebuildCodex.title")}
@@ -295,22 +300,25 @@ export function UsageSettingsSheet({
                   body: t("usage.rebuildCodex.description"),
                 }}
                 trailing={
-                  <Button
-                    type="button"
-                    variant="neutral"
-                    size="compact"
-                    className="shrink-0"
-                    disabled={rebuildingCodex}
-                    onClick={onRebuildCodex}
-                  >
-                    {rebuildingCodex && (
-                      <Loader2
-                        aria-hidden="true"
-                        className="h-3.5 w-3.5 motion-safe:animate-spin"
-                      />
-                    )}
-                    {t("usage.rebuildCodex.actionEllipsis")}
-                  </Button>
+                  // WEB-00: rebuild_codex_usage не замаплен — снимет WEB-12
+                  <WebUnavailableTip active={isWeb}>
+                    <Button
+                      type="button"
+                      variant="neutral"
+                      size="compact"
+                      className="shrink-0"
+                      disabled={isWeb || rebuildingCodex}
+                      onClick={onRebuildCodex}
+                    >
+                      {rebuildingCodex && (
+                        <Loader2
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5 motion-safe:animate-spin"
+                        />
+                      )}
+                      {t("usage.rebuildCodex.actionEllipsis")}
+                    </Button>
+                  </WebUnavailableTip>
                 }
               >
                 <p className="m-0 text-caption text-fg-2">

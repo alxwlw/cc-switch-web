@@ -1,7 +1,9 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { ImageOff } from "lucide-react";
 
+import { isWeb } from "@/lib/api/adapter";
 import { useSessionImage } from "@/lib/query/sessions";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { ImageRef } from "@/types";
 import { useReaderContext } from "./context";
@@ -59,12 +61,30 @@ export const SessionImage = memo(function SessionImage({
   const { providerId, sourcePath, projectDir } = useReaderContext();
   const [ref, near] = useNearViewport();
   const [open, setOpen] = useState(false);
+  const { t } = useTranslation();
+  // WEB-00: get_session_image не замаплен — в web не запрашиваем, показываем заглушку — снимет WEB-13
   const { url, error } = useSessionImage(providerId, sourcePath, image, {
-    enabled: near,
+    enabled: near && !isWeb,
   });
 
   const sizeClass =
     variant === "thumb" ? "h-24 max-w-[240px]" : "max-h-[320px] max-w-full";
+
+  if (isWeb) {
+    return (
+      <span
+        role="img"
+        aria-label={`${alt} · ${t("web.sessionImage")}`}
+        className={cn(
+          "inline-flex h-24 w-32 flex-col items-center justify-center gap-1 rounded-[8px] border border-border bg-subtle px-2 text-center text-caption text-fg-3",
+          className,
+        )}
+      >
+        <ImageOff aria-hidden className="h-4 w-4" />
+        {t("web.sessionImage")}
+      </span>
+    );
+  }
 
   if (error) {
     if (image.source.kind === "local_file") {

@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { Globe, Info, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
+import { isWeb } from "@/lib/api/adapter";
 import { HoverTip } from "@/components/ui/hover-tip";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Notice } from "@/components/ui/notice";
@@ -334,8 +336,9 @@ export function PricingConfigPanel() {
 
   return (
     <div className="flex flex-col gap-3 pt-3">
-      <ModelsDevAutoSyncPanel />
-      <BillingDefaultsRow />
+      {/* WEB-00: конфиг models.dev-синхронизации и pricing model source (get_models_dev_sync_config, get_pricing_model_source) не замаплены — блоки скрыты в web — снимет WEB-12 */}
+      {!isWeb && <ModelsDevAutoSyncPanel />}
+      {!isWeb && <BillingDefaultsRow />}
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex items-center gap-0.5">
@@ -350,24 +353,31 @@ export function PricingConfigPanel() {
           {t("usage.pricing.unit")}
         </span>
         <div className="flex-1" />
-        <Button
-          type="button"
-          variant="neutral"
-          size="compact"
-          onClick={() => setPickerOpen(true)}
-        >
-          <Globe className="h-3.5 w-3.5" />
-          {t("usage.importFromModelsDev")}
-        </Button>
-        <Button
-          type="button"
-          variant="neutral"
-          size="compact"
-          onClick={handleAddNew}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          {t("usage.addPricing")}
-        </Button>
+        {/* WEB-00: update_model_pricing(_batch)/delete_model_pricing не замаплены, читать таблицу можно — снимет WEB-12 */}
+        <WebUnavailableTip active={isWeb}>
+          <Button
+            type="button"
+            variant="neutral"
+            size="compact"
+            disabled={isWeb}
+            onClick={() => setPickerOpen(true)}
+          >
+            <Globe className="h-3.5 w-3.5" />
+            {t("usage.importFromModelsDev")}
+          </Button>
+        </WebUnavailableTip>
+        <WebUnavailableTip active={isWeb}>
+          <Button
+            type="button"
+            variant="neutral"
+            size="compact"
+            disabled={isWeb}
+            onClick={handleAddNew}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("usage.addPricing")}
+          </Button>
+        </WebUnavailableTip>
       </div>
 
       {isLoading ? (
@@ -438,37 +448,53 @@ export function PricingConfigPanel() {
                         {formatUnitPrice(model.cacheCreationCostPerMillion)}
                       </td>
                       <td className="whitespace-nowrap pe-1 text-end">
-                        <HoverTip content={t("common.edit")}>
-                          <Button
-                            type="button"
-                            variant="quiet"
-                            size="icon-compact"
-                            aria-label={t("usage.pricing.editAria", { name })}
-                            onClick={() => {
-                              setIsAddingNew(false);
-                              setEditingModel(model);
-                            }}
-                          >
-                            <Pencil
-                              className="h-3.5 w-3.5"
-                              strokeWidth={1.75}
-                            />
-                          </Button>
+                        <HoverTip
+                          content={
+                            isWeb ? t("web.unavailable") : t("common.edit")
+                          }
+                        >
+                          <span className="inline-flex">
+                            <Button
+                              type="button"
+                              variant="quiet"
+                              size="icon-compact"
+                              aria-label={t("usage.pricing.editAria", { name })}
+                              disabled={isWeb}
+                              onClick={() => {
+                                setIsAddingNew(false);
+                                setEditingModel(model);
+                              }}
+                            >
+                              <Pencil
+                                className="h-3.5 w-3.5"
+                                strokeWidth={1.75}
+                              />
+                            </Button>
+                          </span>
                         </HoverTip>
-                        <HoverTip content={t("common.delete")}>
-                          <Button
-                            type="button"
-                            variant="quiet"
-                            size="icon-compact"
-                            aria-label={t("usage.pricing.deleteAria", { name })}
-                            className="hover:text-danger-text"
-                            onClick={() => setDeleteTarget(model)}
-                          >
-                            <Trash2
-                              className="h-3.5 w-3.5"
-                              strokeWidth={1.75}
-                            />
-                          </Button>
+                        <HoverTip
+                          content={
+                            isWeb ? t("web.unavailable") : t("common.delete")
+                          }
+                        >
+                          <span className="inline-flex">
+                            <Button
+                              type="button"
+                              variant="quiet"
+                              size="icon-compact"
+                              aria-label={t("usage.pricing.deleteAria", {
+                                name,
+                              })}
+                              className="hover:text-danger-text"
+                              disabled={isWeb}
+                              onClick={() => setDeleteTarget(model)}
+                            >
+                              <Trash2
+                                className="h-3.5 w-3.5"
+                                strokeWidth={1.75}
+                              />
+                            </Button>
+                          </span>
                         </HoverTip>
                       </td>
                     </tr>
