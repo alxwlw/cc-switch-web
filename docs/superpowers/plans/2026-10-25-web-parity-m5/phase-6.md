@@ -67,14 +67,17 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 - [x] Тесты: skills ZIP install disabled в web, sessions reveal/terminal в web, Apps actions disabled; desktop без изменений.
 
 ### Task 7: server-host semantics
-- [ ] В web при старте читать `GET /api/capabilities` и показывать `runtime_boundaries` (About-секция и/или неброский баннер): все файловые операции/CLI/proxy — на серверном хосте.
-- [ ] Тест на рендер баннера в web-режиме.
+- [x] В web при старте читать `GET /api/capabilities` и показывать `runtime_boundaries` (About-секция и/или неброский баннер): все файловые операции/CLI/proxy — на серверном хосте.
+- [x] Тест на рендер баннера в web-режиме.
 
 ### Task 8: гейты, PR, Plane
-- [ ] полный набор гейтов (frontend обязателен; Rust — только если задет).
-- [ ] ветка `web-parity/web-00-feature-gating`, PR; DX-58 → In Review + ссылка. Закрыть чекбоксы, Notes (таблица инвентаризации обязательна — понадобится WEB-28).
+- [x] полный набор гейтов (frontend обязателен; Rust — только если задет).
+- [x] ветка `web-parity/web-00-feature-gating`, PR; DX-58 → In Review + ссылка. Закрыть чекбоксы, Notes (таблица инвентаризации обязательна — понадобится WEB-28).
 
 ## Notes for next phase
+
+- **Статус (2026-10-26)**: ветка `web-parity/web-00-feature-gating` (worktree `.worktrees/web-00`), PR открыт, DX-58 In Review. Задачи 2–7 прошли implement→review (T2 r0, T3–T7 — r1 после fix round), T1 и T8 — контроллером. Финальные гейты на `160df993`: `pnpm typecheck`, `format:check` чисто; `test:unit` 3623 pass / 3 baseline (2× UsageDashboard, rememberedChoice storage-unavailable); `build:renderer` и `build:web` ок. Rust не тронут — cargo-гейты не нужны. В реальном браузере не проверялось: tooltip над disabled `Switch` (`[&>*]:pointer-events-none`), раскладка баннера.
+- **Parity-фазам 7–37**: свои гейты искать `git grep -n "WEB-00:"` + строка в таблице ниже (колонка «parity»); снятие гейта = убрать `isWeb`-ветку и перевернуть web-тест («скрыт/disabled в web» → «работает в web»). Секции/views снимаются правкой `src/lib/navigation.ts`, query — убрать `&& !isWeb` из `enabled`.
 
 ### Инвентаризация desktop-only controls (Task 1, `main@f675b330`)
 
@@ -177,3 +180,9 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 - Apps (WEB-25): update-all, diagnose-all, install/update строки, uninstall disabled; версии и check-updates (`get_tool_versions`) работают; ручные install/uninstall-диалоги только копируют команду; `ToolUninstallConfirmDialog` недостижим.
 - i18n: `web.sessionImage`, `web.sessionResumeCopied`.
 - **Flaky вне диффа**: `tests/components/SessionManagerPage.test.tsx` «switches to all apps and to time buckets» падает около полуночи по локальному времени (фикстуры от `Date.now()`, заголовок «今天»); с `TZ=UTC` зелёный. Baseline не трогали.
+
+### Server-host semantics (Task 7, `652e352c..160df993`)
+
+- `GET /api/capabilities` отдаёт голый JSON без `{ok,data}` — читается отдельным `fetchCapabilities` (`src/lib/api/capabilities.ts`, бросает на non-2xx и на payload без строкового `version`), не через `adapter.invoke`. Хук `useServerCapabilities` (`enabled: isWeb`, `retry: false`).
+- `WebHostBanner` (`src/components/web/`, над `EnvWarningBanner` в content-area): постоянный web-баннер «файлы, CLI и proxy — на серверном хосте», закрывается, флаг в `localStorage` в try/catch; не зависит от загрузки capabilities. `WebModeInfo` в About: тот же текст, версия сервера из capabilities (`web.mode.serverVersion`; app-version в web по-прежнему из шима `getVersion()` = "4.0.20-web"), `runtime_boundaries` (пустой/пробельный не рендерится). Ошибка capabilities → текст без версии, без toast. На desktop ничего не рендерится и не запрашивается.
+- WEB-28 (обновления) пригодится `version` из capabilities — это реальная версия crate сервера.
