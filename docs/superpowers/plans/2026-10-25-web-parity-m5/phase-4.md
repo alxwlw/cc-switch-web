@@ -24,9 +24,13 @@ Scope: `src-tauri/src/web_api.rs` (2 роута), `src-tauri/tests/web_api_env.r
 
 ### Task 3: гейты, PR, Plane
 - [x] полный набор гейтов на `1259b58c`: typecheck, format:check, build:renderer, build:web, cargo fmt/clippy `-D warnings`, `build --release --example server` — зелёные; test:unit 3328 passed / 3 failed, cargo test 4248 passed / 3 failed — только предсуществующие (flaky `forwarder::bookkeeping` в этом прогоне не упал).
-- [ ] ветка `web-parity/web-22-env-cleanup`, PR; DX-80 → In Review + ссылка. Закрыть чекбоксы, Notes.
+- [x] ветка `web-parity/web-22-env-cleanup`, PR #5; DX-80 → In Review + ссылка. Закрыть чекбоксы, Notes.
 
 ## Notes for next phase
+
+- **Статус 2026-10-25**: PR #5 (alxwlw/cc-switch-web) открыт, ветка `web-parity/web-22-env-cleanup`, worktree `.worktrees/web-22`; DX-80 → In Review с комментарием (ссылка + контракт). Задачи 1–2 прошли implement→review (r0 approved, 0 открытых), задача 3 — контроллером. Ждёт merge → `post-merge`: backend изменён — пересобрать server (`cargo build --release --example server` → `~/.local/bin/cc-switch-web`, прежний — в `.prev`), `pnpm build:web` в main-checkout, restart `cc-switch-web.service`; DX-80 → Done.
+- В PR вошёл docs-коммит `410a520d` (закрытие фазы 3): он был только в локальном main.
+- Базовая линия гейтов после фазы: cargo test 4248 passed / 3 failed, test:unit 3328 passed / 3 failed — красные те же предсуществующие.
 
 - **Контракт ошибок роутов** (сверено с кодом, не с планом): битый JSON → 400, не та форма/нет поля → 422 — это дефолтный rejection axum `Json<T>`, как у остальных роутов `web_api.rs`; ошибка сервиса → 500 `{ok:false}` с дословным китайским текстом (`读取备份文件失败…`), как `Err(e.to_string())` Tauri-команды.
 - **Unix-поведение env_manager**: `sourceType:"file"` правит rc-файл из `sourcePath` (берётся часть до `:`); `"system"` при delete — no-op, но в backup попадает, а restore такой записи падает; неизвестный тип — ошибка, backup остаётся. Сервис переписывает rc-файл без завершающего `\n` — существующее поведение, не меняли. `backup_dir()` = `dirs::home_dir()/.cc-switch/backups` → в тестах под test home. Тест-файл `cfg(not(windows))`.
