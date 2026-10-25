@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import { providersApi } from "@/lib/api/providers";
 import {
+  getSettings,
   resetProviderState,
   setCurrentProviderId,
   setLiveProviderIds,
@@ -604,6 +605,40 @@ describe("App integration with MSW", () => {
     expect(toastErrorMock).not.toHaveBeenCalledWith(
       expect.stringContaining("Provider key is required for openclaw"),
     );
+  });
+
+  describe.each([
+    ["desktop", false],
+    ["web", true],
+  ])("profile switcher in the app header (%s)", (_label, web) => {
+    it(`${web ? "is hidden" : "is shown"} when enabled in settings`, async () => {
+      setWeb(web);
+      setSettings({ showProfileSwitcher: true });
+      let settingsServed = 0;
+      server.use(
+        http.post("http://tauri.local/get_settings", () => {
+          settingsServed += 1;
+          return HttpResponse.json(getSettings());
+        }),
+      );
+      const { default: App } = await import("@/App");
+      renderApp(App);
+      await screen.findByTestId("provider-list");
+      // настройки (showProfileSwitcher) уже должны быть загружены, иначе отсутствие ничего не доказывает
+      await waitFor(() => expect(settingsServed).toBeGreaterThan(0));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const switcher = () =>
+        screen.queryByRole("combobox", {
+          name: /profiles\.switcherAriaLabel/,
+          // первый запуск открывает модалку и помечает страницу aria-hidden
+          hidden: true,
+        });
+      if (web) expect(switcher()).toBeNull();
+      else await waitFor(() => expect(switcher()).not.toBeNull());
+    });
   });
 
   describe.each([

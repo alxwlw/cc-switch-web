@@ -10,6 +10,7 @@ import type { HermesModel } from "@/config/hermesProviderPresets";
 import { Form } from "@/components/ui/form";
 import { MODELS_DEV_API_URL } from "@/lib/modelsDev";
 import { server } from "../msw/server";
+import { setWeb } from "../helpers/web";
 
 type HermesFormFieldsProps = ComponentProps<typeof HermesFormFields>;
 
@@ -51,6 +52,14 @@ const renderHermesForm = (overrides: Partial<HermesFormFieldsProps> = {}) => {
 };
 
 describe("HermesFormFields", () => {
+  it("web: fetch models is disabled (fetch_models_for_config is unsupported)", () => {
+    setWeb(true);
+    renderHermesForm();
+    expect(
+      screen.getByRole("button", { name: "providerForm.fetchModels" }),
+    ).toBeDisabled();
+  });
+
   it("fills the context length of a model picked from the fetched list", async () => {
     Element.prototype.scrollIntoView = vi.fn();
     const user = userEvent.setup();
@@ -201,9 +210,7 @@ describe("HermesFormFields", () => {
     });
     const onModelsChange = vi.mocked(props.onModelsChange);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "展开或收起模型详情" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "展开或收起模型详情" }));
     const vision = screen.getByRole("switch", { name: "支持图片输入" });
     expect(vision).toHaveAttribute("aria-checked", "true");
 
@@ -260,10 +267,7 @@ describe("HermesFormFields", () => {
       "font-medium",
       "leading-none",
     );
-    expect(input.closest("div.border-l")).toHaveClass(
-      "border-border",
-      "pl-3",
-    );
+    expect(input.closest("div.border-l")).toHaveClass("border-border", "pl-3");
     expect(
       screen.queryByRole("button", { name: "供应商高级选项" }),
     ).not.toBeInTheDocument();

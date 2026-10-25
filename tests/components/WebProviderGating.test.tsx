@@ -10,9 +10,11 @@ import { ProviderEmptyState } from "@/components/providers/ProviderEmptyState";
 import { SwitchModePanel } from "@/components/providers/mode/SwitchModePanel";
 import { ModelInputWithFetch } from "@/components/providers/forms/shared/ModelInputWithFetch";
 import { EndpointField } from "@/components/providers/forms/shared/EndpointField";
+import { FetchedModelPicker } from "@/components/providers/forms/FetchedModelPicker";
 import { CodexOAuthSection } from "@/components/providers/forms/CodexOAuthSection";
 import {
   buildAdditiveSections,
+  buildLaunchSections,
   type AdditiveInput,
   type CardPresentation,
 } from "@/components/providers/presentation";
@@ -207,6 +209,26 @@ describe("buildAdditiveSections — live membership unknown (web)", () => {
   });
 });
 
+describe("buildLaunchSections — web", () => {
+  const t = ((key: string) => key) as AdditiveInput["t"];
+  const build = (terminalUnavailableReason?: string) =>
+    buildLaunchSections({
+      app: "agy",
+      t,
+      providers: [provider("a")],
+      openTerminal: vi.fn(),
+      terminalUnavailableReason,
+    })[0].items[0].presentation.buttons[0];
+
+  it("disables the open-terminal button with the reason", () => {
+    expect(build("web.unavailable").disabledReason).toBe("web.unavailable");
+  });
+
+  it("leaves it enabled without a reason", () => {
+    expect(build().disabledReason).toBeUndefined();
+  });
+});
+
 describe("shared form controls — web", () => {
   it("disables the fetch-models button", () => {
     setWeb(true);
@@ -282,6 +304,42 @@ describe("shared form controls — web", () => {
     );
     expect(screen.getByRole("status")).toHaveTextContent("web.accountLogin");
     expect(screen.queryByText("codexOauth.statusLoading")).toBeNull();
+  });
+});
+
+describe("FetchedModelPicker — web", () => {
+  const render_ = (models: { id: string; ownedBy: string | null }[]) =>
+    render(
+      <FetchedModelPicker
+        models={models}
+        configuredModelIds={[]}
+        onApply={vi.fn()}
+        onFetch={vi.fn()}
+        isFetching={false}
+      />,
+    );
+
+  it("disables fetching while there is no list", () => {
+    setWeb(true);
+    render_([]);
+    expect(
+      screen.getByRole("button", { name: "providerForm.fetchModels" }),
+    ).toBeDisabled();
+  });
+
+  it("keeps an already loaded list openable", () => {
+    setWeb(true);
+    render_([{ id: "m", ownedBy: null }]);
+    expect(
+      screen.getByRole("button", { name: "providerForm.modelPicker.title" }),
+    ).toBeEnabled();
+  });
+
+  it("allows fetching on desktop", () => {
+    render_([]);
+    expect(
+      screen.getByRole("button", { name: "providerForm.fetchModels" }),
+    ).toBeEnabled();
   });
 });
 

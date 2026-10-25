@@ -390,7 +390,40 @@ describe("ProviderList Component", () => {
 
     expect(await screen.findByTestId("add-a")).toBeInTheDocument();
     expect(liveIdsRequests).toBe(0);
+    // «в конфиге ли» неизвестно: не врём «доступно», даём и добавить, и убрать
+    expect(screen.getByTestId("remove-a")).toBeEnabled();
+    expect(
+      screen.getByRole("heading", { name: "web.liveUnknownTitle" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "providerCard.section.available" }),
+    ).not.toBeInTheDocument();
   });
+
+  it.each([
+    ["web", true, true],
+    ["desktop", false, false],
+  ])(
+    "empty claude-desktop list: import-from-live disabled=%s (%s)",
+    (_label, web, disabled) => {
+      setWeb(web);
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+
+      renderWithQueryClient(
+        <ProviderList {...baseProps} providers={{}} appId="claude-desktop" />,
+      );
+
+      const button = screen.getByRole("button", {
+        name: "provider.importFromClaude",
+      });
+      if (disabled) expect(button).toBeDisabled();
+      else expect(button).toBeEnabled();
+    },
+  );
 
   it.each(["mcode"] as const)(
     "uses native membership to add and remove %s providers",

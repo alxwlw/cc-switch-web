@@ -113,6 +113,36 @@ describe("ClaudeDesktopProviderForm", () => {
     expect(defaultRoutesMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["web", true, ["直连"]],
+    ["desktop", false, ["直连", "模型映射"]],
+  ])(
+    "новый провайдер (%s): режим «модель-маппинг» предлагается только где есть прокси",
+    async (_label, web, expected) => {
+      setWeb(web);
+      // jsdom 没有 scrollIntoView，Radix Select 打开时会调
+      Element.prototype.scrollIntoView = vi.fn();
+      renderForm(undefined);
+      await userEvent.click(screen.getByRole("combobox", { name: "接入方式" }));
+
+      const options = await screen.findAllByRole("option");
+      expect(options.map((option) => option.textContent)).toEqual(expected);
+    },
+  );
+
+  it("web: у уже сохранённого proxy-провайдера режим остаётся выбранным", () => {
+    setWeb(true);
+    renderForm({
+      name: "Proxy Provider",
+      settingsConfig: { env: {} },
+      meta: { claudeDesktopMode: "proxy", claudeDesktopModelRoutes: {} },
+    });
+
+    expect(
+      screen.getByRole("combobox", { name: "接入方式" }),
+    ).toHaveTextContent("模型映射");
+  });
+
   it("desktop: запрашивает get_claude_desktop_default_routes", async () => {
     renderForm(undefined);
     await waitFor(() => expect(defaultRoutesMock).toHaveBeenCalledTimes(1));
