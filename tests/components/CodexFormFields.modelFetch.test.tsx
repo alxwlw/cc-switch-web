@@ -178,6 +178,17 @@ describe("Codex model-fetch lifecycle", () => {
     },
   );
 
+  it("web: the single-model fetch button (no catalog editor) is disabled", () => {
+    setWeb(true);
+    render(
+      <Harness {...makeProps("config")} onCatalogModelsChange={undefined} />,
+    );
+    const button = screen.getByRole("button", {
+      name: "providerForm.fetchModels",
+    });
+    expect(button).toBeDisabled();
+  });
+
   it("fetches only models supporting the selected Copilot protocol", async () => {
     const responsesModel = advertisedModel("responses-model");
     const chatModel = {
