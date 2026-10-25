@@ -25,19 +25,19 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 - Каждый гейт помечен комментарием `// WEB-00: <что> — снимет WEB-NN`, чтобы parity-фазы находили свои гейты grep'ом `WEB-00:`.
 
 ### Task 2: честный update-поток + общие примитивы гейтинга
-- [ ] **Тестовый дефолт**: в vitest (jsdom, нет `__TAURI_INTERNALS__`) реальный `isWeb` из adapter равен `true` — гейты сломают desktop-тесты. Сделать так, чтобы в тестах по умолчанию `isWeb === false` (desktop), а web-тесты включали web явно (как `tests/components/EnvWarningBanner.test.tsx:18-22`). Существующие тесты, включая `EnvWarningBanner` и `tests/lib/adapter.*`, остаются зелёными.
-- [ ] **i18n**: namespace `web.*` во всех 5 локалях (`src/i18n/locales/{en,ja,tr,zh,zh-TW}.json`): минимум `web.unavailable` («недоступно в web-режиме»), `web.update.unsupported` («обновления недоступны в web-режиме: сервер обновляет оператор»). Задачи 3–7 добавляют ключи туда же.
-- [ ] `updater.ts`: в web (`isWeb`) `checkForUpdate()` возвращает явный статус `unsupported` (НЕ "up-to-date") без вызова плагина.
-- [ ] `UpdateContext.tsx`: авто-чек на маунте пропускается в web; состояние «обновления недоступны в web-режиме (сервер обновляется оператором)» вместо «up-to-date»; `hasUpdate` в web — false (dot в Sidebar не горит).
-- [ ] `AboutSection.tsx`: кнопка check-update в web скрыта или disabled с текстом `web.update.unsupported`; `settingsApi.checkUpdates` в web не вызывается; install/portable-кнопки недостижимы.
-- [ ] Тесты: `tests/contexts/UpdateContext.test.tsx` (или существующий рядом) — web-ветка без fake success, desktop-ветка не изменилась; AboutSection в web не показывает «up-to-date»; typecheck/test:unit зелёные.
+- [x] **Тестовый дефолт**: в vitest (jsdom, нет `__TAURI_INTERNALS__`) реальный `isWeb` из adapter равен `true` — гейты сломают desktop-тесты. Сделать так, чтобы в тестах по умолчанию `isWeb === false` (desktop), а web-тесты включали web явно (как `tests/components/EnvWarningBanner.test.tsx:18-22`). Существующие тесты, включая `EnvWarningBanner` и `tests/lib/adapter.*`, остаются зелёными.
+- [x] **i18n**: namespace `web.*` во всех 5 локалях (`src/i18n/locales/{en,ja,tr,zh,zh-TW}.json`): минимум `web.unavailable` («недоступно в web-режиме»), `web.update.unsupported` («обновления недоступны в web-режиме: сервер обновляет оператор»). Задачи 3–7 добавляют ключи туда же.
+- [x] `updater.ts`: в web (`isWeb`) `checkForUpdate()` возвращает явный статус `unsupported` (НЕ "up-to-date") без вызова плагина.
+- [x] `UpdateContext.tsx`: авто-чек на маунте пропускается в web; состояние «обновления недоступны в web-режиме (сервер обновляется оператором)» вместо «up-to-date»; `hasUpdate` в web — false (dot в Sidebar не горит).
+- [x] `AboutSection.tsx`: кнопка check-update в web скрыта или disabled с текстом `web.update.unsupported`; `settingsApi.checkUpdates` в web не вызывается; install/portable-кнопки недостижимы.
+- [x] Тесты: `tests/contexts/UpdateContext.test.tsx` (или существующий рядом) — web-ветка без fake success, desktop-ветка не изменилась; AboutSection в web не показывает «up-to-date»; typecheck/test:unit зелёные.
 
 ### Task 3: silence — фоновые query и mount-вызовы
 Строки таблицы с гейтом T3. Только слой данных: `src/lib/query/*`, `src/hooks/*`, mount-эффекты `App.tsx`, `src/lib/api/adapter.ts`. UI-компоненты не трогать (задачи 4–6).
-- [ ] Query с командами вне `mapCommand` в web не выполняются (`enabled: … && !isWeb`, интервалы не стартуют): proxy status/takeover/app mode, failover (5 с), auth status (15 с), kimi status (30 с), subscription/copilot quotas, `useUsageQuery`, claude desktop status (5 с), live provider ids (opencode/openclaw/hermes), `get_${app}_current_state`, `get_session_usage_last_sync` (30 с), `scan_unmanaged_skills`, tool probe/list на Apps page, `get_pi_session_discovery`. Потребители получают «нет данных», а не error: проверить, что sidebar mode/auth-dot, ProviderCard и т.п. в web показывают нейтральное состояние (например sidebar — «direct», как фоллбэк `useSidebarStatus.ts:56`).
-- [ ] Mount-вызовы в web пропускаются: `take_startup_attach_failures` (`App.tsx:266`), checkToolUpdatesOnStartup (`App.tsx:250-258`), если он зовёт неподдерживаемое.
-- [ ] `adapter.ts`: `update_tray_menu` и `set_window_theme` — в silent noop-список (tray/окно: desktop-only fire-and-forget, сейчас кидают и логируют в console).
-- [ ] Тесты: для 2–3 query (proxy status, failover queue, auth status) — в web `invoke`/`fetch` не вызывается и query не в error; desktop-ветка не изменилась; adapter: `update_tray_menu`/`set_window_theme` → `null` без `fetch`.
+- [x] Query с командами вне `mapCommand` в web не выполняются (`enabled: … && !isWeb`, интервалы не стартуют): proxy status/takeover/app mode, failover (5 с), auth status (15 с), kimi status (30 с), subscription/copilot quotas, `useUsageQuery`, claude desktop status (5 с), live provider ids (opencode/openclaw/hermes), `get_${app}_current_state`, `get_session_usage_last_sync` (30 с), `scan_unmanaged_skills`, tool probe/list на Apps page, `get_pi_session_discovery`. Потребители получают «нет данных», а не error: проверить, что sidebar mode/auth-dot, ProviderCard и т.п. в web показывают нейтральное состояние (например sidebar — «direct», как фоллбэк `useSidebarStatus.ts:56`).
+- [x] Mount-вызовы в web пропускаются: `take_startup_attach_failures` (`App.tsx:266`), checkToolUpdatesOnStartup (`App.tsx:250-258`), если он зовёт неподдерживаемое.
+- [x] `adapter.ts`: `update_tray_menu` и `set_window_theme` — в silent noop-список (tray/окно: desktop-only fire-and-forget, сейчас кидают и логируют в console).
+- [x] Тесты: для 2–3 query (proxy status, failover queue, auth status) — в web `invoke`/`fetch` не вызывается и query не в error; desktop-ветка не изменилась; adapter: `update_tray_menu`/`set_window_theme` → `null` без `fetch`.
 
 ### Task 4: hide/disable — shell и Settings
 Строки таблицы с гейтом T4.
@@ -129,3 +129,19 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 | закрыто фазами 1–5 | `open_external` (ф.1), `import_prompt_from_file` (ф.2), custom icons (ф.3), env conflicts (ф.4), OMO/OMO Slim (ф.5) | — | работает | a | — | — |
 
 Не проверено кодом (проверить при гейтинге): точный catch/toast в proxy/failover/skills/usage/workspace/hermes/openclaw; дефолтный `retry` query client; фильтрует ли что-то nav views.
+
+### Примитивы гейтинга (Task 2, `7d5322c3`)
+
+- Тесты по умолчанию desktop: глобальный `vi.mock("@/lib/api/adapter")` в `tests/setupTests.ts` подменяет только `isWeb` (getter на `globalThis.__TEST_IS_WEB__`), остальной adapter настоящий. Web-ветка — `setWeb(true)` из `tests/helpers/web.ts`, сброс после каждого теста. Файл со своим `vi.mock("@/lib/api/adapter", () => ({…}))` обязан включать ключ `isWeb`, иначе импорт `isWeb` падает.
+- `isWeb` читать в момент использования (в хуке/`enabled`/эффекте), не кэшировать в module-level константе — иначе `setWeb` в тестах не действует.
+- i18n: `web.unavailable`, `web.update.unsupported` во всех 5 локалях (переведены, не копия en).
+- Update: `checkForUpdate()` в web → `{status:"unsupported"}` без плагина; `UpdateContext` пропускает авто-чек, `hasUpdate` false; About вместо кнопки показывает текст `web.update.unsupported`.
+
+### Silence (Task 3, `2a42f427..6f9f6e06`)
+
+- `enabled: … && !isWeb` на query: proxy (`query/proxy.ts`: status, takeover, app mode, direct provider, stack, global/app proxy config, client host), failover/circuit breaker (`query/failover.ts`, все 6), quotas (`query/subscription.ts` 5, `query/copilot.ts:58`), `useUsageQuery` (`queries.ts:268`), `useSessionUsageLastSync`/`useProviderLimits` (`query/usage.ts`), `usePiCurrentState`, `useProfilesQuery`, skills (`useSkills.ts`: discoverable, failures, scan unmanaged, repos, skills.sh search, ccSwitch dir), openclaw (`useOpenClaw.ts`: live ids, default model, env, tools, agents defaults, health), hermes (`useHermes.ts`: live ids, model config, memory, limits), sidebar mode/auth (`useSidebarStatus.ts`), `useKimiOAuth` (30 с), `useManagedAuth` (xai 15 с), `useDesktopConfigMessages` (5 с). Call-site `enabled` в `ProviderCard`, `KimiAccountQuotaFooter`, `AppsPage`, `ProviderList`, `SessionManagerPage`, `AgyOAuthSection`, `ClaudeDesktopProviderForm`, `ProviderForm`.
+- Mount: `take_startup_attach_failures` (`App.tsx`) и `loadInstallations` (`useToolManagement.ts`) — ранний return в web. `checkToolUpdatesOnStartup` зовёт `get_tool_versions` (mapped) — работает, не гейтится.
+- Adapter: `update_tray_menu`, `set_window_theme` — silent noop.
+- **Грабли**: disabled react-query query навсегда `isPending` → вечный skeleton. Поэтому `isLiveMembershipPending` (`ProviderList`) и `isInitialStatusPending` (`useProxyStatus`) в web false; в `AppsPage` pending-ветка `rowInstalled` даёт null → плоский список без групп (строка Claude Desktop не попадает в «not installed»).
+- **Ручной `refetch()` disabled query всё равно выполняет** — кнопки refresh/check-updates надо disable в UI (T5/T6).
+- Долги вперёд: `handleDuplicate` (`App.tsx` ~:1115) для opencode/openclaw/hermes/pi/omp в web падает на live ids → toast `provider.duplicateLiveIdsLoadFailed` (T5); в `ProviderList` для live-membership apps `isInConfig` false в web — карточки в «available» (T5); `piStateUnavailable` true для pi/omp в web — честно (карточки заблокированы с подсказкой); не тронуты, за T4/T6: `useBackupManager`, `useBackupLocations`, `useGlobalProxyUrl`/`useUpstreamProxyStatus`, `is_portable_mode`, `OpenTerminalDialog`, `ModelsDevAutoSyncPanel`/`ModelsDevPickerDialog`, `PiNativePromptResources`. `EditProviderDialog.tsx:211,233` уже ловят ошибку и откатываются на сохранённый конфиг — гейт не нужен.
