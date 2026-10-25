@@ -5029,5 +5029,11 @@
       "providerMissing": "This Oh My Pi provider is no longer saved.",
       "legacyModelsJson": "Oh My Pi still has a legacy models.json, which omp migrates to models.yml on its next start. Run omp once, then add the provider again."
     }
+  },
+  "web": {
+    "unavailable": "Unavailable in web mode",
+    "update": {
+      "unsupported": "Updates are unavailable in web mode: the server operator updates the app"
+    }
   }
 }

@@ -1,4 +1,5 @@
 import { getVersion } from "@tauri-apps/api/app";
+import { isWeb } from "@/lib/api/adapter";
 
 export type UpdateChannel = "stable" | "beta";
 
@@ -25,8 +26,13 @@ export async function getCurrentVersion(): Promise<string> {
 export async function checkForUpdate(
   opts: CheckOptions = {},
 ): Promise<
-  { status: "up-to-date" } | { status: "available"; info: UpdateInfo }
+  | { status: "up-to-date" }
+  | { status: "unsupported" }
+  | { status: "available"; info: UpdateInfo }
 > {
+  // WEB-00: в web обновляет оператор сервера, плагин-апдейтер — noop → фейковый "up-to-date" — снимет WEB-28
+  if (isWeb) return { status: "unsupported" };
+
   // 动态引入，避免在未安装插件时导致打包期问题
   const { check } = await import("@tauri-apps/plugin-updater");
 

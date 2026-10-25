@@ -5029,5 +5029,11 @@
       "providerMissing": "此 Oh My Pi 供应商已不在保存的列表中。",
       "legacyModelsJson": "Oh My Pi 目录里还是旧的 models.json，omp 会在下次启动时把它迁移成 models.yml。请先运行一次 omp，再回来添加供应商。"
     }
+  },
+  "web": {
+    "unavailable": "Web 模式下不可用",
+    "update": {
+      "unsupported": "Web 模式下无法检查更新：服务器由运维人员负责升级"
+    }
   }
 }

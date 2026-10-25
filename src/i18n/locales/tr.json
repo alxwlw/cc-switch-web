@@ -5007,5 +5007,11 @@
       "renameProvider": "Oh My Pi sağlayıcı anahtarları yeniden adlandırılamaz.",
       "providerMissing": "Bu Oh My Pi sağlayıcısı artık kayıtlı değil."
     }
+  },
+  "web": {
+    "unavailable": "Web modunda kullanılamaz",
+    "update": {
+      "unsupported": "Web modunda güncellemeler kullanılamaz: sunucuyu operatör günceller"
+    }
   }
 }

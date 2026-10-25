@@ -63,8 +63,14 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
     [version],
   );
 
-  const { hasUpdate, updateInfo, checkUpdate, resetDismiss, isChecking } =
-    useUpdate();
+  const {
+    hasUpdate,
+    updateInfo,
+    checkUpdate,
+    resetDismiss,
+    isChecking,
+    unsupported,
+  } = useUpdate();
 
   useEffect(() => {
     let active = true;
@@ -222,37 +228,44 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
             )}
           </div>
         </div>
-        <Button
-          type="button"
-          variant={hasUpdate ? "solid" : "neutral"}
-          size="regular"
-          onClick={handleCheckUpdate}
-          disabled={isChecking || isDownloading}
-        >
-          {isDownloading ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              {t("settings.updating")}
-            </>
-          ) : hasUpdate ? (
-            <>
-              <Download className="h-3.5 w-3.5" />
-              {t("settings.updateTo", {
-                version: updateInfo?.availableVersion ?? "",
-              })}
-            </>
-          ) : isChecking ? (
-            <>
-              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-              {t("settings.checking")}
-            </>
-          ) : (
-            <>
-              <RefreshCw className="h-3.5 w-3.5" />
-              {t("settings.checkForUpdates")}
-            </>
-          )}
-        </Button>
+        {/* WEB-00: в web кнопки check/install нет — сервер обновляет оператор — снимет WEB-28 */}
+        {unsupported ? (
+          <p className="max-w-xs text-caption text-fg-2">
+            {t("web.update.unsupported")}
+          </p>
+        ) : (
+          <Button
+            type="button"
+            variant={hasUpdate ? "solid" : "neutral"}
+            size="regular"
+            onClick={handleCheckUpdate}
+            disabled={isChecking || isDownloading}
+          >
+            {isDownloading ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {t("settings.updating")}
+              </>
+            ) : hasUpdate ? (
+              <>
+                <Download className="h-3.5 w-3.5" />
+                {t("settings.updateTo", {
+                  version: updateInfo?.availableVersion ?? "",
+                })}
+              </>
+            ) : isChecking ? (
+              <>
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                {t("settings.checking")}
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-3.5 w-3.5" />
+                {t("settings.checkForUpdates")}
+              </>
+            )}
+          </Button>
+        )}
       </div>
 
       {hasUpdate && updateInfo && (
