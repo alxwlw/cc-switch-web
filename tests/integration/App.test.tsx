@@ -606,6 +606,97 @@ describe("App integration with MSW", () => {
     );
   });
 
+  describe.each([
+    ["desktop", false],
+    ["web", true],
+  ])("openclaw/hermes sub-views and launch buttons (%s)", (_label, web) => {
+    it.each([
+      ["OpenClaw", "appPage.workspace", "tab"],
+      ["Hermes", "appPage.memory", "tab"],
+      ["Hermes", "appPage.webUi", "button"],
+    ] as const)(
+      `${web ? "hides" : "shows"} %s %s (%s)`,
+      async (appName, label, role) => {
+        setWeb(web);
+        const { default: App } = await import("@/App");
+        renderApp(App);
+        fireEvent.click(sidebarApp(appName));
+        await screen.findByTestId("provider-list");
+
+        const found = screen.queryByRole(role, { name: label });
+        if (web) expect(found).toBeNull();
+        else expect(found).not.toBeNull();
+      },
+    );
+  });
+
+  describe.each([
+    ["desktop", false],
+    ["web", true],
+  ])(
+    "duplicating an openclaw provider when live ids cannot be read (%s)",
+    (_label, web) => {
+      it(`${web ? "still duplicates without the live-ids check" : "refuses with a toast"}`, async () => {
+        setWeb(web);
+        let liveIdsCalls = 0;
+        server.use(
+          http.post("http://tauri.local/get_openclaw_live_provider_ids", () => {
+            liveIdsCalls += 1;
+            return HttpResponse.json("live config unreadable", { status: 500 });
+          }),
+        );
+        setProviders("openclaw", {
+          deepseek: {
+            id: "deepseek",
+            name: "DeepSeek",
+            settingsConfig: {
+              baseUrl: "https://api.deepseek.com",
+              apiKey: "test-key",
+              api: "openai-completions",
+              models: [],
+            },
+            category: "custom",
+            sortIndex: 0,
+            createdAt: Date.now(),
+          },
+        });
+        setCurrentProviderId("openclaw", "deepseek");
+
+        const { default: App } = await import("@/App");
+        renderApp(App);
+        fireEvent.click(sidebarApp("OpenClaw"));
+        await waitFor(() =>
+          expect(screen.getByTestId("provider-list").textContent).toContain(
+            "deepseek",
+          ),
+        );
+
+        fireEvent.click(screen.getByText("duplicate"));
+
+        if (web) {
+          await waitFor(() =>
+            expect(screen.getByTestId("provider-list").textContent).toContain(
+              "DeepSeek copy",
+            ),
+          );
+          expect(liveIdsCalls).toBe(0);
+          expect(toastErrorMock).not.toHaveBeenCalledWith(
+            expect.stringContaining("读取配置中的供应商标识失败"),
+          );
+        } else {
+          await waitFor(() =>
+            expect(toastErrorMock).toHaveBeenCalledWith(
+              expect.stringContaining("读取配置中的供应商标识失败"),
+            ),
+          );
+          expect(screen.getByTestId("provider-list").textContent).not.toContain(
+            "DeepSeek copy",
+          );
+        }
+      });
+    },
+  );
+
   it.each([
     { options: { apiKey: "test-key" } },
     { npm: "@ai-sdk/openai-compatible", models: {} },
