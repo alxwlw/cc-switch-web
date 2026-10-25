@@ -31,7 +31,7 @@ async fn import_from_file_returns_new_prompt_id_and_stores_disabled_prompt() {
 // The service ids imports by unix-second timestamp: two imports in the same second
 // overwrite one record, in different seconds create two. Either way no id is duplicated.
 #[tokio::test]
-async fn import_from_file_twice_never_duplicates_an_id() {
+async fn reimport_overwrites_or_adds_by_timestamp_id() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     reset_test_fs();
     let home = ensure_test_home();

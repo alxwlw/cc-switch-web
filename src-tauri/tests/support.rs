@@ -98,6 +98,8 @@ pub fn create_test_state_with_config(
 }
 
 /// axum router over a fresh test state (web_api harness; reused by web_api_* tests).
+/// Order matters: hold `test_mutex()`, call `reset_test_fs()` and `ensure_test_home()`,
+/// prepare live files, then build the router — the DB is opened from `HOME` at this call.
 #[allow(dead_code)]
 pub fn web_router() -> axum::Router {
     cc_switch_lib::web_api::router(Arc::new(create_test_state().expect("create test state")))
