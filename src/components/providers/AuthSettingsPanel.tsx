@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
 import type { AuthCenterTarget } from "@/lib/api";
+import { isViewAvailable } from "@/lib/navigation";
 
 interface AuthSettingsPanelProps {
   target: AuthCenterTarget | null;
@@ -19,7 +20,14 @@ export function AuthSettingsPanel({ target, onClose }: AuthSettingsPanelProps) {
       onClose={onClose}
       motionPreset="slide-from-right"
     >
-      {target ? <AuthCenterPanel authScrollTarget={target} /> : null}
+      {/* WEB-00: ссылки «управлять аккаунтами» из форм — в web вместо бросающей панели notice — снимет WEB-02 */}
+      {target && !isViewAvailable("auth") ? (
+        <p role="status" className="text-body text-fg-2">
+          {t("web.unavailable")}
+        </p>
+      ) : target ? (
+        <AuthCenterPanel authScrollTarget={target} />
+      ) : null}
     </FullScreenPanel>
   );
 }

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useProviderActions } from "@/hooks/useProviderActions";
 import type { Provider, UsageScript } from "@/types";
+import { setWeb } from "../helpers/web";
 
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -600,6 +601,28 @@ describe("useProviderActions", () => {
     expect(switchProviderMutateAsync).toHaveBeenCalledWith(provider.id);
     expect(settingsApiGetMock).toHaveBeenCalledTimes(1);
     expect(settingsApiApplyMock).toHaveBeenCalledWith({ official: true });
+  });
+
+  it("web: does not read settings or call applyClaudePluginConfig when switching Claude provider", async () => {
+    setWeb(true);
+    switchProviderMutateAsync.mockResolvedValueOnce(undefined);
+    settingsApiGetMock.mockResolvedValue({
+      enableClaudePluginIntegration: true,
+    });
+    const { wrapper } = createWrapper();
+    const provider = createProvider({ category: "official" });
+
+    const { result } = renderHook(() => useProviderActions("claude"), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.switchProvider(provider);
+    });
+
+    expect(switchProviderMutateAsync).toHaveBeenCalledWith(provider.id);
+    expect(settingsApiApplyMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
   it("should not call applyClaudePluginConfig when integration is disabled", async () => {

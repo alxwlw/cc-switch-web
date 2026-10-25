@@ -32,6 +32,7 @@ import { openclawKeys } from "@/hooks/useOpenClaw";
 import { supportsOfficialProxyTakeover } from "@/utils/providerCapabilities";
 import { getRoutingReason } from "@/utils/routingReason";
 import { logFrontendInfo } from "@/lib/frontendLogger";
+import { isWeb } from "@/lib/api/adapter";
 
 /**
  * Hook for managing provider actions (add, update, delete, switch)
@@ -53,6 +54,8 @@ export function useProviderActions(
   const syncClaudePlugin = useCallback(
     async (provider: Provider) => {
       if (activeApp !== "claude") return;
+      // WEB-00: apply_claude_plugin_config не поддержан — снимет WEB-20
+      if (isWeb) return;
 
       try {
         const settings = await settingsApi.get();

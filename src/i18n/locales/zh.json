@@ -5032,6 +5032,7 @@
   },
   "web": {
     "unavailable": "Web 模式下不可用",
+    "serverPath": "路径需手动输入，指的是服务器主机上的路径，而不是当前设备",
     "update": {
       "unsupported": "Web 模式下无法检查更新：服务器由运维人员负责升级"
     }

@@ -5033,6 +5033,7 @@
   },
   "web": {
     "unavailable": "Web 模式下無法使用",
+    "serverPath": "路徑需手動輸入，指的是伺服器主機上的路徑，而非目前裝置",
     "update": {
       "unsupported": "Web 模式下無法檢查更新：伺服器由維運人員負責升級"
     }

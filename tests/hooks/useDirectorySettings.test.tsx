@@ -2,6 +2,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useDirectorySettings } from "@/hooks/useDirectorySettings";
 import type { SettingsFormState } from "@/hooks/useSettingsForm";
+import { setWeb } from "../helpers/web";
 
 const getAppConfigDirOverrideMock = vi.hoisted(() => vi.fn());
 const getConfigDirMock = vi.hoisted(() => vi.fn());
@@ -423,5 +424,21 @@ describe("useDirectorySettings", () => {
     expect(result.current.resolvedDirs.grokbuild).toBe("/server/grok");
     expect(result.current.resolvedDirs.opencode).toBe("/server/opencode");
     expect(result.current.resolvedDirs.openclaw).toBe("/server/openclaw");
+  });
+
+  it("web: skips get_app_config_dir_override but still resolves directories via get_config_dir", async () => {
+    setWeb(true);
+    getAppConfigDirOverrideMock.mockRejectedValue(new Error("unsupported"));
+
+    const { result } = renderHook(() =>
+      useDirectorySettings({ settings: createSettings(), onUpdateSettings }),
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(getAppConfigDirOverrideMock).not.toHaveBeenCalled();
+    expect(result.current.appConfigDir).toBeUndefined();
+    expect(result.current.resolvedDirs.claude).toBe("/remote/claude");
+    expect(result.current.resolvedDirs.codex).toBe("/remote/codex");
   });
 });

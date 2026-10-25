@@ -61,7 +61,9 @@ import {
   APP_STORAGE_KEY,
   appPageBelongsTo,
   isAppPage,
+  isViewAvailable,
   readStoredView,
+  resolveSettingsSection,
   sharedFeatureAppOf,
   storeView,
   type GlobalPage,
@@ -213,7 +215,10 @@ function App() {
   const { data: settingsData } = useSettingsQuery();
   // Windows 一律去掉系统标题栏，用页头里的应用内窗口按钮；Linux 由设置决定
   const useAppWindowControls =
-    isWindows() || (isLinux() && (settingsData?.useAppWindowControls ?? false));
+    // WEB-00: в браузере нет окна приложения — min/max/close не работают
+    !isWeb &&
+    (isWindows() ||
+      (isLinux() && (settingsData?.useAppWindowControls ?? false)));
   const visibleApps = useMemo<VisibleApps>(
     () => ({
       ...DEFAULT_VISIBLE_APPS,
@@ -543,6 +548,8 @@ function App() {
   useEffect(() => {
     // settingsData 未加载时跳过，避免用 fallback false 覆盖 Rust 侧已设好的装饰状态
     if (!settingsData) return;
+    // WEB-00: window-shim без setDecorations — в web нечего синхронизировать
+    if (isWeb) return;
 
     const syncWindowDecorations = async () => {
       try {
@@ -830,9 +837,11 @@ function App() {
   };
 
   const openSettings = (
-    section: SettingsSection = "general",
+    requestedSection: SettingsSection = "general",
     appConfigTarget?: AppId,
   ) => {
+    // WEB-00: скрытая в web секция открывается как general — снимет WEB-01/23/26
+    const section = resolveSettingsSection(requestedSection);
     if (managementBusyRef.current) return;
     if (confirmLeave(() => openSettings(section, appConfigTarget))) return;
     closeProviderPanels();
@@ -1640,6 +1649,25 @@ function App() {
           />
         );
       case "auth":
+        // WEB-00: прямой переход на auth в web — notice вместо панели, которая бросает — снимет WEB-02
+        if (!isViewAvailable("auth")) {
+          return (
+            <>
+              <AppPageHeader
+                icon={<KeyRound className="h-5 w-5" strokeWidth={1.5} />}
+                title={t("nav.auth")}
+              />
+              <div
+                id="main-content"
+                className="min-h-0 flex-1 overflow-y-auto scroll-stable"
+              >
+                <p role="status" className="px-6 pt-6 text-body text-fg-2">
+                  {t("web.unavailable")}
+                </p>
+              </div>
+            </>
+          );
+        }
         return (
           <>
             <AppPageHeader
@@ -1741,12 +1769,12 @@ function App() {
           activeApp={activeApp}
           view={currentView}
           visibleApps={visibleApps}
-          settingsSection={settingsSection}
+          settingsSection={resolveSettingsSection(settingsSection)}
           onSelectApp={selectApp}
           onSelectPage={openPageFromNav}
           onSelectSettingsSection={(section) => {
             setAppConfigScrollTarget(undefined);
-            setSettingsSection(section);
+            setSettingsSection(resolveSettingsSection(section));
           }}
           onExitSettings={exitSettings}
           appsUpdateAvailable={

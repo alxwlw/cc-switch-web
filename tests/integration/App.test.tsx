@@ -1265,4 +1265,55 @@ describe("App integration with MSW", () => {
       document.removeEventListener("mousedown", documentMouseDown);
     }
   });
+
+  describe.each([
+    ["desktop", false, true],
+    ["web", true, false],
+  ])("WEB-00 shell gating (%s)", (_label, web, desktopOnlyVisible) => {
+    it(`${desktopOnlyVisible ? "shows" : "hides"} the auth nav item and ${
+      desktopOnlyVisible ? "restores" : "drops"
+    } a stored auth view`, async () => {
+      setWeb(web);
+      localStorage.setItem("cc-switch-last-view", "auth");
+      const { default: App } = await import("@/App");
+      renderApp(App);
+
+      const accountsButton = () =>
+        within(document.querySelector("nav") as HTMLElement).queryByRole(
+          "button",
+          { name: /nav\.auth/, hidden: true },
+        );
+      if (desktopOnlyVisible) {
+        await waitFor(() => expect(accountsButton()).not.toBeNull());
+        expect(screen.queryByTestId("provider-list")).toBeNull();
+      } else {
+        expect(await screen.findByTestId("provider-list")).toBeInTheDocument();
+        expect(accountsButton()).toBeNull();
+      }
+    });
+
+    it(`${desktopOnlyVisible ? "syncs" : "does not touch"} window decorations and resize listeners for Linux app controls`, async () => {
+      setWeb(web);
+      windowMocks.isLinux.mockReturnValue(true);
+      windowMocks.setDecorations.mockClear();
+      windowMocks.onResized.mockClear();
+      setSettings({ useAppWindowControls: true });
+      const { default: App } = await import("@/App");
+      renderApp(App);
+
+      if (desktopOnlyVisible) {
+        await waitFor(() =>
+          expect(windowMocks.setDecorations).toHaveBeenCalledWith(false),
+        );
+        expect(windowMocks.onResized).toHaveBeenCalled();
+      } else {
+        await screen.findByTestId("provider-list");
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(windowMocks.setDecorations).not.toHaveBeenCalled();
+        expect(windowMocks.onResized).not.toHaveBeenCalled();
+      }
+    });
+  });
 });

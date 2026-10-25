@@ -187,6 +187,8 @@ export function GeneralSection({
         <SettingsCard>
           <SettingsSwitchRow
             label={t("settings.launchOnStartup")}
+            // WEB-00: set_auto_launch не поддержан — снимет WEB-20
+            unavailableInWeb
             checked={!!settings.launchOnStartup}
             onCheckedChange={(value) =>
               void onAutoSave({ launchOnStartup: value })
@@ -195,6 +197,8 @@ export function GeneralSection({
           {settings.launchOnStartup && (
             <SettingsSwitchRow
               label={t("settings.silentStartup")}
+              // WEB-00: зависит от автозапуска (set_auto_launch) — снимет WEB-20
+              unavailableInWeb
               help={{
                 title: t("settings.silentStartup"),
                 body: t("settings.silentStartupDescription"),

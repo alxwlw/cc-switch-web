@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
 import { HelpTip } from "@/components/ui/help-tip";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
+import { isWeb } from "@/lib/api/adapter";
 import { cn } from "@/lib/utils";
 
 /**
@@ -114,6 +116,7 @@ export function SettingsSwitchRow({
   checked,
   onCheckedChange,
   disabled,
+  unavailableInWeb,
 }: {
   label: string;
   help?: { title: string; body: ReactNode };
@@ -121,19 +124,24 @@ export function SettingsSwitchRow({
   checked: boolean;
   onCheckedChange: (value: boolean) => void;
   disabled?: boolean;
+  /** WEB-00: desktop-only тогл — в web disabled + подсказка `web.unavailable`. */
+  unavailableInWeb?: boolean;
 }) {
+  const webLocked = !!unavailableInWeb && isWeb;
   return (
     <SettingsRow
       label={label}
       help={help}
       description={description}
       control={
-        <Switch
-          checked={checked}
-          onCheckedChange={onCheckedChange}
-          disabled={disabled}
-          aria-label={label}
-        />
+        <WebUnavailableTip active={webLocked}>
+          <Switch
+            checked={checked}
+            onCheckedChange={onCheckedChange}
+            disabled={disabled || webLocked}
+            aria-label={label}
+          />
+        </WebUnavailableTip>
       }
     />
   );

@@ -5032,6 +5032,7 @@
   },
   "web": {
     "unavailable": "Unavailable in web mode",
+    "serverPath": "Paths are entered manually and refer to the server host, not this device",
     "update": {
       "unsupported": "Updates are unavailable in web mode: the server operator updates the app"
     }
