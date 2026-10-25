@@ -75,7 +75,10 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         },
       };
     case "delete_provider":
-      return { method: "DELETE", url: `${appBase(a.app)}/providers/${enc(a.id)}` };
+      return {
+        method: "DELETE",
+        url: `${appBase(a.app)}/providers/${enc(a.id)}`,
+      };
     case "update_providers_sort_order":
       return {
         method: "POST",
@@ -83,7 +86,10 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         body: { updates: a.updates },
       };
     case "import_default_config":
-      return { method: "POST", url: `${appBase(a.app)}/providers/import-default` };
+      return {
+        method: "POST",
+        url: `${appBase(a.app)}/providers/import-default`,
+      };
     case "add_provider_to_live_config":
       return {
         method: "POST",
@@ -118,9 +124,15 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         body: { prompt: a.prompt },
       };
     case "delete_prompt":
-      return { method: "DELETE", url: `${appBase(a.app)}/prompts/${enc(a.id)}` };
+      return {
+        method: "DELETE",
+        url: `${appBase(a.app)}/prompts/${enc(a.id)}`,
+      };
     case "enable_prompt":
-      return { method: "POST", url: `${appBase(a.app)}/prompts/${enc(a.id)}/enable` };
+      return {
+        method: "POST",
+        url: `${appBase(a.app)}/prompts/${enc(a.id)}/enable`,
+      };
     case "get_current_prompt_file_content":
       return { method: "GET", url: `${appBase(a.app)}/prompt-content` };
     case "get_prompt_file_location":
@@ -130,7 +142,11 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "get_mcp_servers":
       return { method: "GET", url: "/api/mcp/servers" };
     case "upsert_mcp_server":
-      return { method: "PUT", url: "/api/mcp/servers", body: { server: a.server } };
+      return {
+        method: "PUT",
+        url: "/api/mcp/servers",
+        body: { server: a.server },
+      };
     case "delete_mcp_server":
       return { method: "DELETE", url: `/api/mcp/servers/${enc(a.id)}` };
     case "toggle_mcp_app":
@@ -147,7 +163,11 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "import_mcp_from_apps":
       return { method: "POST", url: "/api/mcp/import" };
     case "resync_mcp_to_apps":
-      return { method: "POST", url: "/api/mcp/resync", body: { apps: a.apps ?? null } };
+      return {
+        method: "POST",
+        url: "/api/mcp/resync",
+        body: { apps: a.apps ?? null },
+      };
 
     // ---------- skills ----------
     case "get_installed_skills":
@@ -161,7 +181,11 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "resync_skills_to_apps":
       return { method: "POST", url: "/api/skills/resync" };
     case "uninstall_skill_unified":
-      return { method: "POST", url: "/api/skills/uninstall", body: { id: a.id } };
+      return {
+        method: "POST",
+        url: "/api/skills/uninstall",
+        body: { id: a.id },
+      };
 
     // ---------- sessions ----------
     case "list_sessions":
@@ -194,7 +218,11 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         },
       };
     case "delete_sessions":
-      return { method: "DELETE", url: "/api/sessions", body: { items: a.items } };
+      return {
+        method: "DELETE",
+        url: "/api/sessions",
+        body: { items: a.items },
+      };
 
     // ---------- usage ----------
     case "get_usage_summary":
@@ -272,7 +300,10 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         body: { filters: a.filters, page: a.page, pageSize: a.pageSize },
       };
     case "get_request_detail":
-      return { method: "GET", url: `/api/usage/request-detail/${enc(a.requestId)}` };
+      return {
+        method: "GET",
+        url: `/api/usage/request-detail/${enc(a.requestId)}`,
+      };
     case "get_model_pricing":
       return { method: "GET", url: "/api/usage/model-pricing" };
     case "sync_session_usage":
@@ -282,7 +313,11 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "get_settings":
       return { method: "GET", url: "/api/settings" };
     case "save_settings":
-      return { method: "PUT", url: "/api/settings", body: { settings: a.settings } };
+      return {
+        method: "PUT",
+        url: "/api/settings",
+        body: { settings: a.settings },
+      };
     case "get_app_config_path":
       return { method: "GET", url: "/api/paths", pick: "configPath" };
     case "get_config_dir":
@@ -291,14 +326,24 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return {
         method: "POST",
         url: "/api/env/tools",
-        body: { tools: a.tools ?? null, wslShellByTool: a.wslShellByTool ?? null },
+        body: {
+          tools: a.tools ?? null,
+          wslShellByTool: a.wslShellByTool ?? null,
+        },
       };
     case "check_env_conflicts":
-      return { method: "GET", url: `/api/env/conflicts${query({ app: a.app })}` };
+      return {
+        method: "GET",
+        url: `/api/env/conflicts${query({ app: a.app })}`,
+      };
 
     // ---------- startup one-shots ----------
     case "get_migration_result":
-      return { method: "GET", url: "/api/migrations/status", pick: "migration" };
+      return {
+        method: "GET",
+        url: "/api/migrations/status",
+        pick: "migration",
+      };
     case "get_skills_migration_result":
       return { method: "GET", url: "/api/migrations/status", pick: "skills" };
 
@@ -345,7 +390,9 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
   try {
     res = await fetch(mapped.url, init);
   } catch (e) {
-    throw new Error(`Web API недоступно (${mapped.method} ${mapped.url}): ${String(e)}`);
+    throw new Error(
+      `Web API недоступно (${mapped.method} ${mapped.url}): ${String(e)}`,
+    );
   }
   let payload: any = null;
   try {
@@ -357,6 +404,7 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
     throw new Error(payload?.error ?? `Web API ошибка (${cmd})`);
   }
   const data = payload.data;
-  if (mapped.pick && data && typeof data === "object") return data[mapped.pick] as T;
+  if (mapped.pick && data && typeof data === "object")
+    return data[mapped.pick] as T;
   return data as T;
 }
