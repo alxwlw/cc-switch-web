@@ -491,6 +491,33 @@ describe("SessionManagerPage", () => {
     );
   });
 
+  it("web: resume on a macOS browser still only copies the command and never launches a terminal", async () => {
+    setWeb(true);
+    platform.mac = true;
+    setSettings({ preferredTerminal: "iterm2" });
+    const launch = vi
+      .spyOn(sessionsApi, "launchTerminal")
+      .mockResolvedValue(true);
+    renderPage("codex");
+    await screen.findByText("Alpha Session");
+    openRow("Alpha Session");
+
+    await screen.findByRole("button", { name: "复制恢复命令" });
+    expect(screen.queryByRole("button", { name: /中恢复$/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "复制恢复命令" }));
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        "codex resume codex-session-1",
+      ),
+    );
+    await waitFor(() =>
+      expect(toastSuccessMock).toHaveBeenCalledWith("web.sessionResumeCopied"),
+    );
+    expect(launch).not.toHaveBeenCalled();
+    launch.mockRestore();
+  });
+
   it("deletes the open session after confirming and returns to the list", async () => {
     renderPage("codex");
     await screen.findByText("Alpha Session");

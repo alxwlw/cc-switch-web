@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SkillsStorageSheet } from "@/components/skills/SkillsStorageSheet";
+import { setWeb } from "../helpers/web";
 
 const m = vi.hoisted(() => ({
   settings: {
@@ -225,5 +226,38 @@ describe("SkillsStorageSheet", () => {
     await userEvent.click(screen.getByRole("button", { name: "common.done" }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("web: the location radios and open-folder are disabled, sync method and resync keep working", async () => {
+    setWeb(true);
+    m.resync.mockResolvedValue([{ app: "claude", ok: true, failedSkills: [] }]);
+    renderDialog();
+
+    expect(radio("skills.storageSheet.locationCcSwitch")).toBeDisabled();
+    expect(radio(/skills\.storageSheet\.locationUnified/)).toBeDisabled();
+    const openFolder = screen.getByRole("button", {
+      name: "skills.storageSheet.openFolderAria",
+    });
+    expect(openFolder).toBeDisabled();
+    await userEvent.click(openFolder);
+    expect(m.openDir).not.toHaveBeenCalled();
+
+    await userEvent.click(radio(/skills\.storageSheet\.syncCopy/));
+    expect(m.updateSettings).toHaveBeenCalledWith({ skillSyncMethod: "copy" });
+    await userEvent.click(
+      screen.getByRole("button", { name: "skills.storageSheet.resync" }),
+    );
+    await waitFor(() => expect(m.resync).toHaveBeenCalledTimes(1));
+  });
+
+  it("desktop: the location radios and open-folder are enabled", () => {
+    renderDialog();
+    expect(radio("skills.storageSheet.locationCcSwitch")).toBeEnabled();
+    expect(radio(/skills\.storageSheet\.locationUnified/)).toBeEnabled();
+    expect(
+      screen.getByRole("button", {
+        name: "skills.storageSheet.openFolderAria",
+      }),
+    ).toBeEnabled();
   });
 });
