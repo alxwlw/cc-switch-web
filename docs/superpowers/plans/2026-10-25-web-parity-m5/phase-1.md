@@ -24,8 +24,8 @@ Scope: `src/lib/api/adapter.ts` (invoke, ~322-362), новый тест `tests/l
 
 ### Task 3: гейты, PR, Plane
 - [x] `pnpm typecheck && pnpm format:check && pnpm test:unit` — typecheck/format зелёные; test:unit: 3316 passed, 3 failed — ВСЕ предсуществующие на main (см. Notes).
-- [ ] ветка `web-parity/web-30-external-links`, commit, push, PR в `main` (repo alxwlw/cc-switch-web); в описании — ссылка на DX-88. ← ЖДЁТ: auto-mode отклонил push/commit-docs (публичный репозиторий не назван владельцем); изменения застейджены в worktree, спрошен владелец.
-- [ ] Plane DX-88 → In Review, комментарий со ссылкой на PR. Закрыть чекбоксы, Notes.
+- [x] ветка `web-parity/web-30-external-links` — коммиты `76d71ab2` (style) + `8196ff28` (feat), запушена в origin. PR: auto-mode классификатор отклонил `gh pr create` (и handoff-скрипт) — создание PR передано владельцу вручную; тело PR сохранено в Notes ниже.
+- [ ] Plane DX-88 → In Review + комментарий со ссылкой на PR (после создания PR; пока — In Progress).
 
 ## Notes for next phase
 
