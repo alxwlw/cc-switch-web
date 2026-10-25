@@ -61,7 +61,6 @@ import {
   APP_STORAGE_KEY,
   appPageBelongsTo,
   isAppPage,
-  isViewAvailable,
   readStoredView,
   resolveSettingsSection,
   sharedFeatureAppOf,
@@ -1649,25 +1648,6 @@ function App() {
           />
         );
       case "auth":
-        // WEB-00: прямой переход на auth в web — notice вместо панели, которая бросает — снимет WEB-02
-        if (!isViewAvailable("auth")) {
-          return (
-            <>
-              <AppPageHeader
-                icon={<KeyRound className="h-5 w-5" strokeWidth={1.5} />}
-                title={t("nav.auth")}
-              />
-              <div
-                id="main-content"
-                className="min-h-0 flex-1 overflow-y-auto scroll-stable"
-              >
-                <p role="status" className="px-6 pt-6 text-body text-fg-2">
-                  {t("web.unavailable")}
-                </p>
-              </div>
-            </>
-          );
-        }
         return (
           <>
             <AppPageHeader
