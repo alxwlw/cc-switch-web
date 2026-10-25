@@ -25,7 +25,7 @@ use crate::services::provider::icon;
 use crate::services::provider::{EditorSave, ProviderService, ProviderSortUpdate};
 use crate::services::skill::SkillService;
 use crate::services::usage_stats::LogFilters;
-use crate::services::McpService;
+use crate::services::{McpService, OmoService};
 use crate::session_manager;
 use crate::store::AppState;
 
@@ -140,6 +140,13 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/env/conflicts", get(env_conflicts))
         .route("/api/env/conflicts/cleanup", post(env_cleanup))
         .route("/api/env/restore", post(env_restore))
+        // OMO / OMO Slim live config
+        .route("/api/omo/:variant/local-file", get(omo_local_file))
+        .route(
+            "/api/omo/:variant/current-provider",
+            get(omo_current_provider),
+        )
+        .route("/api/omo/:variant/disable", post(omo_disable))
         .route("/api/migrations/status", get(migrations_status))
         // custom icon library
         .route(
@@ -1082,6 +1089,55 @@ async fn env_restore(Json(body): Json<EnvRestoreReq>) -> ApiResult {
         Ok(Ok(())) => ok(serde_json::Value::Null),
         Ok(Err(e)) => fail(e),
         Err(e) => fail(format!("env restore task failed: {e}")),
+    }
+}
+
+// ---------- OMO / OMO Slim live config ----------
+
+fn omo_variant(name: &str) -> Result<&'static crate::services::omo::OmoVariant, ApiResult> {
+    match name {
+        "omo" => Ok(&crate::services::omo::STANDARD),
+        "omo-slim" => Ok(&crate::services::omo::SLIM),
+        other => Err(bad_request(format!("unknown OMO variant: {other}"))),
+    }
+}
+
+async fn omo_local_file(Path(variant): Path<String>) -> ApiResult {
+    let v = match omo_variant(&variant) {
+        Ok(v) => v,
+        Err(resp) => return resp,
+    };
+    match tokio::task::spawn_blocking(move || OmoService::read_local_file(v)).await {
+        Ok(Ok(data)) => ok(data),
+        Ok(Err(e)) => fail(e),
+        Err(e) => fail(format!("omo read task failed: {e}")),
+    }
+}
+
+async fn omo_current_provider(
+    State(state): State<SharedState>,
+    Path(variant): Path<String>,
+) -> ApiResult {
+    let v = match omo_variant(&variant) {
+        Ok(v) => v,
+        Err(resp) => return resp,
+    };
+    match tokio::task::spawn_blocking(move || OmoService::current_provider_id(&state.db, v)).await {
+        Ok(Ok(id)) => ok(id),
+        Ok(Err(e)) => fail(e),
+        Err(e) => fail(format!("omo current-provider task failed: {e}")),
+    }
+}
+
+async fn omo_disable(State(state): State<SharedState>, Path(variant): Path<String>) -> ApiResult {
+    let v = match omo_variant(&variant) {
+        Ok(v) => v,
+        Err(resp) => return resp,
+    };
+    match tokio::task::spawn_blocking(move || OmoService::disable_current(&state.db, v)).await {
+        Ok(Ok(())) => ok(Value::Null),
+        Ok(Err(e)) => fail(e),
+        Err(e) => fail(format!("omo disable task failed: {e}")),
     }
 }
 

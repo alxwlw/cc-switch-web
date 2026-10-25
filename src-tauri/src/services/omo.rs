@@ -1,6 +1,7 @@
 #[cfg(windows)]
 use crate::config::derive_wsl_home_dir;
 use crate::config::{atomic_write, get_home_dir, write_json_file_with_contents};
+use crate::database::Database;
 use crate::error::AppError;
 use crate::jsonc_document::JsoncDocument;
 use crate::opencode_config::get_opencode_dir;
@@ -570,6 +571,23 @@ impl OmoService {
             .set_omo_provider_current("opencode", &provider.id, v.category)?;
         Self::write_config_to_file(state, v)?;
         Ok(provider)
+    }
+
+    /// Id of the current provider of this variant in the DB; empty string when none.
+    pub fn current_provider_id(db: &Database, v: &OmoVariant) -> Result<String, AppError> {
+        let provider = db.get_current_omo_provider("opencode", v.category)?;
+        Ok(provider.map(|p| p.id).unwrap_or_default())
+    }
+
+    /// Clears the current flag of every provider of this variant, then removes its config file.
+    pub fn disable_current(db: &Database, v: &OmoVariant) -> Result<(), AppError> {
+        let providers = db.get_all_providers("opencode")?;
+        for (id, p) in &providers {
+            if p.category.as_deref() == Some(v.category) {
+                db.clear_omo_provider_current("opencode", id, v.category)?;
+            }
+        }
+        Self::delete_config_file(v)
     }
 
     pub fn read_local_file(v: &OmoVariant) -> Result<OmoLocalFileData, AppError> {
