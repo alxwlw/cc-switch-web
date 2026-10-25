@@ -21,6 +21,7 @@ use crate::error::AppError;
 use crate::prompt::Prompt;
 use crate::provider::Provider;
 use crate::services::prompt::PromptService;
+use crate::services::provider::icon;
 use crate::services::provider::{EditorSave, ProviderService, ProviderSortUpdate};
 use crate::services::skill::SkillService;
 use crate::services::usage_stats::LogFilters;
@@ -138,6 +139,15 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/env/tools", post(tool_versions))
         .route("/api/env/conflicts", get(env_conflicts))
         .route("/api/migrations/status", get(migrations_status))
+        // custom icon library
+        .route(
+            "/api/custom-icons",
+            get(list_custom_icons).post(add_custom_icon),
+        )
+        .route(
+            "/api/custom-icons/:id",
+            put(rename_custom_icon).delete(delete_custom_icon),
+        )
         .with_state(state)
 }
 
@@ -1034,5 +1044,63 @@ async fn env_conflicts(Query(q): Query<EnvConflictsQuery>) -> ApiResult {
     match crate::services::env_checker::check_env_conflicts(&q.app) {
         Ok(conflicts) => ok(conflicts),
         Err(e) => fail(e.to_string()),
+    }
+}
+
+// ---------- custom icon library ----------
+
+async fn list_custom_icons(State(state): State<SharedState>) -> ApiResult {
+    match tokio::task::spawn_blocking(move || icon::list_library_icons(&state.db)).await {
+        Ok(Ok(icons)) => ok(icons),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("list custom icons task failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct AddCustomIconReq {
+    name: String,
+    data: String,
+}
+
+async fn add_custom_icon(
+    State(state): State<SharedState>,
+    Json(body): Json<AddCustomIconReq>,
+) -> ApiResult {
+    match tokio::task::spawn_blocking(move || {
+        icon::add_library_icon(&state.db, &body.name, &body.data)
+    })
+    .await
+    {
+        Ok(Ok(result)) => ok(result),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("add custom icon task failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct RenameCustomIconReq {
+    name: String,
+}
+
+async fn rename_custom_icon(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+    Json(body): Json<RenameCustomIconReq>,
+) -> ApiResult {
+    match tokio::task::spawn_blocking(move || icon::rename_library_icon(&state.db, &id, &body.name))
+        .await
+    {
+        Ok(Ok(entry)) => ok(entry),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("rename custom icon task failed: {e}")),
+    }
+}
+
+async fn delete_custom_icon(State(state): State<SharedState>, Path(id): Path<String>) -> ApiResult {
+    match tokio::task::spawn_blocking(move || icon::delete_library_icon(&state.db, &id)).await {
+        Ok(Ok(())) => ok(true),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("delete custom icon task failed: {e}")),
     }
 }
