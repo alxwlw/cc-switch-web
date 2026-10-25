@@ -59,12 +59,12 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 
 ### Task 6: hide/disable — skills, sessions, usage, prompts, Apps page
 Строки таблицы с гейтом T6.
-- [ ] Skills: сегмент discover/`skillsDiscovery` и SkillsStorageSheet скрыты; ZIP install, check updates/update, import from apps, backups restore/delete — disabled + tooltip. Работающие (installed list, toggle, uninstall, resync) не трогать.
-- [ ] Sessions: `SessionImage` в web — placeholder «изображение недоступно в web-режиме» без вызова; export markdown — disabled + tooltip; reveal в `PathChip` скрыт (copy path остаётся); «resume in terminal» в web всегда идёт по copy-command фоллбэку (`SessionManagerPage.tsx:309`), без `launch_session_terminal`.
-- [ ] Usage: rebuild codex usage, pricing edit/delete/batch, pricing model source, models.dev sync, proxy client host в `UsageSettingsSheet`, open config folder — disabled + tooltip или скрыты (по месту). Работающий dashboard не трогать.
-- [ ] Prompts: «open folder» (`usePromptPageCommon.ts:32`) скрыт; `PiNativePromptResources` скрыт.
-- [ ] Apps page: install/update/uninstall — disabled + tooltip; версии (`get_tool_versions`) показываются.
-- [ ] Тесты: skills ZIP install disabled в web, sessions reveal/terminal в web, Apps actions disabled; desktop без изменений.
+- [x] Skills: сегмент discover/`skillsDiscovery` и SkillsStorageSheet скрыты; ZIP install, check updates/update, import from apps, backups restore/delete — disabled + tooltip. Работающие (installed list, toggle, uninstall, resync) не трогать.
+- [x] Sessions: `SessionImage` в web — placeholder «изображение недоступно в web-режиме» без вызова; export markdown — disabled + tooltip; reveal в `PathChip` скрыт (copy path остаётся); «resume in terminal» в web всегда идёт по copy-command фоллбэку (`SessionManagerPage.tsx:309`), без `launch_session_terminal`.
+- [x] Usage: rebuild codex usage, pricing edit/delete/batch, pricing model source, models.dev sync, proxy client host в `UsageSettingsSheet`, open config folder — disabled + tooltip или скрыты (по месту). Работающий dashboard не трогать.
+- [x] Prompts: «open folder» (`usePromptPageCommon.ts:32`) скрыт; `PiNativePromptResources` скрыт.
+- [x] Apps page: install/update/uninstall — disabled + tooltip; версии (`get_tool_versions`) показываются.
+- [x] Тесты: skills ZIP install disabled в web, sessions reveal/terminal в web, Apps actions disabled; desktop без изменений.
 
 ### Task 7: server-host semantics
 - [ ] В web при старте читать `GET /api/capabilities` и показывать `runtime_boundaries` (About-секция и/или неброский баннер): все файловые операции/CLI/proxy — на серверном хосте.
@@ -167,3 +167,13 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 - Формы: fetch-models disabled + tip во всех формах и `ModelInputWithFetch`/`FetchedModelPicker` (WEB-03; picker открывается, если список уже есть); `EndpointField` «manage and speed test» скрыт (WEB-21); Codex/Copilot/Xai OAuth select-режим — notice `web.accountLogin` вместо вечного spinner'а (WEB-02); ClaudeDesktop: режим model-mapping (proxy) скрыт для новых провайдеров, оставлен для уже proxy (WEB-01/19); official-пресеты claude-desktop/grokbuild скрыты в web — seed `ensure_*_official_provider` создаёт провайдера с фиксированным id, обычный add это не воспроизводит (WEB-19). Формы стартуют на `custom`, id пресетов claude-desktop назначаются до фильтра.
 - `AddProviderDialog`: вкладка universal providers скрыта (WEB-07). `useOmoModelSource`: без live-ids/runtime-models и ложных warning-toast'ов (WEB-14). `useProviderActions.ts:100`: регистрация openclaw model catalog/default после add пропущена (WEB-15). General: тогл show-profile-switcher disabled (WEB-06).
 - i18n: `web.accountLogin`, `web.needsRouting`, `web.liveUnknownTitle`, `web.removeUnverifiable`.
+
+### Skills, sessions, usage, prompts, Apps (Task 6, `53c0b089..8e85a1ce`)
+
+- Skills (WEB-05): view `skillsDiscovery` скрыт (`navigation.ts`); в `UnifiedSkillsPanel` скрыты discover-сегмент, пункт add-меню, empty-state shortcut и «search in discover» на no-match; `initialView:"discover"` в web → installed, discover-страница не монтируется. Disabled: ZIP install, import from apps, check updates (меню + toolbar), restore backups, repos. `SkillsStorageSheet` оставлен — единственный вход к работающему `resync_skills_to_apps`; внутри disabled location radios и open folder. Per-skill update и repo-fail «Retry» недостижимы (данные только от отключённого check).
+- Sessions (WEB-13): `terminalName` null в web → только copy-command фоллбэк, `launch_session_terminal` не вызывается, сообщение `web.sessionResumeCopied`; export markdown disabled (меню и toolbar `SessionReaderHeader`); reveal в `PathChip` скрыт, copy остаётся; `SessionImage` — placeholder `web.sessionImage` без `get_session_image`.
+- Usage (WEB-12): `UsageSettingsSheet` — скрыты logging-status row и routing link (WEB-01; proxy client host живёт в `RoutingSection`, скрытой T4), rebuild Codex disabled; `PricingConfigPanel` — скрыты `ModelsDevAutoSyncPanel` и pricing-model-source, disabled models.dev import/add/edit/delete (чтение цен работает); startup sync `modelsDevAutoSync.ts` пропущен (`main.tsx:153` обрабатывает `skipped`).
+- Prompts (WEB-17): open folder скрыт (`usePromptPageCommon.ts`); в `PiPromptPanel` скрыты табы system/templates. `PiNativePromptResources` ни откуда не импортируется.
+- Apps (WEB-25): update-all, diagnose-all, install/update строки, uninstall disabled; версии и check-updates (`get_tool_versions`) работают; ручные install/uninstall-диалоги только копируют команду; `ToolUninstallConfirmDialog` недостижим.
+- i18n: `web.sessionImage`, `web.sessionResumeCopied`.
+- **Flaky вне диффа**: `tests/components/SessionManagerPage.test.tsx` «switches to all apps and to time buckets» падает около полуночи по локальному времени (фикстуры от `Date.now()`, заголовок «今天»); с `TZ=UTC` зелёный. Baseline не трогали.
