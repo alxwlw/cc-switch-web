@@ -102,4 +102,35 @@ describe("AboutSection · update controls", () => {
     expect(screen.getByText("web.hostNotice")).toBeInTheDocument();
     expect(screen.queryByText(/web\.mode\.serverVersion/)).toBeNull();
   });
+
+  it.each([
+    ["HTTP 500", { ok: false, status: 500, json: async () => ({}) }],
+    ["payload without version", { ok: true, json: async () => ({}) }],
+  ])(
+    "web: %s keeps the statement, shows no server version",
+    async (_n, res) => {
+      setWeb(true);
+      fetchMock.mockResolvedValue(res);
+      renderAbout();
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 0));
+      expect(screen.getByText("web.hostNotice")).toBeInTheDocument();
+      expect(screen.queryByText(/web\.mode\.serverVersion/)).toBeNull();
+    },
+  );
+
+  it("web: blank runtime_boundaries renders no empty paragraph", async () => {
+    setWeb(true);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        mode: "web",
+        version: "9.9.9",
+        runtime_boundaries: "  ",
+      }),
+    });
+    renderAbout();
+    const ver = await screen.findByText("web.mode.serverVersion v9.9.9");
+    expect(ver.parentElement?.querySelectorAll("p")).toHaveLength(2);
+  });
 });

@@ -17,7 +17,7 @@ export function WebModeInfo() {
       {data && (
         <>
           <p className="tabular-nums">{`${t("web.mode.serverVersion")} v${data.version}`}</p>
-          {data.runtime_boundaries && <p>{data.runtime_boundaries}</p>}
+          {data.runtime_boundaries.trim() && <p>{data.runtime_boundaries}</p>}
         </>
       )}
     </div>
