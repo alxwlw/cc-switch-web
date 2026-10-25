@@ -359,6 +359,18 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         method: "GET",
         url: `/api/env/conflicts${query({ app: a.app })}`,
       };
+    case "delete_env_vars":
+      return {
+        method: "POST",
+        url: "/api/env/conflicts/cleanup",
+        body: { conflicts: a.conflicts },
+      };
+    case "restore_env_backup":
+      return {
+        method: "POST",
+        url: "/api/env/restore",
+        body: { backupPath: a.backupPath },
+      };
 
     // ---------- startup one-shots ----------
     case "get_migration_result":
