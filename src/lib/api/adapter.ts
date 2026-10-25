@@ -372,6 +372,20 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         body: { backupPath: a.backupPath },
       };
 
+    // ---------- OMO / OMO Slim live config ----------
+    case "read_omo_local_file":
+      return { method: "GET", url: "/api/omo/omo/local-file" };
+    case "get_current_omo_provider_id":
+      return { method: "GET", url: "/api/omo/omo/current-provider" };
+    case "disable_current_omo":
+      return { method: "POST", url: "/api/omo/omo/disable" };
+    case "read_omo_slim_local_file":
+      return { method: "GET", url: "/api/omo/omo-slim/local-file" };
+    case "get_current_omo_slim_provider_id":
+      return { method: "GET", url: "/api/omo/omo-slim/current-provider" };
+    case "disable_current_omo_slim":
+      return { method: "POST", url: "/api/omo/omo-slim/disable" };
+
     // ---------- startup one-shots ----------
     case "get_migration_result":
       return {

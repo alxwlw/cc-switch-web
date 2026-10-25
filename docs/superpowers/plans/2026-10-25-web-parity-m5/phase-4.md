@@ -28,7 +28,8 @@ Scope: `src-tauri/src/web_api.rs` (2 роута), `src-tauri/tests/web_api_env.r
 
 ## Notes for next phase
 
-- **Статус 2026-10-25**: PR #5 (alxwlw/cc-switch-web) открыт, ветка `web-parity/web-22-env-cleanup`, worktree `.worktrees/web-22`; DX-80 → In Review с комментарием (ссылка + контракт). Задачи 1–2 прошли implement→review (r0 approved, 0 открытых), задача 3 — контроллером. Ждёт merge → `post-merge`: backend изменён — пересобрать server (`cargo build --release --example server` → `~/.local/bin/cc-switch-web`, прежний — в `.prev`), `pnpm build:web` в main-checkout, restart `cc-switch-web.service`; DX-80 → Done.
+- **Закрыта 2026-10-25**: PR #5 merged `35b7e3ff` → main; live на `cc-switch-web.service` — server пересобран из main (`cargo build --release --example server` → `~/.local/bin/cc-switch-web`), `pnpm build:web` в main-checkout, restart unit; в проде `POST /api/env/restore` с несуществующим backupPath → 500 `{ok:false}` с дословной ошибкой, битое тело cleanup → 422. DX-80 Done (комментарий со ссылками file:line). Worktree `.worktrees/web-22`, локальная и remote ветки удалены; ledgers прогона перенесены в `.claude/plans/2026-10-25-web-parity-m5-p4` main-checkout. Задачи 1–2 прошли implement→review (r0 approved, 0 открытых), задача 3 — контроллером.
+- **Откат бинарника**: `.prev` при этом деплое НЕ обновлялся — `~/.local/bin/cc-switch-web.prev` остался от 19:18 (до фазы 3), бинарник фазы 3 не сохранён. Откат на фазу 3 = сборка `c756f945`. Следующему деплою: `cp cc-switch-web cc-switch-web.prev` перед `install`.
 - В PR вошёл docs-коммит `410a520d` (закрытие фазы 3): он был только в локальном main.
 - Базовая линия гейтов после фазы: cargo test 4248 passed / 3 failed, test:unit 3328 passed / 3 failed — красные те же предсуществующие.
 
