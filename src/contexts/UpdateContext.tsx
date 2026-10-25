@@ -91,7 +91,7 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
         setHasUpdate(false);
         setUpdateInfo(null);
         setIsDismissed(false);
-        return false; // 已是最新
+        return false; // 已是最新；web 下的 unsupported 也走这里（WEB-00）
       }
     } catch (err) {
       console.error("检查更新失败:", err);
