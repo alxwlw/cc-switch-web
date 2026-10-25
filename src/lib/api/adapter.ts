@@ -133,6 +133,11 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         method: "POST",
         url: `${appBase(a.app)}/prompts/${enc(a.id)}/enable`,
       };
+    case "import_prompt_from_file":
+      return {
+        method: "POST",
+        url: `${appBase(a.app)}/prompts/import-from-file`,
+      };
     case "get_current_prompt_file_content":
       return { method: "GET", url: `${appBase(a.app)}/prompt-content` };
     case "get_prompt_file_location":
