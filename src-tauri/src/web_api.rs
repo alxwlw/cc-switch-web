@@ -138,6 +138,8 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/paths", get(paths))
         .route("/api/env/tools", post(tool_versions))
         .route("/api/env/conflicts", get(env_conflicts))
+        .route("/api/env/conflicts/cleanup", post(env_cleanup))
+        .route("/api/env/restore", post(env_restore))
         .route("/api/migrations/status", get(migrations_status))
         // custom icon library
         .route(
@@ -1044,6 +1046,42 @@ async fn env_conflicts(Query(q): Query<EnvConflictsQuery>) -> ApiResult {
     match crate::services::env_checker::check_env_conflicts(&q.app) {
         Ok(conflicts) => ok(conflicts),
         Err(e) => fail(e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct EnvCleanupReq {
+    conflicts: Vec<crate::services::env_checker::EnvConflict>,
+}
+
+/// Deletes the listed conflicts (after writing a backup) on the SERVER host.
+async fn env_cleanup(Json(body): Json<EnvCleanupReq>) -> ApiResult {
+    match tokio::task::spawn_blocking(move || {
+        crate::services::env_manager::delete_env_vars(body.conflicts)
+    })
+    .await
+    {
+        Ok(Ok(info)) => ok(info),
+        Ok(Err(e)) => fail(e),
+        Err(e) => fail(format!("env cleanup task failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EnvRestoreReq {
+    backup_path: String,
+}
+
+async fn env_restore(Json(body): Json<EnvRestoreReq>) -> ApiResult {
+    match tokio::task::spawn_blocking(move || {
+        crate::services::env_manager::restore_from_backup(body.backup_path)
+    })
+    .await
+    {
+        Ok(Ok(())) => ok(serde_json::Value::Null),
+        Ok(Err(e)) => fail(e),
+        Err(e) => fail(format!("env restore task failed: {e}")),
     }
 }
 
