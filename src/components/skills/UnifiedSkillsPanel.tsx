@@ -1380,20 +1380,23 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
                       >
                         {t("mcpPage.clearSearch")}
                       </Button>
-                      <Button
-                        type="button"
-                        variant="neutral"
-                        size="regular"
-                        onClick={() => {
-                          setDiscoverQuery(searchQuery.trim());
-                          setSearchQuery("");
-                          setView("discover");
-                        }}
-                      >
-                        {t("skillsPage.searchInDiscover", {
-                          query: searchQuery.trim(),
-                        })}
-                      </Button>
+                      {/* WEB-00: discover скрыт в web — «искать в Discover» вело бы в тупик — снимет WEB-05 */}
+                      {discoverAvailable && (
+                        <Button
+                          type="button"
+                          variant="neutral"
+                          size="regular"
+                          onClick={() => {
+                            setDiscoverQuery(searchQuery.trim());
+                            setSearchQuery("");
+                            setView("discover");
+                          }}
+                        >
+                          {t("skillsPage.searchInDiscover", {
+                            query: searchQuery.trim(),
+                          })}
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <Button

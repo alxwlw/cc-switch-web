@@ -36,6 +36,7 @@ const m = vi.hoisted(() => ({
   repoFailures: [] as SkillRepoFailure[],
   checking: false,
   visibleApps: ["claude", "codex", "pi"] as string[],
+  discoverMounts: 0,
 }));
 
 vi.mock("sonner", () => ({
@@ -112,7 +113,10 @@ vi.mock("@/hooks/useSkills", () => ({
     mutateAsync: m.updateSkill,
     isPending: false,
   }),
-  useDiscoverableSkills: () => ({ data: [], refetch: vi.fn() }),
+  useDiscoverableSkills: () => {
+    m.discoverMounts += 1;
+    return { data: [], refetch: vi.fn() };
+  },
   useDiscoverableSkillsFailures: () => ({ data: [] }),
   useSkillRepos: () => ({ data: [], refetch: vi.fn() }),
   useAddSkillRepo: () => ({ mutateAsync: vi.fn() }),
@@ -963,6 +967,7 @@ describe("UnifiedSkillsPanel", () => {
 
 describe("UnifiedSkillsPanel web gating", () => {
   beforeEach(() => {
+    m.discoverMounts = 0;
     m.installed = [makeSkill()];
     m.backups = [];
     m.updates = [];
@@ -988,8 +993,13 @@ describe("UnifiedSkillsPanel web gating", () => {
       setWeb(web);
       renderPanel({ initialView: "discover" });
       expect(screen.queryByText("skillsPage.viewDiscover") === null).toBe(web);
-      // installed-список остаётся рабочим: матрица тоглов на месте
-      expect(screen.getByTestId("skills-matrix")).toBeVisible();
+      // installed-список остаётся рабочим и активным (jsdom не считает класс hidden скрытием)
+      const installedPane = screen
+        .getByTestId("skills-matrix")
+        .closest(".hidden");
+      expect(installedPane === null).toBe(web);
+      // страница discover в web не монтируется вовсе
+      expect(m.discoverMounts > 0).toBe(!web);
     },
   );
 
@@ -1049,6 +1059,28 @@ describe("UnifiedSkillsPanel web gating", () => {
       expect(
         screen.getByRole("button", { name: "skillsPage.importCount" }),
       ).toHaveProperty("disabled", web);
+    },
+  );
+
+  it.each([true, false])(
+    "no-match state offers search-in-discover only outside web (web=%s)",
+    async (web) => {
+      setWeb(web);
+      renderPanel();
+      await userEvent.type(
+        screen.getByRole("textbox", {
+          name: "skills.installedSearchAriaLabel",
+        }),
+        "zzz",
+      );
+      expect(
+        screen.getByRole("button", { name: "mcpPage.clearSearch" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", {
+          name: "skillsPage.searchInDiscover",
+        }) === null,
+      ).toBe(web);
     },
   );
 });

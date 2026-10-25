@@ -448,12 +448,8 @@ export function PricingConfigPanel() {
                         {formatUnitPrice(model.cacheCreationCostPerMillion)}
                       </td>
                       <td className="whitespace-nowrap pe-1 text-end">
-                        <HoverTip
-                          content={
-                            isWeb ? t("web.unavailable") : t("common.edit")
-                          }
-                        >
-                          <span className="inline-flex">
+                        <WebUnavailableTip active={isWeb}>
+                          <HoverTip content={t("common.edit")}>
                             <Button
                               type="button"
                               variant="quiet"
@@ -470,14 +466,10 @@ export function PricingConfigPanel() {
                                 strokeWidth={1.75}
                               />
                             </Button>
-                          </span>
-                        </HoverTip>
-                        <HoverTip
-                          content={
-                            isWeb ? t("web.unavailable") : t("common.delete")
-                          }
-                        >
-                          <span className="inline-flex">
+                          </HoverTip>
+                        </WebUnavailableTip>
+                        <WebUnavailableTip active={isWeb}>
+                          <HoverTip content={t("common.delete")}>
                             <Button
                               type="button"
                               variant="quiet"
@@ -494,8 +486,8 @@ export function PricingConfigPanel() {
                                 strokeWidth={1.75}
                               />
                             </Button>
-                          </span>
-                        </HoverTip>
+                          </HoverTip>
+                        </WebUnavailableTip>
                       </td>
                     </tr>
                   );
