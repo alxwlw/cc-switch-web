@@ -50,12 +50,12 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 
 ### Task 5: hide/disable — providers, формы, proxy, profiles, app views
 Строки таблицы с гейтом T5.
-- [ ] ProviderList/ProviderCard: кнопка Test (`stream_check_provider`), пункт «open terminal», import-from-live на пустом списке, usage-script кнопки в `UsageScriptModal` (test/balance/quota), default-model actions opencode/openclaw — disabled + tooltip.
-- [ ] Формы провайдеров: fetch-models кнопки (Claude/Codex/Gemini/ClaudeDesktop/OMO) и copilot models — disabled + tooltip; `EndpointSpeedTest` скрыт; OAuth login/logout в формах (`useManagedAuth`, `useKimiOAuth`, `AgyOAuthSection`, `KimiAccountLogin`) — disabled + tooltip; `EditProviderDialog.tsx:211,233` не зовёт `get_openclaw_live_provider`/`read_live_provider_settings` в web, если это ломает/шумит открытие формы.
-- [ ] Proxy-режимы: `SwitchModePanel`, `CodexStaleClientsNotice`, `AutoFailoverConfigPanel`, health badge — скрыты в web (режим всегда direct).
-- [ ] `ProfileSwitcher`/`ProfileManageDialog` скрыты; вкладка universal providers в `AddProviderDialog` скрыта.
-- [ ] Входы в views `openclawConfig`, `hermesMemory`, `workspace` и кнопки hermes web UI/dashboard (`App.tsx:944,1881`) скрыты в web; openclaw health banner (`App.tsx:335`) не опрашивает.
-- [ ] Тесты: 2–3 самых заметных (Test в ProviderList, fetch-models в форме, SwitchModePanel/ProfileSwitcher отсутствуют в web), desktop без изменений.
+- [x] ProviderList/ProviderCard: кнопка Test (`stream_check_provider`), пункт «open terminal», import-from-live на пустом списке, usage-script кнопки в `UsageScriptModal` (test/balance/quota), default-model actions opencode/openclaw — disabled + tooltip.
+- [x] Формы провайдеров: fetch-models кнопки (Claude/Codex/Gemini/ClaudeDesktop/OMO) и copilot models — disabled + tooltip; `EndpointSpeedTest` скрыт; OAuth login/logout в формах (`useManagedAuth`, `useKimiOAuth`, `AgyOAuthSection`, `KimiAccountLogin`) — disabled + tooltip; `EditProviderDialog.tsx:211,233` не зовёт `get_openclaw_live_provider`/`read_live_provider_settings` в web, если это ломает/шумит открытие формы.
+- [x] Proxy-режимы: `SwitchModePanel`, `CodexStaleClientsNotice`, `AutoFailoverConfigPanel`, health badge — скрыты в web (режим всегда direct).
+- [x] `ProfileSwitcher`/`ProfileManageDialog` скрыты; вкладка universal providers в `AddProviderDialog` скрыта.
+- [x] Входы в views `openclawConfig`, `hermesMemory`, `workspace` и кнопки hermes web UI/dashboard (`App.tsx:944,1881`) скрыты в web; openclaw health banner (`App.tsx:335`) не опрашивает.
+- [x] Тесты: 2–3 самых заметных (Test в ProviderList, fetch-models в форме, SwitchModePanel/ProfileSwitcher отсутствуют в web), desktop без изменений.
 
 ### Task 6: hide/disable — skills, sessions, usage, prompts, Apps page
 Строки таблицы с гейтом T6.
@@ -155,3 +155,15 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 - `useSettings.ts` в web пропускает: `applyClaudePluginConfig`, `setAutoLaunch`, onboarding apply/clear, `setAppConfigDirOverride`, оба `sync_current_providers_live` (не в `mapCommand`, WEB-09), appDirChanged/restart prompt. `save_settings` выполняется — полный save больше не падает. Также `is_portable_mode` (`useSettingsMetadata.ts`, WEB-28), `get_app_config_dir_override` в `Promise.all` загрузки директорий (`useDirectorySettings.ts`, WEB-26 — без этого в web пропадали resolved dirs), `apply_claude_plugin_config` при switch (`useProviderActions.ts`).
 - Window: `useAppWindowControls` false в web, `setDecorations` пропущен (окна нет — гейт постоянный).
 - Долги вперёд: `onOpenRoutingSettings` из `UsageSettingsSheet.tsx:258` (T6), `SwitchModePanel`, `RouteSettingsSheet` (T5) в web молча открывают General — скрыть ссылки. Легаси `DirectorySettings` не используется, не гейтился.
+
+### Providers, формы, proxy (Task 5, `64e92df6..7d69a62b`)
+
+- Views `workspace`/`openclawConfig`/`hermesMemory` скрыты через `navigation.ts:isViewAvailable` (сохранённый view → providers; WEB-15/16/17); в `App.tsx` скрыты `ProfileSwitcher` (WEB-06), кнопка Hermes Web UI/dashboard (WEB-16), sub-view табы openclaw/hermes (`renderAppSegments` → null).
+- `SwitchModePanel` — единственный рендерер списка для claude/codex/gemini/grokbuild/claude-desktop, поэтому список остаётся (direct, `directId = currentProviderId`), а скрыты ModeTabs, status badge, `ModeDialog`, `RouteSettingsSheet`, `StackSettingsSheet` (WEB-01). `CodexStaleClientsNotice`, `AutoFailoverConfigPanel`, health badge достижимы только оттуда — не рендерятся. Провайдер, которому нужен routing, — switch disabled с `web.needsRouting`.
+- Карточки (`presentation.ts`, `ProviderCardActions.tsx`): Connectivity check (WEB-04), Open terminal (desktop-only, гейт постоянный), set-default opencode/openclaw (WEB-14/15), configure usage для pi/omp (`update_pi_provider_usage_script` не замаплен; проп `configureUsageUnavailable`, WEB-17) — disabled с причиной. `UsageScriptModal` Test (WEB-04).
+- **Live membership в web неизвестна** (opencode/openclaw/hermes): одна секция `web.liveUnknownTitle` вместо «в конфиге / доступно». Add/Remove замаплены и работают; Remove для openclaw/hermes disabled с `web.removeUnverifiable` (backend `remove_openclaw_provider_from_live` не проверяет default, а current/default в web неизвестны), opencode — Remove активен. Hermes enable в этой секции не предлагается. WEB-14/15/16 должны вернуть обычные секции.
+- `handleDuplicate` (`App.tsx`) в web пропускает live-ids: шаг лишь проверял, что ключ копии не совпадает с id из live-конфига (копия сохраняется с `addToLive=false`). Потеря: копия `<id>-copy` может совпасть с id, который есть только в live — узкий случай, допустимо.
+- Import-from-live (`ProviderEmptyState.importUnavailable`) disabled для opencode/openclaw/hermes/claude-desktop (WEB-14/15/16/19); `import_default_config` для остальных работает.
+- Формы: fetch-models disabled + tip во всех формах и `ModelInputWithFetch`/`FetchedModelPicker` (WEB-03; picker открывается, если список уже есть); `EndpointField` «manage and speed test» скрыт (WEB-21); Codex/Copilot/Xai OAuth select-режим — notice `web.accountLogin` вместо вечного spinner'а (WEB-02); ClaudeDesktop: режим model-mapping (proxy) скрыт для новых провайдеров, оставлен для уже proxy (WEB-01/19); official-пресеты claude-desktop/grokbuild скрыты в web — seed `ensure_*_official_provider` создаёт провайдера с фиксированным id, обычный add это не воспроизводит (WEB-19). Формы стартуют на `custom`, id пресетов claude-desktop назначаются до фильтра.
+- `AddProviderDialog`: вкладка universal providers скрыта (WEB-07). `useOmoModelSource`: без live-ids/runtime-models и ложных warning-toast'ов (WEB-14). `useProviderActions.ts:100`: регистрация openclaw model catalog/default после add пропущена (WEB-15). General: тогл show-profile-switcher disabled (WEB-06).
+- i18n: `web.accountLogin`, `web.needsRouting`, `web.liveUnknownTitle`, `web.removeUnverifiable`.
