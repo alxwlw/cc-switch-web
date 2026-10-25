@@ -3254,6 +3254,7 @@
       "title": "Confirm Delete Environment Variables",
       "message": "Are you sure you want to delete {{count}} environment variable(s)?",
       "backupNotice": "A backup will be created automatically before deletion. You can restore it later. Changes take effect after restarting the application or terminal.",
+      "webHostWarning": "Web mode: the variables are removed from the OS user environment (shell rc files) of the machine running the cc-switch server, not of the computer this browser is on.",
       "confirm": "Confirm Delete"
     },
     "error": {

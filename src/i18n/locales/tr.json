@@ -3247,6 +3247,7 @@
       "title": "Ortam Değişkenlerini Silmeyi Onayla",
       "message": "{{count}} ortam değişkenlerini silmek istediğinizden emin misiniz?",
       "backupNotice": "Silmeden önce otomatik olarak bir yedek oluşturulacaktır. Daha sonra geri yükleyebilirsiniz. Değişiklikler uygulamayı veya terminali yeniden başlattıktan sonra etkili olur.",
+      "webHostWarning": "Web modu: Değişkenler, bu tarayıcının bulunduğu bilgisayardan değil, cc-switch sunucusunun çalıştığı ana makinenin işletim sistemi kullanıcı ortamından (shell rc dosyaları) silinir.",
       "confirm": "Silmeyi Onayla"
     },
     "error": {

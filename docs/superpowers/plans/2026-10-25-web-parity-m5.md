@@ -14,8 +14,8 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 
 - [x] [Phase 1 — WEB-30 / DX-88: открытие внешних HTTP(S) ссылок](2026-10-25-web-parity-m5/phase-1.md) — PR #2, merged `50790b7f` → main 2026-10-25, live на cc-switch-web.service; DX-88 Done.
 - [x] [Phase 2 — WEB-31 / DX-89: import prompt из файла](2026-10-25-web-parity-m5/phase-2.md) — PR #3, merged `3a1252b5` → main 2026-10-25, live на cc-switch-web.service (server + dist-web пересобраны); DX-89 Done.
-- [ ] [Phase 3 — WEB-08 / DX-66: пользовательская библиотека иконок](2026-10-25-web-parity-m5/phase-3.md) — PR #4 открыт (ветка `web-parity/web-08-custom-icons`), DX-66 In Review; ждёт merge → post-merge (backend изменён: пересборка server + build:web).
-- [ ] [Phase 4 — WEB-22 / DX-80: env conflicts cleanup с backup/restore](2026-10-25-web-parity-m5/phase-4.md)
+- [x] [Phase 3 — WEB-08 / DX-66: пользовательская библиотека иконок](2026-10-25-web-parity-m5/phase-3.md) — PR #4, merged `c756f945` → main 2026-10-25, live на cc-switch-web.service (server + dist-web пересобраны); DX-66 Done.
+- [ ] [Phase 4 — WEB-22 / DX-80: env conflicts cleanup с backup/restore](2026-10-25-web-parity-m5/phase-4.md) — PR #5 открыт (ветка `web-parity/web-22-env-cleanup`), DX-80 In Review; ждёт merge → post-merge (backend изменён: пересборка server + dist-web).
 - [ ] [Phase 5 — WEB-18 / DX-76: OMO / OMO Slim live config](2026-10-25-web-parity-m5/phase-5.md)
 - [ ] [Phase 6 — WEB-00 / DX-58: честный feature gating](2026-10-25-web-parity-m5/phase-6.md)
 - [ ] [Phase 7 — WEB-32 / DX-90: общий headless startup/bootstrap и migrations](2026-10-25-web-parity-m5/phase-7.md)
