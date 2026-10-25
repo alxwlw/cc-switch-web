@@ -17,14 +17,20 @@ Scope: `src-tauri/src/web_api.rs` (4 роута), `src-tauri/tests/web_api_custo
 - [x] nextest зелёный (`cargo test`: web_api_custom_icons 4/4; полный прогон — только 3 предсуществующих красных).
 
 ### Task 2: frontend — adapter cases + тест
-- [ ] 4 case в `mapCommand` (`get_custom_icons`, `add_custom_icon`, `rename_custom_icon`, `delete_custom_icon`) с теми же camelCase-полями в body.
-- [ ] `tests/lib/customIconsApi.test.ts`: каждый метод — URL/метод/body через mock fetch; существующие `tests/components/IconPicker.test.tsx`, `CustomIconNameDialog.test.tsx`, `ProviderIcon.customIcon.test.tsx`, `tests/utils/customIcon.test.ts` не ломаются.
-- [ ] `pnpm typecheck && pnpm test:unit` зелёные.
+- [x] 4 case в `mapCommand` (`get_custom_icons`, `add_custom_icon`, `rename_custom_icon`, `delete_custom_icon`) с теми же camelCase-полями в body.
+- [x] `tests/lib/customIconsApi.test.ts`: каждый метод — URL/метод/body через mock fetch; существующие `tests/components/IconPicker.test.tsx`, `CustomIconNameDialog.test.tsx`, `ProviderIcon.customIcon.test.tsx`, `tests/utils/customIcon.test.ts` не ломаются.
+- [x] `pnpm typecheck && pnpm test:unit` зелёные.
 
 ### Task 3: гейты, PR, Plane
-- [ ] полный набор гейтов (fmt/clippy/nextest + typecheck/format:check/test:unit).
-- [ ] ветка `web-parity/web-08-custom-icons`, PR; DX-66 → In Review + ссылка. Закрыть чекбоксы, Notes.
+- [x] полный набор гейтов (fmt/clippy/nextest + typecheck/format:check/test:unit).
+- [x] ветка `web-parity/web-08-custom-icons`, PR; DX-66 → In Review + ссылка. Закрыть чекбоксы, Notes.
 
 ## Notes for next phase
 
-- (заполнить по итогам)
+- **Статус 2026-10-25**: PR #4 (alxwlw/cc-switch-web) открыт, ветка `web-parity/web-08-custom-icons`, worktree `.worktrees/web-08`; DX-66 → In Review с комментарием (ссылка + расхождение контракта с планом). Задачи 1–2 прошли implement→review (r0 approved, 0 открытых), задача 3 — контроллером. Ждёт merge владельцем → `post-merge`: backend изменён — пересборка `cargo build --release --example server` → `~/.local/bin/cc-switch-web` + restart `cc-switch-web.service`, плюс `pnpm build:web` в main-checkout.
+- В PR вошёл docs-коммит `4bad1165` (закрытие фазы 2): он был только в локальном main.
+- **Ожидания плана об ошибках сверять с сервисом, а не угадывать.** План фазы 3 предполагал 400/`{ok:false}` там, где сервис даёт `existed:true`, `fail` (500) и no-op `ok:true`; implementer зафиксировал фактический контракт, ревью подтвердило, Task 1 переписан. В `web_api.rs` `bad_request` — только внутри `app_type!` (невалидный app id); любая ошибка сервиса — `fail(e.to_string())`, что совпадает с `Err(e.to_string())` Tauri-команды. Брифам следующих фаз — проверять это по коду сервиса.
+- Тест на add требует настоящий декодируемый PNG (сервис полностью декодирует картинку) — `web_api_custom_icons.rs` собирает его через crate `png` (уже в зависимостях).
+- Адаптер: path-параметры кодируются `enc()` (encodeURIComponent), axum `Path` их декодирует; delete возвращает `data:true`, `customIconsApi.remove` его игнорирует.
+- Базовая линия гейтов после фазы: cargo test 4242 passed / 3 failed, test:unit 3323 passed / 3 failed — красные те же предсуществующие (см. Notes фаз 1–2).
+- Свежий worktree без `node_modules`: implementer поставил симлинк `node_modules -> ../../node_modules` (untracked: `.gitignore` `node_modules/` не матчит симлинк). Перед `git worktree remove` — удалить симлинк.
