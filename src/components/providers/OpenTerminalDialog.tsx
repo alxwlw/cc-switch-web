@@ -140,8 +140,9 @@ export function OpenTerminalDialog({
   const { data: agyRunning } = useQuery({
     queryKey: ["agy-running", provider?.id],
     queryFn: () => authApi.agyAccountIsRunning(),
-    // WEB-00: agy_account_is_running не поддержан — снимет WEB-17
-    enabled: !isWeb && agyWillSwitch,
+    // WEB-00: agy_account_is_running не поддержан; в web agyStatus выключен (выше) → agyWillSwitch
+    // всегда false, отдельный гейт не нужен — снимет WEB-17
+    enabled: agyWillSwitch,
     staleTime: 0,
   });
   const agyTargetLogin = agyStatus?.accounts.find(

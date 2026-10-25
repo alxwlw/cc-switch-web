@@ -5016,6 +5016,7 @@
     },
     "accountLogin": "Web modunda hesap girişi (OAuth) kullanılamaz",
     "needsRouting": "Bu sağlayıcı yönlendirme proxy'sini gerektirir; Web modunda kullanılamaz",
-    "liveUnknownTitle": "Sağlayıcılar (Web modunda canlı yapılandırma durumu bilinmiyor)"
+    "liveUnknownTitle": "Sağlayıcılar (Web modunda canlı yapılandırma durumu bilinmiyor)",
+    "removeUnverifiable": "Web modunda varsayılan/geçerli sağlayıcı olup olmadığı denetlenemediğinden yapılandırmadan kaldırma devre dışıdır"
   }
 }

@@ -5039,6 +5039,7 @@
     },
     "accountLogin": "Web 模式下無法使用帳號登入（OAuth）",
     "needsRouting": "此供應商需要路由代理，Web 模式下無法使用",
-    "liveUnknownTitle": "供應商（Web 模式下無法讀取實際設定狀態）"
+    "liveUnknownTitle": "供應商（Web 模式下無法讀取實際設定狀態）",
+    "removeUnverifiable": "Web 模式下無法確認它是否為預設／目前供應商，因此無法從設定中移除"
   }
 }

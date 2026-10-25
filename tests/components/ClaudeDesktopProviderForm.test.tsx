@@ -130,6 +130,49 @@ describe("ClaudeDesktopProviderForm", () => {
     },
   );
 
+  it.each([
+    ["direct list", undefined],
+    [
+      "model-mapping list",
+      {
+        name: "Proxy Provider",
+        settingsConfig: { env: {} },
+        meta: {
+          claudeDesktopMode: "proxy",
+          claudeDesktopModelRoutes: {
+            "claude-sonnet-5": { model: "upstream" },
+          },
+        },
+      },
+    ],
+  ] as const)(
+    "web: fetch-models button is disabled in the %s",
+    (_label, initialData) => {
+      setWeb(true);
+      renderForm(initialData as never);
+      const buttons = screen.getAllByRole("button", {
+        name: "获取模型",
+      });
+      expect(buttons.length).toBeGreaterThan(0);
+      for (const button of buttons) expect(button).toBeDisabled();
+    },
+  );
+
+  it("web: official preset is not offered (needs the ensure_* seed)", () => {
+    setWeb(true);
+    renderForm(undefined);
+    expect(
+      screen.queryByRole("button", { name: /Claude Desktop Official/ }),
+    ).toBeNull();
+  });
+
+  it("desktop: official preset is offered", () => {
+    renderForm(undefined);
+    expect(
+      screen.getByRole("button", { name: /Claude Desktop Official/ }),
+    ).toBeInTheDocument();
+  });
+
   it("web: у уже сохранённого proxy-провайдера режим остаётся выбранным", () => {
     setWeb(true);
     renderForm({

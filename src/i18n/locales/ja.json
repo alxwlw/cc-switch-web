@@ -5038,6 +5038,7 @@
     },
     "accountLogin": "Webモードではアカウントログイン（OAuth）を利用できません",
     "needsRouting": "このプロバイダーにはルーティングプロキシが必要ですが、Webモードでは利用できません",
-    "liveUnknownTitle": "プロバイダー（Webモードでは実際の設定状態を読み取れません）"
+    "liveUnknownTitle": "プロバイダー（Webモードでは実際の設定状態を読み取れません）",
+    "removeUnverifiable": "Webモードではデフォルト／現在のプロバイダーかどうかを確認できないため、設定から削除できません"
   }
 }

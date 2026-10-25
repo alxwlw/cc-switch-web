@@ -398,10 +398,8 @@ export function ProviderList({
         isHermesReadOnlyProvider(provider.settingsConfig),
       piStateUnavailable: isPiFamilyApp(appId) && !isPiStateReady,
       kimiCurrentId: currentProviderId,
-      // WEB-00: живой конфиг в web не читается — членство неизвестно, set_*_default_model не поддержан
-      // — снимет WEB-14/15/16
+      // WEB-00: живой конфиг в web не читается — членство неизвестно (default-model действий нет) — снимет WEB-14/15/16
       membershipUnknown: isWeb && WEB_LIVE_MEMBERSHIP_APPS.includes(appId),
-      webUnavailableReason: isWeb ? t("web.unavailable") : undefined,
       actions: {
         add: onSwitch,
         remove: (provider) =>

@@ -39,7 +39,11 @@ import {
 import { useProviderHealth } from "@/lib/query/failover";
 import { useUsageQuery } from "@/lib/query/queries";
 import { resolveProviderIcon } from "@/utils/providerIcon";
-import { isAdditiveAppId, isProxyAppId } from "@/config/appConfig";
+import {
+  isAdditiveAppId,
+  isPiFamilyApp,
+  isProxyAppId,
+} from "@/config/appConfig";
 import { ProviderCardActions } from "./ProviderCardActions";
 import type { CardChip, CardPresentation, CardTone } from "./presentation";
 
@@ -602,6 +606,7 @@ export function ProviderCard({
                 ? undefined
                 : () => onConfigureUsage(provider)
             }
+            configureUsageUnavailable={isWeb && isPiFamilyApp(appId)}
             onOpenTerminal={
               onOpenTerminal ? () => onOpenTerminal(provider) : undefined
             }

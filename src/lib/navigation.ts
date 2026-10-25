@@ -138,7 +138,7 @@ export function readStoredView(): View {
   try {
     const stored =
       parseView(localStorage.getItem(VIEW_STORAGE_KEY)) ?? "providers";
-    // WEB-00: сохранённый скрытый в web view не восстанавливается — снимет WEB-02
+    // WEB-00: сохранённый скрытый в web view не восстанавливается — снимет WEB-02 (auth), WEB-15/16/17 (workspace, openclawConfig, hermesMemory)
     return isViewAvailable(stored) ? stored : "providers";
   } catch {
     return "providers";

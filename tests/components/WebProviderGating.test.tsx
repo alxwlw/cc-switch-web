@@ -11,6 +11,8 @@ import { SwitchModePanel } from "@/components/providers/mode/SwitchModePanel";
 import { ModelInputWithFetch } from "@/components/providers/forms/shared/ModelInputWithFetch";
 import { EndpointField } from "@/components/providers/forms/shared/EndpointField";
 import { FetchedModelPicker } from "@/components/providers/forms/FetchedModelPicker";
+import { CopilotAuthSection } from "@/components/providers/forms/CopilotAuthSection";
+import { XaiOAuthSection } from "@/components/providers/forms/XaiOAuthSection";
 import { CodexOAuthSection } from "@/components/providers/forms/CodexOAuthSection";
 import {
   buildAdditiveSections,
@@ -188,24 +190,27 @@ describe("buildAdditiveSections — live membership unknown (web)", () => {
     expect(remove).toHaveBeenCalledWith(first.provider);
   });
 
+  it.each([
+    ["openclaw", "web.removeUnverifiable"],
+    ["hermes", "web.removeUnverifiable"],
+    ["opencode", undefined],
+  ] as const)(
+    "%s: Remove in the unknown-membership section has reason %s",
+    (app, reason) => {
+      const sections = buildAdditiveSections(
+        input({ app, membershipUnknown: true }),
+      );
+      const remove = sections[0].items[0].presentation.buttons.find(
+        (b) => b.key === "remove",
+      );
+      expect(remove?.disabledReason).toBe(reason);
+    },
+  );
+
   it("keeps the added/available split when membership is known", () => {
     const sections = buildAdditiveSections(input());
     expect(sections.map((s) => s.key)).toEqual(["added", "available"]);
     expect(sections[1].items).toHaveLength(2);
-  });
-
-  it("disables setting the default model with the web reason", () => {
-    const sections = buildAdditiveSections(
-      input({
-        app: "openclaw",
-        providers: [provider("a")],
-        isInConfig: () => true,
-        webUnavailableReason: "web.unavailable",
-      }),
-    );
-    const item = sections[0].items[0].presentation.menuItems?.[0];
-    expect(item?.key).toBe("setDefault");
-    expect(item?.disabledReason).toBe("web.unavailable");
   });
 });
 
@@ -340,6 +345,24 @@ describe("FetchedModelPicker — web", () => {
     expect(
       screen.getByRole("button", { name: "providerForm.fetchModels" }),
     ).toBeEnabled();
+  });
+});
+
+describe("account sections in provider forms — web", () => {
+  it.each([
+    ["Copilot", <CopilotAuthSection mode="select" key="c" />],
+    [
+      "xAI",
+      <XaiOAuthSection mode="select" onAccountSelect={vi.fn()} key="x" />,
+    ],
+  ])("%s select mode shows the notice", (_label, element) => {
+    setWeb(true);
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        {element}
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("web.accountLogin");
   });
 });
 

@@ -368,7 +368,10 @@ export function ClaudeDesktopProviderForm({
           id: `claude-desktop-${index}`,
           preset,
         }))
-        .filter((entry) => !entry.preset.hidden),
+        .filter((entry) => !entry.preset.hidden)
+        // WEB-00: официальный пресет сеется ensure_claude_desktop_official_provider (вне mapCommand,
+        // фиксированный id) — обычным add его не воспроизвести, в web не предлагается — снимет WEB-19
+        .filter((entry) => !(isWeb && entry.preset.category === "official")),
     [],
   );
 

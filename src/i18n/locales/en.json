@@ -5038,6 +5038,7 @@
     },
     "accountLogin": "Account sign-in (OAuth) is unavailable in web mode",
     "needsRouting": "This provider needs the routing proxy, which is unavailable in web mode",
-    "liveUnknownTitle": "Providers (live config state is unknown in web mode)"
+    "liveUnknownTitle": "Providers (live config state is unknown in web mode)",
+    "removeUnverifiable": "Removal can't be checked against the default/current provider in web mode"
   }
 }

@@ -162,6 +162,40 @@ describe("useProviderActions", () => {
     expect(addProviderMutateAsync).toHaveBeenCalledWith(providerInput);
   });
 
+  it.each([
+    ["web", true, 0],
+    ["desktop", false, 1],
+  ])(
+    "openclaw addProvider with suggestedDefaults reads the model catalog %s times (%s)",
+    async (_label, web, catalogCalls) => {
+      setWeb(web);
+      addProviderMutateAsync.mockResolvedValueOnce(undefined);
+      openclawApiGetModelCatalogMock.mockResolvedValue({});
+      openclawApiGetDefaultModelMock.mockResolvedValue(null);
+      const { wrapper } = createWrapper();
+      const { result } = renderHook(() => useProviderActions("openclaw"), {
+        wrapper,
+      });
+
+      await act(async () => {
+        await result.current.addProvider({
+          name: "P",
+          settingsConfig: {},
+          providerKey: "p",
+          suggestedDefaults: {
+            model: { primary: "p/m" },
+            modelCatalog: { "p/m": { alias: "m" } },
+          },
+        } as never);
+      });
+
+      expect(addProviderMutateAsync).toHaveBeenCalledTimes(1);
+      expect(openclawApiGetModelCatalogMock).toHaveBeenCalledTimes(
+        catalogCalls,
+      );
+    },
+  );
+
   it("should update tray menu when calling updateProvider", async () => {
     updateProviderMutateAsync.mockResolvedValueOnce(undefined);
     providersApiUpdateTrayMenuMock.mockResolvedValueOnce(true);

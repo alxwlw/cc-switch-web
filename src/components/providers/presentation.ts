@@ -717,8 +717,6 @@ export interface AdditiveInput {
    * карточки и «добавить», и «убрать» — снимет WEB-14/15/16
    */
   membershipUnknown?: boolean;
-  /** WEB-00: причина для действий, которых в web нет (задать модель по умолчанию) — только в web */
-  webUnavailableReason?: string;
   actions: {
     add: (provider: Provider) => void;
     remove: (provider: Provider) => void;
@@ -872,7 +870,14 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
               key: "remove",
               label: t("providerCard.action.remove"),
               onClick: () => actions.remove(p),
-              disabledReason: readOnlyReason,
+              // WEB-00: guard добавленного пути (openclaw default / hermes current) в web не проверить
+              // (живой конфиг не читается), бэкенд его не проверяет — снимет WEB-15/16.
+              // opencode: guard-а на удаление «default» нет (см. ниже), Remove остаётся
+              disabledReason:
+                readOnlyReason ??
+                (app === "openclaw" || app === "hermes"
+                  ? t("web.removeUnverifiable")
+                  : undefined),
             },
           ],
         },
@@ -933,7 +938,6 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
           menuItems.push({
             key: "setDefault",
             label: t("providerCard.action.setDefault"),
-            disabledReason: input.webUnavailableReason,
             onSelect: () => actions.setDefault(p, models[0]?.id),
             submenu:
               models.length > 1
