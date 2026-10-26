@@ -5044,6 +5044,9 @@
     "sessionResumeCopied": "Resume command copied. Run it in a terminal on the server host, in the project folder.",
     "hostNotice": "Files, CLI tools and the proxy live on the server host, not on the computer running this browser.",
     "hostNoticeDismiss": "Dismiss",
+    "initError": {
+      "message": "Unable to read configuration file:\n{{path}}\n\nError details:\n{{detail}}\n\nFix the problem on the server host (check the JSON, or restore a backup such as config.json.bak from the same directory), then restart the server."
+    },
     "mode": {
       "title": "Web mode",
       "serverVersion": "Server version"

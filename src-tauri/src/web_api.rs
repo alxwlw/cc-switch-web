@@ -10,7 +10,7 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    routing::{delete, get, post, put},
+    routing::{any, delete, get, post, put},
     Json, Router,
 };
 use serde::Deserialize;
@@ -65,6 +65,7 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/health", get(health))
         .route("/favicon.ico", get(favicon))
         .route("/api/capabilities", get(capabilities))
+        .route("/api/init-status", get(init_status_route))
         // providers (per app)
         .route(
             "/api/:app/providers",
@@ -158,6 +159,33 @@ pub fn router(state: SharedState) -> Router {
             put(rename_custom_icon).delete(delete_custom_icon),
         )
         .with_state(state)
+}
+
+/// Router served when startup bootstrap failed and there is no `AppState`
+/// (WEB-32): `/api/init-status` reports the error, `/api/capabilities` keeps
+/// working, every other `/api/*` answers 503 with the init error text. The
+/// caller layers the static console on top so the frontend can render the
+/// upgrade / config-error screen.
+pub fn init_error_router() -> Router {
+    Router::new()
+        .route("/api/capabilities", get(capabilities))
+        .route("/api/init-status", get(init_status_route))
+        .route("/api/*rest", any(init_failed))
+}
+
+/// The desktop `get_init_error` payload (`InitErrorPayload`) or `null`.
+async fn init_status_route() -> ApiResult {
+    ok(crate::init_status::get_init_error())
+}
+
+async fn init_failed() -> ApiResult {
+    let msg = crate::init_status::get_init_error()
+        .map(|e| e.error)
+        .unwrap_or_else(|| "startup initialization failed".to_string());
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({ "ok": false, "error": msg })),
+    )
 }
 
 async fn health() -> Json<Value> {

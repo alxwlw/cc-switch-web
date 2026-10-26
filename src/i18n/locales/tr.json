@@ -5022,6 +5022,9 @@
     "sessionResumeCopied": "Devam komutu kopyalandı. Sunucu ana makinesinde, proje klasöründe bir terminale yapıştırıp çalıştırın",
     "hostNotice": "Dosyalar, CLI araçları ve proxy, bu tarayıcıyı çalıştıran bilgisayarda değil, sunucu ana makinesindedir.",
     "hostNoticeDismiss": "Kapat",
+    "initError": {
+      "message": "Yapılandırma dosyası okunamadı:\n{{path}}\n\nHata ayrıntıları:\n{{detail}}\n\nSorunu sunucu ana makinesinde düzeltin (JSON'un geçerli olduğunu kontrol edin veya aynı klasördeki config.json.bak gibi bir yedekten geri yükleyin), ardından sunucuyu yeniden başlatın."
+    },
     "mode": {
       "title": "Web modu",
       "serverVersion": "Sunucu sürümü"

@@ -13,23 +13,36 @@ Scope: новый `src-tauri/src/bootstrap.rs` (или `bootstrap/`), `src-tauri
 - `init_status` — существующий модуль (`set_init_error`/`get_init_error`).
 
 ### Task 1: выделить bootstrap-модуль
-- [ ] `bootstrap.rs`: `pub struct BootstrapReport {…}` + `pub fn run_headless_bootstrap(...) -> Result<BootstrapReport, BootstrapError>` — шаги выше по порядку, идемпотентно, ошибки не-фатальных шагов логируются и попадают в report; диалоги/окна НЕ вызывать.
-- [ ] Tauri `setup` переключить на общий код там, где это безопасно (диалоговые обёртки остаются в lib.rs; минимум — миграция/seed-шаги); поведение desktop не меняется (проверить существующими тестами nextest).
-- [ ] Если какой-то шаг намертво связан с AppHandle и не выделяется — пропустить в headless и записать в Notes (не ломать desktop).
+- [x] `bootstrap.rs`: `pub struct BootstrapReport {…}` + `pub fn run_headless_bootstrap(...) -> Result<BootstrapReport, BootstrapError>` — шаги выше по порядку, идемпотентно, ошибки не-фатальных шагов логируются и попадают в report; диалоги/окна НЕ вызывать. (Факт: возвращает `Bootstrapped { state, report }` — серверу нужен `AppState`; см. Notes.)
+- [x] Tauri `setup` переключить на общий код там, где это безопасно (диалоговые обёртки остаются в lib.rs; минимум — миграция/seed-шаги); поведение desktop не меняется (проверить существующими тестами nextest).
+- [x] Если какой-то шаг намертво связан с AppHandle и не выделяется — пропустить в headless и записать в Notes (не ломать desktop).
 
 ### Task 2: server.rs + init-status route
-- [ ] `examples/server.rs`: вместо голого `Database::init` — bootstrap; при init-ошибке не падать молча: лог + `init_status::set_init_error`, сервер поднимается в режиме «ошибка инициализации».
-- [ ] `GET /api/init-status` в web_api → `{ok:true,data:{error:string|null}}` из `init_status`; adapter: `get_init_error` → этот роут (чтобы `main.tsx:98-111` DatabaseUpgrade-поток заработал в web).
-- [ ] Тест роута.
+- [x] `examples/server.rs`: вместо голого `Database::init` — bootstrap; при init-ошибке не падать молча: лог + `init_status::set_init_error`, сервер поднимается в режиме «ошибка инициализации».
+- [x] `GET /api/init-status` в web_api → `{ok:true,data:{error:string|null}}` из `init_status`; adapter: `get_init_error` → этот роут (чтобы `main.tsx:98-111` DatabaseUpgrade-поток заработал в web). (Факт: `data` — `InitErrorPayload | null`, как desktop-команда; форма `{error}` в плане была ошибкой.)
+- [x] Тест роута.
 
 ### Task 3: тесты first-run/upgrade
-- [ ] `src-tauri/tests/bootstrap.rs`: first-run (пустой HOME → DB создана, skill repos/official providers seeded, first-run flag); upgrade (legacy `config.json` → провайдеры в DB, `config.json.migrated` создан, повторный старт не дублирует); version-too-new (DB с большим schema version → init_status error, HTTP init-status его отдаёт); recover_on_startup вызывается (live-state crash-флаг).
-- [ ] Тесты изолированы: `ensure_test_home`/`reset_test_fs`/`test_mutex` из support.rs.
+- [x] `src-tauri/tests/bootstrap.rs`: first-run (пустой HOME → DB создана, skill repos/official providers seeded, first-run flag); upgrade (legacy `config.json` → провайдеры в DB, `config.json.migrated` создан, повторный старт не дублирует); version-too-new (DB с большим schema version → init_status error, HTTP init-status его отдаёт); recover_on_startup вызывается (live-state crash-флаг).
+- [x] Тесты изолированы: `ensure_test_home`/`reset_test_fs`/`test_mutex` из support.rs.
 
 ### Task 4: гейты, PR, Plane
-- [ ] полный набор гейтов + `cargo build --release --example server` компилируется (CI его не собирает — проверить локально).
-- [ ] ветка `web-parity/web-32-bootstrap`, PR; DX-90 → In Review + ссылка. Закрыть чекбоксы, Notes (что пропущено и почему — нужно для WEB-01/11/23/26/28).
+- [x] полный набор гейтов + `cargo build --release --example server` компилируется (CI его не собирает — проверить локально).
+- [x] ветка `web-parity/web-32-bootstrap`, PR; DX-90 → In Review + ссылка. Закрыть чекбоксы, Notes (что пропущено и почему — нужно для WEB-01/11/23/26/28).
 
 ## Notes for next phase
 
-- (заполнить по итогам)
+- **Статус**: ветка `web-parity/web-32-bootstrap` (worktree `.worktrees/web-32`), PR #8 (https://github.com/alxwlw/cc-switch-web/pull/8) открыт, DX-90 In Review (комментарий со ссылкой). Задачи 1–3 прошли implement→review (T1 r1 после fix DP-024, T2 r1 после fix DP-026/DP-019/DP-015, T3 r0), T4 — контроллером. Финальные гейты на `fca25ba6`: fmt/clippy чисто, `cargo build --release --example server` ок, cargo test 4268 passed / 3 failed (baseline: omp_search_paths, 2× file_modes::switch_*); `pnpm typecheck`/`format:check` чисто, `test:unit` 3629 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice), `build:renderer`/`build:web` ок. После merge — `post-merge`: пересобрать server и `dist-web`, деплой по пункту «Деплой» ниже; DX-90 → Done.
+- **API `bootstrap.rs`** (`pub mod bootstrap`, для WEB-01/11/23/26/28):
+  - pre-DB, без диалогов: `BootstrapPaths::resolve()` (:123), `needs_legacy_migration` (:136, решается ОДИН раз до retry-цикла — DP-024: иначе удалённый во время диалога `config.json` перестаёт мигрировать), `load_legacy_config` (:146, одна попытка), `precheck_db_version` (:164, сам пишет `init_status` с `kind: db_version_too_new`), `open_database` (:192). Ошибки — `BootstrapError::{LegacyConfig, DbVersionTooNew, DatabaseInit}` (:86).
+  - post-DB, никогда не фатален: `apply_persisted_log_level` (:207), `migrate_legacy_config` (:226), `run_post_db_bootstrap(&AppState, CodexHistory, &mut BootstrapReport)` (:343) — 11 именованных шагов (`recover_on_startup`, `skill_repos`, skills SSOT, first-run imports, `official_providers`, `codex_history`, additive live imports, `omo`/`omo-slim`, `mcp_import`, prompts), исход каждого — `StepOutcome::{Done, Skipped, Failed, Deferred}`, `report.step(name)` / `report.failures()`.
+  - целиком: `run_headless_bootstrap()` (Inline codex history; удобно тестам) и `run_headless_bootstrap_with(CodexHistory)` → `Bootstrapped { state: AppState, report }`. LegacyConfig/DatabaseInit пишутся в `init_status` с `kind: None`.
+  - `CodexHistory::{Inline, Spawn(&dyn Fn)}`: desktop передаёт `tauri::async_runtime::spawn_blocking`, сервер — `tokio::task::spawn_blocking` (миграции истории не задерживают bind; в report — `Deferred`).
+- **Desktop** (`lib.rs` setup, −474/+57): диалоги и retry-циклы (`show_migration_error_dialog`, `show_database_init_error_dialog`), показ окна при too-new, `usage_events::init(AppHandle)` и `proxy_service.set_app_handle` остались в lib.rs на прежних местах. **Пропущено в headless**: `app_store::migrate_app_config_dir_from_settings(app.handle())` — Tauri store, только desktop (WEB-26 решит, нужен ли аналог). Всё из списка «НЕ трогаем» не трогали.
+- **Сервер** (`examples/server.rs`): guard HOST/PORT/TRUSTED_TAILNET → bootstrap в `spawn_blocking` → полный router или `web_api::init_error_router()` (`web_api.rs:169`) → console → bind. В режиме init-error: `/api/init-status` отдаёт payload, `/api/capabilities` работает, остальные `/api/*` (включая `/api/health`) — 503 `{ok:false,error}`, статика консоли раздаётся. Вложенный `block_on` воспроизвести не удалось (live.rs уходит в `std::thread::spawn`), `spawn_blocking` — защитный.
+- **Log level**: в headless-пути явный `RUST_LOG` побеждает сохранённый log level (иначе `log::max_level` глушил RUST_LOG=debug); desktop как раньше.
+- **`GET /api/init-status`** (`web_api.rs:68,177`): `data` = `InitErrorPayload | null` (snake_case, как desktop `get_init_error`). Adapter `get_init_error` → этот роут. `/api/migrations/status` — отдельный one-shot, не трогали.
+- **Web-фронт**: без `kind` — `InitErrorScreen` (`src/components/web/`, ключ `web.initError.message`) вместо App, т.к. `message`/`exit` из `@tauri-apps/plugin-dialog`/`plugin-process` в web не шимятся. `db_version_too_new` → `DatabaseUpgrade`, в web загейчен (`WEB-00: … — снимет WEB-28`): нет проверки обновлений, нет кнопок upgrade/open folder/exit/open releases, вместо них `web.update.unsupported`. WEB-28: вернуть ссылку на releases (open_external в web работает). Ветка в `main.tsx` без автотеста (main.tsx не импортируется в vitest) — проверено чтением.
+- **Инвентаризация фазы 6**: строка `get_init_error` закрыта фазой 7; строка update (`DatabaseUpgrade.tsx:69,105,290,300`) — «достижимо с ф.7, в web гейт до WEB-28».
+- **Тесты**: `tests/bootstrap.rs` (first-run, legacy upgrade + идемпотентность, retry-решение DP-024, recover_on_startup по реальному формату `live-state.json`), `bootstrap_runtime.rs` (Spawn-wiring + populated live configs, вложенный runtime НЕ дискриминирует), `bootstrap_rust_log.rs`, `web_api_init_status.rs` (только тесты с init-ошибкой), `web_api_init_status_clean.rs` (без ошибки). `init_status` — глобальный static без reset и приватный модуль: тест, оставляющий ошибку, — только в бинарнике, где никто не ждёт её отсутствия; читать через `/api/init-status` и `/api/migrations/status`. NIT DP-028 (дубль setup too-new DB в `web_api_init_status.rs`) не делали.
+- **Деплой (post-merge)**: впервые сервер при старте гоняет миграции/импорты по реальному `~/.cc-switch` серверного хоста (additive live imports opencode/openclaw/hermes/pi/omp, OMO, MCP/prompts при пустых таблицах, codex history). Перед restart — копия `~/.cc-switch/cc-switch.db`; после — `journalctl` на `startup step \`…\` failed` (warn по `report.failures()`) и `Startup bootstrap failed` (init-error режим), `GET /api/init-status` → `null`. Server пересобирать (Rust менялся), `cp cc-switch-web cc-switch-web.prev` перед install.
