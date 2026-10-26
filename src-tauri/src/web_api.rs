@@ -91,6 +91,19 @@ pub fn router(state: SharedState) -> Router {
             post(live_remove_provider),
         )
         .route("/api/:app/providers/:id", delete(delete_provider))
+        // endpoint speed test, custom endpoints, live settings
+        .route("/api/:app/live-settings", get(live_settings))
+        .route("/api/endpoints/speedtest", post(speedtest_endpoints))
+        .route(
+            "/api/:app/providers/:id/endpoints",
+            get(list_endpoints)
+                .post(add_endpoint)
+                .delete(remove_endpoint),
+        )
+        .route(
+            "/api/:app/providers/:id/endpoints/last-used",
+            post(endpoint_last_used),
+        )
         // universal providers (cross-app)
         .route(
             "/api/universal-providers",
@@ -482,6 +495,105 @@ async fn delete_provider(
         Ok(Ok(())) => ok(true),
         Ok(Err(e)) => fail(e.to_string()),
         Err(e) => fail(format!("delete task failed: {e}")),
+    }
+}
+
+// ---------- endpoint speed test / custom endpoints ----------
+
+async fn live_settings(State(_state): State<SharedState>, Path(app): Path<String>) -> ApiResult {
+    let app_type = app_type!(&app);
+    match tokio::task::spawn_blocking(move || ProviderService::read_live_settings(app_type)).await {
+        Ok(Ok(v)) => ok(v),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("live settings task failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SpeedtestReq {
+    urls: Vec<String>,
+    timeout_secs: Option<u64>,
+}
+
+/// Latency is measured from the server, not the browser. The service probes all
+/// URLs concurrently (`join_all`), so the call is bounded by the timeout, not their sum.
+async fn speedtest_endpoints(Json(body): Json<SpeedtestReq>) -> ApiResult {
+    match crate::services::SpeedtestService::test_endpoints(body.urls, body.timeout_secs).await {
+        Ok(rows) => ok(rows),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct UrlReq {
+    url: String,
+}
+
+async fn list_endpoints(
+    State(state): State<SharedState>,
+    Path((app, id)): Path<(String, String)>,
+) -> ApiResult {
+    let app_type = app_type!(&app);
+    match tokio::task::spawn_blocking(move || {
+        ProviderService::get_custom_endpoints(&state, app_type, &id)
+    })
+    .await
+    {
+        Ok(Ok(v)) => ok(v),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("list endpoints task failed: {e}")),
+    }
+}
+
+async fn add_endpoint(
+    State(state): State<SharedState>,
+    Path((app, id)): Path<(String, String)>,
+    Json(body): Json<UrlReq>,
+) -> ApiResult {
+    let app_type = app_type!(&app);
+    match tokio::task::spawn_blocking(move || {
+        ProviderService::add_custom_endpoint(&state, app_type, &id, body.url)
+    })
+    .await
+    {
+        Ok(Ok(())) => ok(true),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("add endpoint task failed: {e}")),
+    }
+}
+
+async fn remove_endpoint(
+    State(state): State<SharedState>,
+    Path((app, id)): Path<(String, String)>,
+    Json(body): Json<UrlReq>,
+) -> ApiResult {
+    let app_type = app_type!(&app);
+    match tokio::task::spawn_blocking(move || {
+        ProviderService::remove_custom_endpoint(&state, app_type, &id, body.url)
+    })
+    .await
+    {
+        Ok(Ok(())) => ok(true),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("remove endpoint task failed: {e}")),
+    }
+}
+
+async fn endpoint_last_used(
+    State(state): State<SharedState>,
+    Path((app, id)): Path<(String, String)>,
+    Json(body): Json<UrlReq>,
+) -> ApiResult {
+    let app_type = app_type!(&app);
+    match tokio::task::spawn_blocking(move || {
+        ProviderService::update_endpoint_last_used(&state, app_type, &id, body.url)
+    })
+    .await
+    {
+        Ok(Ok(())) => ok(true),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("endpoint last-used task failed: {e}")),
     }
 }
 
