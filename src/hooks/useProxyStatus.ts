@@ -13,6 +13,7 @@ import {
 } from "@/lib/query/proxy";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { getAppLabel } from "@/config/appConfig";
+import { isWeb } from "@/lib/api/adapter";
 
 /**
  * 代理服务状态管理
@@ -197,7 +198,9 @@ export function useProxyStatus() {
     status,
     isRunning: status?.running || false,
     takeoverStatus,
-    isInitialStatusPending: isProxyStatusPending || isTakeoverStatusPending,
+    // WEB-00: в web запросы выключены (вечно pending) — «первичной загрузки» нет
+    isInitialStatusPending:
+      !isWeb && (isProxyStatusPending || isTakeoverStatusPending),
 
     // 启动/停止（总开关）
     startProxyServer: startProxyServerMutation.mutateAsync,

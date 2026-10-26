@@ -141,6 +141,11 @@ export interface SwitchModeInput {
   /** 需要路由的原因（悬停「需要路由」时的说明） */
   routingReason: (provider: Provider) => string;
   serviceRunning: boolean;
+  /**
+   * WEB-00: в web роутинга нет — провайдеру, которому он нужен, не переключиться. Текст причины
+   * (передаёт только web-ветка), кнопка остаётся и показывает его — снимет WEB-01
+   */
+  routingUnavailableReason?: string;
   actions: {
     switchDirect: (provider: Provider) => void;
     needsRouteDialog: (provider: Provider) => void;
@@ -280,6 +285,9 @@ function buildSwitchSectionsByView(input: SwitchModeInput): ProviderSection[] {
                       providerNeedsRouting(app, p)
                         ? actions.needsRouteDialog(p)
                         : actions.switchDirect(p),
+                    disabledReason: providerNeedsRouting(app, p)
+                      ? input.routingUnavailableReason
+                      : undefined,
                   },
                 ],
               },
@@ -643,6 +651,8 @@ export interface LaunchInput {
   t: TFunction;
   providers: Provider[];
   openTerminal: (provider: Provider) => void;
+  /** WEB-00: терминал на сервере не открыть — текст причины (только в web), кнопка disabled — снимет WEB-17 */
+  terminalUnavailableReason?: string;
 }
 
 /**
@@ -671,6 +681,7 @@ export function buildLaunchSections(input: LaunchInput): ProviderSection[] {
               key: "openTerminal",
               label: t("provider.openTerminalWithProvider"),
               onClick: () => openTerminal(p),
+              disabledReason: input.terminalUnavailableReason,
             },
           ],
         },
@@ -700,6 +711,12 @@ export interface AdditiveInput {
   piStateUnavailable?: boolean;
   /** Kimi：原生 default_model 别名所属的供应商。 */
   kimiCurrentId?: string | null;
+  /**
+   * WEB-00: web не читает живой конфиг (get_*_live_provider_ids), «в конфиге ли» неизвестно. Не
+   * делим на «добавленные/доступные» (иначе все ложно «не в конфиге»): одна секция, у каждой
+   * карточки и «добавить», и «убрать» — снимет WEB-14/15/16
+   */
+  membershipUnknown?: boolean;
   actions: {
     add: (provider: Provider) => void;
     remove: (provider: Provider) => void;
@@ -712,6 +729,7 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
   const { app, t, providers, actions } = input;
   const added: ProviderSection["items"] = [];
   const available: ProviderSection["items"] = [];
+  const unknownMembership: ProviderSection["items"] = [];
   const piBlocked =
     isPiFamilyApp(app) && input.piStateUnavailable
       ? t(`${app}.current.stateUnavailableHint`)
@@ -834,6 +852,39 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
       ? t("provider.managedByHermesHint")
       : undefined;
 
+    if (input.membershipUnknown) {
+      unknownMembership.push({
+        provider: p,
+        presentation: {
+          chips,
+          dim: managed,
+          editDisabledReason: readOnlyReason,
+          deleteDisabledReason: readOnlyReason,
+          buttons: [
+            {
+              key: "add",
+              label: t("providerCard.action.add"),
+              onClick: () => actions.add(p),
+            },
+            {
+              key: "remove",
+              label: t("providerCard.action.remove"),
+              onClick: () => actions.remove(p),
+              // WEB-00: guard добавленного пути (openclaw default / hermes current) в web не проверить
+              // (живой конфиг не читается), бэкенд его не проверяет — снимет WEB-15/16.
+              // opencode: guard-а на удаление «default» нет (см. ниже), Remove остаётся
+              disabledReason:
+                readOnlyReason ??
+                (app === "openclaw" || app === "hermes"
+                  ? t("web.removeUnverifiable")
+                  : undefined),
+            },
+          ],
+        },
+      });
+      continue;
+    }
+
     if (!input.isInConfig(p)) {
       available.push({
         provider: p,
@@ -943,6 +994,31 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
         menuItems: menuItems.length ? menuItems : undefined,
       },
     });
+  }
+
+  if (unknownMembership.length > 0) {
+    // OMO-карточки (состояние известно: get_current_omo_*) остаются в своих секциях, если они есть
+    return [
+      {
+        key: "unknownMembership",
+        title: t("web.liveUnknownTitle"),
+        items: unknownMembership,
+      },
+      ...[
+        {
+          key: "added",
+          title: t("providerCard.section.added", { count: added.length }),
+          items: added,
+        },
+        {
+          key: "available",
+          title: t("providerCard.section.available", {
+            count: available.length,
+          }),
+          items: available,
+        },
+      ].filter((section) => section.items.length > 0),
+    ];
   }
 
   return [

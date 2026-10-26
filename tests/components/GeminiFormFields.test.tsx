@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { Form } from "@/components/ui/form";
 import { GeminiFormFields } from "@/components/providers/forms/GeminiFormFields";
 import type { ComponentProps } from "react";
+import { setWeb } from "../helpers/web";
 
 const api = vi.hoisted(() => ({
   fetchModelsForConfig: vi.fn(),
@@ -48,6 +49,17 @@ describe("Antigravity model discovery", () => {
     vi.clearAllMocks();
     api.fetchModelsForConfig.mockResolvedValue([{ id: "gemini-3.8-flash" }]);
     api.getAgyModels.mockResolvedValue([{ id: "Gemini 3.8 Flash (Low)" }]);
+  });
+
+  it("web: fetch-models button is disabled and does not call the API", () => {
+    setWeb(true);
+    render(<Harness />);
+    const button = screen.getByRole("button", {
+      name: "providerForm.fetchModels",
+    });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(api.getAgyModels).not.toHaveBeenCalled();
   });
 
   // agy 的 API Key 模式只认它内置清单里的显示名，Gemini 接口的模型 ID 用不了

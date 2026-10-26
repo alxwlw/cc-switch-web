@@ -3,6 +3,7 @@ import { FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Zap } from "lucide-react";
+import { isWeb } from "@/lib/api/adapter";
 import { REQUIRED_LABEL } from "../BasicFormFields";
 
 interface EndpointFieldProps {
@@ -53,7 +54,9 @@ export function EndpointField({
             <HelpTip title={label}>{help.replace(/^💡\s*/u, "")}</HelpTip>
           ) : null}
         </div>
-        {showManageButton && onManageClick ? (
+        {/* WEB-00: «управление и тест скорости» (EndpointSpeedTest: test_api_endpoints, *_custom_endpoint)
+            не поддержан — вход скрыт, модалка недостижима — снимет WEB-21 */}
+        {showManageButton && onManageClick && !isWeb ? (
           <button
             type="button"
             onClick={onManageClick}

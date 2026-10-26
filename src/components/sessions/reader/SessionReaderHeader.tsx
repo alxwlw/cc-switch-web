@@ -31,6 +31,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { HoverTip } from "@/components/ui/hover-tip";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
+import { isWeb } from "@/lib/api/adapter";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { fieldClass } from "@/components/ui/input";
 import { useSessionUsageSummary } from "@/lib/query/usage";
@@ -128,10 +130,12 @@ export const SessionReaderHeader = memo(function SessionReaderHeader({
         ? t("sessionManager.resumeCommandCopied", {
             defaultValue: "已复制恢复命令",
           })
-        : t("sessionManager.resumeCopiedNoLaunch", {
-            defaultValue:
-              "已复制恢复命令。这个平台暂不支持一键恢复，请在项目目录下粘贴到终端运行",
-          }),
+        : isWeb
+          ? t("web.sessionResumeCopied")
+          : t("sessionManager.resumeCopiedNoLaunch", {
+              defaultValue:
+                "已复制恢复命令。这个平台暂不支持一键恢复，请在项目目录下粘贴到终端运行",
+            }),
     );
 
   let resume: ReactNode;
@@ -290,13 +294,16 @@ export const SessionReaderHeader = memo(function SessionReaderHeader({
             defaultValue: "复制整段为 Markdown",
           })}
         </DropdownMenuItem>
-        <DropdownMenuItem
-          className={sessionMenuItemClass}
-          disabled={!canCopyMarkdown}
-          onSelect={onExportMarkdown}
-        >
-          {rt("exportMarkdown")}
-        </DropdownMenuItem>
+        {/* WEB-00: export_session_markdown (save_file_dialog) не замаплен — снимет WEB-13 */}
+        <WebUnavailableTip active={isWeb}>
+          <DropdownMenuItem
+            className={sessionMenuItemClass}
+            disabled={isWeb || !canCopyMarkdown}
+            onSelect={onExportMarkdown}
+          >
+            {rt("exportMarkdown")}
+          </DropdownMenuItem>
+        </WebUnavailableTip>
         <DropdownMenuCheckboxItem
           // 左边留出勾选标记的位置，避免和文字重叠
           className={cn(sessionMenuItemClass, "ps-8")}
@@ -723,17 +730,30 @@ export const SessionReaderToolbar = memo(function SessionReaderToolbar({
                 </DropdownMenuCheckboxItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <HoverTip content={rt("exportMarkdown")}>
-              <button
-                type="button"
-                aria-label={rt("exportMarkdown")}
-                disabled={turnIndex.length === 0}
-                onClick={onExportMarkdown}
-                className={cn(readerIconButton, "h-8 w-8")}
-              >
-                <Download className="h-4 w-4" strokeWidth={1.5} />
-              </button>
-            </HoverTip>
+            {isWeb ? (
+              <WebUnavailableTip active>
+                <button
+                  type="button"
+                  aria-label={rt("exportMarkdown")}
+                  disabled
+                  className={cn(readerIconButton, "h-8 w-8")}
+                >
+                  <Download className="h-4 w-4" strokeWidth={1.5} />
+                </button>
+              </WebUnavailableTip>
+            ) : (
+              <HoverTip content={rt("exportMarkdown")}>
+                <button
+                  type="button"
+                  aria-label={rt("exportMarkdown")}
+                  disabled={turnIndex.length === 0}
+                  onClick={onExportMarkdown}
+                  className={cn(readerIconButton, "h-8 w-8")}
+                >
+                  <Download className="h-4 w-4" strokeWidth={1.5} />
+                </button>
+              </HoverTip>
+            )}
             {!find.open && (
               <HoverTip
                 content={t("sessionManager.findShort", {

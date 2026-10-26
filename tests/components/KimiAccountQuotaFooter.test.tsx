@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import KimiAccountQuotaFooter from "@/components/KimiAccountQuotaFooter";
 import { kimiOAuthApi } from "@/lib/api/kimiOAuth";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 vi.mock("@/lib/api/kimiOAuth", () => ({
   kimiOAuthApi: { status: vi.fn(), quota: vi.fn() },
@@ -62,6 +63,17 @@ describe("KimiAccountQuotaFooter", () => {
         queryKey: ["providers", "kimi"],
       }),
     );
+  });
+
+  it("web: не опрашивает kimi_oauth_status и квоту", async () => {
+    setWeb(true);
+    const invalidate = renderFooter("Kimi Official (kimi-off)");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(kimiOAuthApi.status).not.toHaveBeenCalled();
+    expect(kimiOAuthApi.quota).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalledWith({
+      queryKey: ["providers", "kimi"],
+    });
   });
 
   it("leaves the list alone when the card already shows the nickname", async () => {

@@ -9,6 +9,7 @@ import {
   type SwitchModeProps,
 } from "@/components/providers/ProviderList";
 import { server } from "../msw/server";
+import { setWeb } from "../helpers/web";
 
 vi.mock("sonner", () => ({
   toast: {
@@ -362,6 +363,67 @@ describe("ProviderList Component", () => {
     fireEvent.click(screen.getByTestId("add-a"));
     expect(onSwitch).toHaveBeenCalledWith(providerA);
   });
+
+  it("web: opencode не ждёт выключенный запрос live ids и рисует карточки, а не скелетон", async () => {
+    setWeb(true);
+    const providerA = createProvider({ id: "a", name: "A" });
+    let liveIdsRequests = 0;
+    useDragSortMock.mockReturnValue({
+      sortedProviders: [providerA],
+      sensors: [],
+      handleDragEnd: vi.fn(),
+    });
+    server.use(
+      http.post(`${TAURI_ENDPOINT}/get_opencode_live_provider_ids`, () => {
+        liveIdsRequests += 1;
+        return HttpResponse.json([]);
+      }),
+    );
+
+    renderWithQueryClient(
+      <ProviderList
+        {...baseProps}
+        providers={{ a: providerA }}
+        appId="opencode"
+      />,
+    );
+
+    expect(await screen.findByTestId("add-a")).toBeInTheDocument();
+    expect(liveIdsRequests).toBe(0);
+    // «в конфиге ли» неизвестно: не врём «доступно», даём и добавить, и убрать
+    expect(screen.getByTestId("remove-a")).toBeEnabled();
+    expect(
+      screen.getByRole("heading", { name: "web.liveUnknownTitle" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "providerCard.section.available" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["web", true, true],
+    ["desktop", false, false],
+  ])(
+    "empty claude-desktop list: import-from-live disabled=%s (%s)",
+    (_label, web, disabled) => {
+      setWeb(web);
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+
+      renderWithQueryClient(
+        <ProviderList {...baseProps} providers={{}} appId="claude-desktop" />,
+      );
+
+      const button = screen.getByRole("button", {
+        name: "provider.importFromClaude",
+      });
+      if (disabled) expect(button).toBeDisabled();
+      else expect(button).toBeEnabled();
+    },
+  );
 
   it.each(["mcode"] as const)(
     "uses native membership to add and remove %s providers",

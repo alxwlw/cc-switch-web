@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { providersApi, settingsApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { syncCurrentProvidersLiveSafe } from "@/utils/postChangeSync";
 import {
   invalidatePiDirectoryCaches,
@@ -156,6 +157,8 @@ export function useSettings(): UseSettingsResult {
       prevEnabled: boolean | undefined,
     ): Promise<boolean> => {
       if (enabled === undefined || enabled === prevEnabled) return false;
+      // WEB-00: apply_claude_plugin_config и sync_current_providers_live не поддержаны — снимет WEB-20/WEB-09
+      if (isWeb) return false;
       try {
         if (enabled) {
           const currentId = await providersApi.getCurrent("claude");
@@ -252,7 +255,9 @@ export function useSettings(): UseSettingsResult {
         await saveMutation.mutateAsync(payload);
 
         // 如果开机自启状态改变，调用系统 API
+        // WEB-00: set_auto_launch не поддержан — снимет WEB-20
         if (
+          !isWeb &&
           payload.launchOnStartup !== undefined &&
           payload.launchOnStartup !== data?.launchOnStartup
         ) {
@@ -271,7 +276,9 @@ export function useSettings(): UseSettingsResult {
         // Claude Code 初次安装确认：开=写入 hasCompletedOnboarding=true；关=删除该字段
         // 仅在本次更新包含 skipClaudeOnboarding 时触发，避免其它自动保存误触发
         const nextSkipClaudeOnboarding = updates.skipClaudeOnboarding;
+        // WEB-00: apply/clear_claude_onboarding_skip не поддержаны — снимет WEB-20
         if (
+          !isWeb &&
           nextSkipClaudeOnboarding !== undefined &&
           nextSkipClaudeOnboarding !== (data?.skipClaudeOnboarding ?? false)
         ) {
@@ -396,12 +403,18 @@ export function useSettings(): UseSettingsResult {
 
         await saveMutation.mutateAsync(payload);
 
-        await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
+        // WEB-00: set_app_config_dir_override не поддержан; без пропуска save падает уже после
+        // успешного save_settings (fake failure) — снимет WEB-26
+        if (!isWeb) {
+          await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
+        }
         // 基准值换成刚存的：设置页不卸载，下次比较和「需要重启」都只跟真正没保存的改动走
         commitAppConfigDir(sanitizedAppDir);
 
         // 只在开机自启状态真正改变时调用系统 API
+        // WEB-00: set_auto_launch не поддержан — снимет WEB-20
         if (
+          !isWeb &&
           payload.launchOnStartup !== undefined &&
           payload.launchOnStartup !== data?.launchOnStartup
         ) {
@@ -420,7 +433,8 @@ export function useSettings(): UseSettingsResult {
         // Claude Code 初次安装确认：开=写入 hasCompletedOnboarding=true；关=删除该字段
         const prevSkipClaudeOnboarding = data?.skipClaudeOnboarding ?? false;
         const nextSkipClaudeOnboarding = payload.skipClaudeOnboarding ?? false;
-        if (nextSkipClaudeOnboarding !== prevSkipClaudeOnboarding) {
+        // WEB-00: apply/clear_claude_onboarding_skip не поддержаны — снимет WEB-20
+        if (!isWeb && nextSkipClaudeOnboarding !== prevSkipClaudeOnboarding) {
           try {
             if (nextSkipClaudeOnboarding) {
               await settingsApi.applyClaudeOnboardingSkip();
@@ -476,7 +490,9 @@ export function useSettings(): UseSettingsResult {
         const openclawDirChanged = sanitizedOpenclawDir !== previousOpenclawDir;
         const piDirChanged = sanitizedPiDir !== previousPiDir;
         const ompDirChanged = sanitizedOmpDir !== previousOmpDir;
+        // WEB-00: sync_current_providers_live не поддержан — снимет WEB-09
         if (
+          !isWeb &&
           !pluginSynced &&
           (claudeDirChanged ||
             codexDirChanged ||
@@ -500,7 +516,9 @@ export function useSettings(): UseSettingsResult {
           await invalidatePiDirectoryCaches(queryClient, "omp");
         }
 
-        const appDirChanged = sanitizedAppDir !== (previousAppDir ?? undefined);
+        // WEB-00: data dir в web не меняется (override не поддержан), restart-prompt недостижим — снимет WEB-26
+        const appDirChanged =
+          !isWeb && sanitizedAppDir !== (previousAppDir ?? undefined);
         setRequiresRestart(appDirChanged);
 
         if (!options?.silent) {

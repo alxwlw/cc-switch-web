@@ -1,3 +1,4 @@
+import { isWeb } from "@/lib/api/adapter";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -59,7 +60,7 @@ type GrokBuildProviderFormProps = Omit<ProviderFormProps, "appId">;
 
 // 预设列表见 grokBuildProviderPresets.ts：独立维护（与 Codex 预设无联动），
 // 不含官方 / OAuth / 国产官方直连 / 纯开源托管站，默认模型为 Grok 系。
-const grokPresetEntries: Array<{
+const allGrokPresetEntries: Array<{
   id: string;
   preset: GrokBuildProviderPreset;
 }> = [
@@ -91,6 +92,14 @@ export function GrokBuildProviderForm({
     () => parseGrokBuildConfig(initialConfigText, initialData?.name),
     [initialConfigText, initialData?.name],
   );
+
+  // WEB-00: официальный пресет сеется ensure_grokbuild_official_provider (вне mapCommand,
+  // фиксированный id) — обычным add его не воспроизвести, в web не предлагается — снимет WEB-19
+  const grokPresetEntries = isWeb
+    ? allGrokPresetEntries.filter(
+        (entry) => entry.id !== GROKBUILD_OFFICIAL_PROVIDER_ID,
+      )
+    : allGrokPresetEntries;
 
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
     initialData ? null : "custom",

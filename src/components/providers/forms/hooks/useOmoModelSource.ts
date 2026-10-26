@@ -1,3 +1,4 @@
+import { isWeb } from "@/lib/api/adapter";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -57,7 +58,8 @@ export function useOmoModelSource({
   } = useQuery({
     queryKey: ["opencode", "runtime-models"],
     queryFn: getOpenCodeModels,
-    enabled: isOmoCategory,
+    // WEB-00: get_opencode_models не поддержан — без него только настроенные провайдеры, не ошибка — снимет WEB-14
+    enabled: isOmoCategory && !isWeb,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: 1,
@@ -80,7 +82,9 @@ export function useOmoModelSource({
 
   useEffect(() => {
     let active = true;
-    if (!isOmoCategory) {
+    // WEB-00: get_opencode_live_provider_ids не поддержан — живой набор неизвестен (liveReady ниже),
+    // это не сбой: без fallback-предупреждения — снимет WEB-14
+    if (!isOmoCategory || isWeb) {
       setEnabledOpencodeProviderIds(null);
       setOmoLiveIdsLoadFailed(false);
       return () => {
@@ -139,7 +143,7 @@ export function useOmoModelSource({
 
     const allProviders = opencodeProvidersData?.providers;
     const liveReady =
-      omoLiveIdsLoadFailed || enabledOpencodeProviderIds !== null;
+      isWeb || omoLiveIdsLoadFailed || enabledOpencodeProviderIds !== null;
 
     // Configured providers are filtered by live ids when available.
     // Runtime models are merged regardless, so OAuth/Zen entries still show

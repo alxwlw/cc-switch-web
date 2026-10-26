@@ -5,6 +5,7 @@ import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ClaudeDesktopProviderForm } from "@/components/providers/forms/ClaudeDesktopProviderForm";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 const authState = vi.hoisted(() => ({
   codexReauthRequired: false,
@@ -12,6 +13,7 @@ const authState = vi.hoisted(() => ({
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),
 }));
+const defaultRoutesMock = vi.hoisted(() => vi.fn());
 const modelFetchMocks = vi.hoisted(() => ({
   fetchCodexOauthModels: vi.fn(),
 }));
@@ -73,7 +75,8 @@ vi.mock("@/components/providers/forms/XaiOAuthSection", () => ({
 
 vi.mock("@/lib/api/providers", () => ({
   providersApi: {
-    getClaudeDesktopDefaultRoutes: () => Promise.resolve([]),
+    getClaudeDesktopDefaultRoutes: (...args: unknown[]) =>
+      defaultRoutesMock(...args),
   },
 }));
 
@@ -100,6 +103,92 @@ describe("ClaudeDesktopProviderForm", () => {
     authState.codexReauthRequired = false;
     toastMocks.error.mockReset();
     modelFetchMocks.fetchCodexOauthModels.mockReset();
+    defaultRoutesMock.mockReset().mockResolvedValue([]);
+  });
+
+  it("web: не запрашивает get_claude_desktop_default_routes", async () => {
+    setWeb(true);
+    renderForm(undefined);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(defaultRoutesMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["web", true, ["直连"]],
+    ["desktop", false, ["直连", "模型映射"]],
+  ])(
+    "новый провайдер (%s): режим «модель-маппинг» предлагается только где есть прокси",
+    async (_label, web, expected) => {
+      setWeb(web);
+      // jsdom 没有 scrollIntoView，Radix Select 打开时会调
+      Element.prototype.scrollIntoView = vi.fn();
+      renderForm(undefined);
+      await userEvent.click(screen.getByRole("combobox", { name: "接入方式" }));
+
+      const options = await screen.findAllByRole("option");
+      expect(options.map((option) => option.textContent)).toEqual(expected);
+    },
+  );
+
+  it.each([
+    ["direct list", undefined],
+    [
+      "model-mapping list",
+      {
+        name: "Proxy Provider",
+        settingsConfig: { env: {} },
+        meta: {
+          claudeDesktopMode: "proxy",
+          claudeDesktopModelRoutes: {
+            "claude-sonnet-5": { model: "upstream" },
+          },
+        },
+      },
+    ],
+  ] as const)(
+    "web: fetch-models button is disabled in the %s",
+    (_label, initialData) => {
+      setWeb(true);
+      renderForm(initialData as never);
+      const buttons = screen.getAllByRole("button", {
+        name: "获取模型",
+      });
+      expect(buttons.length).toBeGreaterThan(0);
+      for (const button of buttons) expect(button).toBeDisabled();
+    },
+  );
+
+  it("web: official preset is not offered (needs the ensure_* seed)", () => {
+    setWeb(true);
+    renderForm(undefined);
+    expect(
+      screen.queryByRole("button", { name: /Claude Desktop Official/ }),
+    ).toBeNull();
+  });
+
+  it("desktop: official preset is offered", () => {
+    renderForm(undefined);
+    expect(
+      screen.getByRole("button", { name: /Claude Desktop Official/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("web: у уже сохранённого proxy-провайдера режим остаётся выбранным", () => {
+    setWeb(true);
+    renderForm({
+      name: "Proxy Provider",
+      settingsConfig: { env: {} },
+      meta: { claudeDesktopMode: "proxy", claudeDesktopModelRoutes: {} },
+    });
+
+    expect(
+      screen.getByRole("combobox", { name: "接入方式" }),
+    ).toHaveTextContent("模型映射");
+  });
+
+  it("desktop: запрашивает get_claude_desktop_default_routes", async () => {
+    renderForm(undefined);
+    await waitFor(() => expect(defaultRoutesMock).toHaveBeenCalledTimes(1));
   });
 
   it("托管 OAuth 供应商也能获取模型并在映射行里选择（#8426）", async () => {

@@ -32,6 +32,7 @@ import { openclawKeys } from "@/hooks/useOpenClaw";
 import { supportsOfficialProxyTakeover } from "@/utils/providerCapabilities";
 import { getRoutingReason } from "@/utils/routingReason";
 import { logFrontendInfo } from "@/lib/frontendLogger";
+import { isWeb } from "@/lib/api/adapter";
 
 /**
  * Hook for managing provider actions (add, update, delete, switch)
@@ -53,6 +54,8 @@ export function useProviderActions(
   const syncClaudePlugin = useCallback(
     async (provider: Provider) => {
       if (activeApp !== "claude") return;
+      // WEB-00: apply_claude_plugin_config не поддержан — снимет WEB-20
+      if (isWeb) return;
 
       try {
         const settings = await settingsApi.get();
@@ -92,7 +95,9 @@ export function useProviderActions(
       await addProviderMutation.mutateAsync(enhanced);
 
       // OpenClaw: register models to allowlist after adding provider
-      if (activeApp === "openclaw" && provider.suggestedDefaults) {
+      // WEB-00: get/set_openclaw_model_catalog и default_model не поддержаны — регистрация моделей
+      // пропускается (провайдер уже сохранён) — снимет WEB-15
+      if (activeApp === "openclaw" && provider.suggestedDefaults && !isWeb) {
         const { model, modelCatalog } = provider.suggestedDefaults;
         let modelsRegistered = false;
 

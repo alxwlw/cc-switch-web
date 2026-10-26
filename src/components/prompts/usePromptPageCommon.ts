@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { settingsApi, type AppId } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { promptKeys, usePromptFileLocationQuery } from "@/lib/query/prompts";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import type { PromptMoreItem } from "./PromptPageFrame";
@@ -25,17 +26,22 @@ export function usePromptPageCommon(appId: AppId) {
     copyPath: { label: string; path: string | undefined },
   ): PromptMoreItem[] => [
     importItem,
-    {
-      key: "open-folder",
-      label: t("prompts.openFolder"),
-      onSelect: () => {
-        settingsApi.openConfigFolder(appId).catch((error: unknown) => {
-          toast.error(t("prompts.openFolderFailed"), {
-            description: extractErrorMessage(error) || undefined,
-          });
-        });
-      },
-    },
+    // WEB-00: open_config_folder открывает файловый менеджер на хосте — в web скрыт (copy path остаётся) — снимет WEB-17
+    ...(isWeb
+      ? []
+      : [
+          {
+            key: "open-folder",
+            label: t("prompts.openFolder"),
+            onSelect: () => {
+              settingsApi.openConfigFolder(appId).catch((error: unknown) => {
+                toast.error(t("prompts.openFolderFailed"), {
+                  description: extractErrorMessage(error) || undefined,
+                });
+              });
+            },
+          },
+        ]),
     {
       key: "copy-path",
       label: copyPath.label,

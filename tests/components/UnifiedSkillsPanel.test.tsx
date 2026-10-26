@@ -2,6 +2,7 @@ import { render, screen, waitFor, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import i18n from "i18next";
+import { setWeb } from "../helpers/web";
 import en from "@/i18n/locales/en.json";
 
 import UnifiedSkillsPanel from "@/components/skills/UnifiedSkillsPanel";
@@ -35,6 +36,7 @@ const m = vi.hoisted(() => ({
   repoFailures: [] as SkillRepoFailure[],
   checking: false,
   visibleApps: ["claude", "codex", "pi"] as string[],
+  discoverMounts: 0,
 }));
 
 vi.mock("sonner", () => ({
@@ -111,7 +113,10 @@ vi.mock("@/hooks/useSkills", () => ({
     mutateAsync: m.updateSkill,
     isPending: false,
   }),
-  useDiscoverableSkills: () => ({ data: [], refetch: vi.fn() }),
+  useDiscoverableSkills: () => {
+    m.discoverMounts += 1;
+    return { data: [], refetch: vi.fn() };
+  },
   useDiscoverableSkillsFailures: () => ({ data: [] }),
   useSkillRepos: () => ({ data: [], refetch: vi.fn() }),
   useAddSkillRepo: () => ({ mutateAsync: vi.fn() }),
@@ -958,4 +963,124 @@ describe("UnifiedSkillsPanel", () => {
     expect(m.toastError).not.toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
   });
+});
+
+describe("UnifiedSkillsPanel web gating", () => {
+  beforeEach(() => {
+    m.discoverMounts = 0;
+    m.installed = [makeSkill()];
+    m.backups = [];
+    m.updates = [];
+    m.repoFailures = [];
+    m.checking = false;
+    m.visibleApps = ["claude", "codex", "pi"];
+    for (const fn of [
+      m.scanUnmanaged,
+      m.installFromZip,
+      m.checkUpdates,
+      m.refetchBackups,
+    ]) {
+      fn.mockReset();
+    }
+  });
+
+  const isDisabled = (el: HTMLElement) =>
+    el.hasAttribute("disabled") || el.getAttribute("aria-disabled") === "true";
+
+  it.each([true, false])(
+    "discover segment is hidden only in web (web=%s) and a direct discover entry opens installed",
+    (web) => {
+      setWeb(web);
+      renderPanel({ initialView: "discover" });
+      expect(screen.queryByText("skillsPage.viewDiscover") === null).toBe(web);
+      // installed-список остаётся рабочим и активным (jsdom не считает класс hidden скрытием)
+      const installedPane = screen
+        .getByTestId("skills-matrix")
+        .closest(".hidden");
+      expect(installedPane === null).toBe(web);
+      // страница discover в web не монтируется вовсе
+      expect(m.discoverMounts > 0).toBe(!web);
+    },
+  );
+
+  it.each([
+    ["skillsPage.add", "skillsPage.addMenu.discover", "hidden"],
+    ["skillsPage.add", "skillsPage.addMenu.zip", "disabled"],
+    ["skillsPage.add", "skillsPage.addMenu.import", "disabled"],
+    ["skills.moreActions", "skills.checkUpdates", "disabled"],
+    ["skills.moreActions", "skillsPage.moreMenu.restore", "disabled"],
+    ["skills.moreActions", "skillsPage.moreMenu.repos", "disabled"],
+    ["skills.moreActions", "skills.storageSheet.open", "enabled"],
+  ] as const)(
+    "web: %s menu item %s is %s, desktop keeps it enabled",
+    async (trigger, item, webState) => {
+      for (const web of [true, false]) {
+        setWeb(web);
+        const { unmount } = renderPanel();
+        await userEvent.click(screen.getByRole("button", { name: trigger }));
+        const found = screen.queryByRole("menuitem", {
+          // у пункта импорта справа бейдж с числом — имя начинается с ключа
+          name: (name) => name.startsWith(item),
+        });
+        if (web && webState === "hidden") {
+          expect(found).toBeNull();
+        } else {
+          expect(found).not.toBeNull();
+          expect(isDisabled(found!)).toBe(web && webState === "disabled");
+        }
+        unmount();
+      }
+    },
+  );
+
+  it("web: toolbar check-updates button is disabled and does not refetch", async () => {
+    setWeb(true);
+    renderPanel();
+    const button = screen.getByRole("button", { name: "skills.checkUpdates" });
+    expect(button).toBeDisabled();
+    await userEvent.click(button);
+    expect(m.checkUpdates).not.toHaveBeenCalled();
+  });
+
+  it("desktop: toolbar check-updates button is enabled", () => {
+    renderPanel();
+    expect(
+      screen.getByRole("button", { name: "skills.checkUpdates" }),
+    ).toBeEnabled();
+  });
+
+  it.each([true, false])(
+    "empty state: discover shortcut is hidden and import is disabled only in web (web=%s)",
+    (web) => {
+      setWeb(web);
+      m.installed = [];
+      renderPanel();
+      expect(screen.queryByText("skillsPage.goDiscover") === null).toBe(web);
+      expect(
+        screen.getByRole("button", { name: "skillsPage.importCount" }),
+      ).toHaveProperty("disabled", web);
+    },
+  );
+
+  it.each([true, false])(
+    "no-match state offers search-in-discover only outside web (web=%s)",
+    async (web) => {
+      setWeb(web);
+      renderPanel();
+      await userEvent.type(
+        screen.getByRole("textbox", {
+          name: "skills.installedSearchAriaLabel",
+        }),
+        "zzz",
+      );
+      expect(
+        screen.getByRole("button", { name: "mcpPage.clearSearch" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", {
+          name: "skillsPage.searchInDiscover",
+        }) === null,
+      ).toBe(web);
+    },
+  );
 });

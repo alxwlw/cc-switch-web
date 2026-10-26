@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { isWeb } from "@/lib/api/adapter";
 import type {
   CardButton,
   CardMenuItem,
@@ -74,6 +75,8 @@ interface ProviderCardActionsProps {
   onTest?: () => void;
   isTesting?: boolean;
   onConfigureUsage?: () => void;
+  /** WEB-00: сохранение скрипта pi/omp идёт через update_pi_provider_usage_script (вне mapCommand) — снимет WEB-17 */
+  configureUsageUnavailable?: boolean;
   onOpenTerminal?: () => void;
 }
 
@@ -92,6 +95,7 @@ export function ProviderCardActions({
   onTest,
   isTesting,
   onConfigureUsage,
+  configureUsageUnavailable = false,
   onOpenTerminal,
 }: ProviderCardActionsProps) {
   const { t } = useTranslation();
@@ -187,20 +191,39 @@ export function ProviderCardActions({
               {t("provider.duplicate")}
             </DropdownMenuItem>
           )}
+          {/* WEB-00: stream_check_provider не поддержан — пункт disabled с причиной — снимет WEB-04 */}
           {onTest && (
-            <DropdownMenuItem disabled={isTesting} onSelect={onTest}>
+            <DropdownMenuItem
+              disabled={isTesting || isWeb}
+              onSelect={onTest}
+              className={cn(isWeb && "flex-col items-start gap-0.5")}
+            >
               {isTesting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {t("provider.connectivityCheck")}
+              {isWeb && <WebUnavailableCaption />}
             </DropdownMenuItem>
           )}
           {onConfigureUsage && (
-            <DropdownMenuItem onSelect={onConfigureUsage}>
+            <DropdownMenuItem
+              disabled={configureUsageUnavailable}
+              onSelect={onConfigureUsage}
+              className={cn(
+                configureUsageUnavailable && "flex-col items-start gap-0.5",
+              )}
+            >
               {t("provider.configureUsage")}
+              {configureUsageUnavailable && <WebUnavailableCaption />}
             </DropdownMenuItem>
           )}
+          {/* WEB-00: open_provider_terminal запускает терминал на хосте приложения — в web нет; desktop-only */}
           {onOpenTerminal && (
-            <DropdownMenuItem onSelect={onOpenTerminal}>
+            <DropdownMenuItem
+              disabled={isWeb}
+              onSelect={onOpenTerminal}
+              className={cn(isWeb && "flex-col items-start gap-0.5")}
+            >
               {t("provider.openTerminal")}
+              {isWeb && <WebUnavailableCaption />}
             </DropdownMenuItem>
           )}
           {(onDuplicate || onTest || onConfigureUsage || onOpenTerminal) && (
@@ -222,6 +245,12 @@ export function ProviderCardActions({
       </DropdownMenu>
     </div>
   );
+}
+
+/** WEB-00: disabled-пункт меню — причина строкой под названием (как у disabledReason) */
+function WebUnavailableCaption() {
+  const { t } = useTranslation();
+  return <span className="text-caption text-fg-3">{t("web.unavailable")}</span>;
 }
 
 /** 有禁用原因时只挂说明卡（报原因），否则挂 HoverTip（报名字），两者不叠。 */

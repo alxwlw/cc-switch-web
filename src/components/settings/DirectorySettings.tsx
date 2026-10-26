@@ -4,6 +4,8 @@ import { FolderSearch, Undo2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { HoverTip } from "@/components/ui/hover-tip";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
+import { isWeb } from "@/lib/api/adapter";
 import { useTranslation } from "react-i18next";
 import type { AppId } from "@/lib/api";
 import type { ResolvedDirectories } from "@/hooks/useSettings";
@@ -257,17 +259,21 @@ export function DirectoryInput({
           className="text-xs"
           onChange={(event) => onChange(event.target.value)}
         />
-        <HoverTip content={t("settings.browseDirectory")}>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={onBrowse}
-            aria-label={t("settings.browseDirectory")}
-          >
-            <FolderSearch className="h-4 w-4" />
-          </Button>
-        </HoverTip>
+        {/* WEB-00: pick_directory не поддержан — Browse disabled, ввод пути остаётся (путь на сервере) — снимет WEB-26 */}
+        <WebUnavailableTip active={isWeb}>
+          <HoverTip content={isWeb ? undefined : t("settings.browseDirectory")}>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled={isWeb}
+              onClick={onBrowse}
+              aria-label={t("settings.browseDirectory")}
+            >
+              <FolderSearch className="h-4 w-4" />
+            </Button>
+          </HoverTip>
+        </WebUnavailableTip>
         <HoverTip content={t("settings.resetDefault")}>
           <Button
             type="button"

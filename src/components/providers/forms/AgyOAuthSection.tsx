@@ -2,6 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { authApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -192,6 +193,8 @@ export function AgyAccountSelect({ value, onChange }: AgyAccountSelectProps) {
     queryKey: ["managed-auth-status", "agy_oauth"],
     queryFn: () => authApi.authGetStatus("agy_oauth"),
     staleTime: 30000,
+    // WEB-00: auth_get_status не поддержан — снимет WEB-02
+    enabled: !isWeb,
   });
   const accounts = data?.accounts ?? [];
   // 绑的号在这台电脑上不存在（别的设备同步来的、或已删掉）时也要显示出来，别悄悄改成「跟随」

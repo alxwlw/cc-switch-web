@@ -5029,5 +5029,24 @@
       "providerMissing": "この Oh My Pi プロバイダは保存済みリストにありません。",
       "legacyModelsJson": "Oh My Pi にはまだ旧形式の models.json があり、omp は次回起動時にこれを models.yml へ移行します。omp を一度起動してから、もう一度プロバイダを追加してください。"
     }
+  },
+  "web": {
+    "unavailable": "Webモードでは利用できません",
+    "serverPath": "パスは手入力で、この端末ではなくサーバーホスト上のパスを指します",
+    "update": {
+      "unsupported": "Webモードではアップデートを利用できません。サーバーの更新は運用者が行います"
+    },
+    "accountLogin": "Webモードではアカウントログイン（OAuth）を利用できません",
+    "needsRouting": "このプロバイダーにはルーティングプロキシが必要ですが、Webモードでは利用できません",
+    "liveUnknownTitle": "プロバイダー（Webモードでは実際の設定状態を読み取れません）",
+    "removeUnverifiable": "Webモードではデフォルト／現在のプロバイダーかどうかを確認できないため、設定から削除できません",
+    "sessionImage": "Webモードでは画像を表示できません",
+    "sessionResumeCopied": "再開コマンドをコピーしました。サーバーホスト上のプロジェクトフォルダーで、ターミナルに貼り付けて実行してください",
+    "hostNotice": "ファイル、CLI ツール、プロキシはサーバーホスト上にあり、このブラウザを実行しているコンピューター上にはありません。",
+    "hostNoticeDismiss": "閉じる",
+    "mode": {
+      "title": "Web モード",
+      "serverVersion": "サーバーバージョン"
+    }
   }
 }

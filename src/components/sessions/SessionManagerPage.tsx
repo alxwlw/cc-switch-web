@@ -23,6 +23,7 @@ import {
   useSettingsQuery,
 } from "@/lib/query";
 import { piApi, sessionsApi, type AppId } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import type { SessionMeta } from "@/types";
 import { DEFAULT_VISIBLE_APPS } from "@/config/appConfig";
 import { Button } from "@/components/ui/button";
@@ -189,7 +190,8 @@ export function SessionManagerPage({
   const piSessionDiscovery = useQuery({
     queryKey: piKeys.sessionDiscovery,
     queryFn: () => piApi.getSessionDiscovery(),
-    enabled: appFilter === "pi",
+    // WEB-00: get_pi_session_discovery не поддержан — снимет WEB-17
+    enabled: appFilter === "pi" && !isWeb,
     staleTime: 30 * 1000,
   });
 
@@ -306,7 +308,9 @@ export function SessionManagerPage({
   }, [sessions]);
 
   const terminalName = useMemo(() => {
-    if (!isMac()) return null;
+    // WEB-00: launch_session_terminal не замаплен, а isMac() читает UA браузера, не хост —
+    // в web всегда copy-фоллбэк, без кнопки запуска — снимет WEB-13
+    if (isWeb || !isMac()) return null;
     const value = settings?.preferredTerminal || "terminal";
     const key = `settings.terminal.options.macos.${value}`;
     const label = t(key);
@@ -332,17 +336,19 @@ export function SessionManagerPage({
     [copyText],
   );
 
+  const resumeCopiedNoLaunchMessage = () =>
+    isWeb
+      ? t("web.sessionResumeCopied")
+      : t("sessionManager.resumeCopiedNoLaunch", {
+          defaultValue:
+            "已复制恢复命令。这个平台暂不支持一键恢复，请在项目目录下粘贴到终端运行",
+        });
+
   const handleLaunch = async (session: SessionMeta) => {
     const command = session.resumeCommand;
     if (!command) return;
     if (!terminalName) {
-      handleCopy(
-        command,
-        t("sessionManager.resumeCopiedNoLaunch", {
-          defaultValue:
-            "已复制恢复命令。这个平台暂不支持一键恢复，请在项目目录下粘贴到终端运行",
-        }),
-      );
+      handleCopy(command, resumeCopiedNoLaunchMessage());
       return;
     }
     try {
@@ -655,10 +661,7 @@ export function SessionManagerPage({
               ? t("sessionManager.resumeCommandCopied", {
                   defaultValue: "已复制恢复命令",
                 })
-              : t("sessionManager.resumeCopiedNoLaunch", {
-                  defaultValue:
-                    "已复制恢复命令。这个平台暂不支持一键恢复，请在项目目录下粘贴到终端运行",
-                }),
+              : resumeCopiedNoLaunchMessage(),
           )
         }
         onCopyId={() =>

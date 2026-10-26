@@ -19,6 +19,7 @@ import {
 } from "@/lib/query/sessions";
 import type { SessionMessage, SessionMeta } from "@/types";
 import { call, fixtures, msg, result, text } from "./sessions/reader/helpers";
+import { setWeb } from "../helpers/web";
 
 // jsdom 没有布局，虚拟列表一条都不渲染；这里让它把全部行都画出来
 vi.mock("@tanstack/react-virtual", () => ({
@@ -491,6 +492,49 @@ describe("SessionReader", () => {
     expect(name).toBe("claude 会话.md");
     expect(content).toContain("claude 会话");
     expect(content).toContain("cargo build 一直报 tokio_util 找不到");
+  });
+
+  it("web: 导出 Markdown 文件在工具栏和菜单里都是禁用的，不调用 export_session_markdown", async () => {
+    setWeb(true);
+    const exportMarkdown = vi
+      .spyOn(sessionsApi, "exportMarkdown")
+      .mockResolvedValue("/tmp/x.md");
+    renderReader("claude", fixtures.claude);
+
+    const iconButton = screen.getByRole("button", {
+      name: "导出为 Markdown 文件",
+    });
+    expect(iconButton).toBeDisabled();
+    fireEvent.click(iconButton);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "claude 会话 的更多操作" }),
+    );
+    const menuItem = await screen.findByRole("menuitem", {
+      name: "导出为 Markdown 文件",
+    });
+    expect(menuItem).toHaveAttribute("aria-disabled", "true");
+    // 同一个菜单里的「复制整段为 Markdown」不受影响
+    expect(
+      screen.getByRole("menuitem", { name: "复制整段为 Markdown" }),
+    ).not.toHaveAttribute("aria-disabled", "true");
+    expect(exportMarkdown).not.toHaveBeenCalled();
+  });
+
+  it("web: 图片显示占位说明，不请求 get_session_image", async () => {
+    setWeb(true);
+    const getImage = vi.mocked(sessionsApi.getImage);
+
+    renderReader("claude", fixtures.claude);
+
+    const placeholder = await screen.findByRole("img", {
+      name: /图 1 · web\.sessionImage/,
+    });
+    expect(placeholder).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /放大查看/ }),
+    ).not.toBeInTheDocument();
+    expect(getImage).not.toHaveBeenCalled();
   });
 
   it("全部 / 对话 / 改动 三选一", () => {

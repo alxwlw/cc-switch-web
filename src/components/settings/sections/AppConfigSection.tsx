@@ -6,6 +6,7 @@ import type {
 } from "@/hooks/useSettings";
 import type { Settings } from "@/types";
 import { Button } from "@/components/ui/button";
+import { isWeb } from "@/lib/api/adapter";
 import {
   DirectoryInput,
   type DirectoryAppId,
@@ -141,6 +142,12 @@ export function AppConfigSection({
 
   return (
     <>
+      {/* WEB-00: пути вводятся вручную и относятся к серверному хосту — снимет WEB-26 */}
+      {isWeb && (
+        <p role="note" className="text-caption text-fg-2">
+          {t("web.serverPath")}
+        </p>
+      )}
       {DIRECTORY_APPS.map((app) => (
         <SettingsBlock
           key={app}
@@ -154,6 +161,8 @@ export function AppConfigSection({
               <>
                 <SettingsSwitchRow
                   label={t("settings.enableClaudePluginIntegration")}
+                  // WEB-00: apply_claude_plugin_config не поддержан — снимет WEB-20
+                  unavailableInWeb
                   help={{
                     title: t("settings.enableClaudePluginIntegration"),
                     body: t(
@@ -167,6 +176,8 @@ export function AppConfigSection({
                 />
                 <SettingsSwitchRow
                   label={t("settings.skipClaudeOnboarding")}
+                  // WEB-00: apply/clear_claude_onboarding_skip не поддержаны — снимет WEB-20
+                  unavailableInWeb
                   help={{
                     title: t("settings.skipClaudeOnboarding"),
                     body: t("settings.skipClaudeOnboardingDescription"),
@@ -178,7 +189,8 @@ export function AppConfigSection({
                 />
               </>
             )}
-            {app === "codex" && (
+            {/* WEB-00: Codex compression/unify history — desktop-only команды, снимет WEB-20 */}
+            {app === "codex" && !isWeb && (
               <CodexAuthSettings
                 settings={settings}
                 onChange={onAutoSave}

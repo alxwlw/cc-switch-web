@@ -29,7 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { settingsApi, type AppId } from "@/lib/api";
 import { useSettingsQuery } from "@/lib/query";
-import type { SettingsSection } from "@/lib/navigation";
+import { resolveSettingsSection, type SettingsSection } from "@/lib/navigation";
 import { AppPageHeader } from "@/components/shell/AppPageHeader";
 import { DirectoryInput } from "@/components/settings/DirectorySettings";
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
@@ -80,13 +80,15 @@ interface SettingsPageProps {
  * 开关类即时保存；路径类改完点本节的「保存」。
  */
 export function SettingsPage({
-  section,
+  section: requestedSection,
   appConfigScrollTarget,
   onImportSuccess,
   onOpenApps,
   onOpenApp,
 }: SettingsPageProps) {
   const { t } = useTranslation();
+  // WEB-00: скрытая в web секция (из любого входа) показывается как general — снимет WEB-01/23/26
+  const section = resolveSettingsSection(requestedSection);
   const {
     settings,
     isLoading,

@@ -35,6 +35,7 @@ import {
   type ProviderSwitchEvent,
 } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
+import { isWeb } from "@/lib/api/adapter";
 import { useProviderActions } from "@/hooks/useProviderActions";
 import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
 import { hermesKeys, useOpenHermesWebUI } from "@/hooks/useHermes";
@@ -95,6 +96,7 @@ import {
   useToolUpdatesAvailable,
 } from "@/components/apps/useToolManagement";
 import { UsagePage } from "@/components/usage/UsagePage";
+import { WebHostBanner } from "@/components/web/WebHostBanner";
 import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
 import { SwitchModePanel } from "@/components/providers/mode/SwitchModePanel";
 import { proxyApi } from "@/lib/api/proxy";
@@ -212,7 +214,10 @@ function App() {
   const { data: settingsData } = useSettingsQuery();
   // Windows 一律去掉系统标题栏，用页头里的应用内窗口按钮；Linux 由设置决定
   const useAppWindowControls =
-    isWindows() || (isLinux() && (settingsData?.useAppWindowControls ?? false));
+    // WEB-00: в браузере нет окна приложения — min/max/close не работают
+    !isWeb &&
+    (isWindows() ||
+      (isLinux() && (settingsData?.useAppWindowControls ?? false)));
   const visibleApps = useMemo<VisibleApps>(
     () => ({
       ...DEFAULT_VISIBLE_APPS,
@@ -262,6 +267,8 @@ function App() {
     StartupAttachFailure[]
   >([]);
   useEffect(() => {
+    // WEB-00: take_startup_attach_failures не поддержан (mount-вызов) — снимет WEB-01
+    if (isWeb) return;
     proxyApi
       .takeStartupAttachFailures()
       .then((failures) => {
@@ -540,6 +547,8 @@ function App() {
   useEffect(() => {
     // settingsData 未加载时跳过，避免用 fallback false 覆盖 Rust 侧已设好的装饰状态
     if (!settingsData) return;
+    // WEB-00: window-shim без setDecorations — в web нечего синхронизировать
+    if (isWeb) return;
 
     const syncWindowDecorations = async () => {
       try {
@@ -1118,8 +1127,12 @@ function App() {
     ) {
       let liveProviderIds: string[] = [];
       try {
-        liveProviderIds =
-          activeApp === "opencode"
+        // WEB-00: live-ids (get_*_live_provider_ids / get_*_current_state) не поддержаны. Шаг только
+        // проверяет коллизию ключа копии с записями живого конфига; в web копия получает ключ,
+        // свободный среди провайдеров БД (addToLive=false, в живой конфиг не пишется) — снимет WEB-14/15/16
+        liveProviderIds = isWeb
+          ? []
+          : activeApp === "opencode"
             ? await queryClient.ensureQueryData({
                 queryKey: ["opencodeLiveProviderIds"],
                 queryFn: () => providersApi.getOpenCodeLiveProviderIds(),
@@ -1366,13 +1379,16 @@ function App() {
       }
       actions={
         <>
-          {currentView === "providers" &&
+          {/* WEB-00: профили (list/apply_profile) не поддержаны — переключатель скрыт — снимет WEB-06 */}
+          {!isWeb &&
+            currentView === "providers" &&
             activeApp !== "mcode" &&
             activeApp !== "kimi" &&
             (settingsData?.showProfileSwitcher ?? false) && (
               <ProfileSwitcher activeApp={activeApp} />
             )}
-          {activeApp === "hermes" && (
+          {/* WEB-00: запуск Hermes Web UI/dashboard — desktop-only (launch_hermes_dashboard) — снимет WEB-16 */}
+          {activeApp === "hermes" && !isWeb && (
             <Button
               variant="quiet"
               size="regular"
@@ -1421,6 +1437,8 @@ function App() {
   // OpenClaw / Hermes 没有模式 tab，那一行放它们自己的页面导航。
   // 换整块内容的是页面导航，用下划线页签；分段控件只留给模式和页内筛选。
   const renderAppSegments = () => {
+    // WEB-00: единственная доступная вкладка — providers (workspace/config/memory скрыты) — снимет WEB-15/16/17
+    if (isWeb) return null;
     if (activeApp === "openclaw") {
       return (
         <div className="shrink-0 px-6 pt-2">
@@ -1755,6 +1773,7 @@ function App() {
           id="content-area"
           className="relative isolate flex min-w-0 flex-1 flex-col overflow-hidden bg-app"
         >
+          <WebHostBanner />
           {showEnvBanner && envConflicts.length > 0 && (
             <EnvWarningBanner
               conflicts={envConflicts}

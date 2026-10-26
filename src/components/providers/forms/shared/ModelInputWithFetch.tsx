@@ -1,3 +1,5 @@
+import { isWeb } from "@/lib/api/adapter";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -79,18 +81,22 @@ export function ModelInputWithFetch({
           autoComplete="off"
           className="flex-1"
         />
-        <HoverTip content={t("providerForm.fetchModels")}>
-          <Button
-            aria-label={t("providerForm.fetchModels")}
-            variant="outline"
-            size="icon"
-            className="shrink-0"
-            type="button"
-            onClick={onFetch}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-        </HoverTip>
+        {/* WEB-00: fetch_models_for_config/copilot_get_models не поддержаны — кнопка disabled — снимет WEB-03 */}
+        <WebUnavailableTip active={isWeb}>
+          <HoverTip content={t("providerForm.fetchModels")}>
+            <Button
+              aria-label={t("providerForm.fetchModels")}
+              variant="outline"
+              size="icon"
+              className="shrink-0"
+              type="button"
+              onClick={onFetch}
+              disabled={isWeb}
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+          </HoverTip>
+        </WebUnavailableTip>
       </div>
     );
   }

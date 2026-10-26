@@ -10,6 +10,7 @@ import {
 import type { Provider, Settings, UsageResult, SessionMeta } from "@/types";
 import { usageKeys } from "@/lib/query/usage";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { isWeb } from "@/lib/api/adapter";
 
 const sortProviders = (
   providers: Record<string, Provider>,
@@ -260,7 +261,8 @@ export const useUsageQuery = (
   const query = useQuery<UsageResult>({
     queryKey: usageKeys.script(providerId, appId),
     queryFn: async () => usageApi.query(providerId, appId),
-    enabled: enabled && !!providerId,
+    // WEB-00: query_provider_usage не поддержан — снимет WEB-04
+    enabled: enabled && !!providerId && !isWeb,
     refetchInterval:
       autoQueryInterval > 0
         ? Math.max(autoQueryInterval, 1) * 60 * 1000 // 最小1分钟

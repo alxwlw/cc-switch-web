@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { usageApi } from "@/lib/api/usage";
+import { isWeb } from "@/lib/api/adapter";
 import { resolveUsageRange } from "@/lib/usageRange";
 import type {
   LogFilters,
@@ -395,6 +396,8 @@ export function useSessionUsageLastSync(options?: UsageQueryOptions) {
   return useQuery({
     queryKey: [...usageKeys.all, "session-last-sync"] as const,
     queryFn: () => usageApi.getSessionUsageLastSync(),
+    // WEB-00: get_session_usage_last_sync не поддержан (опрос 30 с) — снимет WEB-12
+    enabled: !isWeb,
     refetchInterval: options?.refetchInterval ?? DEFAULT_REFETCH_INTERVAL_MS,
     refetchIntervalInBackground: options?.refetchIntervalInBackground ?? false,
   });
@@ -421,7 +424,8 @@ export function useProviderLimits(providerId: string, appType: string) {
   return useQuery({
     queryKey: usageKeys.limits(providerId, appType),
     queryFn: () => usageApi.checkProviderLimits(providerId, appType),
-    enabled: !!providerId && !!appType,
+    // WEB-00: check_provider_limits не поддержан — снимет WEB-12
+    enabled: !!providerId && !!appType && !isWeb,
   });
 }
 

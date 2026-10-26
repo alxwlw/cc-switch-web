@@ -1,4 +1,5 @@
 import type { AppId } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 
 /**
  * 主窗口的导航模型（v7）：侧栏选一个应用或一个全局页；设置单独占一屏。
@@ -42,6 +43,40 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   "data",
   "about",
 ];
+
+// WEB-00: секции целиком из desktop-only команд скрыты в web (routing — снимет WEB-01/WEB-24,
+// network — WEB-23, data — WEB-26/WEB-09/WEB-10/WEB-11). isWeb читается в момент вызова.
+const WEB_HIDDEN_SETTINGS_SECTIONS: SettingsSection[] = [
+  "routing",
+  "network",
+  "data",
+];
+
+export function isSettingsSectionAvailable(section: SettingsSection): boolean {
+  return !(isWeb && WEB_HIDDEN_SETTINGS_SECTIONS.includes(section));
+}
+
+/** Скрытая в web секция (запрошенная, сохранённая, из ссылки) открывается как `general`. */
+export function resolveSettingsSection(
+  section: SettingsSection,
+): SettingsSection {
+  return isSettingsSectionAvailable(section) ? section : "general";
+}
+
+// WEB-00: экраны целиком из desktop-only команд скрыты в web: центр авторизации (OAuth, auth_*) —
+// снимет WEB-02; workspace/openclawConfig/hermesMemory (openclaw/hermes-команды) — WEB-15/16/17;
+// skillsDiscovery (discover/skills.sh/репозитории) — WEB-05.
+const WEB_HIDDEN_VIEWS: View[] = [
+  "auth",
+  "skillsDiscovery",
+  "workspace",
+  "openclawConfig",
+  "hermesMemory",
+];
+
+export function isViewAvailable(view: View): boolean {
+  return !(isWeb && WEB_HIDDEN_VIEWS.includes(view));
+}
 
 const APP_PAGES: AppPage[] = [
   "providers",
@@ -103,7 +138,10 @@ export function appPageBelongsTo(page: AppPage, app: AppId): boolean {
 
 export function readStoredView(): View {
   try {
-    return parseView(localStorage.getItem(VIEW_STORAGE_KEY)) ?? "providers";
+    const stored =
+      parseView(localStorage.getItem(VIEW_STORAGE_KEY)) ?? "providers";
+    // WEB-00: сохранённый скрытый в web view не восстанавливается — снимет WEB-02 (auth), WEB-15/16/17 (workspace, openclawConfig, hermesMemory)
+    return isViewAvailable(stored) ? stored : "providers";
   } catch {
     return "providers";
   }

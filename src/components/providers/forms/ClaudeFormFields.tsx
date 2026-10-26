@@ -1,3 +1,5 @@
+import { isWeb } from "@/lib/api/adapter";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -1164,21 +1166,24 @@ export function ClaudeFormFields({
                       defaultValue: "一键设置",
                     })}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleModelFetchClick}
-                    disabled={modelFetchLoading}
-                    className="h-7 gap-1"
-                  >
-                    {modelFetchLoading ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5" />
-                    )}
-                    {t("providerForm.fetchModels")}
-                  </Button>
+                  {/* WEB-00: fetch_models_for_config/copilot_get_models не поддержаны — кнопка disabled — снимет WEB-03 */}
+                  <WebUnavailableTip active={isWeb}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleModelFetchClick}
+                      disabled={modelFetchLoading || isWeb}
+                      className="h-7 gap-1"
+                    >
+                      {modelFetchLoading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" />
+                      )}
+                      {t("providerForm.fetchModels")}
+                    </Button>
+                  </WebUnavailableTip>
                 </div>
               </div>
             </div>

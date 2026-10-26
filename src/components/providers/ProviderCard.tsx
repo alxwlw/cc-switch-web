@@ -14,6 +14,7 @@ import type {
 import type { Provider } from "@/types";
 import type { AppId } from "@/lib/api";
 import { authApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { cn } from "@/lib/utils";
 import { ProviderIconBox } from "@/components/ProviderIconBox";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -38,7 +39,11 @@ import {
 import { useProviderHealth } from "@/lib/query/failover";
 import { useUsageQuery } from "@/lib/query/queries";
 import { resolveProviderIcon } from "@/utils/providerIcon";
-import { isAdditiveAppId, isProxyAppId } from "@/config/appConfig";
+import {
+  isAdditiveAppId,
+  isPiFamilyApp,
+  isProxyAppId,
+} from "@/config/appConfig";
 import { ProviderCardActions } from "./ProviderCardActions";
 import type { CardChip, CardPresentation, CardTone } from "./presentation";
 
@@ -204,7 +209,9 @@ export function ProviderCard({
   } = useQuery({
     queryKey: ["managed-auth-status", "codex_oauth"],
     queryFn: () => authApi.authGetStatus("codex_oauth"),
+    // WEB-00: auth_get_status не поддержан — снимет WEB-02
     enabled:
+      !isWeb &&
       codexOfficialIdentity === "managed_account" &&
       Boolean(managedCodexAccountId),
     staleTime: 30_000,
@@ -599,6 +606,7 @@ export function ProviderCard({
                 ? undefined
                 : () => onConfigureUsage(provider)
             }
+            configureUsageUnavailable={isWeb && isPiFamilyApp(appId)}
             onOpenTerminal={
               onOpenTerminal ? () => onOpenTerminal(provider) : undefined
             }

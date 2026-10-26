@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
 import { proxyKeys } from "@/lib/query/proxy";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -98,6 +99,24 @@ describe("useProxyStatus", () => {
 
       return Promise.resolve(null);
     });
+  });
+
+  it("desktop: isInitialStatusPending is true until the first status arrives, then false", async () => {
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useProxyStatus(), { wrapper });
+    expect(result.current.isInitialStatusPending).toBe(true);
+    await waitFor(() =>
+      expect(result.current.isInitialStatusPending).toBe(false),
+    );
+  });
+
+  it("web: queries are off, so there is no initial load to wait for and nothing is requested", async () => {
+    setWeb(true);
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useProxyStatus(), { wrapper });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(result.current.isInitialStatusPending).toBe(false);
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
   it("keeps the established proxy query key shapes", () => {

@@ -1,3 +1,4 @@
+import { isWeb } from "@/lib/api/adapter";
 import { usageApi } from "@/lib/api/usage";
 import { fetchModelsDev } from "@/lib/modelsDev";
 import {
@@ -88,6 +89,16 @@ let startupSync: Promise<ModelsDevSyncResult> | null = null;
 
 /** Run once per renderer and at most once per interval across WebView rebuilds. */
 export function syncModelsDevPricingOnStartup(): Promise<ModelsDevSyncResult> {
+  // WEB-00: get_models_dev_sync_config не замаплен — в web стартовый sync пропущен без ошибки — снимет WEB-12
+  if (isWeb) {
+    return Promise.resolve({
+      skipped: true,
+      selected: 0,
+      imported: 0,
+      changed: 0,
+      syncedAt: null,
+    });
+  }
   startupSync ??= syncModelsDevPricing();
   return startupSync;
 }

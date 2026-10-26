@@ -21,7 +21,9 @@ vi.mock("@/lib/api/usage", () => ({
 import {
   MODELS_DEV_STARTUP_SYNC_INTERVAL_MS,
   syncModelsDevPricing,
+  syncModelsDevPricingOnStartup,
 } from "@/lib/modelsDevAutoSync";
+import { setWeb } from "../helpers/web";
 
 const state = {
   configPath: "C:/Users/test/.cc-switch/model-pricing.json",
@@ -195,5 +197,24 @@ describe("syncModelsDevPricing", () => {
 
     await expect(syncModelsDevPricing()).rejects.toThrow("offline");
     expect(recordModelsDevSyncResult).toHaveBeenCalledWith(null, "offline");
+  });
+});
+
+describe("syncModelsDevPricingOnStartup · web", () => {
+  it("is skipped without reading the sync config (get_models_dev_sync_config is not mapped)", async () => {
+    getModelsDevSyncConfig
+      .mockReset()
+      .mockRejectedValue(new Error("unsupported"));
+    setWeb(true);
+
+    await expect(syncModelsDevPricingOnStartup()).resolves.toEqual({
+      skipped: true,
+      selected: 0,
+      imported: 0,
+      changed: 0,
+      syncedAt: null,
+    });
+    expect(getModelsDevSyncConfig).not.toHaveBeenCalled();
+    expect(recordModelsDevSyncResult).not.toHaveBeenCalled();
   });
 });

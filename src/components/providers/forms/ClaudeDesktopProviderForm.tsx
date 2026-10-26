@@ -1,3 +1,4 @@
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -64,6 +65,7 @@ import {
 } from "@/lib/api/providers";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import type { ManagedAuthProvider } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { useCopilotAuth, useCodexOauth, useXaiOauth } from "./hooks";
 import { isOAuthProviderType } from "@/config/constants";
 
@@ -320,6 +322,8 @@ export function ClaudeDesktopProviderForm({
   const { data: defaultRoutes = [] } = useQuery({
     queryKey: ["claudeDesktopDefaultRoutes"],
     queryFn: () => providersApi.getClaudeDesktopDefaultRoutes(),
+    // WEB-00: get_claude_desktop_default_routes не поддержан — снимет WEB-19
+    enabled: !isWeb,
   });
   const defaultProxyRouteRows = useMemo(
     () =>
@@ -364,7 +368,10 @@ export function ClaudeDesktopProviderForm({
           id: `claude-desktop-${index}`,
           preset,
         }))
-        .filter((entry) => !entry.preset.hidden),
+        .filter((entry) => !entry.preset.hidden)
+        // WEB-00: официальный пресет сеется ensure_claude_desktop_official_provider (вне mapCommand,
+        // фиксированный id) — обычным add его не воспроизвести, в web не предлагается — снимет WEB-19
+        .filter((entry) => !(isWeb && entry.preset.category === "official")),
     [],
   );
 
@@ -930,21 +937,24 @@ export function ClaudeDesktopProviderForm({
 
   const renderActionButtons = (onAdd: () => void, addLabel: string) => (
     <div className="flex gap-1">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={handleFetchModels}
-        disabled={isFetchingModels}
-        className="h-7 gap-1"
-      >
-        {isFetchingModels ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Download className="h-3.5 w-3.5" />
-        )}
-        {t("providerForm.fetchModels", { defaultValue: "获取模型" })}
-      </Button>
+      {/* WEB-00: fetch_models_for_config/copilot_get_models не поддержаны — кнопка disabled — снимет WEB-03 */}
+      <WebUnavailableTip active={isWeb}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleFetchModels}
+          disabled={isFetchingModels || isWeb}
+          className="h-7 gap-1"
+        >
+          {isFetchingModels ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Download className="h-3.5 w-3.5" />
+          )}
+          {t("providerForm.fetchModels", { defaultValue: "获取模型" })}
+        </Button>
+      </WebUnavailableTip>
       <Button
         type="button"
         variant="outline"
@@ -1098,11 +1108,15 @@ export function ClaudeDesktopProviderForm({
                           defaultValue: "直连",
                         })}
                       </SelectItem>
-                      <SelectItem value="proxy">
-                        {t("claudeDesktop.modelModeProxy", {
-                          defaultValue: "模型映射",
-                        })}
-                      </SelectItem>
+                      {/* WEB-00: «модель-маппинг» идёт через прокси/роутинг и get_claude_desktop_default_routes
+                          (вне mapCommand) — новый выбрать нельзя; у уже сохранённого proxy-провайдера пункт остаётся — снимет WEB-01/19 */}
+                      {(!isWeb || effectiveMode === "proxy") && (
+                        <SelectItem value="proxy">
+                          {t("claudeDesktop.modelModeProxy", {
+                            defaultValue: "模型映射",
+                          })}
+                        </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1172,23 +1186,26 @@ export function ClaudeDesktopProviderForm({
                             defaultValue: "模型映射",
                           })}
                         </Label>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={handleFetchModels}
-                          disabled={isFetchingModels}
-                          className="h-7 gap-1"
-                        >
-                          {isFetchingModels ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Download className="h-3.5 w-3.5" />
-                          )}
-                          {t("providerForm.fetchModels", {
-                            defaultValue: "获取模型",
-                          })}
-                        </Button>
+                        {/* WEB-00: fetch_models_for_config/copilot_get_models не поддержаны — кнопка disabled — снимет WEB-03 */}
+                        <WebUnavailableTip active={isWeb}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleFetchModels}
+                            disabled={isFetchingModels || isWeb}
+                            className="h-7 gap-1"
+                          >
+                            {isFetchingModels ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Download className="h-3.5 w-3.5" />
+                            )}
+                            {t("providerForm.fetchModels", {
+                              defaultValue: "获取模型",
+                            })}
+                          </Button>
+                        </WebUnavailableTip>
                       </div>
                       <p className="text-xs leading-relaxed text-fg-2">
                         {t("claudeDesktop.routeMapHint", {

@@ -14,6 +14,7 @@ import { providersApi } from "@/lib/api";
 import type { ProviderEditorView } from "@/lib/api/providers";
 import { usePresetStep } from "@/components/providers/forms/presetStep";
 import { createPortal } from "react-dom";
+import { setWeb } from "../helpers/web";
 
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ children }: { children: React.ReactNode }) => (
@@ -589,5 +590,21 @@ context_window = 500000
       expect(universalProps.onUniversalPresetSelect).toBeTypeOf("function"),
     );
     expect(universalProps.onManageUniversalProviders).toBeTypeOf("function");
+  });
+
+  // WEB-00: универсальные провайдеры (get/upsert/sync) в web не поддержаны — входа нет даже для Claude Code.
+  it("не отдаёт форме вход в универсальные провайдеры в web", async () => {
+    setWeb(true);
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="claude"
+        onSubmit={vi.fn()}
+      />,
+    );
+    await screen.findByRole("button", { name: "common.add" });
+    expect(universalProps.onUniversalPresetSelect).toBeUndefined();
+    expect(universalProps.onManageUniversalProviders).toBeUndefined();
   });
 });

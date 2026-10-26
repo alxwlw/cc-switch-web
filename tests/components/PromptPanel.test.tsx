@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setWeb } from "../helpers/web";
 
 import PromptPanel, {
   type PromptPanelProps,
@@ -239,6 +240,28 @@ describe("PromptPanel", () => {
     expect(screen.getByText("Aurora Prompt")).toBeInTheDocument();
     expect(screen.queryByText("Harbor Prompt")).not.toBeInTheDocument();
   });
+
+  it.each([true, false])(
+    "page menu offers open-folder only on desktop (web=%s), copy path stays",
+    async (web) => {
+      setWeb(web);
+      renderPanel();
+      await waitForPanelReady();
+
+      const user = userEvent.setup();
+      await user.click(
+        screen.getByRole("button", { name: "prompts.moreActions" }),
+      );
+      await screen.findByRole("menu");
+
+      expect(
+        screen.queryByRole("menuitem", { name: "prompts.openFolder" }) === null,
+      ).toBe(web);
+      expect(
+        screen.getByRole("menuitem", { name: "prompts.copyFilePath" }),
+      ).toBeInTheDocument();
+    },
+  );
 
   it("distinguishes an empty prompt collection from no search matches", async () => {
     const view = renderPanel();

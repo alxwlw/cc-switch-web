@@ -25,7 +25,12 @@ import type { AppId } from "@/lib/api";
 import type { VisibleApps } from "@/types";
 import { orderAppIds } from "@/config/appConfig";
 import type { GlobalPage, SettingsSection, View } from "@/lib/navigation";
-import { isAppPage } from "@/lib/navigation";
+import {
+  isAppPage,
+  isSettingsSectionAvailable,
+  isViewAvailable,
+  resolveSettingsSection,
+} from "@/lib/navigation";
 import { SkillsIcon } from "@/components/BrandIcons";
 import { useUpdate } from "@/contexts/UpdateContext";
 import { sidebarWidth, useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
@@ -292,6 +297,9 @@ function MainDirectory({
     },
   ];
 
+  // WEB-00: nav «auth» скрыт в web (весь экран desktop-only) — снимет WEB-02
+  const visibleGlobals = globals.filter((g) => isViewAvailable(g.page));
+
   const isGlobalSelected = (page: GlobalPage) =>
     view === page || (page === "skills" && view === "skillsDiscovery");
 
@@ -330,7 +338,7 @@ function MainDirectory({
       />
 
       <div className="flex shrink-0 flex-col">
-        {globals.map((item) => (
+        {visibleGlobals.map((item) => (
           <NavItem
             key={item.page}
             collapsed={collapsed}
@@ -745,11 +753,15 @@ function SettingsDirectory({
         aria-label={t("nav.settings")}
         className={cn("flex min-h-0 flex-1 flex-col", collapsed && "mt-2")}
       >
-        {SETTINGS_ITEMS.map(({ section, icon }) => (
+        {/* WEB-00: routing/network/data скрыты в web — снимет WEB-01/23/26 */}
+        {SETTINGS_ITEMS.filter(({ section }) =>
+          isSettingsSectionAvailable(section),
+        ).map(({ section, icon }) => (
           <NavItem
             key={section}
             collapsed={collapsed}
-            selected={settingsSection === section}
+            // WEB-00: запрошенная скрытая секция подсвечивает general (её и рисует SettingsPage)
+            selected={resolveSettingsSection(settingsSection) === section}
             icon={icon}
             label={t(`settings.sections.${section}`)}
             dot={section === "about" && hasUpdate}

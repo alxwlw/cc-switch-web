@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import type { AppId } from "@/lib/api";
 import { providersApi } from "@/lib/api/providers";
+import { isWeb } from "@/lib/api/adapter";
 import type { ToolInstallationReport } from "@/lib/api/settings";
 import type { VisibleApps } from "@/types";
 import { DEFAULT_VISIBLE_APPS, orderAppIds } from "@/config/appConfig";
@@ -51,6 +52,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { isUpdateAvailable } from "@/lib/version";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { Switch } from "@/components/ui/switch";
 import { HelpTip } from "@/components/ui/help-tip";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -181,12 +183,15 @@ export function AppsPage() {
     queryKey: ["claude-desktop-status"],
     queryFn: () => providersApi.getClaudeDesktopStatus(),
     staleTime: 30_000,
+    // WEB-00: get_claude_desktop_status не поддержан — снимет WEB-19
+    enabled: !isWeb,
   });
 
   // 按「已安装 / 未安装」分两组。Claude Desktop 没有命令可探，用后端按数据目录 / 应用包推断的结果。
   // 首次探测还没出结果时不分组，免得各行探完一个跳一个；之后重新检查时沿用上次结果，位置不动。
   const rowInstalled = (row: Row): boolean | null => {
     if (row.kind === "desktop") {
+      // WEB-00: в web запрос выключен и остаётся pending => null, список без групп — снимет WEB-19
       return isDesktopStatusPending ? null : Boolean(desktopStatus?.installed);
     }
     const info = tools.toolVersionByName.get(row.tool);
@@ -389,27 +394,32 @@ export function AppsPage() {
             <span className="whitespace-nowrap text-caption text-fg-3">
               {lastChecked}
             </span>
+            {/* WEB-00: update/install/uninstall (run_tool_lifecycle_action, probe/prepare) не замаплены; версии (get_tool_versions) и проверка обновлений работают — снимет WEB-25 */}
             {(updatableCount > 0 || tools.batchAction) && (
-              <Button
-                variant="neutral"
-                size="regular"
-                disabled={tools.isLoadingTools || Boolean(tools.batchAction)}
-                aria-busy={Boolean(tools.batchAction)}
-                onClick={() =>
-                  void tools.handleRunToolAction(
-                    tools.updatableToolNames,
-                    "update",
-                    { fromBatchEntry: true },
-                  )
-                }
-              >
-                {tools.batchAction === "update" ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <ArrowUpCircle className="h-3.5 w-3.5" />
-                )}
-                {t("settings.updateAllTools", { count: updatableCount })}
-              </Button>
+              <WebUnavailableTip active={isWeb}>
+                <Button
+                  variant="neutral"
+                  size="regular"
+                  disabled={
+                    isWeb || tools.isLoadingTools || Boolean(tools.batchAction)
+                  }
+                  aria-busy={Boolean(tools.batchAction)}
+                  onClick={() =>
+                    void tools.handleRunToolAction(
+                      tools.updatableToolNames,
+                      "update",
+                      { fromBatchEntry: true },
+                    )
+                  }
+                >
+                  {tools.batchAction === "update" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ArrowUpCircle className="h-3.5 w-3.5" />
+                  )}
+                  {t("settings.updateAllTools", { count: updatableCount })}
+                </Button>
+              </WebUnavailableTip>
             )}
             <Button
               variant="neutral"
@@ -453,16 +463,19 @@ export function AppsPage() {
                 </DropdownMenuTrigger>
               </HoverTip>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  disabled={
-                    tools.isLoadingTools ||
-                    tools.isAnyBusy ||
-                    tools.isDiagnosingAll
-                  }
-                  onSelect={() => void tools.handleDiagnoseAll()}
-                >
-                  {t("settings.toolDiagnose")}
-                </DropdownMenuItem>
+                <WebUnavailableTip active={isWeb}>
+                  <DropdownMenuItem
+                    disabled={
+                      isWeb ||
+                      tools.isLoadingTools ||
+                      tools.isAnyBusy ||
+                      tools.isDiagnosingAll
+                    }
+                    onSelect={() => void tools.handleDiagnoseAll()}
+                  >
+                    {t("settings.toolDiagnose")}
+                  </DropdownMenuItem>
+                </WebUnavailableTip>
                 <DropdownMenuItem onSelect={() => setShowCommands(true)}>
                   {t("appsPage.manualCommands")}
                 </DropdownMenuItem>
@@ -778,24 +791,26 @@ function ToolRow({
   );
 
   const actionButton = action ? (
-    <Button
-      variant="neutral"
-      size="compact"
-      onClick={() => void tools.handleRunToolAction([tool], action)}
-      disabled={isVersionLoading || isBusy}
-      aria-busy={isBusy}
-    >
-      {isBusy && busyAction !== "uninstall" ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-      ) : action === "install" ? (
-        <Download className="h-3.5 w-3.5" />
-      ) : (
-        <ArrowUpCircle className="h-3.5 w-3.5" />
-      )}
-      {action === "install"
-        ? t("settings.toolInstall")
-        : t("settings.toolUpdate")}
-    </Button>
+    <WebUnavailableTip active={isWeb}>
+      <Button
+        variant="neutral"
+        size="compact"
+        onClick={() => void tools.handleRunToolAction([tool], action)}
+        disabled={isWeb || isVersionLoading || isBusy}
+        aria-busy={isBusy}
+      >
+        {isBusy && busyAction !== "uninstall" ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : action === "install" ? (
+          <Download className="h-3.5 w-3.5" />
+        ) : (
+          <ArrowUpCircle className="h-3.5 w-3.5" />
+        )}
+        {action === "install"
+          ? t("settings.toolInstall")
+          : t("settings.toolUpdate")}
+      </Button>
+    </WebUnavailableTip>
   ) : null;
 
   const installHint = t(`appsPage.installHint.${tool}`, { defaultValue: "" });
@@ -953,13 +968,16 @@ function ToolRow({
               </DropdownMenuTrigger>
             </HoverTip>
             <DropdownMenuContent align="end" className="min-w-[160px]">
-              <DropdownMenuItem
-                onSelect={onUninstall}
-                className="text-danger-text focus:text-danger-text"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                {t("settings.toolUninstall")}
-              </DropdownMenuItem>
+              <WebUnavailableTip active={isWeb}>
+                <DropdownMenuItem
+                  disabled={isWeb}
+                  onSelect={onUninstall}
+                  className="text-danger-text focus:text-danger-text"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {t("settings.toolUninstall")}
+                </DropdownMenuItem>
+              </WebUnavailableTip>
             </DropdownMenuContent>
           </DropdownMenu>
         )

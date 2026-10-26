@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import { providersApi } from "@/lib/api/providers";
 import {
+  getSettings,
   resetProviderState,
   setCurrentProviderId,
   setLiveProviderIds,
@@ -20,6 +21,7 @@ import {
 } from "../msw/state";
 import { emitTauriEvent } from "../msw/tauriMocks";
 import { server } from "../msw/server";
+import { setWeb } from "../helpers/web";
 
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -496,6 +498,30 @@ describe("App integration with MSW", () => {
     expect(screen.getByTestId("mcp-editor")).toBeInTheDocument();
   }, 10_000);
 
+  describe.each([
+    ["desktop", false, 1],
+    ["web", true, 0],
+  ])("startup attach failures on mount (%s)", (_label, web, expectedCalls) => {
+    it(`requests take_startup_attach_failures ${expectedCalls} time(s)`, async () => {
+      setWeb(web);
+      let calls = 0;
+      server.use(
+        http.post("http://tauri.local/take_startup_attach_failures", () => {
+          calls += 1;
+          return HttpResponse.json([]);
+        }),
+      );
+      const { default: App } = await import("@/App");
+      renderApp(App);
+      await waitFor(() =>
+        expect(screen.getByTestId("provider-list").textContent).toContain(
+          "claude-1",
+        ),
+      );
+      expect(calls).toBe(expectedCalls);
+    });
+  });
+
   it("shows toast when auto sync fails in background", async () => {
     const { default: App } = await import("@/App");
     renderApp(App);
@@ -580,6 +606,131 @@ describe("App integration with MSW", () => {
       expect.stringContaining("Provider key is required for openclaw"),
     );
   });
+
+  describe.each([
+    ["desktop", false],
+    ["web", true],
+  ])("profile switcher in the app header (%s)", (_label, web) => {
+    it(`${web ? "is hidden" : "is shown"} when enabled in settings`, async () => {
+      setWeb(web);
+      setSettings({ showProfileSwitcher: true });
+      let settingsServed = 0;
+      server.use(
+        http.post("http://tauri.local/get_settings", () => {
+          settingsServed += 1;
+          return HttpResponse.json(getSettings());
+        }),
+      );
+      const { default: App } = await import("@/App");
+      renderApp(App);
+      await screen.findByTestId("provider-list");
+      // настройки (showProfileSwitcher) уже должны быть загружены, иначе отсутствие ничего не доказывает
+      await waitFor(() => expect(settingsServed).toBeGreaterThan(0));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const switcher = () =>
+        screen.queryByRole("combobox", {
+          name: /profiles\.switcherAriaLabel/,
+          // первый запуск открывает модалку и помечает страницу aria-hidden
+          hidden: true,
+        });
+      if (web) expect(switcher()).toBeNull();
+      else await waitFor(() => expect(switcher()).not.toBeNull());
+    });
+  });
+
+  describe.each([
+    ["desktop", false],
+    ["web", true],
+  ])("openclaw/hermes sub-views and launch buttons (%s)", (_label, web) => {
+    it.each([
+      ["OpenClaw", "appPage.workspace", "tab"],
+      ["Hermes", "appPage.memory", "tab"],
+      ["Hermes", "appPage.webUi", "button"],
+    ] as const)(
+      `${web ? "hides" : "shows"} %s %s (%s)`,
+      async (appName, label, role) => {
+        setWeb(web);
+        const { default: App } = await import("@/App");
+        renderApp(App);
+        fireEvent.click(sidebarApp(appName));
+        await screen.findByTestId("provider-list");
+
+        const found = screen.queryByRole(role, { name: label });
+        if (web) expect(found).toBeNull();
+        else expect(found).not.toBeNull();
+      },
+    );
+  });
+
+  describe.each([
+    ["desktop", false],
+    ["web", true],
+  ])(
+    "duplicating an openclaw provider when live ids cannot be read (%s)",
+    (_label, web) => {
+      it(`${web ? "still duplicates without the live-ids check" : "refuses with a toast"}`, async () => {
+        setWeb(web);
+        let liveIdsCalls = 0;
+        server.use(
+          http.post("http://tauri.local/get_openclaw_live_provider_ids", () => {
+            liveIdsCalls += 1;
+            return HttpResponse.json("live config unreadable", { status: 500 });
+          }),
+        );
+        setProviders("openclaw", {
+          deepseek: {
+            id: "deepseek",
+            name: "DeepSeek",
+            settingsConfig: {
+              baseUrl: "https://api.deepseek.com",
+              apiKey: "test-key",
+              api: "openai-completions",
+              models: [],
+            },
+            category: "custom",
+            sortIndex: 0,
+            createdAt: Date.now(),
+          },
+        });
+        setCurrentProviderId("openclaw", "deepseek");
+
+        const { default: App } = await import("@/App");
+        renderApp(App);
+        fireEvent.click(sidebarApp("OpenClaw"));
+        await waitFor(() =>
+          expect(screen.getByTestId("provider-list").textContent).toContain(
+            "deepseek",
+          ),
+        );
+
+        fireEvent.click(screen.getByText("duplicate"));
+
+        if (web) {
+          await waitFor(() =>
+            expect(screen.getByTestId("provider-list").textContent).toContain(
+              "DeepSeek copy",
+            ),
+          );
+          expect(liveIdsCalls).toBe(0);
+          expect(toastErrorMock).not.toHaveBeenCalledWith(
+            expect.stringContaining("读取配置中的供应商标识失败"),
+          );
+        } else {
+          await waitFor(() =>
+            expect(toastErrorMock).toHaveBeenCalledWith(
+              expect.stringContaining("读取配置中的供应商标识失败"),
+            ),
+          );
+          expect(screen.getByTestId("provider-list").textContent).not.toContain(
+            "DeepSeek copy",
+          );
+        }
+      });
+    },
+  );
 
   it.each([
     { options: { apiKey: "test-key" } },
@@ -882,7 +1033,9 @@ describe("App integration with MSW", () => {
     await waitFor(() =>
       expect(toastErrorMock).toHaveBeenCalledWith(
         "notifications.removeFromConfigFailed",
-        expect.objectContaining({ description: "kimi.error.defaultModelInUse" }),
+        expect.objectContaining({
+          description: "kimi.error.defaultModelInUse",
+        }),
       ),
     );
     await waitFor(() =>
@@ -1237,5 +1390,56 @@ describe("App integration with MSW", () => {
     } finally {
       document.removeEventListener("mousedown", documentMouseDown);
     }
+  });
+
+  describe.each([
+    ["desktop", false, true],
+    ["web", true, false],
+  ])("WEB-00 shell gating (%s)", (_label, web, desktopOnlyVisible) => {
+    it(`${desktopOnlyVisible ? "shows" : "hides"} the auth nav item and ${
+      desktopOnlyVisible ? "restores" : "drops"
+    } a stored auth view`, async () => {
+      setWeb(web);
+      localStorage.setItem("cc-switch-last-view", "auth");
+      const { default: App } = await import("@/App");
+      renderApp(App);
+
+      const accountsButton = () =>
+        within(document.querySelector("nav") as HTMLElement).queryByRole(
+          "button",
+          { name: /nav\.auth/, hidden: true },
+        );
+      if (desktopOnlyVisible) {
+        await waitFor(() => expect(accountsButton()).not.toBeNull());
+        expect(screen.queryByTestId("provider-list")).toBeNull();
+      } else {
+        expect(await screen.findByTestId("provider-list")).toBeInTheDocument();
+        expect(accountsButton()).toBeNull();
+      }
+    });
+
+    it(`${desktopOnlyVisible ? "syncs" : "does not touch"} window decorations and resize listeners for Linux app controls`, async () => {
+      setWeb(web);
+      windowMocks.isLinux.mockReturnValue(true);
+      windowMocks.setDecorations.mockClear();
+      windowMocks.onResized.mockClear();
+      setSettings({ useAppWindowControls: true });
+      const { default: App } = await import("@/App");
+      renderApp(App);
+
+      if (desktopOnlyVisible) {
+        await waitFor(() =>
+          expect(windowMocks.setDecorations).toHaveBeenCalledWith(false),
+        );
+        expect(windowMocks.onResized).toHaveBeenCalled();
+      } else {
+        await screen.findByTestId("provider-list");
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(windowMocks.setDecorations).not.toHaveBeenCalled();
+        expect(windowMocks.onResized).not.toHaveBeenCalled();
+      }
+    });
   });
 });

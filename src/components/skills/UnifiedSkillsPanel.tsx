@@ -24,6 +24,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { HoverTip } from "@/components/ui/hover-tip";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
+import { isWeb } from "@/lib/api/adapter";
+import { isViewAvailable } from "@/lib/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AppPageHeader } from "@/components/shell/AppPageHeader";
 import { AppGlyph, APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
@@ -126,10 +129,16 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
   const appIds = useVisibleAppIds(SKILLS_APP_IDS);
   const { targets, setTargets, installTo } = useSkillInstallTargets(appIds);
 
-  const [view, setView] = useState<SkillsView>(initialView);
+  // WEB-00: discover (discover_available_skills, search_skills_sh, skill repos) не работает в web —
+  // сегмент скрыт, прямой заход в skillsDiscovery открывает installed — снимет WEB-05
+  const discoverAvailable = isViewAvailable("skillsDiscovery");
+  const webOff = isWeb;
+  const [view, setView] = useState<SkillsView>(
+    discoverAvailable ? initialView : "installed",
+  );
   // 「发现」段第一次打开后就一直挂着（隐藏而不卸载），来回切不再重新加载仓库列表
   const [discoverMounted, setDiscoverMounted] = useState(
-    initialView === "discover",
+    discoverAvailable && initialView === "discover",
   );
   useEffect(() => {
     if (view === "discover") setDiscoverMounted(true);
@@ -955,16 +964,31 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[220px]">
-              <DropdownMenuItem onSelect={() => setView("discover")}>
-                {t("skillsPage.addMenu.discover")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => void handleInstallFromZip()}>
-                {t("skillsPage.addMenu.zip")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => void handleOpenImport()}>
-                <span className="flex-1">{t("skillsPage.addMenu.import")}</span>
-                {nUnmanaged > 0 && <NeutralBadge>{nUnmanaged}</NeutralBadge>}
-              </DropdownMenuItem>
+              {discoverAvailable && (
+                <DropdownMenuItem onSelect={() => setView("discover")}>
+                  {t("skillsPage.addMenu.discover")}
+                </DropdownMenuItem>
+              )}
+              {/* WEB-00: ZIP (open_zip_file_dialog) и import-from-apps (scan/import на хосте) — снимет WEB-05 */}
+              <WebUnavailableTip active={webOff}>
+                <DropdownMenuItem
+                  disabled={webOff}
+                  onSelect={() => void handleInstallFromZip()}
+                >
+                  {t("skillsPage.addMenu.zip")}
+                </DropdownMenuItem>
+              </WebUnavailableTip>
+              <WebUnavailableTip active={webOff}>
+                <DropdownMenuItem
+                  disabled={webOff}
+                  onSelect={() => void handleOpenImport()}
+                >
+                  <span className="flex-1">
+                    {t("skillsPage.addMenu.import")}
+                  </span>
+                  {nUnmanaged > 0 && <NeutralBadge>{nUnmanaged}</NeutralBadge>}
+                </DropdownMenuItem>
+              </WebUnavailableTip>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
@@ -982,24 +1006,31 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
               </DropdownMenuTrigger>
             </HoverTip>
             <DropdownMenuContent align="end" className="min-w-[200px]">
-              <DropdownMenuItem
-                disabled={controlsDisabled || nInstalled === 0}
-                onSelect={() => void handleCheckUpdates()}
-              >
-                {t("skills.checkUpdates")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={controlsDisabled}
-                onSelect={() => void handleOpenRestoreFromBackup()}
-              >
-                {t("skillsPage.moreMenu.restore")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={controlsDisabled}
-                onSelect={() => setRepoManagerOpen(true)}
-              >
-                {t("skillsPage.moreMenu.repos")}
-              </DropdownMenuItem>
+              {/* WEB-00: check_skill_updates, backups (get/restore/delete_skill_backup), skill repos не замаплены — снимет WEB-05 */}
+              <WebUnavailableTip active={webOff}>
+                <DropdownMenuItem
+                  disabled={webOff || controlsDisabled || nInstalled === 0}
+                  onSelect={() => void handleCheckUpdates()}
+                >
+                  {t("skills.checkUpdates")}
+                </DropdownMenuItem>
+              </WebUnavailableTip>
+              <WebUnavailableTip active={webOff}>
+                <DropdownMenuItem
+                  disabled={webOff || controlsDisabled}
+                  onSelect={() => void handleOpenRestoreFromBackup()}
+                >
+                  {t("skillsPage.moreMenu.restore")}
+                </DropdownMenuItem>
+              </WebUnavailableTip>
+              <WebUnavailableTip active={webOff}>
+                <DropdownMenuItem
+                  disabled={webOff || controlsDisabled}
+                  onSelect={() => setRepoManagerOpen(true)}
+                >
+                  {t("skillsPage.moreMenu.repos")}
+                </DropdownMenuItem>
+              </WebUnavailableTip>
               <DropdownMenuItem onSelect={() => setStorageOpen(true)}>
                 {t("skills.storageSheet.open")}
               </DropdownMenuItem>
@@ -1035,10 +1066,14 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
             ? t("skillsPage.viewInstalledCount", { count: nInstalled })
             : t("skillsPage.viewInstalled"),
         },
-        {
-          value: "discover",
-          label: t("skillsPage.viewDiscover"),
-        },
+        ...(discoverAvailable
+          ? [
+              {
+                value: "discover" as const,
+                label: t("skillsPage.viewDiscover"),
+              },
+            ]
+          : []),
       ]}
       trailing={<div ref={setTabsTrailingSlot} className="flex items-center" />}
     />
@@ -1091,25 +1126,29 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
           <h2 className="m-0 text-section">{t("skillsPage.emptyTitle")}</h2>
           <p className="m-0 text-body text-fg-2">{t("skillsPage.emptyBody")}</p>
           <div className="mt-2 flex gap-2">
-            <Button
-              type="button"
-              variant="neutral"
-              size="regular"
-              onClick={() => setView("discover")}
-            >
-              {t("skillsPage.goDiscover")}
-            </Button>
-            <Button
-              type="button"
-              variant="neutral"
-              size="regular"
-              disabled={controlsDisabled}
-              onClick={() => void handleOpenImport()}
-            >
-              {nUnmanaged
-                ? t("skillsPage.importCount", { count: nUnmanaged })
-                : t("skillsPage.addMenu.import")}
-            </Button>
+            {discoverAvailable && (
+              <Button
+                type="button"
+                variant="neutral"
+                size="regular"
+                onClick={() => setView("discover")}
+              >
+                {t("skillsPage.goDiscover")}
+              </Button>
+            )}
+            <WebUnavailableTip active={webOff}>
+              <Button
+                type="button"
+                variant="neutral"
+                size="regular"
+                disabled={webOff || controlsDisabled}
+                onClick={() => void handleOpenImport()}
+              >
+                {nUnmanaged
+                  ? t("skillsPage.importCount", { count: nUnmanaged })
+                  : t("skillsPage.addMenu.import")}
+              </Button>
+            </WebUnavailableTip>
           </div>
         </div>
       );
@@ -1341,20 +1380,23 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
                       >
                         {t("mcpPage.clearSearch")}
                       </Button>
-                      <Button
-                        type="button"
-                        variant="neutral"
-                        size="regular"
-                        onClick={() => {
-                          setDiscoverQuery(searchQuery.trim());
-                          setSearchQuery("");
-                          setView("discover");
-                        }}
-                      >
-                        {t("skillsPage.searchInDiscover", {
-                          query: searchQuery.trim(),
-                        })}
-                      </Button>
+                      {/* WEB-00: discover скрыт в web — «искать в Discover» вело бы в тупик — снимет WEB-05 */}
+                      {discoverAvailable && (
+                        <Button
+                          type="button"
+                          variant="neutral"
+                          size="regular"
+                          onClick={() => {
+                            setDiscoverQuery(searchQuery.trim());
+                            setSearchQuery("");
+                            setView("discover");
+                          }}
+                        >
+                          {t("skillsPage.searchInDiscover", {
+                            query: searchQuery.trim(),
+                          })}
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <Button
@@ -1534,23 +1576,25 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
                       {t("skillsPage.updateAllCount", { count: nUpdates })}
                     </Button>
                   ) : (
-                    <Button
-                      type="button"
-                      variant="quiet"
-                      size="regular"
-                      className="shrink-0"
-                      disabled={controlsDisabled}
-                      onClick={() => void handleCheckUpdates()}
-                    >
-                      {isCheckingUpdates ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="h-4 w-4" strokeWidth={2} />
-                      )}
-                      {isCheckingUpdates
-                        ? t("skills.checkingUpdates")
-                        : t("skills.checkUpdates")}
-                    </Button>
+                    <WebUnavailableTip active={webOff}>
+                      <Button
+                        type="button"
+                        variant="quiet"
+                        size="regular"
+                        className="shrink-0"
+                        disabled={webOff || controlsDisabled}
+                        onClick={() => void handleCheckUpdates()}
+                      >
+                        {isCheckingUpdates ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" strokeWidth={2} />
+                        )}
+                        {isCheckingUpdates
+                          ? t("skills.checkingUpdates")
+                          : t("skills.checkUpdates")}
+                      </Button>
+                    </WebUnavailableTip>
                   )}
                 </HoverTip>
               </div>
