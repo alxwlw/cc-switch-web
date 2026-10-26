@@ -26,12 +26,25 @@ Scope: `src-tauri/src/web_api.rs` (9 роутов), `src-tauri/tests/web_api_app
 - [x] Снять WEB-00-гейты с соответствующих controls (таблица фазы 6). В подписи restore в web — «восстанавливает историю Codex на сервере».
 
 ### Task 3: гейты, PR, Plane
-- [ ] Полный набор гейтов + `cargo build --release --example server`.
-- [ ] Ветка `web-parity/web-20-app-settings`, PR; DX-78 → In Review + ссылка. Закрыть чекбоксы, Notes.
+- [x] Полный набор гейтов + `cargo build --release --example server`.
+- [x] Ветка `web-parity/web-20-app-settings`, PR; DX-78 → In Review + ссылка. Закрыть чекбоксы, Notes.
 
 Риски для ревью:
-- Restore во время работающего Codex CLI на сервере: поведение как на desktop, но в web пользователь не видит процессов сервера — подтверждение в UI до restore (если на desktop его нет — добавить только для web).
+- Restore во время работающего Codex CLI на сервере: поведение как на desktop, но в web пользователь не видит процессов сервера — подтверждение в UI до restore (если на desktop его нет — добавить только для web). **Снят**: на desktop restore вызывается только из ConfirmDialog `unifyCodexHistoryOff` с чекбоксом `restoreBackup`; в web у чекбокса своя подпись `restoreBackupWeb` («…на сервере»).
 
 ## Notes for next phase
 
-- (заполнить по итогам)
+- **Статус до merge (2026-10-26)**: ветка `web-parity/web-20-app-settings` (worktree `.worktrees/web-20`), PR открыт; DX-78 In Review (комментарий со ссылкой).
+  - Т1 и Т2 одобрены с r0, fix round не понадобился. NIT DP-019 из ревью Т2 (владельцы строк в таблице фазы 6) закрыл контроллер в `718dcb26`.
+  - Финальные гейты на `718dcb26`: `cargo fmt --check` и `cargo clippy -- -D warnings` чисто. `cargo test --no-fail-fast`: 4354 passed / 3 failed — только baseline (omp_search_paths, 2× file_modes::switch_*), bookkeeping в этот раз зелёные. `cargo build --release --example server` ок. `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок; `test:unit` 3727 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice).
+- **Post-merge**: пересобрать server и `dist-web` (Rust менялся); перед install — `cp cc-switch-web cc-switch-web.prev`. Миграций БД нет. DX-78 → Done.
+- **Роуты** (`web_api.rs`, блок «app-specific settings (WEB-20)»):
+  - Codex: `GET /api/codex/unify-history-backup`, `GET /api/codex/forces-multi-agent-v2`, `GET|PUT /api/codex/session-compression` (body `{enabled}`), `GET /api/codex/sessions-disk-usage` (число байт), `POST /api/codex/restore-unified-history` (DTO `CodexUnifyHistoryRestoreResult`, camelCase; без backup — `{ok:true, skippedReason:"no_backup_ledger"}`).
+  - Claude: `POST /api/claude/plugin-config` (body `{official}`), `POST|DELETE /api/claude/onboarding-skip`.
+  - **`official:true` СНИМАЕТ plugin-config, `false` — пишет** (как desktop `commands/plugin.rs`). Исходный текст плана был перевёрнут; адаптер передаёт `official` как есть.
+  - Блокирующие операции — в `spawn_blocking`; ошибки — `fail(e.to_string())`.
+- **Тесты**: `src-tauri/tests/web_api_app_settings.rs` — 7 тестов, все `#[serial]`. На `mod support;` стоит `#[allow(dead_code)]`: это единственный `web_api_*`-файл без `test_mutex`, а у `test_mutex` в `support.rs` своего allow нет. Фронт: `tests/lib/appSettingsApi.test.ts`, `tests/components/CodexAuthSettings.web.test.tsx`; четыре WEB-00-теста (`useSettings.web.test.tsx` ×2, `useProviderActions.test.tsx`, `WebShellGating.test.tsx`) переписаны под новый гейтинг — оставшиеся гейты в них по-прежнему проверяются.
+- **Гейты, оставленные намеренно**:
+  - `set_auto_launch` и silent startup (`GeneralSection.tsx`, `useSettings.ts`) — desktop-only: в web это был бы автозапуск ОС на серверном хосте, а сервис живёт как systemd-юнит. Фазы-владельца в M5 нет; строка таблицы фазы 6 говорит это явно.
+  - `sync_current_providers_live` — WEB-09 (ф.19); `set_app_config_dir_override` и `pick_directory` (Browse) — WEB-26 (ф.35).
+- **Инвентаризация фазы 6**: строки settings › general и settings › appConfig обновлены (Claude plugin/onboarding и 6 Codex-команд закрыты ф.14, владельцы остатка переписаны).
