@@ -63,6 +63,7 @@ macro_rules! app_type {
 pub fn router(state: SharedState) -> Router {
     Router::new()
         .route("/api/health", get(health))
+        .route("/api/events", get(events_stream))
         .route("/favicon.ico", get(favicon))
         .route("/api/capabilities", get(capabilities))
         .route("/api/init-status", get(init_status_route))
@@ -188,6 +189,50 @@ async fn init_failed() -> ApiResult {
     )
 }
 
+/// Keep-alive comment frame (`: keep-alive`) cadence: frequent enough that an
+/// idle connection is never silent for long (intermediaries commonly drop idle
+/// connections after tens of seconds), rare enough to be negligible traffic.
+pub const SSE_KEEP_ALIVE: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// `GET /api/events` (WEB-29): Server-Sent Events view of the event hub.
+///
+/// Wire format: one *named* SSE event per bus event — `event: <name>` and a
+/// single `data:` line holding the JSON payload (`null` for payload-less
+/// events). No `id:` / `retry:` fields; nothing is replayed on reconnect
+/// (events are notifications to refetch, not state). A subscriber that falls
+/// behind the hub's buffer gets a `resync` frame (`data: null`) in place of
+/// the lost events (client must invalidate everything) and keeps streaming;
+/// the stream ends only when the hub is gone. Dropping the response (client
+/// disconnect) drops the receiver, so nothing leaks.
+async fn events_stream(
+    State(state): State<SharedState>,
+) -> axum::response::sse::Sse<
+    impl futures::Stream<Item = Result<axum::response::sse::Event, std::convert::Infallible>>,
+> {
+    use axum::response::sse::{Event, KeepAlive, Sse};
+    use tokio::sync::broadcast::error::RecvError;
+
+    // Subscribe before the response is returned so nothing emitted after the
+    // request was accepted is missed.
+    let mut rx = state.events.subscribe();
+    let stream = async_stream::stream! {
+        loop {
+            match rx.recv().await {
+                Ok(ev) => match Event::default().event(ev.name.as_str()).json_data(&ev.payload) {
+                    Ok(frame) => yield Ok(frame),
+                    Err(e) => log::warn!("sse: dropping `{}`: {e}", ev.name),
+                },
+                Err(RecvError::Lagged(n)) => {
+                    log::warn!("sse: subscriber lagged, skipped {n} events");
+                    yield Ok(Event::default().event("resync").data("null"));
+                }
+                Err(RecvError::Closed) => break,
+            }
+        }
+    };
+    Sse::new(stream).keep_alive(KeepAlive::new().interval(SSE_KEEP_ALIVE).text("keep-alive"))
+}
+
 async fn health() -> Json<Value> {
     Json(json!({ "status": "ok" }))
 }
@@ -232,7 +277,13 @@ async fn switch_provider(
 ) -> ApiResult {
     let app_type = app_type!(&app);
     let id = body.id;
-    match tokio::task::spawn_blocking(move || ProviderService::switch(&state, app_type, &id)).await
+    match tokio::task::spawn_blocking(move || {
+        let result = ProviderService::switch(&state, app_type.clone(), &id)?;
+        let payload = crate::events::provider_switched_payload(&state, &app_type, &id);
+        state.events.emit("provider-switched", payload);
+        Ok::<_, crate::error::AppError>(result)
+    })
+    .await
     {
         Ok(Ok(result)) => ok(result),
         Ok(Err(e)) => fail(e.to_string()),

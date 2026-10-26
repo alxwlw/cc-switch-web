@@ -1,7 +1,7 @@
 //! 项目 Profile 管理命令
 
 use serde::Serialize;
-use tauri::{Emitter, State};
+use tauri::State;
 
 use crate::database::Profile;
 use crate::services::profile::{ProfilePayload, ProfileScope, ProfileService};
@@ -84,16 +84,12 @@ pub fn emit_profile_apply_events(
             "autoFailoverEnabled": auto_failover_enabled,
             "providerId": provider_id,
         });
-        if let Err(e) = app.emit("provider-switched", event_data) {
-            log::error!("发射 provider-switched 事件失败: {e}");
-        }
+        state.events.emit("provider-switched", event_data);
     }
-    if let Err(e) = app.emit(
+    state.events.emit(
         "profile-applied",
         serde_json::json!({ "profileId": profile_id, "scope": scope.as_str() }),
-    ) {
-        log::error!("发射 profile-applied 事件失败: {e}");
-    }
+    );
     crate::tray::refresh_tray_menu(app);
 }
 

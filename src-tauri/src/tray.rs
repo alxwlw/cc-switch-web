@@ -2817,12 +2817,11 @@ pub fn handle_profile_tray_event(app: &tauri::AppHandle, event_id: &str) -> bool
             }
         }
         // 通知主窗口刷新（profileId=null 表示该分组已清除当前项目）
-        if let Err(e) = app.emit(
+        crate::events::emit_via_app(
+            app,
             "profile-applied",
             serde_json::json!({ "profileId": null, "scope": scope.as_str() }),
-        ) {
-            log::error!("发射 profile-applied 事件失败: {e}");
-        }
+        );
         refresh_tray_menu(app);
         return true;
     }
@@ -2988,23 +2987,17 @@ fn handle_provider_click(
 }
 
 fn emit_switched(app: &tauri::AppHandle, app_type: &AppType, provider_id: &str) {
-    let proxy_enabled = crate::mode::current::is_proxy(app_type);
-    let auto_failover = app
-        .try_state::<AppState>()
-        .map(|state| state.db.get_proxy_flags_sync(app_type.as_str()).1)
-        .unwrap_or(false);
-    let event_data = serde_json::json!({
-        "appType": app_type.as_str(),
-        "proxyEnabled": proxy_enabled,
-        "autoFailoverEnabled": auto_failover,
-        "providerId": provider_id
-    });
-    if let Err(e) = app.emit("proxy-flags-changed", event_data.clone()) {
-        log::error!("发射 proxy-flags-changed 事件失败: {e}");
-    }
-    if let Err(e) = app.emit("provider-switched", event_data) {
-        log::error!("发射 provider-switched 事件失败: {e}");
-    }
+    let event_data = match app.try_state::<AppState>() {
+        Some(state) => crate::events::provider_switched_payload(&state, app_type, provider_id),
+        None => serde_json::json!({
+            "appType": app_type.as_str(),
+            "proxyEnabled": crate::mode::current::is_proxy(app_type),
+            "autoFailoverEnabled": false,
+            "providerId": provider_id
+        }),
+    };
+    crate::events::emit_via_app(app, "proxy-flags-changed", event_data.clone());
+    crate::events::emit_via_app(app, "provider-switched", event_data);
 }
 
 #[cfg(target_os = "macos")]

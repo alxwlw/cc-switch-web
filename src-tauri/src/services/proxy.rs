@@ -11,7 +11,6 @@ use crate::proxy::switch_lock::SwitchLockManager;
 use crate::proxy::types::*;
 use serde_json::{json, Value};
 use std::sync::Arc;
-use tauri::Emitter;
 use tokio::sync::RwLock;
 
 use crate::live::project::claude::PROXY_TOKEN_PLACEHOLDER;
@@ -23,6 +22,7 @@ pub struct ProxyService {
     /// AppHandle，用于传递给 ProxyServer 以支持故障转移时的 UI 更新
     app_handle: Arc<RwLock<Option<tauri::AppHandle>>>,
     switch_locks: SwitchLockManager,
+    events: crate::events::EventHub,
 }
 
 /// 重启失败时写回库的那份配置：设置页只动四个全局字段，旧接口是整份七个字段。
@@ -63,7 +63,14 @@ impl ProxyService {
             server: Arc::new(RwLock::new(None)),
             app_handle: Arc::new(RwLock::new(None)),
             switch_locks: SwitchLockManager::new(),
+            events: crate::events::EventHub::new(),
         }
+    }
+
+    /// 与 AppState 共用同一条事件总线。
+    pub fn with_events(mut self, events: crate::events::EventHub) -> Self {
+        self.events = events;
+        self
     }
 
     /// 设置 AppHandle（在应用初始化时调用）
@@ -212,11 +219,7 @@ impl ProxyService {
     }
 
     pub(crate) async fn emit(&self, event: &str, payload: Value) {
-        if let Some(handle) = self.app_handle.read().await.as_ref() {
-            if let Err(error) = handle.emit(event, payload) {
-                log::warn!("发送事件 {event} 失败: {error}");
-            }
-        }
+        self.events.emit(event, payload);
     }
 
     async fn stop_server(&self) -> Result<(), String> {
@@ -660,6 +663,20 @@ impl ProxyService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn emit_goes_to_the_shared_event_hub() {
+        let hub = crate::events::EventHub::new();
+        let mut rx = hub.subscribe();
+        let service = ProxyService::new(Arc::new(Database::memory().unwrap())).with_events(hub);
+        service
+            .emit("proxy-official-warning", json!({ "appType": "claude" }))
+            .await;
+        let event = rx.try_recv().unwrap();
+        assert_eq!(event.name, "proxy-official-warning");
+        assert_eq!(event.payload, json!({ "appType": "claude" }));
+    }
+
     async fn seed_distinct_app_proxy_configs(db: &Database) -> Vec<Value> {
         let mut configs = Vec::new();
         for (app, retries) in [("claude", 6), ("codex", 0), ("gemini", 2), ("grokbuild", 3)] {

@@ -12,6 +12,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MotionConfig } from "framer-motion";
 import { queryClient } from "@/lib/query";
+import { startEventInvalidation } from "@/lib/query/eventInvalidation";
 import { settingsApi } from "@/lib/api";
 import { Toaster } from "@/components/ui/sonner";
 import { listen } from "@tauri-apps/api/event";
@@ -163,6 +164,12 @@ async function bootstrap() {
         </QueryClientProvider>
       </FrontendErrorBoundary>
     </React.StrictMode>,
+  );
+
+  // WEB-29: SSE events -> query invalidation. Web only: on desktop the
+  // existing per-component listeners own this and behaviour must not change.
+  startEventInvalidation(queryClient, isWeb, (error) =>
+    reportFrontendError("event_invalidation", error),
   );
 
   void syncModelsDevPricingOnStartup()
