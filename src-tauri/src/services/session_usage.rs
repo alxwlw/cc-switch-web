@@ -1441,6 +1441,7 @@ pub fn get_data_source_breakdown(db: &Database) -> Result<Vec<DataSourceSummary>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     fn pricing_test_message(model: &str) -> ParsedAssistantUsage {
         ParsedAssistantUsage {
@@ -1613,28 +1614,20 @@ mod tests {
     }
 
     /// 临时 HOME 隔离 backup/Codex 目录，避免测试读写真实 ~/.cc-switch 与 ~/.codex。
-    /// CC_SWITCH_TEST_HOME 是进程级变量：guard 持有模块内互斥锁直到 Drop 恢复变量之后才释放，
-    /// 让并行测试不会互相覆盖或删除对方的值。
+    /// CC_SWITCH_TEST_HOME 是进程级变量：调用方须标 `#[serial]`，Drop 恢复原值。
     struct IsolatedHome {
         previous: Option<std::ffi::OsString>,
         _dir: tempfile::TempDir,
-        _guard: std::sync::MutexGuard<'static, ()>,
     }
 
     impl IsolatedHome {
         fn new() -> Self {
-            static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
-            let guard = LOCK
-                .get_or_init(|| std::sync::Mutex::new(()))
-                .lock()
-                .unwrap_or_else(|err| err.into_inner());
             let dir = tempfile::tempdir().expect("temp home");
             let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
             std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
             Self {
                 previous,
                 _dir: dir,
-                _guard: guard,
             }
         }
     }
@@ -1649,6 +1642,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn rebuild_codex_usage_notifies_once_after_successful_reset() {
         let _home = IsolatedHome::new();
         let db = Database::memory().expect("memory db");
@@ -1659,6 +1653,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn rebuild_codex_usage_notifies_when_reset_succeeds_and_import_errors() -> Result<(), AppError>
     {
         let _home = IsolatedHome::new();
