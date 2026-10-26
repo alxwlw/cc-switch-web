@@ -256,7 +256,7 @@ export function UsageSettingsSheet({
               </SettingsRow>
 
               {/* 只读状态 + 去别处修改：整行就是入口（「已开启 ›」），不再单放一个按钮 */}
-              {/* WEB-00: статус логирования (get_global_proxy_config) неизвестен, а секция «routing», куда ведёт ссылка, скрыта — строка скрыта в web — снимет WEB-01 */}
+              {/* WEB-00: статус логирования (get_global_proxy_config) неизвестен, а секция «routing», куда ведёт ссылка, в web содержит только rectifier (WEB-24) — строка скрыта в web — снимет WEB-01 */}
               {!isWeb && (
                 <div className="relative">
                   {onOpenRoutingSettings && (

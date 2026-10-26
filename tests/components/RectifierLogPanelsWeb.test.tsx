@@ -14,6 +14,7 @@ vi.mock("@/lib/toast", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { RectifierConfigPanel } from "@/components/settings/RectifierConfigPanel";
 import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
+import { toast } from "@/lib/toast";
 
 const ok = (data: unknown) => ({
   status: 200,
@@ -83,5 +84,21 @@ describe("config panels through the web adapter (WEB-24)", () => {
     expect(JSON.parse(put[1].body)).toEqual({
       config: { enabled: false, level: "debug" },
     });
+  });
+
+  it("log panel reverts the switch and toasts when the PUT fails", async () => {
+    fetchSpy.mockImplementation(async (_url: string, init: RequestInit) =>
+      init.method === "PUT"
+        ? { status: 500, json: async () => ({ ok: false, error: "boom" }) }
+        : ok({ enabled: true, level: "debug" }),
+    );
+    render(<LogConfigPanel />);
+    const sw = await screen.findByRole("switch");
+    expect(sw).toBeChecked();
+    await userEvent.click(sw);
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("Error: boom"),
+    );
+    await waitFor(() => expect(sw).toBeChecked());
   });
 });

@@ -98,12 +98,15 @@ export function ServerLogViewer({ open, onClose }: ServerLogViewerProps) {
               )}
               {t("settings.advanced.logConfig.viewer.refresh")}
             </Button>
-            <Button variant="neutral" size="compact" asChild>
-              <a href={SERVER_LOG_DOWNLOAD_URL} download>
-                <Download className="h-3.5 w-3.5" />
-                {t("settings.advanced.logConfig.viewer.download")}
-              </a>
-            </Button>
+            {/* A missing file answers 404 JSON; the browser would save the error body. */}
+            {!error && (
+              <Button variant="neutral" size="compact" asChild>
+                <a href={SERVER_LOG_DOWNLOAD_URL} download>
+                  <Download className="h-3.5 w-3.5" />
+                  {t("settings.advanced.logConfig.viewer.download")}
+                </a>
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

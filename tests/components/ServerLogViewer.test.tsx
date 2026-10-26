@@ -91,9 +91,7 @@ describe("ServerLogViewer (WEB-24)", () => {
     expect(
       screen.getByText("log file not found: /srv/cc/logs/cc-switch-web.log"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /viewer\.download/ }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /viewer\.download/ })).toBeNull();
   });
 
   it("refresh after a failure replaces the error with the lines, and the reverse", async () => {
@@ -112,9 +110,13 @@ describe("ServerLogViewer (WEB-24)", () => {
     const refresh = screen.getByRole("button", { name: /viewer\.refresh/ });
     await userEvent.click(refresh);
     await screen.findByText("back");
+    expect(
+      screen.getByRole("link", { name: /viewer\.download/ }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("log file not found: /p")).toBeNull();
     await userEvent.click(refresh);
     await screen.findByText("log file not found: /p");
+    expect(screen.queryByRole("link", { name: /viewer\.download/ })).toBeNull();
     expect(screen.queryByText("back")).toBeNull();
     expect(screen.queryByText(/viewer\.path/)).toBeNull();
   });
