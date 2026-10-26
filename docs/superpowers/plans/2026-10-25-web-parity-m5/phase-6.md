@@ -166,7 +166,7 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 - Import-from-live (`ProviderEmptyState.importUnavailable`) disabled для opencode/claude-desktop (WEB-14/19; openclaw закрыт WEB-15, ф.16; hermes — закрыт WEB-16); `import_default_config` для остальных работает.
 - Формы: fetch-models disabled + tip во всех формах и `ModelInputWithFetch`/`FetchedModelPicker` (WEB-03; picker открывается, если список уже есть); `EndpointField` «manage and speed test» скрыт (WEB-21); Codex/Copilot/Xai OAuth select-режим — notice `web.accountLogin` вместо вечного spinner'а (WEB-02); ClaudeDesktop: режим model-mapping (proxy) скрыт для новых провайдеров, оставлен для уже proxy (WEB-01/19); official-пресеты claude-desktop/grokbuild скрыты в web — seed `ensure_*_official_provider` создаёт провайдера с фиксированным id, обычный add это не воспроизводит (WEB-19). Формы стартуют на `custom`, id пресетов claude-desktop назначаются до фильтра.
 - `AddProviderDialog`: вкладка universal providers скрыта (WEB-07). `useOmoModelSource`: без live-ids/runtime-models и ложных warning-toast'ов (WEB-14). `useProviderActions.ts:100`: регистрация openclaw model catalog/default после add была пропущена — гейт снят WEB-15 (ф.16). General: тогл show-profile-switcher disabled (WEB-06).
-- i18n: `web.accountLogin`, `web.needsRouting`, `web.liveUnknownTitle`, `web.removeUnverifiable`.
+- i18n: `web.accountLogin`, `web.needsRouting`, `web.liveUnknownTitle` (`web.removeUnverifiable` удалён в WEB-15, ф.16).
 
 ### Skills, sessions, usage, prompts, Apps (Task 6, `53c0b089..8e85a1ce`)
 
