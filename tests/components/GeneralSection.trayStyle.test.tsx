@@ -81,15 +81,15 @@ describe("GeneralSection tray style", () => {
 
 describe("GeneralSection profile switcher toggle", () => {
   it.each([
-    ["web", true, true],
-    ["desktop", false, false],
-  ])("is disabled in %s: %s", (_label, web, disabled) => {
+    ["web", true],
+    ["desktop", false],
+  ])("is enabled in %s (WEB-06)", (_label, web) => {
     setWeb(web);
     renderSection();
-    const toggle = screen.getByRole("switch", {
-      name: "settings.appVisibility.showProfileSwitcher",
-    });
-    if (disabled) expect(toggle).toBeDisabled();
-    else expect(toggle).toBeEnabled();
+    expect(
+      screen.getByRole("switch", {
+        name: "settings.appVisibility.showProfileSwitcher",
+      }),
+    ).toBeEnabled();
   });
 });

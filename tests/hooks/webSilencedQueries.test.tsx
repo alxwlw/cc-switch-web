@@ -29,7 +29,6 @@ import {
   useXaiOauthQuotaByAccountId,
 } from "@/lib/query/subscription";
 import { useCopilotQuota } from "@/lib/query/copilot";
-import { useProfilesQuery } from "@/lib/query/profiles";
 import { useProviderLimits, useSessionUsageLastSync } from "@/lib/query/usage";
 import { usePiCurrentState } from "@/lib/query/pi";
 import {
@@ -57,6 +56,7 @@ import { useKimiOAuth } from "@/components/providers/forms/hooks/useKimiOAuth";
 import { useManagedAuth } from "@/components/providers/forms/hooks/useManagedAuth";
 import { useDesktopConfigMessages } from "@/components/providers/mode/useDesktopConfigMessages";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { useProfilesQuery } from "@/lib/query/profiles";
 import { setWeb } from "../helpers/web";
 
 const invokeMock = vi.fn();
@@ -155,7 +155,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "get_auto_failover_enabled",
     () => useAutoFailoverEnabled("claude"),
   ],
-  ["useProfilesQuery", "list_profiles", () => useProfilesQuery()],
   [
     "useProviderLimits",
     "check_provider_limits",
@@ -279,6 +278,16 @@ describe("WEB-00: фоновые query молчат в web", () => {
       expect(states).not.toContain("error");
     },
   );
+
+  it("useProfilesQuery в web зовёт list_profiles (WEB-06, гейт снят)", async () => {
+    setWeb(true);
+    const { wrapper } = wrapperFor();
+    renderHook(() => useProfilesQuery(), { wrapper });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(calledCommands()).toContain("list_profiles");
+  });
 
   it("useSidebarStatus в web: режим direct, без alert и точки auth, запросов mode/auth нет", async () => {
     setWeb(true);
