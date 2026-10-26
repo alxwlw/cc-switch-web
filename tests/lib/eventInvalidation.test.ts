@@ -46,6 +46,27 @@ describe("subscribeEventInvalidation", () => {
     ]);
   });
 
+  it("provider-switched without appType invalidates the app-agnostic prefixes", async () => {
+    await subscribeEventInvalidation(qc);
+    fire("provider-switched", {});
+    expect(keys()).toEqual([
+      ["autoFailoverEnabled"],
+      ["failoverQueue"],
+      ["proxyStatus"],
+      ["proxyTakeoverStatus"],
+    ]);
+  });
+
+  it("proxy-flags-changed invalidates proxy status, takeover and failover flags", async () => {
+    await subscribeEventInvalidation(qc);
+    fire("proxy-flags-changed");
+    expect(keys()).toEqual([
+      ["proxyStatus"],
+      ["proxyTakeoverStatus"],
+      ["autoFailoverEnabled"],
+    ]);
+  });
+
   it("usage-log-recorded invalidates the usage namespace only", async () => {
     await subscribeEventInvalidation(qc);
     fire("usage-log-recorded");
