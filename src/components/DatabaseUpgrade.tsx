@@ -13,6 +13,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { isWeb } from "@/lib/api/adapter";
 
 const RELEASES_URL = "https://github.com/farion1231/cc-switch/releases";
 
@@ -59,6 +60,8 @@ export function DatabaseUpgrade({ payload }: DatabaseUpgradeProps) {
 
   // 启动时检查可用更新，决定 upgradable / incompatible
   useEffect(() => {
+    // WEB-00: в web нет проверки обновлений — сервер обновляет оператор — снимет WEB-28
+    if (isWeb) return;
     let cancelled = false;
     (async () => {
       try {
@@ -176,123 +179,132 @@ export function DatabaseUpgrade({ payload }: DatabaseUpgradeProps) {
           )}
         </div>
 
-        {phase === "checking" && (
-          <p className="flex items-center gap-2 text-sm text-fg-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {t("dbUpgrade.checking", "正在检查可用更新…")}
-          </p>
-        )}
-
-        {phase === "upgradable" && availableVersion && (
-          <p className="text-sm text-fg-2">
-            {t("dbUpgrade.updateAvailable", {
-              version: availableVersion,
-              defaultValue: "发现新版本 v{{version}}，升级后即可继续使用。",
-            })}
-          </p>
-        )}
-
-        {phase === "incompatible" && (
-          <div className="space-y-2 rounded-lg border border-transparent bg-danger-soft p-3 text-sm text-danger-text">
-            <p className="font-medium">
-              {t("dbUpgrade.incompatibleTitle", "升级也无法解决")}
-            </p>
-            <p className="leading-relaxed">
-              {t("dbUpgrade.incompatibleDescription", {
-                db: dbVersion,
-                supported: supportedVersion,
-                defaultValue:
-                  "你已是最新版本，但数据库版本（v{{db}}）仍高于本应用支持的版本（v{{supported}}）。该数据库可能由第三方客户端或更高版本创建，升级当前官方应用也无法兼容。",
-              })}
-            </p>
-          </div>
-        )}
-
-        {phase === "updating" && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="flex items-center gap-2 text-fg-2">
+        {/* WEB-00: в web обновление/перезапуск/папка/выход недоступны — снимет WEB-28 */}
+        {isWeb ? (
+          <p className="text-sm text-fg-2">{t("web.update.unsupported")}</p>
+        ) : (
+          <>
+            {phase === "checking" && (
+              <p className="flex items-center gap-2 text-sm text-fg-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {percent === null
-                  ? t("dbUpgrade.preparing", "正在准备更新…")
-                  : t("dbUpgrade.downloading", "正在下载更新…")}
-              </span>
-              {percent !== null && (
-                <span className="tabular-nums text-fg-2">{percent}%</span>
-              )}
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-subtle">
-              <div
-                className={`h-full rounded-full bg-warning transition-all duration-200 ${
-                  percent === null ? "w-1/3 animate-pulse" : ""
-                }`}
-                style={percent === null ? undefined : { width: `${percent}%` }}
-              />
-            </div>
-            {progress && (
-              <p className="text-right text-xs tabular-nums text-fg-2">
-                {fmtMB(progress.downloaded)} MB
-                {progress.total ? ` / ${fmtMB(progress.total)} MB` : ""}
+                {t("dbUpgrade.checking", "正在检查可用更新…")}
               </p>
             )}
-          </div>
-        )}
 
-        {phase === "error" && errorMsg && (
-          <p className="rounded-lg border border-transparent bg-danger-soft p-3 text-sm text-danger-text">
-            {errorMsg}
-          </p>
-        )}
+            {phase === "upgradable" && availableVersion && (
+              <p className="text-sm text-fg-2">
+                {t("dbUpgrade.updateAvailable", {
+                  version: availableVersion,
+                  defaultValue: "发现新版本 v{{version}}，升级后即可继续使用。",
+                })}
+              </p>
+            )}
 
-        <div className="flex flex-wrap items-center gap-2">
-          {(phase === "upgradable" || phase === "error") && (
-            <Button
-              onClick={startUpgrade}
-              className="gap-2 bg-warning text-white hover:bg-warning"
-            >
-              {phase === "error" ? (
-                <RefreshCw className="h-4 w-4" />
-              ) : (
-                <Download className="h-4 w-4" />
+            {phase === "incompatible" && (
+              <div className="space-y-2 rounded-lg border border-transparent bg-danger-soft p-3 text-sm text-danger-text">
+                <p className="font-medium">
+                  {t("dbUpgrade.incompatibleTitle", "升级也无法解决")}
+                </p>
+                <p className="leading-relaxed">
+                  {t("dbUpgrade.incompatibleDescription", {
+                    db: dbVersion,
+                    supported: supportedVersion,
+                    defaultValue:
+                      "你已是最新版本，但数据库版本（v{{db}}）仍高于本应用支持的版本（v{{supported}}）。该数据库可能由第三方客户端或更高版本创建，升级当前官方应用也无法兼容。",
+                  })}
+                </p>
+              </div>
+            )}
+
+            {phase === "updating" && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2 text-fg-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {percent === null
+                      ? t("dbUpgrade.preparing", "正在准备更新…")
+                      : t("dbUpgrade.downloading", "正在下载更新…")}
+                  </span>
+                  {percent !== null && (
+                    <span className="tabular-nums text-fg-2">{percent}%</span>
+                  )}
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-subtle">
+                  <div
+                    className={`h-full rounded-full bg-warning transition-all duration-200 ${
+                      percent === null ? "w-1/3 animate-pulse" : ""
+                    }`}
+                    style={
+                      percent === null ? undefined : { width: `${percent}%` }
+                    }
+                  />
+                </div>
+                {progress && (
+                  <p className="text-right text-xs tabular-nums text-fg-2">
+                    {fmtMB(progress.downloaded)} MB
+                    {progress.total ? ` / ${fmtMB(progress.total)} MB` : ""}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {phase === "error" && errorMsg && (
+              <p className="rounded-lg border border-transparent bg-danger-soft p-3 text-sm text-danger-text">
+                {errorMsg}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              {(phase === "upgradable" || phase === "error") && (
+                <Button
+                  onClick={startUpgrade}
+                  className="gap-2 bg-warning text-white hover:bg-warning"
+                >
+                  {phase === "error" ? (
+                    <RefreshCw className="h-4 w-4" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  {phase === "error"
+                    ? t("dbUpgrade.retry", "重试升级")
+                    : t("dbUpgrade.upgradeNow", "升级应用")}
+                </Button>
               )}
-              {phase === "error"
-                ? t("dbUpgrade.retry", "重试升级")
-                : t("dbUpgrade.upgradeNow", "升级应用")}
-            </Button>
-          )}
 
-          {(phase === "incompatible" || phase === "error") && (
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() =>
-                void invoke("open_external", { url: RELEASES_URL })
-              }
-            >
-              <ExternalLink className="h-4 w-4" />
-              {t("dbUpgrade.openReleases", "打开发布页")}
-            </Button>
-          )}
+              {(phase === "incompatible" || phase === "error") && (
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() =>
+                    void invoke("open_external", { url: RELEASES_URL })
+                  }
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  {t("dbUpgrade.openReleases", "打开发布页")}
+                </Button>
+              )}
 
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => void invoke("open_app_config_folder")}
-            disabled={phase === "updating"}
-          >
-            <FolderOpen className="h-4 w-4" />
-            {t("dbUpgrade.openConfigDir", "打开配置目录")}
-          </Button>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => void invoke("open_app_config_folder")}
+                disabled={phase === "updating"}
+              >
+                <FolderOpen className="h-4 w-4" />
+                {t("dbUpgrade.openConfigDir", "打开配置目录")}
+              </Button>
 
-          <Button
-            variant="ghost"
-            className="ml-auto text-fg-2"
-            onClick={() => void exit(0)}
-            disabled={phase === "updating"}
-          >
-            {t("dbUpgrade.quit", "退出")}
-          </Button>
-        </div>
+              <Button
+                variant="ghost"
+                className="ml-auto text-fg-2"
+                onClick={() => void exit(0)}
+                disabled={phase === "updating"}
+              >
+                {t("dbUpgrade.quit", "退出")}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

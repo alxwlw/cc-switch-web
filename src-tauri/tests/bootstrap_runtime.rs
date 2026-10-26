@@ -1,6 +1,9 @@
 //! The headless bootstrap called the way `examples/server.rs` calls it: from
 //! inside a Tokio runtime, through `spawn_blocking`, with the Codex history
-//! migrations handed to the blocking pool (WEB-32).
+//! migrations handed to the blocking pool (WEB-32). Pins the `Spawn` wiring
+//! (step reported `Deferred`) and a clean run over populated live configs; it
+//! does not prove protection against a nested `block_on` (no startup step
+//! reaches one today, and the same run directly on the async thread passes).
 
 mod support;
 
@@ -8,7 +11,7 @@ use cc_switch_lib::bootstrap::{run_headless_bootstrap_with, CodexHistory, StepOu
 use support::{ensure_test_home, reset_test_fs, test_mutex};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn bootstrap_runs_on_the_blocking_pool_with_populated_live_configs() {
+async fn bootstrap_spawns_codex_history_and_imports_populated_live_configs() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     reset_test_fs();
     let home = ensure_test_home();
@@ -36,7 +39,7 @@ async fn bootstrap_runs_on_the_blocking_pool_with_populated_live_configs() {
         }))
     })
     .await
-    .expect("bootstrap must not panic (nested runtime)")
+    .expect("bootstrap task must not panic")
     .expect("bootstrap");
 
     assert_eq!(
