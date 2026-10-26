@@ -945,7 +945,6 @@ pub fn update_providers_sort_order(
 
 use crate::provider::UniversalProvider;
 use std::collections::HashMap;
-use tauri::AppHandle;
 
 #[derive(Clone, serde::Serialize)]
 pub struct UniversalProviderSyncedEvent {
@@ -953,15 +952,40 @@ pub struct UniversalProviderSyncedEvent {
     pub id: String,
 }
 
-fn emit_universal_provider_synced(app: &AppHandle, action: &str, id: &str) {
-    crate::events::emit_via_app(
-        app,
+fn emit_universal_provider_synced(state: &AppState, action: &str, id: &str) {
+    state.events.emit(
         "universal-provider-synced",
         UniversalProviderSyncedEvent {
             action: action.to_string(),
             id: id.to_string(),
         },
     );
+}
+
+/// Upsert + `universal-provider-synced` on success. Shared by the Tauri
+/// command and the web API so both emit the same event.
+pub fn upsert_universal_provider_emit(
+    state: &AppState,
+    provider: UniversalProvider,
+) -> Result<bool, AppError> {
+    let id = provider.id.clone();
+    let result = ProviderService::upsert_universal(state, provider)?;
+    emit_universal_provider_synced(state, "upsert", &id);
+    Ok(result)
+}
+
+/// Delete + `universal-provider-synced` on success.
+pub fn delete_universal_provider_emit(state: &AppState, id: &str) -> Result<bool, AppError> {
+    let result = ProviderService::delete_universal(state, id)?;
+    emit_universal_provider_synced(state, "delete", id);
+    Ok(result)
+}
+
+/// Sync to apps + `universal-provider-synced` on success.
+pub fn sync_universal_provider_emit(state: &AppState, id: &str) -> Result<bool, AppError> {
+    let result = ProviderService::sync_universal_to_apps(state, id)?;
+    emit_universal_provider_synced(state, "sync", id);
+    Ok(result)
 }
 
 #[tauri::command]
@@ -981,45 +1005,20 @@ pub fn get_universal_provider(
 
 #[tauri::command]
 pub fn upsert_universal_provider(
-    app: AppHandle,
     state: State<'_, AppState>,
     provider: UniversalProvider,
 ) -> Result<bool, String> {
-    let id = provider.id.clone();
-    let result =
-        ProviderService::upsert_universal(state.inner(), provider).map_err(|e| e.to_string())?;
-
-    emit_universal_provider_synced(&app, "upsert", &id);
-
-    Ok(result)
+    upsert_universal_provider_emit(state.inner(), provider).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn delete_universal_provider(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<bool, String> {
-    let result =
-        ProviderService::delete_universal(state.inner(), &id).map_err(|e| e.to_string())?;
-
-    emit_universal_provider_synced(&app, "delete", &id);
-
-    Ok(result)
+pub fn delete_universal_provider(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+    delete_universal_provider_emit(state.inner(), &id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn sync_universal_provider(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<bool, String> {
-    let result =
-        ProviderService::sync_universal_to_apps(state.inner(), &id).map_err(|e| e.to_string())?;
-
-    emit_universal_provider_synced(&app, "sync", &id);
-
-    Ok(result)
+pub fn sync_universal_provider(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+    sync_universal_provider_emit(state.inner(), &id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
