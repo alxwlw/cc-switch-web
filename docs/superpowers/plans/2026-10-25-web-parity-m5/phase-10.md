@@ -17,25 +17,32 @@ Scope: `src-tauri/src/commands/profile.rs` (DTO и сборка ответа →
 - Тесты: `src-tauri/tests/profile_roundtrip.rs` (7 тестов), emit не покрыт; TS-тестов профилей не найдено.
 
 ### Task 1: вынос из commands-слоя
-- [ ] DTO и сборку `ProfilesResponse` (с `current_ids`) перенести в `services/profile.rs` (`ProfileService::list_response(&AppState) -> Result<ProfilesResponse, AppError>`); команда `list_profiles` вызывает её.
-- [ ] `emit_profile_apply_events` разделить: `profile_apply_events(&AppState, id, scope) -> Vec<(String, Value)>` (handle-free, вычисляет payload) + emit через `state.events`; tray-refresh остаётся в desktop-обёртке и в `tray.rs:2872`. `profile_roundtrip.rs` зелёный.
+- [x] DTO и сборку `ProfilesResponse` (с `current_ids`) перенести в `services/profile.rs` (`ProfileService::list_response(&AppState) -> Result<ProfilesResponse, AppError>`); команда `list_profiles` вызывает её.
+- [x] `emit_profile_apply_events` разделить: `profile_apply_events(&AppState, id, scope) -> Vec<(String, Value)>` (handle-free, вычисляет payload) + emit через `state.events`; tray-refresh остаётся в desktop-обёртке и в `tray.rs:2872`. `profile_roundtrip.rs` зелёный.
 
 ### Task 2: backend — роуты + тесты
-- [ ] `GET /api/profiles`, `POST /api/profiles` (`{name, scope}`), `PATCH /api/profiles/:id` (`{name?, resnapshot?, scope?}`), `DELETE /api/profiles/:id`, `POST /api/profiles/:id/apply` (`{scope}`; `spawn_blocking`, затем emit событий через bus), `POST /api/profiles/clear-current` (`{scope}`). Неизвестный scope → 400.
-- [ ] `src-tauri/tests/web_api_profiles.rs`: create → list (`currentIds` пуст); apply → warnings, current provider приложений scope сменился, live-файл в temp HOME обновлён, bus выдал `provider-switched` по каждому приложению scope и затем `profile-applied` (порядок как на desktop); resnapshot перезаписывает снимок; clear → `currentIds[scope] = null`; apply из async-контекста не паникует.
+- [x] `GET /api/profiles`, `POST /api/profiles` (`{name, scope}`), `PATCH /api/profiles/:id` (`{name?, resnapshot?, scope?}`), `DELETE /api/profiles/:id`, `POST /api/profiles/:id/apply` (`{scope}`; `spawn_blocking`, затем emit событий через bus), `POST /api/profiles/clear-current` (`{scope}`). Неизвестный scope → 400.
+- [x] `src-tauri/tests/web_api_profiles.rs`: create → list (`currentIds` пуст); apply → warnings, current provider приложений scope сменился, live-файл в temp HOME обновлён, bus выдал `provider-switched` по каждому приложению scope и затем `profile-applied` (порядок как на desktop); resnapshot перезаписывает снимок; clear → `currentIds[scope] = null`; apply из async-контекста не паникует.
 
 ### Task 3: frontend
-- [ ] 6 case в `mapCommand`.
-- [ ] `tests/lib/profilesApi.test.ts`: URL/метод/body каждой функции. Тест на инвалидацию `proxyKeys.*` после SSE-события `profile-applied` (mock EventSource фазы 8).
-- [ ] Снять WEB-00-гейт с `ProfileSwitcher`/`ProfileManageDialog` (таблица фазы 6).
+- [x] 6 case в `mapCommand`.
+- [x] `tests/lib/profilesApi.test.ts`: URL/метод/body каждой функции. Тест на инвалидацию `proxyKeys.*` после SSE-события `profile-applied` (mock EventSource фазы 8).
+- [x] Снять WEB-00-гейт с `ProfileSwitcher`/`ProfileManageDialog` (таблица фазы 6).
 
 ### Task 4: гейты, PR, Plane
-- [ ] Полный набор гейтов + `cargo build --release --example server`.
-- [ ] Ветка `web-parity/web-06-profiles`, PR; DX-64 → In Review + ссылка. Закрыть чекбоксы, Notes.
+- [x] Полный набор гейтов + `cargo build --release --example server`.
+- [x] Ветка `web-parity/web-06-profiles`, PR; DX-64 → In Review + ссылка. Закрыть чекбоксы, Notes.
 
 Риски для ревью:
 - Apply профиля, когда приложение scope в proxy takeover: `provider-switched` должен нести `proxyEnabled: true`, иначе фронт покажет direct-режим.
 
 ## Notes for next phase
 
-- (заполнить по итогам)
+- **Статус до merge (2026-10-26)**: ветка `web-parity/web-06-profiles` (worktree `.worktrees/web-06`), PR #11 (https://github.com/alxwlw/cc-switch-web/pull/11) открыт, DX-64 In Review (комментарий со ссылкой). Задачи 1–3 прошли implement→review, все одобрены с r0 (fix round не понадобился). NIT T3 DP-011 (заголовок теста `profile-applied` с «web:» преувеличивал покрытие) поправил контроллер в `3cff8c44`; T4 — контроллер. Финальные гейты на `3cff8c44`: fmt/clippy чисто, `cargo build --release --example server` ок, `cargo test --no-fail-fast` 4303 passed / 6 failed (baseline omp_search_paths, 2× file_modes::switch_* + 3 нестабильных, см. ниже); `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок, `test:unit` 3681 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice). В PR едет неподтолкнутый `0c0f6c6d` (docs закрытия фазы 9 с локального main). После merge — `post-merge`: пересобрать server и `dist-web` (Rust менялся), `cp cc-switch-web cc-switch-web.prev` перед install; миграций БД нет; DX-64 → Done.
+- **Нестабильные тесты (не этой фазы)**: `proxy::forwarder::tests::bookkeeping::{signature_rectifier_retry_client_error_is_neutral, budget_error_without_anything_to_rectify_is_neutral, signature_error_without_anything_to_rectify_is_neutral}` около 14:50 26.10 падали стабильно («upstream script exhausted»: фейковый upstream получил лишний запрос) — в полном прогоне, в изоляции и на чистом `main` `0c0f6c6d`. Через ~10 минут те же тесты в изоляции зелёные 3/3. Конфиг у них `RectifierConfig::default()`, файлы не читают; похоже на клиентский повтор под нагрузкой хоста. Если всплывут снова — разбирать отдельно (src/proxy этой фазой не тронут).
+- **Backend API** (`services/profile.rs`): DTO `ProfileDto`/`CurrentProfileIds`/`ProfilesResponse` живут в сервисе (реэкспорт из `commands::*`, не из lib.rs). `ProfileService::list_response(&AppState)`; `ProfileService::apply_events(&AppState, id, scope) -> Vec<(String, Value)>` — `provider-switched` (payload `events::provider_switched_payload`) по каждому приложению scope, затем `profile-applied {profileId, scope}`; `ProfileService::emit_apply_events` — через `state.events`. Desktop `commands::emit_profile_apply_events(app, …)` = emit + `tray::refresh_tray_menu`; `tray.rs` вызывает эту обёртку, не менялся. Все три `ProfileScope` сейчас одноприложенческие (`ProfileScope::apps`) — если появится scope на несколько приложений, порядок N×`provider-switched` → `profile-applied` тестом не закреплён.
+- **Роуты** (`web_api.rs`): `GET/POST /api/profiles`, `PATCH/DELETE /api/profiles/:id`, `POST /api/profiles/:id/apply` (`{scope}` → warnings), `POST /api/profiles/clear-current` (`{scope}` → `true`); статический `clear-current` в axum выигрывает у `/:id`. Неизвестный scope → 400 на create/update/apply/clear, без побочных эффектов. Apply — `spawn_blocking`, emit только после успеха.
+- **Почему `spawn_blocking` в apply обязателен, хотя тест его не ловит** (NIT T2 DP-018, не делали): на пути switch только `futures::executor::block_on` (`mode/controller.rs`, `provider/live.rs`, `pi_state.rs`) — паники в tokio нет, но он паркует worker-поток, а `lock_switch_for_app` (`services/proxy.rs`) — tokio-мьютекс: если держатель — async-задача, которой нужен этот поток, будет зависание; плюс синхронный DB/файловый IO. Тест на это (current_thread runtime + удержание switch lock) зависал бы, а не падал — не стали заводить.
+- **Frontend**: 6 case в `mapCommand`, в union методов `Endpoint` добавлен `PATCH` (первый PATCH-роут адаптера). Rename-only `update_profile` шлёт в body только `name`. Сняты гейты: `enabled: !isWeb` в `useProfilesQuery`, `!isWeb` у `ProfileSwitcher` в `App.tsx`, `unavailableInWeb` у тогла show-profile-switcher в General. Инвалидация после apply — общий код desktop/web (хук `query/profiles.ts` + слушатели `profile-applied` в App.tsx/PromptPanel/PiPromptPanel); в `eventInvalidation.ts` `profile-applied` не добавляли. Цепочка SSE → App.tsx проверена по частям (shim в `webShimsEvent.test.ts`, обработчик в `App.test.tsx` через `emitTauriEvent`), не end-to-end.
+- **NIT не делали**: T3 DP-018 — условия показа switcher в `App.tsx:1382` (`currentView === "providers"`, не mcode/kimi) не покрыты тестом (мутанты выжили; условия старые, фаза их лишь переобернула).
+- **Инвентаризация фазы 6**: строка `profiles` перенесена в «закрыто фазами 1–5, 7, 9, 10».
