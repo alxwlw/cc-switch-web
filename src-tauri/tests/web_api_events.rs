@@ -203,8 +203,10 @@ mod sse {
         for i in 0..400 {
             state.events.emit("burst", json!(i));
         }
+        let resync = read_frames(&mut body, 1).await;
+        assert_eq!(resync, "event: resync\ndata: null\n\n");
         let first = read_frames(&mut body, 1).await;
-        // Lagged was skipped, not fatal: the oldest events are gone, newer ones arrive.
+        // The oldest events are gone, newer ones arrive.
         assert!(first.starts_with("event: burst\ndata: "), "{first}");
         assert!(!first.starts_with("event: burst\ndata: 0\n"), "{first}");
         // ... and the stream keeps working afterwards.
@@ -220,6 +222,19 @@ mod sse {
         })
         .await;
         assert!(end.is_ok(), "stream did not end after the hub was dropped");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn idle_stream_sends_keep_alive_comment_frames() {
+        let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+        reset_test_fs();
+        ensure_test_home();
+        let state = Arc::new(create_test_state().unwrap());
+        let router = cc_switch_lib::web_api::router(state.clone());
+        let mut body = open(&router).await.into_body().into_data_stream();
+
+        tokio::time::advance(cc_switch_lib::web_api::SSE_KEEP_ALIVE).await;
+        assert_eq!(read_frames(&mut body, 1).await, ": keep-alive\n\n");
     }
 
     #[tokio::test]
