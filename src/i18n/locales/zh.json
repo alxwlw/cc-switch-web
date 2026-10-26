@@ -506,6 +506,15 @@
         "enabledDescription": "控制 cc-switch.log；不影响请求用量记录和 crash.log",
         "openLog": "打开日志",
         "openLogFailed": "打开日志所在位置失败：{{error}}",
+        "viewer": {
+          "title": "服务器日志",
+          "serverNote": "这是运行 cc-switch-web 的服务器上的日志，不是本浏览器的日志。",
+          "path": "服务器上的路径",
+          "unavailable": "暂无日志，或无法读取。",
+          "empty": "日志文件为空。",
+          "refresh": "刷新",
+          "download": "下载"
+        },
         "level": "日志级别",
         "levelDescription": "设置输出的最低日志级别",
         "levels": {

@@ -506,6 +506,15 @@
         "enabledDescription": "cc-switch.log を制御します。リクエスト使用量記録と crash.log には影響しません",
         "openLog": "ログを開く",
         "openLogFailed": "ログの場所を開けませんでした：{{error}}",
+        "viewer": {
+          "title": "サーバーログ",
+          "serverNote": "これは cc-switch-web を実行しているサーバーのログであり、このブラウザのログではありません。",
+          "path": "サーバー上のパス",
+          "unavailable": "ログがまだないか、読み取れません。",
+          "empty": "ログファイルは空です。",
+          "refresh": "更新",
+          "download": "ダウンロード"
+        },
         "level": "ログレベル",
         "levelDescription": "出力する最小ログレベルを設定",
         "levels": {

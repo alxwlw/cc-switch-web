@@ -506,6 +506,15 @@
         "enabledDescription": "cc-switch.log'u kontrol eder; istek kullanım kayıtları ve Crash.log etkilenmez",
         "openLog": "Günlüğü aç",
         "openLogFailed": "Günlük konumu açılamadı: {{error}}",
+        "viewer": {
+          "title": "Sunucu günlüğü",
+          "serverNote": "Bu, cc-switch-web'i çalıştıran sunucunun günlüğüdür; bu tarayıcının değil.",
+          "path": "Sunucudaki yol",
+          "unavailable": "Henüz günlük yok veya okunamıyor.",
+          "empty": "Günlük dosyası boş.",
+          "refresh": "Yenile",
+          "download": "İndir"
+        },
         "level": "Günlük Düzeyi",
         "levelDescription": "Çıkış için minimum günlük düzeyini ayarlayın",
         "levels": {

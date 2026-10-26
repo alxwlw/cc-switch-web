@@ -506,6 +506,15 @@
         "enabledDescription": "控制 cc-switch.log；不影響請求用量記錄和 crash.log",
         "openLog": "開啟日誌",
         "openLogFailed": "開啟日誌所在位置失敗：{{error}}",
+        "viewer": {
+          "title": "伺服器日誌",
+          "serverNote": "這是執行 cc-switch-web 的伺服器上的日誌，不是本瀏覽器的日誌。",
+          "path": "伺服器上的路徑",
+          "unavailable": "尚無日誌，或無法讀取。",
+          "empty": "日誌檔案為空。",
+          "refresh": "重新整理",
+          "download": "下載"
+        },
         "level": "日誌層級",
         "levelDescription": "設定輸出的最低日誌層級",
         "levels": {

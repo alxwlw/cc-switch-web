@@ -114,6 +114,39 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         },
       };
 
+    // ---------- rectifier / optimizer / log config (reveal_app_log_file stays unmapped) ----------
+    case "get_rectifier_config":
+      return { method: "GET", url: "/api/settings/rectifier" };
+    case "set_rectifier_config":
+      return {
+        method: "PUT",
+        url: "/api/settings/rectifier",
+        body: { config: a.config },
+      };
+    case "get_optimizer_config":
+      return { method: "GET", url: "/api/settings/optimizer" };
+    case "set_optimizer_config":
+      return {
+        method: "PUT",
+        url: "/api/settings/optimizer",
+        body: { config: a.config },
+      };
+    case "get_log_config":
+      return { method: "GET", url: "/api/settings/log" };
+    case "set_log_config":
+      return {
+        method: "PUT",
+        url: "/api/settings/log",
+        body: { config: a.config },
+      };
+
+    // ---------- server log (web-only, no Tauri command) ----------
+    case "get_server_log_tail":
+      return {
+        method: "GET",
+        url: `/api/logs/tail${query({ lines: a.lines })}`,
+      };
+
     // ---------- endpoint speed test / custom endpoints ----------
     case "read_live_provider_settings":
       return { method: "GET", url: `${appBase(a.app)}/live-settings` };

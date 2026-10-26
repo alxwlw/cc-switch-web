@@ -444,17 +444,7 @@ export function RoutingSection({ onOpenApp }: RoutingSectionProps) {
         </div>
       </SettingsBlock>
 
-      <SettingsBlock
-        title={t("settings.advanced.rectifier.title")}
-        help={{
-          title: t("settings.advanced.rectifier.title"),
-          body: t("settings.advanced.rectifier.description"),
-        }}
-      >
-        <div className="rounded-panel border border-border bg-surface p-5">
-          <RectifierConfigPanel />
-        </div>
-      </SettingsBlock>
+      <RectifierBlock />
 
       {/* 可恢复的操作（路由目标、队列、聚合名单都保留），不用红色 */}
       <ConfirmDialog
@@ -470,6 +460,24 @@ export function RoutingSection({ onOpenApp }: RoutingSectionProps) {
         onCancel={() => setConfirmExitAll(false)}
       />
     </>
+  );
+}
+
+/** Rectifier + optimizer panel; the only routing block that works in web (WEB-24). */
+export function RectifierBlock() {
+  const { t } = useTranslation();
+  return (
+    <SettingsBlock
+      title={t("settings.advanced.rectifier.title")}
+      help={{
+        title: t("settings.advanced.rectifier.title"),
+        body: t("settings.advanced.rectifier.description"),
+      }}
+    >
+      <div className="rounded-panel border border-border bg-surface p-5">
+        <RectifierConfigPanel />
+      </div>
+    </SettingsBlock>
   );
 }
 

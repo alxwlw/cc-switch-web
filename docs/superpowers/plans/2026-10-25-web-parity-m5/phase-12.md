@@ -24,10 +24,10 @@ Scope: `src-tauri/src/web_api.rs` (6 роутов конфигурации + 2 �
 - [ ] `src-tauri/tests/web_api_settings_config.rs`: round-trip для трёх конфигов; `PUT log {level:"debug"}` → `log::max_level() == Debug`; tail на подготовленном файле из 10 строк с `lines=3` → последние 3; `lines=100000` обрезается до 5000; download отдаёт заголовок attachment.
 
 ### Task 3: frontend
-- [ ] 6 case в `mapCommand` для конфигов; `reveal_app_log_file` в web не мапить.
-- [ ] `SettingsPage`: в web кнопка «открыть лог» открывает просмотр хвоста (компонент `ServerLogViewer`: путь на сервере, последние строки, кнопка «скачать» → `/api/logs/download`).
-- [ ] Тесты: панели rectifier/log в web сохраняют через adapter (mock fetch); viewer показывает строки и ссылку на download.
-- [ ] Снять WEB-00-гейты с этих панелей и кнопки лога (таблица фазы 6).
+- [x] 6 case в `mapCommand` для конфигов; `reveal_app_log_file` в web не мапить.
+- [x] `SettingsPage`: в web кнопка «открыть лог» открывает просмотр хвоста (компонент `ServerLogViewer`: путь на сервере, последние строки, кнопка «скачать» → `/api/logs/download`).
+- [x] Тесты: панели rectifier/log в web сохраняют через adapter (mock fetch); viewer показывает строки и ссылку на download.
+- [x] Снять WEB-00-гейты с этих панелей и кнопки лога (таблица фазы 6).
 
 ### Task 4: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server`; на agentbox проверить, что после `PUT log debug` в файле появляются debug-строки.
