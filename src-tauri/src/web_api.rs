@@ -273,6 +273,37 @@ pub fn router(state: SharedState) -> Router {
             put(hermes_memory_enabled),
         )
         .route("/api/hermes/web-ui", get(hermes_web_ui))
+        // OpenClaw (WEB-15)
+        .route("/api/openclaw/import-live", post(openclaw_import_live))
+        .route(
+            "/api/openclaw/live-provider-ids",
+            get(openclaw_live_provider_ids),
+        )
+        .route(
+            "/api/openclaw/live-provider/:id",
+            get(openclaw_live_provider),
+        )
+        .route("/api/openclaw/health", get(openclaw_health))
+        .route(
+            "/api/openclaw/default-model",
+            get(openclaw_default_model_get).put(openclaw_default_model_set),
+        )
+        .route(
+            "/api/openclaw/model-catalog",
+            get(openclaw_model_catalog_get).put(openclaw_model_catalog_set),
+        )
+        .route(
+            "/api/openclaw/agents-defaults",
+            get(openclaw_agents_defaults_get).put(openclaw_agents_defaults_set),
+        )
+        .route(
+            "/api/openclaw/env",
+            get(openclaw_env_get).put(openclaw_env_set),
+        )
+        .route(
+            "/api/openclaw/tools",
+            get(openclaw_tools_get).put(openclaw_tools_set),
+        )
         .with_state(state)
 }
 
@@ -2226,6 +2257,129 @@ async fn hermes_memory_enabled(
     };
     blocking_api("hermes memory toggle", move || {
         crate::hermes_config::set_memory_enabled(kind, body.enabled)
+    })
+    .await
+}
+
+// ---------- OpenClaw (WEB-15) ----------
+
+async fn openclaw_import_live(State(state): State<SharedState>) -> ApiResult {
+    blocking_api("openclaw import", move || {
+        crate::services::provider::import_openclaw_providers_from_live(&state)
+    })
+    .await
+}
+
+async fn openclaw_live_provider_ids() -> ApiResult {
+    blocking_api("openclaw live provider ids", || {
+        crate::openclaw_config::get_providers().map(|p| p.keys().cloned().collect::<Vec<_>>())
+    })
+    .await
+}
+
+async fn openclaw_live_provider(Path(id): Path<String>) -> ApiResult {
+    blocking_api("openclaw live provider", move || {
+        crate::openclaw_config::get_provider(&id)
+    })
+    .await
+}
+
+async fn openclaw_health() -> ApiResult {
+    blocking_api(
+        "openclaw health",
+        crate::openclaw_config::scan_openclaw_config_health,
+    )
+    .await
+}
+
+#[derive(Deserialize)]
+struct OpenClawDefaultModelReq {
+    model: crate::openclaw_config::OpenClawDefaultModel,
+}
+
+async fn openclaw_default_model_get() -> ApiResult {
+    blocking_api(
+        "openclaw default model",
+        crate::openclaw_config::get_default_model,
+    )
+    .await
+}
+
+async fn openclaw_default_model_set(Json(body): Json<OpenClawDefaultModelReq>) -> ApiResult {
+    blocking_api("openclaw default model write", move || {
+        crate::openclaw_config::set_default_model(&body.model)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct OpenClawModelCatalogReq {
+    catalog: std::collections::HashMap<String, crate::openclaw_config::OpenClawModelCatalogEntry>,
+}
+
+async fn openclaw_model_catalog_get() -> ApiResult {
+    blocking_api(
+        "openclaw model catalog",
+        crate::openclaw_config::get_model_catalog,
+    )
+    .await
+}
+
+async fn openclaw_model_catalog_set(Json(body): Json<OpenClawModelCatalogReq>) -> ApiResult {
+    blocking_api("openclaw model catalog write", move || {
+        crate::openclaw_config::set_model_catalog(&body.catalog)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct OpenClawAgentsDefaultsReq {
+    defaults: crate::openclaw_config::OpenClawAgentsDefaults,
+}
+
+async fn openclaw_agents_defaults_get() -> ApiResult {
+    blocking_api(
+        "openclaw agents defaults",
+        crate::openclaw_config::get_agents_defaults,
+    )
+    .await
+}
+
+async fn openclaw_agents_defaults_set(Json(body): Json<OpenClawAgentsDefaultsReq>) -> ApiResult {
+    blocking_api("openclaw agents defaults write", move || {
+        crate::openclaw_config::set_agents_defaults(&body.defaults)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct OpenClawEnvReq {
+    env: crate::openclaw_config::OpenClawEnvConfig,
+}
+
+async fn openclaw_env_get() -> ApiResult {
+    blocking_api("openclaw env", crate::openclaw_config::get_env_config).await
+}
+
+async fn openclaw_env_set(Json(body): Json<OpenClawEnvReq>) -> ApiResult {
+    blocking_api("openclaw env write", move || {
+        crate::openclaw_config::set_env_config(&body.env)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct OpenClawToolsReq {
+    tools: crate::openclaw_config::OpenClawToolsConfig,
+}
+
+async fn openclaw_tools_get() -> ApiResult {
+    blocking_api("openclaw tools", crate::openclaw_config::get_tools_config).await
+}
+
+async fn openclaw_tools_set(Json(body): Json<OpenClawToolsReq>) -> ApiResult {
+    blocking_api("openclaw tools write", move || {
+        crate::openclaw_config::set_tools_config(&body.tools)
     })
     .await
 }
