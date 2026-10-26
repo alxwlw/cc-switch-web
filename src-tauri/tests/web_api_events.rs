@@ -34,6 +34,10 @@ async fn switch_provider_emits_provider_switched_with_the_desktop_payload_shape(
     ensure_test_home();
     let state =
         Arc::new(create_test_state_with_config(&config_with_two_claude_providers()).unwrap());
+    state
+        .db
+        .set_proxy_flags_sync("claude", false, true)
+        .unwrap();
     let mut rx = state.events.subscribe();
     let router = cc_switch_lib::web_api::router(state.clone());
 
@@ -54,7 +58,7 @@ async fn switch_provider_emits_provider_switched_with_the_desktop_payload_shape(
         json!({
             "appType": "claude",
             "proxyEnabled": false,
-            "autoFailoverEnabled": false,
+            "autoFailoverEnabled": true,
             "providerId": "new-provider",
         })
     );
@@ -80,4 +84,41 @@ async fn failed_switch_emits_nothing() {
     .await;
     assert_eq!(body["ok"], false);
     assert!(matches!(rx.try_recv(), Err(TryRecvError::Empty)));
+}
+
+#[test]
+fn provider_switched_payload_reads_both_flags_from_their_sources() {
+    use cc_switch_lib::live::engine::DeviceStore;
+    use cc_switch_lib::mode::state::{self, Mode};
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    ensure_test_home();
+    let app_state = create_test_state_with_config(&config_with_two_claude_providers()).unwrap();
+    app_state
+        .db
+        .set_proxy_flags_sync("claude", true, true)
+        .unwrap();
+    state::update(&DeviceStore::for_device(), |live| {
+        let app = live.apps.entry("claude".to_string()).or_default();
+        let mut mode = app.mode_state();
+        mode.mode = Some(Mode::Proxy);
+        app.set_mode_state(mode);
+    })
+    .unwrap();
+
+    let payload =
+        cc_switch_lib::events::provider_switched_payload(&app_state, &AppType::Claude, "p1");
+    assert_eq!(
+        payload,
+        json!({
+            "appType": "claude",
+            "proxyEnabled": true,
+            "autoFailoverEnabled": true,
+            "providerId": "p1",
+        })
+    );
+    // other apps keep their own (default) flags
+    let other = cc_switch_lib::events::provider_switched_payload(&app_state, &AppType::Codex, "p2");
+    assert_eq!(other["proxyEnabled"], false);
+    assert_eq!(other["autoFailoverEnabled"], false);
 }

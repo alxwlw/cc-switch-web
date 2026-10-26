@@ -91,7 +91,7 @@ impl EventHub {
     }
 
     /// Desktop bridge: every event also goes to `app.emit(name, payload)`.
-    pub fn bridge_to_tauri(&self, app: tauri::AppHandle) {
+    pub fn bridge_to_tauri<R: tauri::Runtime>(&self, app: tauri::AppHandle<R>) {
         use tauri::Emitter;
         self.set_sink(move |event| {
             if let Err(e) = app.emit(&event.name, event.payload.clone()) {
@@ -104,7 +104,11 @@ impl EventHub {
 /// Emit from a code path that only has an AppHandle (desktop): through the
 /// managed `AppState` hub when present (so web subscribers see it too),
 /// straight to the AppHandle otherwise (startup, before state is managed).
-pub fn emit_via_app<S: Serialize + Clone>(app: &tauri::AppHandle, name: &str, payload: S) {
+pub fn emit_via_app<R: tauri::Runtime, S: Serialize + Clone>(
+    app: &tauri::AppHandle<R>,
+    name: &str,
+    payload: S,
+) {
     use tauri::{Emitter, Manager};
     match app.try_state::<crate::store::AppState>() {
         Some(state) => state.events.emit(name, payload),
@@ -134,12 +138,23 @@ pub fn provider_switched_payload(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::Database;
     use serde_json::json;
+    use std::sync::mpsc;
     use std::sync::Mutex;
-    use tokio::sync::broadcast::error::{RecvError, TryRecvError};
+    use std::time::Duration;
+    use tauri::{Listener, Manager};
+    use tokio::sync::broadcast::error::TryRecvError;
 
-    #[tokio::test]
-    async fn emit_reaches_every_subscriber_in_order() {
+    fn ev(name: &str, payload: Value) -> Event {
+        Event {
+            name: name.into(),
+            payload,
+        }
+    }
+
+    #[test]
+    fn emit_reaches_every_subscriber_in_order() {
         let hub = EventHub::new();
         let mut a = hub.subscribe();
         let mut b = hub.subscribe();
@@ -147,19 +162,11 @@ mod tests {
         hub.emit("second", ());
         for rx in [&mut a, &mut b] {
             assert_eq!(
-                rx.recv().await.unwrap(),
-                Event {
-                    name: "first".into(),
-                    payload: json!({ "appType": "claude" })
-                }
+                rx.try_recv(),
+                Ok(ev("first", json!({ "appType": "claude" })))
             );
-            assert_eq!(
-                rx.recv().await.unwrap(),
-                Event {
-                    name: "second".into(),
-                    payload: Value::Null
-                }
-            );
+            assert_eq!(rx.try_recv(), Ok(ev("second", Value::Null)));
+            assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
         }
     }
 
@@ -173,22 +180,20 @@ mod tests {
         let hub = EventHub::new();
         hub.emit("early", ());
         let mut rx = hub.subscribe();
-        assert!(matches!(rx.try_recv(), Err(TryRecvError::Empty)));
+        assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
     }
 
-    #[tokio::test]
-    async fn lagged_receiver_does_not_block_emit_and_recovers() {
+    #[test]
+    fn lagged_receiver_does_not_block_emit_and_recovers() {
         let hub = EventHub::new();
         let mut slow = hub.subscribe();
-        let total = CHANNEL_CAPACITY + 10;
-        for i in 0..total {
+        for i in 0..CHANNEL_CAPACITY + 10 {
             hub.emit("tick", i);
         }
         // the sender was never blocked; the slow receiver learns how many it missed
-        assert_eq!(slow.recv().await, Err(RecvError::Lagged(10)));
+        assert_eq!(slow.try_recv(), Err(TryRecvError::Lagged(10)));
         // ...and keeps receiving the retained tail
-        assert_eq!(slow.recv().await.unwrap().payload, json!(10));
-        // a fresh emit still works
+        assert_eq!(slow.try_recv().unwrap().payload, json!(10));
         hub.emit("after", ());
         let mut last = None;
         while let Ok(e) = slow.try_recv() {
@@ -210,7 +215,6 @@ mod tests {
         });
         hub.emit("a", json!({ "x": 1 }));
         hub.emit("b", ());
-        // no await: the sink ran inside emit()
         assert_eq!(
             *seen.lock().unwrap(),
             vec![
@@ -231,6 +235,69 @@ mod tests {
         let hub = EventHub::new();
         let mut rx = hub.subscribe();
         hub.emit("bad", Bad);
-        assert!(matches!(rx.try_recv(), Err(TryRecvError::Empty)));
+        assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+    }
+
+    /// Frontend-side view of a mock app: every `name` event payload (raw JSON).
+    fn listen_on<R: tauri::Runtime>(
+        app: &tauri::AppHandle<R>,
+        name: &str,
+    ) -> mpsc::Receiver<String> {
+        let (tx, rx) = mpsc::channel();
+        app.listen(name, move |e| {
+            let _ = tx.send(e.payload().to_string());
+        });
+        rx
+    }
+
+    #[test]
+    fn bridge_forwards_name_and_payload_to_the_app_handle() {
+        let app = tauri::test::mock_app();
+        let hub = EventHub::new();
+        hub.bridge_to_tauri(app.handle().clone());
+        let seen = listen_on(app.handle(), "provider-switched");
+        let unit = listen_on(app.handle(), "deeplink-pending");
+
+        hub.emit(
+            "provider-switched",
+            json!({ "appType": "claude", "providerId": "p" }),
+        );
+        hub.emit("deeplink-pending", ());
+
+        let got = seen.recv_timeout(Duration::from_secs(2)).unwrap();
+        let got: Value = serde_json::from_str(&got).unwrap();
+        assert_eq!(got, json!({ "appType": "claude", "providerId": "p" }));
+        assert_eq!(unit.recv_timeout(Duration::from_secs(2)).unwrap(), "null");
+    }
+
+    #[test]
+    fn emit_via_app_uses_the_managed_state_hub_and_reaches_desktop_through_the_bridge() {
+        let app = tauri::test::mock_app();
+        let state = crate::store::AppState::new(Arc::new(Database::memory().unwrap()));
+        state.events.bridge_to_tauri(app.handle().clone());
+        let mut rx = state.events.subscribe();
+        app.manage(state);
+        let seen = listen_on(app.handle(), "profile-applied");
+
+        emit_via_app(app.handle(), "profile-applied", json!({ "profileId": "x" }));
+
+        assert_eq!(
+            rx.try_recv(),
+            Ok(ev("profile-applied", json!({ "profileId": "x" })))
+        );
+        assert_eq!(
+            seen.recv_timeout(Duration::from_secs(2)).unwrap(),
+            r#"{"profileId":"x"}"#
+        );
+        // exactly once on the app handle (hub bridge), not twice
+        assert!(seen.recv_timeout(Duration::from_millis(50)).is_err());
+    }
+
+    #[test]
+    fn emit_via_app_without_managed_state_emits_on_the_app_handle_directly() {
+        let app = tauri::test::mock_app();
+        let seen = listen_on(app.handle(), "deeplink-pending");
+        emit_via_app(app.handle(), "deeplink-pending", ());
+        assert_eq!(seen.recv_timeout(Duration::from_secs(2)).unwrap(), "null");
     }
 }

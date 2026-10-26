@@ -263,3 +263,28 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod status_event_tests {
+    use super::*;
+
+    #[test]
+    fn auto_sync_status_goes_to_the_hub_with_and_without_error() {
+        let hub = EventHub::new();
+        let mut rx = hub.subscribe();
+        emit_auto_sync_status_updated(&hub, "success", None);
+        emit_auto_sync_status_updated(&hub, "error", Some("boom"));
+        let first = rx.try_recv().unwrap();
+        assert_eq!(first.name, "webdav-sync-status-updated");
+        assert_eq!(
+            first.payload,
+            serde_json::json!({ "source": "auto", "status": "success" })
+        );
+        let second = rx.try_recv().unwrap();
+        assert_eq!(second.name, "webdav-sync-status-updated");
+        assert_eq!(
+            second.payload,
+            serde_json::json!({ "source": "auto", "status": "error", "error": "boom" })
+        );
+    }
+}

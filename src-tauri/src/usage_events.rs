@@ -5,7 +5,8 @@
 //! 立刻 invalidate 查询缓存而无需等待轮询周期。
 //!
 //! 设计要点：
-//! - 全局单例 AppHandle：写日志路径上不持有 AppHandle，用 OnceCell 共享。
+//! - 全局单例事件总线（`EventHub`）：写日志路径上不持有 AppState，用 OnceLock 共享；
+//!   桌面端由总线桥接到 AppHandle，web 端由 SSE 订阅。
 //! - 200ms 防抖合并：流式响应等场景在短时间内可能写入多条日志，
 //!   合并成一次事件可避免前端连续 invalidate。
 //! - 不阻塞写入：通知失败仅记录 warn 日志，不向上传播错误。
@@ -52,8 +53,12 @@ pub fn notify_log_recorded() {
         return;
     };
 
+    schedule_emit(hub, &EMIT_SCHEDULED);
+}
+
+fn schedule_emit(hub: &EventHub, scheduled: &'static AtomicBool) {
     // 已有调度任务：本次通知被合并到既有任务里，无需再起线程。
-    if EMIT_SCHEDULED.swap(true, Ordering::AcqRel) {
+    if scheduled.swap(true, Ordering::AcqRel) {
         return;
     }
 
@@ -62,7 +67,7 @@ pub fn notify_log_recorded() {
         std::thread::sleep(DEBOUNCE_WINDOW);
         // 必须先清标志再 emit：万一 emit 期间又有新通知进来，
         // 下一轮防抖窗口会重新调度，不会丢失。
-        EMIT_SCHEDULED.store(false, Ordering::Release);
+        scheduled.store(false, Ordering::Release);
 
         hub.emit(EVENT_USAGE_LOG_RECORDED, ());
     });
@@ -76,4 +81,31 @@ thread_local! {
 #[cfg(test)]
 pub(crate) fn take_test_notify_count() -> u32 {
     TEST_NOTIFY_COUNT.with(|count| count.replace(0))
+}
+
+#[cfg(test)]
+mod hub_tests {
+    use super::*;
+    use tokio::sync::broadcast::error::TryRecvError;
+
+    #[tokio::test]
+    async fn burst_of_notifications_is_one_usage_log_recorded_event_with_null_payload() {
+        let hub = EventHub::new();
+        let mut rx = hub.subscribe();
+        let flag: &'static AtomicBool = Box::leak(Box::new(AtomicBool::new(false)));
+        for _ in 0..5 {
+            schedule_emit(&hub, flag);
+        }
+        let event = tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("event within the debounce window")
+            .unwrap();
+        assert_eq!(event.name, "usage-log-recorded");
+        assert_eq!(event.payload, serde_json::Value::Null);
+        assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+        assert!(
+            !flag.load(Ordering::Acquire),
+            "flag cleared for the next window"
+        );
+    }
 }
