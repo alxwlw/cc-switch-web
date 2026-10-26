@@ -146,13 +146,17 @@ const createMetadataMock = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const SIDE_EFFECTS = () => [
+// Не обслуживаются в web (WEB-26/WEB-09/desktop-only); plugin/onboarding закрыты WEB-20.
+const DESKTOP_ONLY = () => [
   setAppConfigDirOverrideMock,
   setAutoLaunchMock,
+  syncCurrentProvidersLiveMock,
+];
+const SIDE_EFFECTS = () => [
+  ...DESKTOP_ONLY(),
   applyClaudePluginConfigMock,
   applyClaudeOnboardingSkipMock,
   clearClaudeOnboardingSkipMock,
-  syncCurrentProvidersLiveMock,
 ];
 
 // Форма и сервер расходятся по всем полям, у которых в full save есть desktop-only side effect.
@@ -216,7 +220,7 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     arrange();
   });
 
-  it("web: full save succeeds after save_settings without calling desktop-only commands", async () => {
+  it("web: full save succeeds after save_settings, runs the served Claude side effects only", async () => {
     setWeb(true);
     const { result } = renderHook(() => useSettings());
 
@@ -233,7 +237,11 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     );
     expect(saveResult).toEqual({ requiresRestart: false });
     expect(metadataMock.setRequiresRestart).toHaveBeenCalledWith(false);
-    for (const m of SIDE_EFFECTS()) expect(m).not.toHaveBeenCalled();
+    for (const m of DESKTOP_ONLY()) expect(m).not.toHaveBeenCalled();
+    expect(applyClaudeOnboardingSkipMock).toHaveBeenCalledTimes(1);
+    expect(applyClaudePluginConfigMock).toHaveBeenCalledWith({
+      official: false,
+    });
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
@@ -249,7 +257,7 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
-  it("web: autosave of launchOnStartup/skipClaudeOnboarding/plugin saves only settings", async () => {
+  it("web: autosave applies plugin/onboarding, skips auto-launch and live sync", async () => {
     setWeb(true);
     const { result } = renderHook(() => useSettings());
     await act(async () => {
@@ -260,7 +268,9 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
       });
     });
     expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
-    for (const m of SIDE_EFFECTS()) expect(m).not.toHaveBeenCalled();
+    for (const m of DESKTOP_ONLY()) expect(m).not.toHaveBeenCalled();
+    expect(applyClaudeOnboardingSkipMock).toHaveBeenCalledTimes(1);
+    expect(applyClaudePluginConfigMock).toHaveBeenCalledTimes(1);
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
