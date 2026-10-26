@@ -1,5 +1,5 @@
 use indexmap::IndexMap;
-use tauri::{Emitter, Manager, State};
+use tauri::{Manager, State};
 
 use crate::app_config::AppType;
 use crate::commands::copilot::CopilotAuthState;
@@ -547,9 +547,7 @@ pub async fn queryProviderUsage(
             "providerId": &providerId,
             "data": snapshot,
         });
-        if let Err(e) = app_handle.emit("usage-cache-updated", payload) {
-            log::error!("emit usage-cache-updated (script) 失败: {e}");
-        }
+        state.events.emit("usage-cache-updated", payload);
         state
             .usage_cache
             .put_script(app_type, providerId, snapshot.clone());
@@ -956,7 +954,8 @@ pub struct UniversalProviderSyncedEvent {
 }
 
 fn emit_universal_provider_synced(app: &AppHandle, action: &str, id: &str) {
-    let _ = app.emit(
+    crate::events::emit_via_app(
+        app,
         "universal-provider-synced",
         UniversalProviderSyncedEvent {
             action: action.to_string(),

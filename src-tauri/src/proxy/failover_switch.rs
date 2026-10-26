@@ -8,7 +8,7 @@
 use crate::error::AppError;
 use std::collections::HashSet;
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tokio::sync::RwLock;
 
 /// 故障转移切换管理器
@@ -113,9 +113,7 @@ impl FailoverSwitchManager {
                 "providerId": provider_id,
                 "source": "failover"  // 标识来源是故障转移
             });
-            if let Err(e) = app.emit("provider-switched", event_data) {
-                log::error!("[Failover] 发射事件失败: {e}");
-            }
+            crate::events::emit_via_app(app, "provider-switched", event_data);
         }
 
         Ok(switched)

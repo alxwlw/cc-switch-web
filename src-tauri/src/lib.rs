@@ -17,6 +17,7 @@ mod config;
 mod database;
 mod deeplink;
 mod error;
+pub mod events;
 mod gemini_config;
 mod gemini_mcp;
 mod grok_config;
@@ -89,8 +90,8 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{fmt, sync::Arc};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+use tauri::Manager;
 use tauri::RunEvent;
-use tauri::{Emitter, Manager};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 #[cfg(target_os = "windows")]
@@ -307,9 +308,7 @@ fn handle_deeplink_url(
     };
     crate::deeplink::set_pending_deeplink(pending);
 
-    if let Err(e) = app.emit("deeplink-pending", ()) {
-        log::error!("✗ Failed to emit deeplink-pending event: {e}");
-    }
+    crate::events::emit_via_app(app, "deeplink-pending", ());
 
     if focus_main_window {
         if let Some(window) = app.get_webview_window("main") {
@@ -590,11 +589,6 @@ pub fn run() {
                 }
             }
 
-            // 注入 AppHandle 给 usage_events，让无 AppHandle 持有的写日志路径
-            // 也能向前端推送 `usage-log-recorded`。
-            // 放在日志系统初始化之后，确保 init 的日志能正常输出。
-            usage_events::init(app.handle().clone());
-
             // 初始化数据库
             let paths = bootstrap::BootstrapPaths::resolve();
 
@@ -690,6 +684,11 @@ pub fn run() {
 
             // 设置 AppHandle 用于代理故障转移时的 UI 更新
             app_state.proxy_service.set_app_handle(app.handle().clone());
+
+            // 事件总线 -> 前端：同步桥接到 AppHandle::emit，事件名与 payload 与此前直接
+            // emit 完全一致；usage_events 的写日志路径也经总线推送 `usage-log-recorded`。
+            app_state.events.bridge_to_tauri(app.handle().clone());
+            usage_events::init(app_state.events.clone());
 
             // 崩溃恢复、默认数据 seed、首次运行导入：与 headless web 服务共用
             // （codex 历史迁移仍在 Tauri 的 blocking 线程池中执行）。
@@ -850,11 +849,11 @@ pub fn run() {
             let _tray = tray_builder.build(app)?;
             crate::services::webdav_auto_sync::start_worker(
                 app_state.db.clone(),
-                app.handle().clone(),
+                app_state.events.clone(),
             );
             crate::services::s3_auto_sync::start_worker(
                 app_state.db.clone(),
-                app.handle().clone(),
+                app_state.events.clone(),
             );
             // 将同一个实例注入到全局状态，避免重复创建导致的不一致
             app.manage(app_state);

@@ -232,7 +232,13 @@ async fn switch_provider(
 ) -> ApiResult {
     let app_type = app_type!(&app);
     let id = body.id;
-    match tokio::task::spawn_blocking(move || ProviderService::switch(&state, app_type, &id)).await
+    match tokio::task::spawn_blocking(move || {
+        let result = ProviderService::switch(&state, app_type.clone(), &id)?;
+        let payload = crate::events::provider_switched_payload(&state, &app_type, &id);
+        state.events.emit("provider-switched", payload);
+        Ok::<_, crate::error::AppError>(result)
+    })
+    .await
     {
         Ok(Ok(result)) => ok(result),
         Ok(Err(e)) => fail(e.to_string()),
