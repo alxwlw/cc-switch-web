@@ -397,6 +397,61 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return { method: "GET", url: "/api/usage/model-pricing" };
     case "sync_session_usage":
       return { method: "POST", url: "/api/usage/sync" };
+    case "update_model_pricing":
+      return {
+        method: "PUT",
+        url: `/api/usage/model-pricing/${enc(a.modelId)}`,
+        body: {
+          displayName: a.displayName,
+          inputCost: a.inputCost,
+          outputCost: a.outputCost,
+          cacheReadCost: a.cacheReadCost,
+          cacheCreationCost: a.cacheCreationCost,
+        },
+      };
+    case "update_model_pricing_batch":
+      return {
+        method: "POST",
+        url: "/api/usage/model-pricing/batch",
+        body: { entries: a.entries },
+      };
+    case "delete_model_pricing":
+      return {
+        method: "DELETE",
+        url: `/api/usage/model-pricing/${enc(a.modelId)}`,
+      };
+    case "get_models_dev_sync_config":
+      return { method: "GET", url: "/api/usage/models-dev/config" };
+    case "save_models_dev_sync_config":
+      // The route takes the bare config object, not the {config} wrapper.
+      return {
+        method: "PUT",
+        url: "/api/usage/models-dev/config",
+        body: a.config,
+      };
+    case "record_models_dev_sync_result":
+      return {
+        method: "POST",
+        url: "/api/usage/models-dev/result",
+        body: { syncedAt: a.syncedAt, error: a.error },
+      };
+    case "get_session_usage_last_sync":
+      return { method: "GET", url: "/api/usage/last-sync" };
+    case "rebuild_codex_usage":
+      return { method: "POST", url: "/api/usage/rebuild-codex" };
+    case "get_usage_data_sources":
+      return { method: "GET", url: "/api/usage/data-sources" };
+    case "get_pricing_model_source":
+      return {
+        method: "GET",
+        url: `/api/${enc(a.appType)}/pricing-model-source`,
+      };
+    case "set_pricing_model_source":
+      return {
+        method: "PUT",
+        url: `/api/${enc(a.appType)}/pricing-model-source`,
+        body: { value: a.value },
+      };
 
     // ---------- settings & environment ----------
     case "get_settings":

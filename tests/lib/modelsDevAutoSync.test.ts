@@ -200,21 +200,45 @@ describe("syncModelsDevPricing", () => {
   });
 });
 
+describe("syncModelsDevPricing · batch failure", () => {
+  it("rejects and records the error when the batch update fails, so the UI never reports an update", async () => {
+    getModelsDevSyncConfig.mockResolvedValue(state);
+    updateModelPricingBatch.mockRejectedValue(new Error("invalid entry"));
+    recordModelsDevSyncResult.mockResolvedValue(undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          relay: {
+            models: {
+              "custom-model": { name: "Custom", cost: { input: 1, output: 2 } },
+            },
+          },
+        }),
+      }),
+    );
+
+    await expect(syncModelsDevPricing(state, true)).rejects.toThrow(
+      "invalid entry",
+    );
+    expect(recordModelsDevSyncResult).toHaveBeenCalledWith(
+      null,
+      "invalid entry",
+    );
+  });
+});
+
 describe("syncModelsDevPricingOnStartup · web", () => {
-  it("is skipped without reading the sync config (get_models_dev_sync_config is not mapped)", async () => {
-    getModelsDevSyncConfig
-      .mockReset()
-      .mockRejectedValue(new Error("unsupported"));
+  it("is not skipped in web: reads the sync config like on desktop", async () => {
+    getModelsDevSyncConfig.mockReset().mockResolvedValue({
+      ...state,
+      config: { ...state.config, autoSyncEnabled: false },
+    });
     setWeb(true);
 
-    await expect(syncModelsDevPricingOnStartup()).resolves.toEqual({
-      skipped: true,
-      selected: 0,
-      imported: 0,
-      changed: 0,
-      syncedAt: null,
-    });
-    expect(getModelsDevSyncConfig).not.toHaveBeenCalled();
-    expect(recordModelsDevSyncResult).not.toHaveBeenCalled();
+    const result = await syncModelsDevPricingOnStartup();
+    expect(getModelsDevSyncConfig).toHaveBeenCalled();
+    expect(result.skipped).toBe(true);
   });
 });

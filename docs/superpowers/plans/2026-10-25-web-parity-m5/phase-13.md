@@ -23,10 +23,10 @@ Scope: `src-tauri/src/web_api.rs` (11 роутов), `src-tauri/tests/web_api_us
 - [ ] `src-tauri/tests/web_api_usage_admin.rs`: update → `GET /api/usage/model-pricing` отражает; batch из 3 записей → 3; delete; models.dev config round-trip; record result → config показывает `lastSyncedAt`/ошибку; pricing source round-trip, невалидное значение → 400; rebuild на seeded Codex-сессиях в temp HOME создаёт backup-файл и пересобирает usage; два одновременных rebuild сериализуются mutex-ом.
 
 ### Task 2: frontend
-- [ ] 11 case в `mapCommand`.
-- [ ] `tests/lib/usageAdminApi.test.ts`: URL/метод/body каждой функции.
-- [ ] Проверить в web: models.dev отвечает браузеру с CORS-заголовками (desktop-webview тоже ходит браузерным fetch, но с другим origin). Если нет — Notes и отдельный server-side fetch-роут в этой же фазе.
-- [ ] Снять WEB-00-гейты с `PricingConfigPanel`/`ModelsDevAutoSyncPanel`/rebuild (таблица фазы 6).
+- [x] 11 case в `mapCommand`.
+- [x] `tests/lib/usageAdminApi.test.ts`: URL/метод/body каждой функции.
+- [x] Проверить в web: models.dev отвечает браузеру с CORS-заголовками (desktop-webview тоже ходит браузерным fetch, но с другим origin). Если нет — Notes и отдельный server-side fetch-роут в этой же фазе. (Закрыто: `models.dev/api.json` отвечает `access-control-allow-origin: *`, `fetchModelsDev` — простой GET без кастомных заголовков, preflight нет.)
+- [x] Снять WEB-00-гейты с `PricingConfigPanel`/`ModelsDevAutoSyncPanel`/rebuild (таблица фазы 6).
 
 ### Task 3: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server`.
