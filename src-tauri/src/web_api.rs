@@ -304,6 +304,28 @@ pub fn router(state: SharedState) -> Router {
             "/api/openclaw/tools",
             get(openclaw_tools_get).put(openclaw_tools_set),
         )
+        .route(
+            "/api/openclaw/workspace/:filename",
+            get(openclaw_workspace_get).put(openclaw_workspace_set),
+        )
+        .route(
+            "/api/openclaw/workspace-paths",
+            get(openclaw_workspace_paths),
+        )
+        .route(
+            "/api/openclaw/daily-memory",
+            get(openclaw_daily_memory_list),
+        )
+        .route(
+            "/api/openclaw/daily-memory/search",
+            get(openclaw_daily_memory_search),
+        )
+        .route(
+            "/api/openclaw/daily-memory/:filename",
+            get(openclaw_daily_memory_get)
+                .put(openclaw_daily_memory_set)
+                .delete(openclaw_daily_memory_delete),
+        )
         .with_state(state)
 }
 
@@ -2441,4 +2463,84 @@ async fn hermes_web_ui(headers: HeaderMap, Query(q): Query<HermesWebUiQuery>) ->
         normalize_web_path(q.path.as_deref())
     );
     ok(json!({ "reachable": reachable, "port": port, "url": url }))
+}
+
+// ---------- OpenClaw workspace + daily memory (WEB-15) ----------
+//
+// Filename validation lives in `commands::workspace`; the handlers call the
+// same validators first only so a bad name answers 400 (errors that come out
+// of `blocking_api`-style paths are 500).
+
+fn cmd_result<T: serde::Serialize>(r: Result<T, String>) -> ApiResult {
+    match r {
+        Ok(v) => ok(v),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct OpenClawContentReq {
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct OpenClawMemorySearchQuery {
+    #[serde(default)]
+    q: String,
+}
+
+async fn openclaw_workspace_get(Path(filename): Path<String>) -> ApiResult {
+    if let Err(e) = crate::commands::validate_filename(&filename) {
+        return bad_request(e);
+    }
+    cmd_result(crate::commands::read_workspace_file(filename).await)
+}
+
+async fn openclaw_workspace_set(
+    Path(filename): Path<String>,
+    Json(body): Json<OpenClawContentReq>,
+) -> ApiResult {
+    if let Err(e) = crate::commands::validate_filename(&filename) {
+        return bad_request(e);
+    }
+    cmd_result(crate::commands::write_workspace_file(filename, body.content).await)
+}
+
+async fn openclaw_workspace_paths() -> ApiResult {
+    ok(json!({
+        "workspace": crate::commands::workspace_subdir("workspace"),
+        "memory": crate::commands::workspace_subdir("memory"),
+    }))
+}
+
+async fn openclaw_daily_memory_list() -> ApiResult {
+    cmd_result(crate::commands::list_daily_memory_files().await)
+}
+
+async fn openclaw_daily_memory_search(Query(q): Query<OpenClawMemorySearchQuery>) -> ApiResult {
+    cmd_result(crate::commands::search_daily_memory_files(q.q).await)
+}
+
+async fn openclaw_daily_memory_get(Path(filename): Path<String>) -> ApiResult {
+    if let Err(e) = crate::commands::validate_daily_memory_filename(&filename) {
+        return bad_request(e);
+    }
+    cmd_result(crate::commands::read_daily_memory_file(filename).await)
+}
+
+async fn openclaw_daily_memory_set(
+    Path(filename): Path<String>,
+    Json(body): Json<OpenClawContentReq>,
+) -> ApiResult {
+    if let Err(e) = crate::commands::validate_daily_memory_filename(&filename) {
+        return bad_request(e);
+    }
+    cmd_result(crate::commands::write_daily_memory_file(filename, body.content).await)
+}
+
+async fn openclaw_daily_memory_delete(Path(filename): Path<String>) -> ApiResult {
+    if let Err(e) = crate::commands::validate_daily_memory_filename(&filename) {
+        return bad_request(e);
+    }
+    cmd_result(crate::commands::delete_daily_memory_file(filename).await)
 }

@@ -264,7 +264,7 @@ async fn put_with_wrong_body_key_is_rejected() {
         .await
         .expect("infallible");
     let status = resp.status();
-    assert!(status.is_client_error(), "{status}");
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{status}");
     assert_eq!(
         fs::read_to_string(dir.join("openclaw.json")).unwrap(),
         before
