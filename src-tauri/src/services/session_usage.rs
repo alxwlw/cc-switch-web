@@ -1613,19 +1613,28 @@ mod tests {
     }
 
     /// 临时 HOME 隔离 backup/Codex 目录，避免测试读写真实 ~/.cc-switch 与 ~/.codex。
+    /// CC_SWITCH_TEST_HOME 是进程级变量：guard 持有模块内互斥锁直到 Drop 恢复变量之后才释放，
+    /// 让并行测试不会互相覆盖或删除对方的值。
     struct IsolatedHome {
-        _dir: tempfile::TempDir,
         previous: Option<std::ffi::OsString>,
+        _dir: tempfile::TempDir,
+        _guard: std::sync::MutexGuard<'static, ()>,
     }
 
     impl IsolatedHome {
         fn new() -> Self {
+            static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+            let guard = LOCK
+                .get_or_init(|| std::sync::Mutex::new(()))
+                .lock()
+                .unwrap_or_else(|err| err.into_inner());
             let dir = tempfile::tempdir().expect("temp home");
             let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
             std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
             Self {
-                _dir: dir,
                 previous,
+                _dir: dir,
+                _guard: guard,
             }
         }
     }
