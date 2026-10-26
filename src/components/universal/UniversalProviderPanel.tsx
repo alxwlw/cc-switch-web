@@ -172,7 +172,7 @@ export function UniversalProviderPanel() {
       );
     } catch (error) {
       console.error("Failed to sync universal provider:", error);
-      // sync 不改统一供应商记录本身（失败时库里的列表不变），所以不刷新列表
+      // sync 只写各应用的子供应商，不改统一供应商记录本身，所以不刷新本列表
       toast.error(
         t("universalProvider.syncError", {
           defaultValue: "同步统一供应商失败",

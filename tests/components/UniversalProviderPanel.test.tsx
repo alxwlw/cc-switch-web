@@ -167,7 +167,8 @@ describe("UniversalProviderPanel", () => {
     expect(api.getAll).toHaveBeenCalledTimes(1);
   });
 
-  it("правка: upsert без sync, форма закрывается из режима правки только при успехе", async () => {
+  // Реальная модалка закрывается сама (onClose сразу после onSave), здесь — только состояние панели.
+  it("правка: upsert без sync, панель сбрасывает editingProvider только при успехе", async () => {
     render(<UniversalProviderPanel />);
     await screen.findByText("Univ");
     fireEvent.click(screen.getByText("edit"));
