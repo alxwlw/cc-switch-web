@@ -27,12 +27,12 @@ Scope: новый `src-tauri/src/bootstrap.rs` (или `bootstrap/`), `src-tauri
 - [x] Тесты изолированы: `ensure_test_home`/`reset_test_fs`/`test_mutex` из support.rs.
 
 ### Task 4: гейты, PR, Plane
-- [ ] полный набор гейтов + `cargo build --release --example server` компилируется (CI его не собирает — проверить локально).
-- [ ] ветка `web-parity/web-32-bootstrap`, PR; DX-90 → In Review + ссылка. Закрыть чекбоксы, Notes (что пропущено и почему — нужно для WEB-01/11/23/26/28).
+- [x] полный набор гейтов + `cargo build --release --example server` компилируется (CI его не собирает — проверить локально).
+- [x] ветка `web-parity/web-32-bootstrap`, PR; DX-90 → In Review + ссылка. Закрыть чекбоксы, Notes (что пропущено и почему — нужно для WEB-01/11/23/26/28).
 
 ## Notes for next phase
 
-- **Статус**: STATUS_PLACEHOLDER
+- **Статус**: ветка `web-parity/web-32-bootstrap` (worktree `.worktrees/web-32`), PR #8 (https://github.com/alxwlw/cc-switch-web/pull/8) открыт, DX-90 In Review (комментарий со ссылкой). Задачи 1–3 прошли implement→review (T1 r1 после fix DP-024, T2 r1 после fix DP-026/DP-019/DP-015, T3 r0), T4 — контроллером. Финальные гейты на `fca25ba6`: fmt/clippy чисто, `cargo build --release --example server` ок, cargo test 4268 passed / 3 failed (baseline: omp_search_paths, 2× file_modes::switch_*); `pnpm typecheck`/`format:check` чисто, `test:unit` 3629 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice), `build:renderer`/`build:web` ок. После merge — `post-merge`: пересобрать server и `dist-web`, деплой по пункту «Деплой» ниже; DX-90 → Done.
 - **API `bootstrap.rs`** (`pub mod bootstrap`, для WEB-01/11/23/26/28):
   - pre-DB, без диалогов: `BootstrapPaths::resolve()` (:123), `needs_legacy_migration` (:136, решается ОДИН раз до retry-цикла — DP-024: иначе удалённый во время диалога `config.json` перестаёт мигрировать), `load_legacy_config` (:146, одна попытка), `precheck_db_version` (:164, сам пишет `init_status` с `kind: db_version_too_new`), `open_database` (:192). Ошибки — `BootstrapError::{LegacyConfig, DbVersionTooNew, DatabaseInit}` (:86).
   - post-DB, никогда не фатален: `apply_persisted_log_level` (:207), `migrate_legacy_config` (:226), `run_post_db_bootstrap(&AppState, CodexHistory, &mut BootstrapReport)` (:343) — 11 именованных шагов (`recover_on_startup`, `skill_repos`, skills SSOT, first-run imports, `official_providers`, `codex_history`, additive live imports, `omo`/`omo-slim`, `mcp_import`, prompts), исход каждого — `StepOutcome::{Done, Skipped, Failed, Deferred}`, `report.step(name)` / `report.failures()`.
