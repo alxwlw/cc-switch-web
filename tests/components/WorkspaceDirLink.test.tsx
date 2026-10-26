@@ -66,11 +66,22 @@ describe("WorkspaceDirLink", () => {
     );
   });
 
-  it("web: keeps the label when the paths request fails", async () => {
+  it("web: keeps the label, no copy button and a warning when the paths request fails", async () => {
     setWeb(true);
-    vi.mocked(workspaceApi.getPaths).mockRejectedValue(new Error("boom"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const boom = new Error("boom");
+    vi.mocked(workspaceApi.getPaths).mockRejectedValue(boom);
     render(<WorkspaceDirLink subdir="workspace" label="~/w/" />);
-    await waitFor(() => expect(workspaceApi.getPaths).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(warn).toHaveBeenCalledWith(
+        "[WorkspaceDirLink] Failed to load workspace paths",
+        boom,
+      ),
+    );
     expect(screen.getByText("~/w/")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "workspace.copyPath" }),
+    ).toBeNull();
+    warn.mockRestore();
   });
 });

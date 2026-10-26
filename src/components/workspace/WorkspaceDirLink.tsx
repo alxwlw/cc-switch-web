@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 interface WorkspaceDirLinkProps {
   subdir: "workspace" | "memory";
-  /** Path shown on desktop (and in web until the server path arrives). */
+  /** Path shown on desktop (and in web until the server path arrives, with no copy button). */
   label: string;
   className?: string;
 }
@@ -37,8 +37,12 @@ const WorkspaceDirLink: React.FC<WorkspaceDirLinkProps> = ({
       .then((paths) => {
         if (!cancelled) setServerPath(paths[subdir]);
       })
-      .catch(() => {
-        // keep the generic label
+      .catch((error) => {
+        // keep the generic label, without a copy button
+        console.warn(
+          "[WorkspaceDirLink] Failed to load workspace paths",
+          error,
+        );
       });
     return () => {
       cancelled = true;
@@ -62,10 +66,10 @@ const WorkspaceDirLink: React.FC<WorkspaceDirLinkProps> = ({
     );
   }
 
-  const shown = serverPath ?? label;
   const handleCopy = async () => {
+    if (serverPath === null) return;
     try {
-      await copyText(shown);
+      await copyText(serverPath);
       toast.success(t("workspace.pathCopied"));
     } catch {
       toast.error(t("workspace.pathCopyFailed"));
@@ -79,16 +83,18 @@ const WorkspaceDirLink: React.FC<WorkspaceDirLinkProps> = ({
         className,
       )}
     >
-      <span className="break-all">{shown}</span>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6"
-        aria-label={t("workspace.copyPath")}
-        onClick={handleCopy}
-      >
-        <Copy className="w-3.5 h-3.5" />
-      </Button>
+      <span className="break-all">{serverPath ?? label}</span>
+      {serverPath !== null && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          aria-label={t("workspace.copyPath")}
+          onClick={handleCopy}
+        >
+          <Copy className="w-3.5 h-3.5" />
+        </Button>
+      )}
     </span>
   );
 };
