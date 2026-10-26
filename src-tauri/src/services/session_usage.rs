@@ -1612,6 +1612,60 @@ mod tests {
         assert_eq!(crate::usage_events::take_test_notify_count(), 1);
     }
 
+    /// 临时 HOME 隔离 backup/Codex 目录，避免测试读写真实 ~/.cc-switch 与 ~/.codex。
+    struct IsolatedHome {
+        _dir: tempfile::TempDir,
+        previous: Option<std::ffi::OsString>,
+    }
+
+    impl IsolatedHome {
+        fn new() -> Self {
+            let dir = tempfile::tempdir().expect("temp home");
+            let previous = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
+            Self {
+                _dir: dir,
+                previous,
+            }
+        }
+    }
+
+    impl Drop for IsolatedHome {
+        fn drop(&mut self) {
+            match self.previous.take() {
+                Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
+
+    #[test]
+    fn rebuild_codex_usage_notifies_once_after_successful_reset() {
+        let _home = IsolatedHome::new();
+        let db = Database::memory().expect("memory db");
+        crate::usage_events::take_test_notify_count();
+        let result = rebuild_codex_usage_unlocked(&db);
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(crate::usage_events::take_test_notify_count(), 1);
+    }
+
+    #[test]
+    fn rebuild_codex_usage_notifies_when_reset_succeeds_and_import_errors() -> Result<(), AppError>
+    {
+        let _home = IsolatedHome::new();
+        let db = Database::memory()?;
+        {
+            // 缺表时 reset 跳过游标清理（成功），而 import 的游标预载失败（报错）
+            let conn = lock_conn!(db.conn);
+            conn.execute("DROP TABLE session_log_sync", [])?;
+        }
+        crate::usage_events::take_test_notify_count();
+        let result = rebuild_codex_usage_unlocked(&db);
+        assert!(matches!(result, Err(AppError::Database(_))), "{result:?}");
+        assert_eq!(crate::usage_events::take_test_notify_count(), 1);
+        Ok(())
+    }
+
     #[test]
     fn last_sync_completed_at_only_moves_forward() {
         // 别的测试会跑 sync_all_unlocked 记下「现在」，这里用一小时后的时间避开它们

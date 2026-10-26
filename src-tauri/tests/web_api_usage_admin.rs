@@ -335,7 +335,7 @@ async fn rebuild_codex_backs_up_and_reimports_from_session_files() {
 }
 
 #[tokio::test]
-async fn last_sync_is_null_or_a_timestamp_and_moves_after_sync() {
+async fn last_sync_is_a_timestamp_at_or_after_a_sync() {
     let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     let router = fresh();
     let before = chrono::Utc::now().timestamp_millis();
