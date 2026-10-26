@@ -252,6 +252,28 @@ describe("web-shims/event", () => {
     expect(FakeES.instances).toHaveLength(4);
   });
 
+  it("drops an invalid-JSON frame and logs it once", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const h = vi.fn();
+    await shim.listen("x", h);
+    last().emit("x", "{not json");
+    expect(h).not.toHaveBeenCalled();
+    expect(err).toHaveBeenCalledTimes(1);
+    err.mockRestore();
+  });
+
+  it("a stale backoff timer does not spawn a second connection after re-listen", async () => {
+    const un = await shim.listen("x", () => {});
+    last().fail(true); // 1s timer armed
+    un();
+    vi.advanceTimersByTime(500);
+    await shim.listen("x", () => {});
+    expect(FakeES.instances).toHaveLength(2);
+    last().fail(true); // new 1s timer armed
+    vi.advanceTimersByTime(500); // stale timer would fire here
+    expect(FakeES.instances).toHaveLength(2);
+  });
+
   it("a never-emitted name (configLoadError) stays silent", async () => {
     const h = vi.fn();
     await shim.listen("configLoadError", h);
