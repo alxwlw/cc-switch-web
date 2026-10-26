@@ -69,19 +69,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // may reach `block_on`, so it runs on the blocking pool, not on this
     // runtime thread. The Codex history migrations go to the blocking pool too
     // so a large history does not delay the listener.
-    let rust_log_max = env::var_os("RUST_LOG").map(|_| log::max_level());
     let bootstrapped = tokio::task::spawn_blocking(|| {
         run_headless_bootstrap_with(CodexHistory::Spawn(&|job| {
             tokio::task::spawn_blocking(job);
         }))
     })
     .await?;
-    // The persisted log level (applied inside the bootstrap) must not silence
-    // an explicit RUST_LOG.
-    if let Some(max) = rust_log_max {
-        log::set_max_level(max);
-    }
-
     let api = match bootstrapped {
         Ok(boot) => {
             for (step, err) in boot.report.failures() {
