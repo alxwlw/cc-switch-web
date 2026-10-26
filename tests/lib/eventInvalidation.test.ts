@@ -8,16 +8,22 @@ import {
 } from "vitest";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 
+let failListen = false;
 const handlers = new Map<string, Set<(e: { payload: unknown }) => void>>();
 vi.mock("@tauri-apps/api/event", () => ({
   listen: async (name: string, fn: (e: { payload: unknown }) => void) => {
+    if (failListen) throw new Error("boom");
     if (!handlers.has(name)) handlers.set(name, new Set());
     handlers.get(name)!.add(fn);
     return () => handlers.get(name)!.delete(fn);
   },
 }));
 
-import { subscribeEventInvalidation } from "../../src/lib/query/eventInvalidation";
+import {
+  EVENT_INVALIDATIONS,
+  startEventInvalidation,
+  subscribeEventInvalidation,
+} from "../../src/lib/query/eventInvalidation";
 
 const fire = (name: string, payload: unknown = null) =>
   handlers.get(name)?.forEach((fn) => fn({ payload }));
@@ -77,7 +83,7 @@ describe("subscribeEventInvalidation", () => {
     await subscribeEventInvalidation(qc);
     fire("resync");
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0][0]).toBeUndefined();
+    expect(spy.mock.calls[0]).toEqual([]);
   });
 
   it("does not map events owned elsewhere", async () => {
@@ -87,24 +93,53 @@ describe("subscribeEventInvalidation", () => {
     }
   });
 
-  it("two events during one in-flight refetch do not restart it", async () => {
-    let release!: (v: number) => void;
-    const fn = vi.fn(() => new Promise<number>((r) => (release = r)));
-    qc.setQueryData(["usage", "x"], 0); // cancelRefetch only bites with data
+  it("an event during an in-flight fetch restarts it and ends with new data", async () => {
+    let server = "old";
+    const resolvers: Array<() => void> = [];
+    const fn = vi.fn(() => {
+      const snap = server; // value as of when the request started
+      return new Promise<string>((r) => resolvers.push(() => r(snap)));
+    });
+    qc.setQueryData(["usage", "x"], "old");
     const observer = new QueryObserver(qc, {
       queryKey: ["usage", "x"],
       queryFn: fn,
     });
     const unobserve = observer.subscribe(() => {});
-    expect(fn).toHaveBeenCalledTimes(1); // mount fetch, still pending
+    expect(fn).toHaveBeenCalledTimes(1); // started before the change
     await subscribeEventInvalidation(qc);
+    server = "new";
     fire("usage-log-recorded");
-    fire("usage-log-recorded");
-    expect(fn).toHaveBeenCalledTimes(1);
-    release(1);
-    await vi.waitFor(() => expect(observer.getCurrentResult().data).toBe(1));
-    expect(fn).toHaveBeenCalledTimes(1);
+    expect(fn).toHaveBeenCalledTimes(2);
+    resolvers.forEach((r) => r());
+    await vi.waitFor(() =>
+      expect(observer.getCurrentResult().data).toBe("new"),
+    );
     unobserve();
+  });
+
+  it("startEventInvalidation registers nothing when disabled", async () => {
+    startEventInvalidation(qc, false, () => {});
+    await Promise.resolve();
+    expect(handlers.size).toBe(0);
+  });
+
+  it("startEventInvalidation listens to every mapped name plus resync", async () => {
+    startEventInvalidation(qc, true, () => {});
+    await vi.waitFor(() => expect(handlers.has("resync")).toBe(true));
+    expect([...handlers.keys()].sort()).toEqual(
+      [...Object.keys(EVENT_INVALIDATIONS), "resync"].sort(),
+    );
+  });
+
+  it("startEventInvalidation reports subscribe failures", async () => {
+    const onError = vi.fn();
+    const bad = { invalidateQueries: vi.fn() } as unknown as QueryClient;
+    handlers.clear();
+    failListen = true;
+    startEventInvalidation(bad, true, onError);
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    failListen = false;
   });
 
   it("unsubscribe detaches every handler", async () => {

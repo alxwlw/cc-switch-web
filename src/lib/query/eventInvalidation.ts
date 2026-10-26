@@ -49,10 +49,8 @@ export const EVENT_INVALIDATIONS: Record<string, KeysFor> = {
 
 export const RESYNC_EVENT = "resync";
 
-// cancelRefetch:false joins an in-flight fetch instead of restarting it, so
-// overlapping handlers (App.tsx, UsageDashboard) and explicit mutation
-// refetches do not cancel each other.
-const OPTS = { cancelRefetch: false } as const;
+// Default cancelRefetch (true): a fetch already in flight may have started
+// before the server change, so it is restarted rather than joined.
 
 /**
  * Subscribe once at the app root (web build only). The subscription is never
@@ -67,15 +65,25 @@ export async function subscribeEventInvalidation(
     offs.push(
       await listen<Payload>(name, (e) => {
         for (const queryKey of keysFor(e.payload)) {
-          void queryClient.invalidateQueries({ queryKey }, OPTS);
+          void queryClient.invalidateQueries({ queryKey });
         }
       }),
     );
   }
   offs.push(
     await listen(RESYNC_EVENT, () => {
-      void queryClient.invalidateQueries(undefined, OPTS);
+      void queryClient.invalidateQueries();
     }),
   );
   return () => offs.forEach((off) => off());
+}
+
+/** Root wiring: registers nothing unless `enabled` (the web build). */
+export function startEventInvalidation(
+  queryClient: QueryClient,
+  enabled: boolean,
+  onError: (error: unknown) => void,
+): void {
+  if (!enabled) return;
+  subscribeEventInvalidation(queryClient).catch(onError);
 }
