@@ -435,7 +435,7 @@ describe("SettingsPage · WEB-00", () => {
     );
   });
 
-  it("web: appConfig keeps manual paths, disables Browse, hides Codex block, says paths are on the server", async () => {
+  it("web: appConfig keeps manual paths, disables Browse, shows Claude toggles and Codex block, says paths are on the server", async () => {
     setWeb(true);
     renderPage("appConfig");
 
@@ -443,11 +443,11 @@ describe("SettingsPage · WEB-00", () => {
       screen.getByRole("switch", {
         name: "settings.enableClaudePluginIntegration",
       }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     expect(
       screen.getByRole("switch", { name: "settings.skipClaudeOnboarding" }),
-    ).toBeDisabled();
-    expect(screen.queryByText("codex-auth-settings")).toBeNull();
+    ).toBeEnabled();
+    expect(screen.getByText("codex-auth-settings")).toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent("web.serverPath");
 
     const browse = screen.getAllByRole("button", {

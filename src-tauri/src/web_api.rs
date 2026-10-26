@@ -230,6 +230,32 @@ pub fn router(state: SharedState) -> Router {
             "/api/custom-icons/:id",
             put(rename_custom_icon).delete(delete_custom_icon),
         )
+        // app-specific settings (WEB-20)
+        .route(
+            "/api/codex/unify-history-backup",
+            get(codex_unify_history_backup),
+        )
+        .route(
+            "/api/codex/forces-multi-agent-v2",
+            get(codex_forces_multi_agent_v2),
+        )
+        .route(
+            "/api/codex/session-compression",
+            get(codex_session_compression_get).put(codex_session_compression_set),
+        )
+        .route(
+            "/api/codex/sessions-disk-usage",
+            get(codex_sessions_disk_usage),
+        )
+        .route(
+            "/api/codex/restore-unified-history",
+            post(codex_restore_unified_history),
+        )
+        .route("/api/claude/plugin-config", post(claude_plugin_config))
+        .route(
+            "/api/claude/onboarding-skip",
+            post(claude_onboarding_skip_set).delete(claude_onboarding_skip_clear),
+        )
         .with_state(state)
 }
 
@@ -1993,4 +2019,110 @@ async fn delete_custom_icon(State(state): State<SharedState>, Path(id): Path<Str
         Ok(Err(e)) => fail(e.to_string()),
         Err(e) => fail(format!("delete custom icon task failed: {e}")),
     }
+}
+
+// ---------- app-specific settings: Codex / Claude (WEB-20) ----------
+
+/// Runs a blocking, fallible closure and maps both failure layers to `fail`.
+async fn blocking_api<T, E, F>(what: &'static str, f: F) -> ApiResult
+where
+    T: serde::Serialize + Send + 'static,
+    E: ToString + Send + 'static,
+    F: FnOnce() -> Result<T, E> + Send + 'static,
+{
+    match tokio::task::spawn_blocking(f).await {
+        Ok(Ok(v)) => ok(v),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("{what} task failed: {e}")),
+    }
+}
+
+async fn codex_unify_history_backup() -> ApiResult {
+    blocking_api("codex unify backup probe", || {
+        Ok::<_, String>(crate::codex_history_migration::has_codex_official_history_unify_backup())
+    })
+    .await
+}
+
+async fn codex_forces_multi_agent_v2() -> ApiResult {
+    blocking_api("codex multi-agent probe", || {
+        crate::codex_config::read_codex_config_text()
+            .map(|text| crate::codex_config::codex_config_forces_multi_agent_v2(&text))
+    })
+    .await
+}
+
+async fn codex_session_compression_get() -> ApiResult {
+    blocking_api(
+        "codex session compression read",
+        crate::services::codex_session_compression::is_enabled,
+    )
+    .await
+}
+
+#[derive(Deserialize)]
+struct CodexSessionCompressionReq {
+    enabled: bool,
+}
+
+async fn codex_session_compression_set(
+    State(state): State<SharedState>,
+    Json(body): Json<CodexSessionCompressionReq>,
+) -> ApiResult {
+    blocking_api("codex session compression write", move || {
+        crate::services::codex_session_compression::set_enabled(&state.db, body.enabled)
+    })
+    .await
+}
+
+async fn codex_sessions_disk_usage() -> ApiResult {
+    blocking_api("codex disk usage", || {
+        Ok::<_, String>(crate::services::codex_session_compression::sessions_disk_usage())
+    })
+    .await
+}
+
+async fn codex_restore_unified_history() -> ApiResult {
+    blocking_api("codex history restore", || {
+        crate::codex_history_migration::restore_codex_official_history_from_backups().map(|o| {
+            crate::commands::CodexUnifyHistoryRestoreResult {
+                restored_jsonl_files: o.restored_jsonl_files,
+                restored_state_rows: o.restored_state_rows,
+                skipped_reason: o.skipped_reason,
+            }
+        })
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct ClaudePluginConfigReq {
+    official: bool,
+}
+
+async fn claude_plugin_config(Json(body): Json<ClaudePluginConfigReq>) -> ApiResult {
+    blocking_api("claude plugin config", move || {
+        if body.official {
+            crate::claude_plugin::clear_claude_config()
+        } else {
+            crate::claude_plugin::write_claude_config()
+        }
+    })
+    .await
+}
+
+async fn claude_onboarding_skip_set() -> ApiResult {
+    blocking_api(
+        "claude onboarding skip",
+        crate::claude_mcp::set_has_completed_onboarding,
+    )
+    .await
+}
+
+async fn claude_onboarding_skip_clear() -> ApiResult {
+    blocking_api(
+        "claude onboarding restore",
+        crate::claude_mcp::clear_has_completed_onboarding,
+    )
+    .await
 }

@@ -637,7 +637,7 @@ describe("useProviderActions", () => {
     expect(settingsApiApplyMock).toHaveBeenCalledWith({ official: true });
   });
 
-  it("web: does not read settings or call applyClaudePluginConfig when switching Claude provider", async () => {
+  it("web: applies the Claude plugin config when switching Claude provider", async () => {
     setWeb(true);
     switchProviderMutateAsync.mockResolvedValueOnce(undefined);
     settingsApiGetMock.mockResolvedValue({
@@ -655,7 +655,7 @@ describe("useProviderActions", () => {
     });
 
     expect(switchProviderMutateAsync).toHaveBeenCalledWith(provider.id);
-    expect(settingsApiApplyMock).not.toHaveBeenCalled();
+    expect(settingsApiApplyMock).toHaveBeenCalledWith({ official: true });
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 

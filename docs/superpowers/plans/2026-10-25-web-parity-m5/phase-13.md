@@ -38,6 +38,11 @@ Scope: `src-tauri/src/web_api.rs` (11 роутов), `src-tauri/tests/web_api_us
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-26**: PR #14 merged `cf41a7ec` → main; live на `cc-switch-web.service`.
+  - Server пересобран из main (`cargo build --release --example server` → `~/.local/bin/cc-switch-web`); бинарник фазы 12 сохранён в `cc-switch-web.prev`. `pnpm build:web` выполнен в main-checkout. Перед restart БД скопирована в `~/.cc-switch-web/backups-predeploy-p13-<ts>/`. Миграций нет.
+  - Session-usage worker на живом сервисе: стартовый раунд через 2 с после старта, `[SESSION-SYNC] 同步完成: 导入 1269 条, 跳过 0 条, 扫描 3681 个文件`; `GET /api/usage/last-sync` = время этого раунда.
+  - Проверено: unit active, WARN/ERROR в journal нет. `/api/health`, `/api/init-status`, `GET /api/usage/{last-sync,data-sources,models-dev/config}`, `GET /api/{claude,codex}/pricing-model-source` → 200; `/api/bogus/pricing-model-source` → 400; отдаваемый `index.html` совпадает со сборкой.
+  - DX-70 Done (комментарий со ссылками file:line). Worktree `.worktrees/web-12`, локальная и remote ветки удалены; ledgers прогона перенесены в `.claude/plans/2026-10-25-web-parity-m5-p13` main-checkout.
 - **Статус до merge (2026-10-26)**: ветка `web-parity/web-12-usage-admin` (worktree `.worktrees/web-12`), PR #14 (https://github.com/alxwlw/cc-switch-web/pull/14) открыт; DX-70 In Review (комментарий со ссылкой).
   - Т1 одобрена с r3. r0: SHOULD-FIX DP-018, шаг notify после rebuild не закреплён тестом, закрыто в `16b15223`. r1: SHOULD-FIX DP-017, `IsolatedHome` менял `CC_SWITCH_TEST_HOME` без блокировки, закрыто модульным mutex в `8c8ee539`.
   - После одобрения r2 финальный полный `cargo test` уронил `services::provider::tests::update_claude_desktop_route_provider_rewrites_profile_in_route_mode`: модульный mutex не исключает `#[serial]`-тесты других модулей. Т1 переоткрыта через `--force`, тесты переведены на `#[serial]` в `09c8c2b9`, r3 одобрено.

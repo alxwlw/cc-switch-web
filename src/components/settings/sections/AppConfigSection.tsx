@@ -161,8 +161,6 @@ export function AppConfigSection({
               <>
                 <SettingsSwitchRow
                   label={t("settings.enableClaudePluginIntegration")}
-                  // WEB-00: apply_claude_plugin_config не поддержан — снимет WEB-20
-                  unavailableInWeb
                   help={{
                     title: t("settings.enableClaudePluginIntegration"),
                     body: t(
@@ -176,8 +174,6 @@ export function AppConfigSection({
                 />
                 <SettingsSwitchRow
                   label={t("settings.skipClaudeOnboarding")}
-                  // WEB-00: apply/clear_claude_onboarding_skip не поддержаны — снимет WEB-20
-                  unavailableInWeb
                   help={{
                     title: t("settings.skipClaudeOnboarding"),
                     body: t("settings.skipClaudeOnboardingDescription"),
@@ -189,8 +185,7 @@ export function AppConfigSection({
                 />
               </>
             )}
-            {/* WEB-00: Codex compression/unify history — desktop-only команды, снимет WEB-20 */}
-            {app === "codex" && !isWeb && (
+            {app === "codex" && (
               <CodexAuthSettings
                 settings={settings}
                 onChange={onAutoSave}
