@@ -104,6 +104,18 @@ pub fn router(state: SharedState) -> Router {
             "/api/:app/providers/:id/endpoints/last-used",
             post(endpoint_last_used),
         )
+        // proxy rectifier / optimizer / log settings, server log file
+        .route(
+            "/api/settings/rectifier",
+            get(get_rectifier_config).put(set_rectifier_config),
+        )
+        .route(
+            "/api/settings/optimizer",
+            get(get_optimizer_config).put(set_optimizer_config),
+        )
+        .route("/api/settings/log", get(get_log_config).put(set_log_config))
+        .route("/api/logs/tail", get(logs_tail))
+        .route("/api/logs/download", get(logs_download))
         // universal providers (cross-app)
         .route(
             "/api/universal-providers",
@@ -496,6 +508,149 @@ async fn delete_provider(
         Ok(Err(e)) => fail(e.to_string()),
         Err(e) => fail(format!("delete task failed: {e}")),
     }
+}
+
+// ---------- rectifier / optimizer / log settings, server log file ----------
+
+#[derive(Deserialize)]
+struct ConfigReq<T> {
+    config: T,
+}
+
+macro_rules! db_call {
+    ($state:expr, $what:literal, |$db:ident| $body:expr) => {
+        match tokio::task::spawn_blocking(move || {
+            let $db = &$state.db;
+            $body
+        })
+        .await
+        {
+            Ok(Ok(v)) => ok(v),
+            Ok(Err(e)) => fail(e.to_string()),
+            Err(e) => fail(format!("{} task failed: {e}", $what)),
+        }
+    };
+}
+
+async fn get_rectifier_config(State(state): State<SharedState>) -> ApiResult {
+    db_call!(state, "get rectifier config", |db| db
+        .get_rectifier_config())
+}
+
+async fn set_rectifier_config(
+    State(state): State<SharedState>,
+    Json(body): Json<ConfigReq<crate::proxy::types::RectifierConfig>>,
+) -> ApiResult {
+    db_call!(state, "set rectifier config", |db| db
+        .set_rectifier_config(&body.config)
+        .map(|()| true))
+}
+
+async fn get_optimizer_config(State(state): State<SharedState>) -> ApiResult {
+    db_call!(state, "get optimizer config", |db| db
+        .get_optimizer_config())
+}
+
+async fn set_optimizer_config(
+    State(state): State<SharedState>,
+    Json(body): Json<ConfigReq<crate::proxy::types::OptimizerConfig>>,
+) -> ApiResult {
+    db_call!(state, "set optimizer config", |db| db
+        .set_optimizer_config(&body.config)
+        .map(|()| true))
+}
+
+async fn get_log_config(State(state): State<SharedState>) -> ApiResult {
+    db_call!(state, "get log config", |db| db.get_log_config())
+}
+
+/// Same effect as the desktop command: saves the config and applies the level
+/// to the running logger (`log::set_max_level`).
+async fn set_log_config(
+    State(state): State<SharedState>,
+    Json(body): Json<ConfigReq<crate::proxy::types::LogConfig>>,
+) -> ApiResult {
+    db_call!(state, "set log config", |db| {
+        crate::services::ConfigService::set_log_config(db, &body.config).map(|()| true)
+    })
+}
+
+fn log_not_found(path: &std::path::Path) -> ApiResult {
+    (
+        StatusCode::NOT_FOUND,
+        Json(json!({
+            "ok": false,
+            "error": format!("log file not found: {}", path.display()),
+            "path": path.display().to_string(),
+        })),
+    )
+}
+
+#[derive(Deserialize)]
+struct TailQuery {
+    lines: Option<String>,
+}
+
+/// `lines`: absent -> 500, above 5000 -> 5000, `0` or not a number -> 400.
+/// A missing log file is 404 `{ok:false, error, path}`.
+async fn logs_tail(Query(q): Query<TailQuery>) -> ApiResult {
+    use crate::server_log::{log_file_path, tail_lines, TAIL_DEFAULT_LINES, TAIL_MAX_LINES};
+    let n = match q.lines.as_deref() {
+        None => TAIL_DEFAULT_LINES,
+        Some(raw) => match raw.trim().parse::<usize>() {
+            Ok(0) | Err(_) => {
+                return bad_request(format!("lines must be a positive integer, got '{raw}'"))
+            }
+            Ok(n) => n.min(TAIL_MAX_LINES),
+        },
+    };
+    let path = log_file_path();
+    let p = path.clone();
+    match tokio::task::spawn_blocking(move || tail_lines(&p, n)).await {
+        Ok(Ok(lines)) => ok(json!({ "path": path.display().to_string(), "lines": lines })),
+        Ok(Err(e)) if e.kind() == std::io::ErrorKind::NotFound => log_not_found(&path),
+        Ok(Err(e)) => fail(format!("read {}: {e}", path.display())),
+        Err(e) => fail(format!("log tail task failed: {e}")),
+    }
+}
+
+/// Streams the file (no full buffering) as an attachment.
+async fn logs_download() -> axum::response::Response {
+    use axum::response::IntoResponse;
+    use tokio::io::AsyncReadExt;
+    let path = crate::server_log::log_file_path();
+    let file = match tokio::fs::File::open(&path).await {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return log_not_found(&path).into_response()
+        }
+        Err(e) => return fail(format!("read {}: {e}", path.display())).into_response(),
+    };
+    let stream = futures::stream::unfold(file, |mut f| async move {
+        let mut buf = vec![0u8; 64 * 1024];
+        match f.read(&mut buf).await {
+            Ok(0) => None,
+            Ok(n) => {
+                buf.truncate(n);
+                Some((Ok::<_, std::io::Error>(axum::body::Bytes::from(buf)), f))
+            }
+            Err(e) => Some((Err(e), f)),
+        }
+    });
+    (
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "text/plain; charset=utf-8",
+            ),
+            (
+                axum::http::header::CONTENT_DISPOSITION,
+                "attachment; filename=\"cc-switch-web.log\"",
+            ),
+        ],
+        axum::body::Body::from_stream(stream),
+    )
+        .into_response()
 }
 
 // ---------- endpoint speed test / custom endpoints ----------

@@ -764,9 +764,9 @@ pub fn run_headless_bootstrap_with(
     };
     precheck_db_version(&paths)?;
     let db = open_database(&paths).inspect_err(|e| record_init_error(&paths, e))?;
-    // An explicit RUST_LOG wins over the persisted level: the persisted one
+    // An explicit (non-blank) RUST_LOG wins over the persisted level: the persisted one
     // would otherwise cap `log::max_level` under the env_logger of the server.
-    if std::env::var_os("RUST_LOG").is_some() {
+    if crate::server_log::explicit_rust_log().is_some() {
         log::info!("RUST_LOG is set, skipping the persisted log level");
     } else {
         apply_persisted_log_level(&db);

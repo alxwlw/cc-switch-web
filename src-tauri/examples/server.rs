@@ -8,6 +8,8 @@
 //! - `PORT` (default `18766`).
 //! - `CC_SWITCH_CONFIG_DIR` (default `~/.cc-switch`) — fork data dir, e.g.
 //!   `~/.cc-switch-web` to isolate from upstream/Laliet installs.
+//! - `RUST_LOG` — env_logger filter; default `trace` (dependency noise capped),
+//!   effective level = saved `LogConfig`. Logs go to stderr and `<config>/logs/cc-switch-web.log`.
 //! - `TRUSTED_TAILNET=1` — required for any non-loopback bind.
 //! - `WEB_DIST` — directory with the `pnpm build:web` output (`dist-web`).
 //!   Defaults to `dist-web` next to the repo root, resolved from the
@@ -44,7 +46,7 @@ fn default_web_dist() -> PathBuf {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    cc_switch_lib::server_log::init();
 
     let port: u16 = env::var("PORT")
         .ok()

@@ -753,7 +753,7 @@ function SettingsDirectory({
         aria-label={t("nav.settings")}
         className={cn("flex min-h-0 flex-1 flex-col", collapsed && "mt-2")}
       >
-        {/* WEB-00: routing/network/data скрыты в web — снимет WEB-01/23/26 */}
+        {/* WEB-00: network скрыта в web (routing/data открыты с урезанным содержимым: rectifier и лог-вьювер, WEB-24) — снимет WEB-23 */}
         {SETTINGS_ITEMS.filter(({ section }) =>
           isSettingsSectionAvailable(section),
         ).map(({ section, icon }) => (

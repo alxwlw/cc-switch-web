@@ -341,6 +341,11 @@ export const settingsApi = {
     return await invoke("set_optimizer_config", { config });
   },
 
+  /** Web only: last lines of the server's own log file (`GET /api/logs/tail`). */
+  async getServerLogTail(lines?: number): Promise<ServerLogTail> {
+    return await invoke("get_server_log_tail", { lines });
+  },
+
   async getLogConfig(): Promise<LogConfig> {
     return await invoke("get_log_config");
   },
@@ -408,6 +413,15 @@ export interface OptimizerConfig {
   thinkingOptimizer: boolean;
   cacheInjection: boolean;
 }
+
+export interface ServerLogTail {
+  /** Absolute path of the log file on the server host. */
+  path: string;
+  lines: string[];
+}
+
+/** Web only: streams the whole server log as an attachment (plain link, no auth headers). */
+export const SERVER_LOG_DOWNLOAD_URL = "/api/logs/download";
 
 export interface LogConfig {
   enabled: boolean;

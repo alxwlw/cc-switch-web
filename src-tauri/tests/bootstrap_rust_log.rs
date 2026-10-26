@@ -19,7 +19,14 @@ fn rust_log_is_not_capped_by_the_persisted_log_level() {
     run_headless_bootstrap().expect("bootstrap");
     assert_eq!(log::max_level(), log::LevelFilter::Debug);
 
+    // A blank RUST_LOG is unset: the persisted level applies.
+    std::env::set_var("RUST_LOG", "  ");
+    log::set_max_level(log::LevelFilter::Debug);
+    run_headless_bootstrap().expect("bootstrap");
+    assert_eq!(log::max_level(), log::LevelFilter::Info);
+
     std::env::remove_var("RUST_LOG");
+    log::set_max_level(log::LevelFilter::Debug);
     run_headless_bootstrap().expect("bootstrap");
     assert_eq!(log::max_level(), log::LevelFilter::Info);
 }

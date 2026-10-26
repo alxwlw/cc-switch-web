@@ -93,9 +93,17 @@ vi.mock("@/hooks/useImportExport", () => ({
 vi.mock("@/lib/query", () => ({
   useSettingsQuery: () => ({ data: settingsState.value }),
 }));
-vi.mock("@/lib/api", () => ({ settingsApi: { restart: vi.fn() } }));
+const revealAppLogFile = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/api", () => ({
+  settingsApi: { restart: vi.fn(), revealAppLogFile },
+}));
 vi.mock("@/components/settings/sections/RoutingSection", () => ({
   RoutingSection: () => <div>routing-section</div>,
+  RectifierBlock: () => <div>rectifier-block</div>,
+}));
+vi.mock("@/components/settings/ServerLogViewer", () => ({
+  ServerLogViewer: ({ open }: { open: boolean }) =>
+    open ? <div>server-log-viewer</div> : null,
 }));
 vi.mock("@/components/settings/GlobalProxySettings", () => ({
   GlobalProxySettings: () => <div>global-proxy-settings</div>,
@@ -134,7 +142,7 @@ const SECTIONS: SettingsSection[] = [
   "data",
   "about",
 ];
-const WEB_HIDDEN: SettingsSection[] = ["routing", "network", "data"];
+const WEB_HIDDEN: SettingsSection[] = ["network"];
 
 beforeEach(() => {
   platform.linux = false;
@@ -150,6 +158,7 @@ beforeEach(() => {
   settingsState.saveSettings.mockReset();
   settingsState.browseAppConfigDir.mockReset();
   settingsState.browseDirectory.mockReset();
+  revealAppLogFile.mockReset();
   localStorage.clear();
 });
 
@@ -245,6 +254,8 @@ describe("Sidebar · WEB-00", () => {
     expect(names).toEqual([
       "settings.sections.general",
       "settings.sections.appConfig",
+      "settings.sections.routing",
+      "settings.sections.data",
       "settings.sections.about",
     ]);
   });
@@ -265,7 +276,7 @@ describe("Sidebar settings highlight · WEB-00", () => {
 
   it("web: a requested hidden section highlights general", () => {
     setWeb(true);
-    renderSidebar("settings", "routing");
+    renderSidebar("settings", "network");
     expect(current()).toEqual(["settings.sections.general"]);
   });
 
@@ -288,16 +299,50 @@ describe("SettingsPage · WEB-00", () => {
         }),
       ).toBeInTheDocument();
       expect(screen.getByText("settings.general.appearance")).toBeVisible();
-      for (const marker of [
-        "routing-section",
-        "global-proxy-settings",
-        "import-export-section",
-        "log-config-panel",
-      ]) {
-        expect(screen.queryByText(marker)).toBeNull();
-      }
+      expect(screen.queryByText("global-proxy-settings")).toBeNull();
     },
   );
+
+  it("web: routing shows only the rectifier block", () => {
+    setWeb(true);
+    renderPage("routing");
+    expect(screen.getByText("rectifier-block")).toBeInTheDocument();
+    expect(screen.queryByText("routing-section")).toBeNull();
+  });
+
+  it("desktop: routing shows the full routing section", () => {
+    renderPage("routing");
+    expect(screen.getByText("routing-section")).toBeInTheDocument();
+    expect(screen.queryByText("rectifier-block")).toBeNull();
+  });
+
+  it("web: data shows only the log block and its button opens the server log viewer", async () => {
+    setWeb(true);
+    renderPage("data");
+    expect(screen.getByText("log-config-panel")).toBeInTheDocument();
+    expect(screen.queryByText("import-export-section")).toBeNull();
+    expect(screen.queryByText("backup-list-section")).toBeNull();
+    expect(screen.queryByText("webdav-section")).toBeNull();
+    expect(screen.queryByText("server-log-viewer")).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "settings.advanced.logConfig.openLog",
+      }),
+    );
+    expect(screen.getByText("server-log-viewer")).toBeInTheDocument();
+  });
+
+  it("desktop: data shows import/export and the log button reveals the file", async () => {
+    renderPage("data");
+    expect(screen.getByText("import-export-section")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "settings.advanced.logConfig.openLog",
+      }),
+    );
+    expect(screen.queryByText("server-log-viewer")).toBeNull();
+    expect(revealAppLogFile).toHaveBeenCalledTimes(1);
+  });
 
   it("desktop: network section still renders", () => {
     renderPage("network");
