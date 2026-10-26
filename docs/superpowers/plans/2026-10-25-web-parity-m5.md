@@ -28,7 +28,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 12 — WEB-24 / DX-82: Rectifier/optimizer и log config](2026-10-25-web-parity-m5/phase-12.md) — PR #13, merged `d94f812b` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны, из юнита убран `RUST_LOG=info`); DX-82 Done.
 - [x] [Phase 13 — WEB-12 / DX-70: администрирование usage и pricing](2026-10-25-web-parity-m5/phase-13.md) — PR #14, merged `cf41a7ec` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-70 Done.
 - [x] [Phase 14 — WEB-20 / DX-78: app-specific settings Claude и Codex](2026-10-25-web-parity-m5/phase-14.md) — PR #15, merged `d665f078` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-78 Done.
-- [ ] [Phase 15 — WEB-16 / DX-74: Hermes config и memory](2026-10-25-web-parity-m5/phase-15.md)
+- [ ] [Phase 15 — WEB-16 / DX-74: Hermes config и memory](2026-10-25-web-parity-m5/phase-15.md) — PR #16 открыт (ветка `web-parity/web-16-hermes`), DX-74 In Review.
 - [ ] [Phase 16 — WEB-15 / DX-73: OpenClaw config, workspace и memory](2026-10-25-web-parity-m5/phase-16.md)
 - [ ] [Phase 17 — WEB-17 / DX-75: Pi / Oh My Pi state, sessions и prompts](2026-10-25-web-parity-m5/phase-17.md)
 - [ ] [Phase 18 — WEB-10 / DX-68: DB backups и restore](2026-10-25-web-parity-m5/phase-18.md)

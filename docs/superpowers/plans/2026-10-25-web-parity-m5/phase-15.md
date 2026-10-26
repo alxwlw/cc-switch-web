@@ -34,7 +34,7 @@ Scope: `src-tauri/src/web_api.rs` (8 роутов), `src-tauri/tests/web_api_her
 
 ## Notes for next phase
 
-- **Статус до merge (2026-10-26)**: ветка `web-parity/web-16-hermes` (worktree `.worktrees/web-16`), PR открывается в Task 3.
+- **Статус до merge (2026-10-26)**: ветка `web-parity/web-16-hermes` (worktree `.worktrees/web-16`), PR #16 (https://github.com/alxwlw/cc-switch-web/pull/16) открыт; DX-74 In Review (комментарий со ссылкой).
   - Т1 одобрена с r1. r0: SHOULD-FIX DP-018, фильтр управляющих символов в `normalize_web_path` не был закреплён тестом, закрыто в `ba84aced` (кейсы `/%09/x`, `%0A//x`) вместе с NIT: голый IPv6 `::1` в `Host` → 400.
   - Т2 одобрена с r1. r0: SHOULD-FIX DP-018, снятые сверх брифа Hermes-гейты в `ProviderList`/`App.handleDuplicate` не были закреплены, закрыто в `c636bcc4` (3 теста ProviderList, 1 в App.test) вместе с NIT DP-019 (строки фазы 6).
   - Финальные гейты на `c636bcc4`: `cargo fmt --check` и `cargo clippy -- -D warnings` чисто. `cargo test --no-fail-fast`: 4363 passed / 3 failed — только baseline (omp_search_paths, 2× file_modes::switch_*). `cargo build --release --example server` ок. `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок; `test:unit` 3731 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice).
