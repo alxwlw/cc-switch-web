@@ -1943,7 +1943,9 @@
     "testUnavailable": "Speed test unavailable",
     "noResult": "No result returned",
     "testFailed": "Speed test failed: {{error}}",
-    "empty": "No endpoints"
+    "empty": "No endpoints",
+    "serverSideNote": "Latency is measured from the cc-switch-web server, not from this browser, and may differ from what you get. URLs such as http://127.0.0.1 or localhost point to services on the server itself.",
+    "savePartial": "Saved before the error: {{saved}}. Error: {{error}}"
   },
   "codexConfig": {
     "authJson": "auth.json (JSON) *",

@@ -114,6 +114,39 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         },
       };
 
+    // ---------- endpoint speed test / custom endpoints ----------
+    case "read_live_provider_settings":
+      return { method: "GET", url: `${appBase(a.app)}/live-settings` };
+    case "test_api_endpoints":
+      return {
+        method: "POST",
+        url: "/api/endpoints/speedtest",
+        body: { urls: a.urls, timeoutSecs: a.timeoutSecs },
+      };
+    case "get_custom_endpoints":
+      return {
+        method: "GET",
+        url: `${appBase(a.app)}/providers/${enc(a.providerId)}/endpoints`,
+      };
+    case "add_custom_endpoint":
+      return {
+        method: "POST",
+        url: `${appBase(a.app)}/providers/${enc(a.providerId)}/endpoints`,
+        body: { url: a.url },
+      };
+    case "remove_custom_endpoint":
+      return {
+        method: "DELETE",
+        url: `${appBase(a.app)}/providers/${enc(a.providerId)}/endpoints`,
+        body: { url: a.url },
+      };
+    case "update_endpoint_last_used":
+      return {
+        method: "POST",
+        url: `${appBase(a.app)}/providers/${enc(a.providerId)}/endpoints/last-used`,
+        body: { url: a.url },
+      };
+
     // ---------- prompts ----------
     case "get_prompts":
       return { method: "GET", url: `${appBase(a.app)}/prompts` };

@@ -1943,7 +1943,9 @@
     "testUnavailable": "速度テストを実行できません",
     "noResult": "結果がありません",
     "testFailed": "速度テストに失敗しました: {{error}}",
-    "empty": "エンドポイントがありません"
+    "empty": "エンドポイントがありません",
+    "serverSideNote": "レイテンシは cc-switch-web サーバーから計測されており、このブラウザからの値とは異なる場合があります。http://127.0.0.1 や localhost はサーバー自身のサービスを指します。",
+    "savePartial": "エラー前に保存済み：{{saved}}。エラー：{{error}}"
   },
   "codexConfig": {
     "authJson": "auth.json (JSON) *",

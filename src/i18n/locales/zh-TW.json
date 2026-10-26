@@ -1944,7 +1944,9 @@
     "testUnavailable": "測速功能不可用",
     "noResult": "未回傳結果",
     "testFailed": "測速失敗：{{error}}",
-    "empty": "暫無端點"
+    "empty": "暫無端點",
+    "serverSideNote": "延遲由 cc-switch-web 伺服器量測，而非目前的瀏覽器，可能與你的實際體驗不同。http://127.0.0.1、localhost 等位址指向伺服器本機的服務。",
+    "savePartial": "出錯前已儲存：{{saved}}。錯誤：{{error}}"
   },
   "codexConfig": {
     "authJson": "auth.json (JSON) *",
