@@ -34,6 +34,10 @@ Scope: `src-tauri/src/web_api.rs` (9 роутов), `src-tauri/tests/web_api_app
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-26**: PR #15 merged `d665f078` → main; live на `cc-switch-web.service`.
+  - Server пересобран из main (`cargo build --release --example server` → `~/.local/bin/cc-switch-web`); бинарник фазы 13 сохранён в `cc-switch-web.prev`. `pnpm build:web` выполнен в main-checkout. Перед restart БД скопирована в `~/.cc-switch-web/backups-predeploy-p14-<ts>/`. Миграций нет.
+  - Проверено: unit active, WARN/ERROR в journal нет. `/api/health`, `/api/init-status`, `GET /api/codex/{unify-history-backup,forces-multi-agent-v2,session-compression,sessions-disk-usage}` → 200; отдаваемый `index.html` совпадает со сборкой.
+  - DX-78 Done (комментарий со ссылками file:line). Worktree `.worktrees/web-20` и локальная ветка удалены; remote-ветку `web-parity/web-20-app-settings` удаляет владелец (push --delete заблокирован классификатором). Ledgers прогона p14 не перенесены в main-checkout — `.claude/` в `.gitignore`, ушли вместе с worktree.
 - **Статус до merge (2026-10-26)**: ветка `web-parity/web-20-app-settings` (worktree `.worktrees/web-20`), PR #15 (https://github.com/alxwlw/cc-switch-web/pull/15) открыт; DX-78 In Review (комментарий со ссылкой).
   - Т1 и Т2 одобрены с r0, fix round не понадобился. NIT DP-019 из ревью Т2 (владельцы строк в таблице фазы 6) закрыл контроллер в `718dcb26`.
   - Финальные гейты на `718dcb26`: `cargo fmt --check` и `cargo clippy -- -D warnings` чисто. `cargo test --no-fail-fast`: 4354 passed / 3 failed — только baseline (omp_search_paths, 2× file_modes::switch_*), bookkeeping в этот раз зелёные. `cargo build --release --example server` ок. `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок; `test:unit` 3727 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice).
