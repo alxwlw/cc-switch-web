@@ -20,6 +20,20 @@ pub const MAX_LOG_BYTES: u64 = 20 * 1024 * 1024;
 pub const DEFAULT_FILTER: &str = "trace,hyper=info,hyper_util=info,h2=info,reqwest=info,\
 rustls=info,tower=info,tower_http=info,tokio_util=info,rusqlite=info,mio=info";
 
+/// The `RUST_LOG` spec when it is set to something other than blank. An empty
+/// or whitespace-only value (`Environment=RUST_LOG=` in a unit) counts as unset,
+/// for the filter, the `info` cap and the bootstrap alike.
+pub fn explicit_rust_log() -> Option<String> {
+    non_blank_spec(std::env::var_os("RUST_LOG"))
+}
+
+fn non_blank_spec(raw: Option<std::ffi::OsString>) -> Option<String> {
+    let raw = raw?;
+    let spec = raw.to_string_lossy();
+    let spec = spec.trim();
+    (!spec.is_empty()).then(|| spec.to_string())
+}
+
 pub fn log_dir() -> PathBuf {
     crate::config::get_app_config_dir().join("logs")
 }
@@ -94,9 +108,10 @@ pub fn open_log_file(path: &Path, max_bytes: u64) -> io::Result<File> {
 /// be opened the server logs to stderr only.
 pub fn init() {
     let mut builder = env_logger::Builder::new();
-    match std::env::var("RUST_LOG") {
-        Ok(spec) if !spec.trim().is_empty() => builder.parse_filters(&spec),
-        _ => builder.parse_filters(DEFAULT_FILTER),
+    let explicit = explicit_rust_log();
+    match &explicit {
+        Some(spec) => builder.parse_filters(spec),
+        None => builder.parse_filters(DEFAULT_FILTER),
     };
     let path = log_file_path();
     let file_err = match open_log_file(&path, MAX_LOG_BYTES) {
@@ -110,9 +125,9 @@ pub fn init() {
         Err(e) => Some(e),
     };
     builder.init();
-    // env_logger::init sets max_level to its filter (trace). RUST_LOG, when set,
-    // keeps its own cap; bootstrap skips the saved level in that case.
-    if std::env::var_os("RUST_LOG").is_none() {
+    // env_logger::init sets max_level to its filter (trace). RUST_LOG, when set
+    // (non-blank), keeps its own cap; bootstrap skips the saved level then.
+    if explicit.is_none() {
         log::set_max_level(log::LevelFilter::Info);
     }
     match file_err {
@@ -146,6 +161,19 @@ mod tests {
         fn flush(&mut self) -> io::Result<()> {
             Err(io::Error::other("boom"))
         }
+    }
+
+    #[test]
+    fn blank_rust_log_counts_as_unset() {
+        use std::ffi::OsString;
+        let os = |s: &str| Some(OsString::from(s));
+        assert_eq!(non_blank_spec(None), None);
+        assert_eq!(non_blank_spec(os("")), None);
+        assert_eq!(non_blank_spec(os("  \t ")), None);
+        assert_eq!(
+            non_blank_spec(os(" debug,hyper=warn ")),
+            Some("debug,hyper=warn".into())
+        );
     }
 
     #[test]
