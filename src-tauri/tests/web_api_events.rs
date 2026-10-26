@@ -122,3 +122,114 @@ fn provider_switched_payload_reads_both_flags_from_their_sources() {
     assert_eq!(other["proxyEnabled"], false);
     assert_eq!(other["autoFailoverEnabled"], false);
 }
+
+mod sse {
+    use super::support::create_test_state;
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{header, Request};
+    use futures::StreamExt;
+    use std::time::Duration;
+    use tower::ServiceExt;
+
+    async fn open(router: &axum::Router) -> axum::http::Response<Body> {
+        router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/events")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap()
+    }
+
+    /// Reads body chunks until `needle` count of "\n\n" frame ends is reached.
+    async fn read_frames(
+        stream: &mut (impl futures::Stream<Item = Result<bytes::Bytes, axum::Error>> + Unpin),
+        frames: usize,
+    ) -> String {
+        let mut buf = String::new();
+        while buf.matches("\n\n").count() < frames {
+            let chunk = tokio::time::timeout(Duration::from_secs(5), stream.next())
+                .await
+                .expect("sse stream hung")
+                .expect("stream ended early")
+                .unwrap();
+            buf.push_str(std::str::from_utf8(&chunk).unwrap());
+        }
+        buf
+    }
+
+    #[tokio::test]
+    async fn events_endpoint_streams_hub_events_in_emit_order_as_named_sse_events() {
+        let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+        reset_test_fs();
+        ensure_test_home();
+        let state = Arc::new(create_test_state().unwrap());
+        let router = cc_switch_lib::web_api::router(state.clone());
+
+        let resp = open(&router).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get(header::CONTENT_TYPE).unwrap(),
+            "text/event-stream"
+        );
+        let mut body = resp.into_body().into_data_stream();
+
+        state
+            .events
+            .emit("first-event", json!({ "a": 1, "b": "x" }));
+        state.events.emit("second-event", ());
+        let text = read_frames(&mut body, 2).await;
+        assert_eq!(
+            text,
+            "event: first-event\ndata: {\"a\":1,\"b\":\"x\"}\n\nevent: second-event\ndata: null\n\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn events_endpoint_survives_lag_and_ends_when_the_hub_is_gone() {
+        let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+        reset_test_fs();
+        ensure_test_home();
+        let state = Arc::new(create_test_state().unwrap());
+        let router = cc_switch_lib::web_api::router(state.clone());
+        let resp = open(&router).await;
+        let mut body = resp.into_body().into_data_stream();
+
+        // Overflow the 256-slot buffer before the stream is polled once.
+        for i in 0..400 {
+            state.events.emit("burst", json!(i));
+        }
+        let first = read_frames(&mut body, 1).await;
+        // Lagged was skipped, not fatal: the oldest events are gone, newer ones arrive.
+        assert!(first.starts_with("event: burst\ndata: "), "{first}");
+        assert!(!first.starts_with("event: burst\ndata: 0\n"), "{first}");
+        // ... and the stream keeps working afterwards.
+        state.events.emit("after", json!("ok"));
+        let rest = read_frames(&mut body, 1).await;
+        assert!(rest.contains("event:"), "{rest}");
+
+        // Hub gone (state and router dropped) -> Closed -> stream ends.
+        drop(router);
+        drop(state);
+        let end = tokio::time::timeout(Duration::from_secs(5), async {
+            while body.next().await.is_some() {}
+        })
+        .await;
+        assert!(end.is_ok(), "stream did not end after the hub was dropped");
+    }
+
+    #[tokio::test]
+    async fn init_error_router_answers_events_with_503_json_not_a_stream() {
+        let router = cc_switch_lib::web_api::init_error_router();
+        let resp = open(&router).await;
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            resp.headers().get(header::CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
+    }
+}
