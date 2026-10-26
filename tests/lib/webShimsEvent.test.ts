@@ -232,6 +232,26 @@ describe("web-shims/event", () => {
     expect(FakeES.instances).toHaveLength(3);
   });
 
+  it("unlisten of the last handler then listen opens a new connection", async () => {
+    const un = await shim.listen("x", () => {});
+    un();
+    await shim.listen("x", () => {});
+    expect(FakeES.instances).toHaveLength(2);
+    expect(last().closed).toBe(false);
+  });
+
+  it("backoff restarts at 1s after everything was unlistened", async () => {
+    const un = await shim.listen("x", () => {});
+    last().fail(true);
+    vi.advanceTimersByTime(1_000);
+    last().fail(true); // next delay is now 2s
+    un();
+    await shim.listen("x", () => {});
+    last().fail(true);
+    vi.advanceTimersByTime(1_000);
+    expect(FakeES.instances).toHaveLength(4);
+  });
+
   it("a never-emitted name (configLoadError) stays silent", async () => {
     const h = vi.fn();
     await shim.listen("configLoadError", h);
