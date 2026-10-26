@@ -640,7 +640,8 @@ describe("App integration with MSW", () => {
     });
   });
 
-  it("web: profile-applied event invalidates proxy status and takeover queries", async () => {
+  // Обработчик общий для desktop и web; в web событие доставляет SSE-shim (webShimsEvent.test.ts)
+  it("profile-applied event invalidates proxy status and takeover queries", async () => {
     setWeb(true);
     const invalidate = vi.spyOn(QueryClient.prototype, "invalidateQueries");
     const { default: App } = await import("@/App");
