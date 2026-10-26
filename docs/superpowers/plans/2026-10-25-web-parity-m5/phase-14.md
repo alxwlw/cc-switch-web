@@ -34,7 +34,7 @@ Scope: `src-tauri/src/web_api.rs` (9 роутов), `src-tauri/tests/web_api_app
 
 ## Notes for next phase
 
-- **Статус до merge (2026-10-26)**: ветка `web-parity/web-20-app-settings` (worktree `.worktrees/web-20`), PR открыт; DX-78 In Review (комментарий со ссылкой).
+- **Статус до merge (2026-10-26)**: ветка `web-parity/web-20-app-settings` (worktree `.worktrees/web-20`), PR #15 (https://github.com/alxwlw/cc-switch-web/pull/15) открыт; DX-78 In Review (комментарий со ссылкой).
   - Т1 и Т2 одобрены с r0, fix round не понадобился. NIT DP-019 из ревью Т2 (владельцы строк в таблице фазы 6) закрыл контроллер в `718dcb26`.
   - Финальные гейты на `718dcb26`: `cargo fmt --check` и `cargo clippy -- -D warnings` чисто. `cargo test --no-fail-fast`: 4354 passed / 3 failed — только baseline (omp_search_paths, 2× file_modes::switch_*), bookkeeping в этот раз зелёные. `cargo build --release --example server` ок. `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок; `test:unit` 3727 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice).
 - **Post-merge**: пересобрать server и `dist-web` (Rust менялся); перед install — `cp cc-switch-web cc-switch-web.prev`. Миграций БД нет. DX-78 → Done.
