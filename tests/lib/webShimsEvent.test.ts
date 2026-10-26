@@ -207,6 +207,31 @@ describe("web-shims/event", () => {
     expect(h).toHaveBeenCalledTimes(1);
   });
 
+  it("a name added while connected is bound on the live source", async () => {
+    await shim.listen("x", () => {});
+    const y = vi.fn();
+    await shim.listen("y", y);
+    last().emit("y", "3");
+    expect(y).toHaveBeenCalledTimes(1);
+  });
+
+  it("listening again after the last unlisten opens a fresh clean connection", async () => {
+    const r = vi.fn();
+    const un = await shim.listen("resync", r);
+    last().fail(false); // dropped, then everything is unlistened
+    last().fail(true);
+    last().fail(true);
+    un();
+    expect(FakeES.instances).toHaveLength(1);
+    await shim.listen("resync", r);
+    expect(FakeES.instances).toHaveLength(2);
+    last().open();
+    expect(r).not.toHaveBeenCalled(); // first open of the new connection
+    last().fail(true);
+    vi.advanceTimersByTime(1_000); // backoff restarted at 1s
+    expect(FakeES.instances).toHaveLength(3);
+  });
+
   it("a never-emitted name (configLoadError) stays silent", async () => {
     const h = vi.fn();
     await shim.listen("configLoadError", h);
