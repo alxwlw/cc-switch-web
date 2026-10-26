@@ -861,3 +861,92 @@ fn claude_desktop_profile_scope_is_independent() {
         "desktop scope marker set"
     );
 }
+
+#[test]
+fn profile_list_response_and_apply_events_are_handle_free() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let _home = ensure_test_home();
+
+    let state = create_test_state().expect("create test state");
+
+    futures::executor::block_on(async {
+        let mut proxy_config = state.db.get_proxy_config().await.expect("get proxy config");
+        proxy_config.listen_port = 0;
+        state
+            .db
+            .update_proxy_config(proxy_config)
+            .await
+            .expect("set ephemeral proxy port");
+    });
+
+    let mut custom1 = claude_provider("custom1", "custom-key-1");
+    custom1.category = Some("custom".to_string());
+    state
+        .db
+        .save_provider(AppType::Claude.as_str(), &custom1)
+        .expect("save custom1 provider");
+    ProviderService::switch(&state, AppType::Claude, "custom1").expect("switch to custom1");
+
+    // list_response: 无当前项目时 currentIds 全 null，创建后列表带 camelCase 键
+    let empty = serde_json::to_value(ProfileService::list_response(&state).expect("list empty"))
+        .expect("serialize");
+    assert_eq!(
+        empty,
+        json!({
+            "profiles": [],
+            "currentIds": { "claude": null, "claudeDesktop": null, "codex": null }
+        })
+    );
+    let created =
+        ProfileService::create(&state, "P1", ProfileScope::Claude).expect("create profile");
+    state
+        .db
+        .set_current_profile_id("claude", Some(&created.id))
+        .expect("mark current");
+    let listed = serde_json::to_value(ProfileService::list_response(&state).expect("list"))
+        .expect("serialize");
+    assert_eq!(listed["profiles"][0]["id"], json!(created.id));
+    assert_eq!(listed["profiles"][0]["name"], json!("P1"));
+    assert_eq!(listed["currentIds"]["claude"], json!(created.id));
+    assert_eq!(listed["currentIds"]["codex"], json!(null));
+
+    // 直连模式：scope 内一条 provider-switched，随后 profile-applied
+    let direct = ProfileService::apply_events(&state, &created.id, ProfileScope::Claude);
+    assert_eq!(
+        direct,
+        vec![
+            (
+                "provider-switched".to_string(),
+                json!({
+                    "appType": "claude",
+                    "proxyEnabled": false,
+                    "autoFailoverEnabled": false,
+                    "providerId": "custom1",
+                })
+            ),
+            (
+                "profile-applied".to_string(),
+                json!({ "profileId": created.id, "scope": "claude" })
+            ),
+        ]
+    );
+
+    // 路由模式：proxyEnabled 必须为 true，否则前端会显示直连
+    let rt = tokio::runtime::Runtime::new().expect("create tokio runtime");
+    rt.block_on(cc_switch_lib::mode::controller::enter(
+        &state,
+        &AppType::Claude,
+        false,
+    ))
+    .expect("enter routing mode");
+    let mut rx = state.events.subscribe();
+    ProfileService::emit_apply_events(&state, &created.id, ProfileScope::Claude);
+    let first = rx.try_recv().expect("provider-switched emitted");
+    assert_eq!(first.name, "provider-switched");
+    assert_eq!(first.payload["proxyEnabled"], json!(true));
+    let second = rx.try_recv().expect("profile-applied emitted");
+    assert_eq!(second.name, "profile-applied");
+    assert_eq!(second.payload["profileId"], json!(created.id));
+    assert!(rx.try_recv().is_err(), "no extra events");
+}

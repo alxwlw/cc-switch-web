@@ -4,7 +4,6 @@ import { toast } from "@/lib/toast";
 import { profilesApi, providersApi } from "@/lib/api";
 import type { ProfileScope } from "@/lib/api/profiles";
 import { extractErrorMessage } from "@/utils/errorUtils";
-import { isWeb } from "@/lib/api/adapter";
 
 const updateTrayMenuSafely = async () => {
   try {
@@ -18,8 +17,6 @@ export const useProfilesQuery = () => {
   return useQuery({
     queryKey: ["profiles"],
     queryFn: () => profilesApi.list(),
-    // WEB-00: profile-команды не поддержаны — снимет WEB-06
-    enabled: !isWeb,
   });
 };
 

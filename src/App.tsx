@@ -1379,9 +1379,7 @@ function App() {
       }
       actions={
         <>
-          {/* WEB-00: профили (list/apply_profile) не поддержаны — переключатель скрыт — снимет WEB-06 */}
-          {!isWeb &&
-            currentView === "providers" &&
+          {currentView === "providers" &&
             activeApp !== "mcode" &&
             activeApp !== "kimi" &&
             (settingsData?.showProfileSwitcher ?? false) && (

@@ -611,7 +611,7 @@ describe("App integration with MSW", () => {
     ["desktop", false],
     ["web", true],
   ])("profile switcher in the app header (%s)", (_label, web) => {
-    it(`${web ? "is hidden" : "is shown"} when enabled in settings`, async () => {
+    it("is shown when enabled in settings (WEB-06)", async () => {
       setWeb(web);
       setSettings({ showProfileSwitcher: true });
       let settingsServed = 0;
@@ -636,9 +636,28 @@ describe("App integration with MSW", () => {
           // первый запуск открывает модалку и помечает страницу aria-hidden
           hidden: true,
         });
-      if (web) expect(switcher()).toBeNull();
-      else await waitFor(() => expect(switcher()).not.toBeNull());
+      await waitFor(() => expect(switcher()).not.toBeNull());
     });
+  });
+
+  // Обработчик общий для desktop и web; в web событие доставляет SSE-shim (webShimsEvent.test.ts)
+  it("profile-applied event invalidates proxy status and takeover queries", async () => {
+    setWeb(true);
+    const invalidate = vi.spyOn(QueryClient.prototype, "invalidateQueries");
+    const { default: App } = await import("@/App");
+    renderApp(App);
+    await screen.findByTestId("provider-list");
+    invalidate.mockClear();
+
+    emitTauriEvent("profile-applied", { profileId: "p1", scope: "claude" });
+
+    await waitFor(() => {
+      const keys = invalidate.mock.calls.map((c) => c[0]?.queryKey);
+      expect(keys).toContainEqual(["proxyStatus"]);
+      expect(keys).toContainEqual(["proxyTakeoverStatus"]);
+      expect(keys).toContainEqual(["profiles"]);
+    });
+    invalidate.mockRestore();
   });
 
   describe.each([

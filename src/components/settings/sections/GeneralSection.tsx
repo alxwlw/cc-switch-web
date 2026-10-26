@@ -154,8 +154,6 @@ export function GeneralSection({
             onCheckedChange={(value) =>
               void onAutoSave({ showProfileSwitcher: value })
             }
-            // WEB-00: переключатель профилей скрыт в web (профили не поддержаны) — снимет WEB-06
-            unavailableInWeb
           />
           <SettingsSwitchRow
             label={t("settings.appVisibility.showProviderSearch")}

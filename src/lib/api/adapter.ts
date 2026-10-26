@@ -15,7 +15,7 @@ export const isWeb =
 type Args = Record<string, any>;
 
 interface Endpoint {
-  method: "GET" | "POST" | "PUT" | "DELETE";
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   url: string;
   body?: unknown;
   /** When set, resolve with `data[pick]` instead of the whole payload. */
@@ -416,6 +416,36 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return {
         method: "POST",
         url: `/api/universal-providers/${enc(a.id)}/sync`,
+      };
+
+    // ---------- project profiles ----------
+    case "list_profiles":
+      return { method: "GET", url: "/api/profiles" };
+    case "create_profile":
+      return {
+        method: "POST",
+        url: "/api/profiles",
+        body: { name: a.name, scope: a.scope },
+      };
+    case "update_profile":
+      return {
+        method: "PATCH",
+        url: `/api/profiles/${enc(a.id)}`,
+        body: { name: a.name, resnapshot: a.resnapshot, scope: a.scope },
+      };
+    case "delete_profile":
+      return { method: "DELETE", url: `/api/profiles/${enc(a.id)}` };
+    case "apply_profile":
+      return {
+        method: "POST",
+        url: `/api/profiles/${enc(a.id)}/apply`,
+        body: { scope: a.scope },
+      };
+    case "clear_current_profile":
+      return {
+        method: "POST",
+        url: "/api/profiles/clear-current",
+        body: { scope: a.scope },
       };
 
     default:
