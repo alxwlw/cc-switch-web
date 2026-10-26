@@ -19,8 +19,10 @@ let cardProps: {
   provider: UniversalProvider;
   onDuplicate: (p: UniversalProvider) => void;
   onSync: (id: string) => void;
+  onEdit: (p: UniversalProvider) => void;
 }[] = [];
 let modalProps: {
+  editingProvider?: UniversalProvider | null;
   onSave: (p: UniversalProvider) => Promise<void>;
   onSaveAndSync: (p: UniversalProvider) => Promise<void>;
 } | null = null;
@@ -35,6 +37,7 @@ vi.mock("@/components/universal/UniversalProviderCard", () => ({
         <span>{props.provider.name}</span>
         <button onClick={() => props.onDuplicate(props.provider)}>dup</button>
         <button onClick={() => props.onSync(props.provider.id)}>sync</button>
+        <button onClick={() => props.onEdit(props.provider)}>edit</button>
       </div>
     );
   },
@@ -162,5 +165,22 @@ describe("UniversalProviderPanel", () => {
       }),
     );
     expect(api.getAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("правка: upsert без sync, форма закрывается из режима правки только при успехе", async () => {
+    render(<UniversalProviderPanel />);
+    await screen.findByText("Univ");
+    fireEvent.click(screen.getByText("edit"));
+    await waitFor(() => expect(modalProps!.editingProvider).toEqual(base));
+
+    api.upsert.mockRejectedValueOnce(new Error("db"));
+    await modalProps!.onSave(base);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(modalProps!.editingProvider).toEqual(base);
+
+    await modalProps!.onSave(base);
+    expect(api.sync).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(modalProps!.editingProvider).toBeNull());
   });
 });
