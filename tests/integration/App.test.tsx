@@ -705,8 +705,9 @@ describe("App integration with MSW", () => {
     ["web", true],
   ])("openclaw/hermes sub-views and launch buttons (%s)", (_label, web) => {
     it.each([
-      // hermes memory tab and Web UI button are served in web (WEB-16); openclaw workspace is not yet
-      ["OpenClaw", "appPage.workspace", "tab", false],
+      // hermes memory tab and Web UI button (WEB-16) and openclaw tabs (WEB-15) are served in web
+      ["OpenClaw", "appPage.workspace", "tab", true],
+      ["OpenClaw", "appPage.openclawConfig", "tab", true],
       ["Hermes", "appPage.memory", "tab", true],
       ["Hermes", "appPage.webUi", "button", true],
     ] as const)(
@@ -729,9 +730,9 @@ describe("App integration with MSW", () => {
     ["desktop", false],
     ["web", true],
   ])(
-    "duplicating an openclaw provider when live ids cannot be read (%s)",
+    "duplicating an openclaw provider when live ids cannot be read (%s; web reads them since WEB-15)",
     (_label, web) => {
-      it(`${web ? "still duplicates without the live-ids check" : "refuses with a toast"}`, async () => {
+      it("refuses with a toast", async () => {
         setWeb(web);
         let liveIdsCalls = 0;
         server.use(
@@ -766,28 +767,18 @@ describe("App integration with MSW", () => {
           ),
         );
 
+        liveIdsCalls = 0;
         fireEvent.click(screen.getByText("duplicate"));
 
-        if (web) {
-          await waitFor(() =>
-            expect(screen.getByTestId("provider-list").textContent).toContain(
-              "DeepSeek copy",
-            ),
-          );
-          expect(liveIdsCalls).toBe(0);
-          expect(toastErrorMock).not.toHaveBeenCalledWith(
+        await waitFor(() =>
+          expect(toastErrorMock).toHaveBeenCalledWith(
             expect.stringContaining("读取配置中的供应商标识失败"),
-          );
-        } else {
-          await waitFor(() =>
-            expect(toastErrorMock).toHaveBeenCalledWith(
-              expect.stringContaining("读取配置中的供应商标识失败"),
-            ),
-          );
-          expect(screen.getByTestId("provider-list").textContent).not.toContain(
-            "DeepSeek copy",
-          );
-        }
+          ),
+        );
+        expect(liveIdsCalls).toBeGreaterThan(0);
+        expect(screen.getByTestId("provider-list").textContent).not.toContain(
+          "DeepSeek copy",
+        );
       });
     },
   );

@@ -3040,6 +3040,9 @@
     "saveFailed": "儲存失敗",
     "loadFailed": "讀取失敗",
     "openDirectory": "在檔案管理員中開啟",
+    "copyPath": "複製路徑",
+    "pathCopied": "路徑已複製",
+    "pathCopyFailed": "複製路徑失敗",
     "dailyMemory": {
       "title": "每日記憶",
       "sectionTitle": "每日記憶",

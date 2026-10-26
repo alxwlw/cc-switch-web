@@ -3032,6 +3032,9 @@
     "saveFailed": "Kaydedilemedi",
     "loadFailed": "Yüklenemedi",
     "openDirectory": "Dosya yöneticisinde aç",
+    "copyPath": "Yolu kopyala",
+    "pathCopied": "Yol kopyalandı",
+    "pathCopyFailed": "Yol kopyalanamadı",
     "dailyMemory": {
       "title": "Günlük Hafıza",
       "sectionTitle": "Günlük Hafıza",

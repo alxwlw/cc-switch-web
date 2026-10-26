@@ -48,4 +48,5 @@ Scope: `src-tauri/src/web_api.rs` (≈21 роут), `src-tauri/tests/web_api_ope
 
 ## Notes for next phase
 
-- (заполнить по итогам)
+- Т3 (frontend): сняты гейты `navigation.ts` (workspace/openclawConfig), `App.tsx` (табы openclaw, live ids при duplicate), `useOpenClaw.ts` (6 хуков), `useProviderActions.ts` (catalog/default после add), `ProviderList.tsx` (membership/import/skeleton для openclaw), `presentation.ts` (Remove openclaw больше не disabled — секция «неизвестно» осталась только у opencode; ключ i18n `web.removeUnverifiable` теперь не используется, не удалён). «Открыть каталог» в web — `WorkspaceDirLink` (серверный путь из `get_openclaw_workspace_paths` + копирование). `OpenClawFormFields.tsx:312-318` (fetch models) не тронут.
+- (остальное заполнить по итогам)

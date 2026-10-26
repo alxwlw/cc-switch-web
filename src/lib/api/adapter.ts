@@ -513,6 +513,97 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: `/api/hermes/web-ui${query({ path: a.path })}`,
       };
 
+    // ---------- OpenClaw config, workspace & daily memory (WEB-15) ----------
+    // `open_workspace_directory` (file manager on the server) stays desktop-only: unmapped.
+    case "import_openclaw_providers_from_live":
+      return { method: "POST", url: "/api/openclaw/import-live" };
+    case "get_openclaw_live_provider_ids":
+      return { method: "GET", url: "/api/openclaw/live-provider-ids" };
+    case "get_openclaw_live_provider":
+      return {
+        method: "GET",
+        url: `/api/openclaw/live-provider/${enc(a.providerId)}`,
+      };
+    case "scan_openclaw_config_health":
+      return { method: "GET", url: "/api/openclaw/health" };
+    case "get_openclaw_default_model":
+      return { method: "GET", url: "/api/openclaw/default-model" };
+    case "set_openclaw_default_model":
+      return {
+        method: "PUT",
+        url: "/api/openclaw/default-model",
+        body: { model: a.model },
+      };
+    case "get_openclaw_model_catalog":
+      return { method: "GET", url: "/api/openclaw/model-catalog" };
+    case "set_openclaw_model_catalog":
+      return {
+        method: "PUT",
+        url: "/api/openclaw/model-catalog",
+        body: { catalog: a.catalog },
+      };
+    case "get_openclaw_agents_defaults":
+      return { method: "GET", url: "/api/openclaw/agents-defaults" };
+    case "set_openclaw_agents_defaults":
+      return {
+        method: "PUT",
+        url: "/api/openclaw/agents-defaults",
+        body: { defaults: a.defaults },
+      };
+    case "get_openclaw_env":
+      return { method: "GET", url: "/api/openclaw/env" };
+    case "set_openclaw_env":
+      return {
+        method: "PUT",
+        url: "/api/openclaw/env",
+        body: { env: a.env },
+      };
+    case "get_openclaw_tools":
+      return { method: "GET", url: "/api/openclaw/tools" };
+    case "set_openclaw_tools":
+      return {
+        method: "PUT",
+        url: "/api/openclaw/tools",
+        body: { tools: a.tools },
+      };
+    case "read_workspace_file":
+      return {
+        method: "GET",
+        url: `/api/openclaw/workspace/${enc(a.filename)}`,
+      };
+    case "write_workspace_file":
+      return {
+        method: "PUT",
+        url: `/api/openclaw/workspace/${enc(a.filename)}`,
+        body: { content: a.content },
+      };
+    case "list_daily_memory_files":
+      return { method: "GET", url: "/api/openclaw/daily-memory" };
+    case "search_daily_memory_files":
+      return {
+        method: "GET",
+        url: `/api/openclaw/daily-memory/search${query({ q: a.query })}`,
+      };
+    case "read_daily_memory_file":
+      return {
+        method: "GET",
+        url: `/api/openclaw/daily-memory/${enc(a.filename)}`,
+      };
+    case "write_daily_memory_file":
+      return {
+        method: "PUT",
+        url: `/api/openclaw/daily-memory/${enc(a.filename)}`,
+        body: { content: a.content },
+      };
+    case "delete_daily_memory_file":
+      return {
+        method: "DELETE",
+        url: `/api/openclaw/daily-memory/${enc(a.filename)}`,
+      };
+    // Web-only (no desktop command): server-side absolute paths of the workspace dirs.
+    case "get_openclaw_workspace_paths":
+      return { method: "GET", url: "/api/openclaw/workspace-paths" };
+
     // ---------- settings & environment ----------
     case "get_settings":
       return { method: "GET", url: "/api/settings" };
