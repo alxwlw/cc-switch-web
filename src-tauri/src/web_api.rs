@@ -2245,11 +2245,13 @@ fn host_without_port(raw: &str) -> Option<String> {
     } else {
         raw.rsplit_once(':').map_or(raw, |(h, _)| h)
     };
+    let bracketed = host.starts_with('[');
     let inner = host.trim_start_matches('[').trim_end_matches(']');
+    // ':' is only legal inside an IPv6 literal, which must be bracketed
     let valid = !inner.is_empty()
-        && inner
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':'));
+        && inner.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '.' | '-') || (bracketed && c == ':')
+        });
     valid.then(|| host.to_string())
 }
 

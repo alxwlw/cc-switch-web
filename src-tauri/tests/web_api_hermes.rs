@@ -258,6 +258,8 @@ async fn web_ui_path_cannot_become_the_host() {
         "?path=http://evil.example",
         "?path=/%5Cevil.example",
         "?path=x",
+        "?path=/%09/x",
+        "?path=%0A//x",
     ] {
         let (status, resp) = web_ui(&router, Some("h.example"), q).await;
         assert_eq!(status, StatusCode::OK, "{q}: {resp}");
@@ -272,6 +274,8 @@ async fn web_ui_path_cannot_become_the_host() {
             "http://h.example:9119/http://evil.example",
             "http://h.example:9119/evil.example",
             "http://h.example:9119/x",
+            "http://h.example:9119/x",
+            "http://h.example:9119/x",
         ]
     );
 }
@@ -280,7 +284,13 @@ async fn web_ui_path_cannot_become_the_host() {
 #[serial]
 async fn web_ui_rejects_missing_or_hostile_host() {
     let (router, _dir) = fresh();
-    for host in [None, Some("evil.example/x"), Some("a@b"), Some("")] {
+    for host in [
+        None,
+        Some("evil.example/x"),
+        Some("a@b"),
+        Some(""),
+        Some("::1"),
+    ] {
         let (status, resp) = web_ui(&router, host, "").await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{host:?}: {resp}");
     }
