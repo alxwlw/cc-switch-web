@@ -74,7 +74,7 @@ pub use mcp::{
     sync_single_server_to_gemini, sync_single_server_to_grokbuild,
 };
 pub use prompt::Prompt;
-pub use provider::{Provider, ProviderMeta};
+pub use provider::{Provider, ProviderMeta, UniversalProvider};
 pub use services::{
     profile::{ProfilePayload, ProfileScope, ProfileService},
     provider::{reapply_current_codex_official_live, EditorSave, EditorView},

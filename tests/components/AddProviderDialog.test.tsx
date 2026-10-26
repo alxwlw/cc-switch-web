@@ -592,8 +592,8 @@ context_window = 500000
     expect(universalProps.onManageUniversalProviders).toBeTypeOf("function");
   });
 
-  // WEB-00: универсальные провайдеры (get/upsert/sync) в web не поддержаны — входа нет даже для Claude Code.
-  it("не отдаёт форме вход в универсальные провайдеры в web", async () => {
+  // WEB-07: универсальные провайдеры работают через /api/universal-providers — вход есть и в web.
+  it("отдаёт форме вход в универсальные провайдеры в web", async () => {
     setWeb(true);
     render(
       <AddProviderDialog
@@ -604,7 +604,9 @@ context_window = 500000
       />,
     );
     await screen.findByRole("button", { name: "common.add" });
-    expect(universalProps.onUniversalPresetSelect).toBeUndefined();
-    expect(universalProps.onManageUniversalProviders).toBeUndefined();
+    await waitFor(() =>
+      expect(universalProps.onUniversalPresetSelect).toBeTypeOf("function"),
+    );
+    expect(universalProps.onManageUniversalProviders).toBeTypeOf("function");
   });
 });

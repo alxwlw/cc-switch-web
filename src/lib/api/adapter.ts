@@ -399,6 +399,25 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "get_skills_migration_result":
       return { method: "GET", url: "/api/migrations/status", pick: "skills" };
 
+    // ---------- universal providers ----------
+    case "get_universal_providers":
+      return { method: "GET", url: "/api/universal-providers" };
+    case "get_universal_provider":
+      return { method: "GET", url: `/api/universal-providers/${enc(a.id)}` };
+    case "upsert_universal_provider":
+      return {
+        method: "PUT",
+        url: "/api/universal-providers",
+        body: { provider: a.provider },
+      };
+    case "delete_universal_provider":
+      return { method: "DELETE", url: `/api/universal-providers/${enc(a.id)}` };
+    case "sync_universal_provider":
+      return {
+        method: "POST",
+        url: `/api/universal-providers/${enc(a.id)}/sync`,
+      };
+
     default:
       return null;
   }
