@@ -16,22 +16,22 @@ Scope: `src-tauri/src/web_api.rs` (≈21 роут), `src-tauri/tests/web_api_ope
 - Тесты: Rust для OpenClaw/workspace нет (в workspace.rs нет `#[test]`); фронт — `DailyMemoryPanel.test.tsx`, `WorkspaceFileEditor.test.tsx` (mock API).
 
 ### Task 1: backend OpenClaw — роуты + тесты
-- [ ] `POST /api/openclaw/import-live`, `GET /api/openclaw/live-provider-ids`, `GET /api/openclaw/live-provider/:id`, `GET /api/openclaw/health`, `GET/PUT /api/openclaw/{default-model|model-catalog|agents-defaults|env|tools}` (тело `{model}`/`{catalog}`/`{defaults}`/`{env}`/`{tools}`). Команды без tauri-типов вызывать напрямую.
-- [ ] `src-tauri/tests/web_api_openclaw.rs` (temp-каталог OpenClaw): каждая get/set пара — round-trip, неизвестные поля конфига (`flatten`) сохраняются после set; health на конфиге с известной проблемой возвращает warning; import-live импортирует N провайдеров.
+- [x] `POST /api/openclaw/import-live`, `GET /api/openclaw/live-provider-ids`, `GET /api/openclaw/live-provider/:id`, `GET /api/openclaw/health`, `GET/PUT /api/openclaw/{default-model|model-catalog|agents-defaults|env|tools}` (тело `{model}`/`{catalog}`/`{defaults}`/`{env}`/`{tools}`). Команды без tauri-типов вызывать напрямую.
+- [x] `src-tauri/tests/web_api_openclaw.rs` (temp-каталог OpenClaw): каждая get/set пара — round-trip, неизвестные поля конфига (`flatten`) сохраняются после set; health на конфиге с известной проблемой возвращает warning; import-live импортирует N провайдеров.
 
 ### Task 2: backend workspace — роуты + тесты
-- [ ] `GET/PUT /api/openclaw/workspace/:filename` (`{content}`), `GET /api/openclaw/daily-memory`, `GET/PUT/DELETE /api/openclaw/daily-memory/:filename`, `GET /api/openclaw/daily-memory/search?q=`, `GET /api/openclaw/workspace-paths`. Хендлеры вызывают команды workspace.rs напрямую — валидация имени остаётся единственной, в командах (400 — через те же валидаторы, см. «Уточнения контроллера»).
-- [ ] `src-tauri/tests/web_api_workspace.rs`: `../../etc/passwd`, `%2e%2e%2fsecret.md`, `AGENTS.txt`, `notes.md` → 400/`{ok:false}` и файл вне корня не создан; `2026-13-45.md` проходит regex — зафиксировать фактическое поведение команды тестом; write → read; после write в каталоге нет временных файлов (проверка атомарности `write_text_file`; если он не атомарен — сделать атомарным в этой фазе); search находит подстроку; delete.
+- [x] `GET/PUT /api/openclaw/workspace/:filename` (`{content}`), `GET /api/openclaw/daily-memory`, `GET/PUT/DELETE /api/openclaw/daily-memory/:filename`, `GET /api/openclaw/daily-memory/search?q=`, `GET /api/openclaw/workspace-paths`. Хендлеры вызывают команды workspace.rs напрямую — валидация имени остаётся единственной, в командах (400 — через те же валидаторы, см. «Уточнения контроллера»).
+- [x] `src-tauri/tests/web_api_workspace.rs`: `../../etc/passwd`, `%2e%2e%2fsecret.md`, `AGENTS.txt`, `notes.md` → 400/`{ok:false}` и файл вне корня не создан; `2026-13-45.md` проходит regex — зафиксировать фактическое поведение команды тестом; write → read; после write в каталоге нет временных файлов (проверка атомарности `write_text_file`; если он не атомарен — сделать атомарным в этой фазе); search находит подстроку; delete.
 
 ### Task 3: frontend
-- [ ] adapter: case для всех команд, кроме `open_workspace_directory`.
-- [ ] Кнопку «открыть каталог» в web заменить показом серверного пути (`get_openclaw_dir`) с копированием.
-- [ ] Тесты: `tests/lib/openclawApi.test.ts`, `tests/lib/workspaceApi.test.ts`; существующие компонентные тесты зелёные.
-- [ ] Снять WEB-00-гейты (таблица фазы 6).
+- [x] adapter: case для всех команд, кроме `open_workspace_directory`.
+- [x] Кнопку «открыть каталог» в web заменить показом серверного пути (`get_openclaw_dir`) с копированием.
+- [x] Тесты: `tests/lib/openclawApi.test.ts`, `tests/lib/workspaceApi.test.ts`; существующие компонентные тесты зелёные.
+- [x] Снять WEB-00-гейты (таблица фазы 6).
 
 ### Task 4: гейты, PR, Plane
-- [ ] Полный набор гейтов + `cargo build --release --example server`.
-- [ ] Ветка `web-parity/web-15-openclaw`, PR; DX-73 → In Review + ссылка. Закрыть чекбоксы, Notes.
+- [x] Полный набор гейтов + `cargo build --release --example server`.
+- [x] Ветка `web-parity/web-15-openclaw`, PR; DX-73 → In Review + ссылка. Закрыть чекбоксы, Notes.
 
 Риски для ревью:
 - Symlink внутри каталога workspace, указывающий наружу (`MEMORY.md -> /etc/…`): allowlist по имени его не ловит. Тест фиксирует поведение; если запись идёт по ссылке наружу — проверять canonical path.
@@ -49,4 +49,20 @@ Scope: `src-tauri/src/web_api.rs` (≈21 роут), `src-tauri/tests/web_api_ope
 ## Notes for next phase
 
 - Т3 (frontend): сняты гейты `navigation.ts` (workspace/openclawConfig), `App.tsx` (табы openclaw, live ids при duplicate), `useOpenClaw.ts` (6 хуков), `useProviderActions.ts` (catalog/default после add), `ProviderList.tsx` (membership/import/skeleton для openclaw), `presentation.ts` (Remove openclaw больше не disabled — секция «неизвестно» осталась только у opencode; ключ i18n `web.removeUnverifiable` удалён из 5 локалей в fix round 1). «Открыть каталог» в web — `WorkspaceDirLink` (серверный путь из `get_openclaw_workspace_paths` + копирование). `OpenClawFormFields.tsx:312-318` (fetch models) не тронут.
-- (остальное заполнить по итогам)
+- **Статус до merge (2026-10-26)**: ветка `web-parity/web-15-openclaw` (worktree `.worktrees/web-15`), PR #17 (https://github.com/alxwlw/cc-switch-web/pull/17) открыт; DX-73 In Review (комментарий со ссылкой).
+  - Т1 и Т2 одобрены с r0. Concern r0 по Т1 (`put_with_wrong_body_key_is_rejected` оставался зелёным и без PUT-роута) закрыт в Т2: тест проверяет ровно 422.
+  - Т3 одобрена с r2. r0: SHOULD-FIX DP-019, строки фазы 6 про openclaw-гейты устарели; NIT DP-029, неиспользуемый ключ `web.removeUnverifiable`; NIT DP-047, `WorkspaceDirLink` копировал тильду при ошибке `getPaths`. Всё закрыто в `afcee314`. r1: остаточный DP-019, две строки docs про ключ, закрыл контроллер в `f22ec77c`.
+  - Финальные гейты на `f22ec77c`: `cargo fmt --check` и `cargo clippy -- -D warnings` чисто. `cargo test --no-fail-fast`: 4382 passed / 3 failed — только baseline (omp_search_paths, 2× file_modes::switch_*). `cargo build --release --example server` ок. `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок; `test:unit` 3752 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice).
+- **Post-merge**: пересобрать server и `dist-web` (Rust менялся); перед install — `cp cc-switch-web cc-switch-web.prev`. Миграций БД нет. Smoke: `GET /api/openclaw/{health,live-provider-ids,default-model,workspace-paths,daily-memory}`, `GET /api/openclaw/workspace/notes.md` → 400. DX-73 → Done.
+- **Роуты** (`web_api.rs`, блок «OpenClaw (WEB-15)», :277-324):
+  - Config: `POST import-live`, `GET live-provider-ids`, `GET live-provider/:id`, `GET health`, `GET|PUT {default-model,model-catalog,agents-defaults,env,tools}` с телами `{model}`/`{catalog}`/`{defaults}`/`{env}`/`{tools}`. Неверный ключ тела даёт plain-text 422 от axum, как у остальных `Json<Req>`-роутов.
+  - Workspace: `GET|PUT workspace/:filename`, `GET daily-memory`, `GET|PUT|DELETE daily-memory/:filename`, `GET daily-memory/search?q=`, `GET workspace-paths` → `{workspace, memory}`.
+  - 400 на имя: хендлер сначала вызывает `pub(crate)` валидаторы из `commands/workspace.rs`, затем команду. Через `blocking_api` ошибка команды была бы 500.
+  - `workspace_subdir()` — общий helper пути для `open_workspace_directory` и `workspace-paths`.
+- **Поведение, закреплённое тестами**:
+  - literal `../../etc/passwd` → 404 (роутер); `%2e%2e%2f…` и `..%2F…` декодируются axum и дают 400;
+  - `2026-13-45.md` проходит regex;
+  - после write нет temp-файлов (`write_text_file` атомарен, менять не пришлось);
+  - write поверх symlink заменяет ссылку обычным файлом, цель не трогается;
+  - read по symlink отдаёт файл вне корня — принято (ruling в journal): через API ссылку не создать, desktop так же. Возможное ужесточение позже: отказ при `symlink_metadata().is_symlink()` в read и search.
+- **Ловушка для следующих фаз**: `get_config_dir` в web мапится на `GET /api/paths` → `configDir` cc-switch, игнорируя `app` (`adapter.ts:527-528`, `web_api.rs:1851-1856`). Для путей конкретного приложения нужен свой роут, как `workspace-paths`.
