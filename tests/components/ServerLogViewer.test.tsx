@@ -96,6 +96,38 @@ describe("ServerLogViewer (WEB-24)", () => {
     ).toBeInTheDocument();
   });
 
+  it("refresh after a failure replaces the error with the lines, and the reverse", async () => {
+    fetchSpy
+      .mockResolvedValueOnce({
+        status: 404,
+        json: async () => ({ ok: false, error: "log file not found: /p" }),
+      })
+      .mockResolvedValueOnce(ok({ path: "/p", lines: ["back"] }))
+      .mockResolvedValueOnce({
+        status: 404,
+        json: async () => ({ ok: false, error: "log file not found: /p" }),
+      });
+    render(<ServerLogViewer open onClose={vi.fn()} />);
+    await screen.findByText("log file not found: /p");
+    const refresh = screen.getByRole("button", { name: /viewer\.refresh/ });
+    await userEvent.click(refresh);
+    await screen.findByText("back");
+    expect(screen.queryByText("log file not found: /p")).toBeNull();
+    await userEvent.click(refresh);
+    await screen.findByText("log file not found: /p");
+    expect(screen.queryByText("back")).toBeNull();
+    expect(screen.queryByText(/viewer\.path/)).toBeNull();
+  });
+
+  it("Escape closes the dialog through onClose", async () => {
+    fetchSpy.mockResolvedValue(ok({ path: "/p", lines: [] }));
+    const onClose = vi.fn();
+    render(<ServerLogViewer open onClose={onClose} />);
+    await screen.findByText("settings.advanced.logConfig.viewer.empty");
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("does not fetch while closed", () => {
     render(<ServerLogViewer open={false} onClose={vi.fn()} />);
     expect(fetchSpy).not.toHaveBeenCalled();
