@@ -29,8 +29,8 @@ Scope: `src-tauri/src/web_api.rs` (11 роутов), `src-tauri/tests/web_api_us
 - [x] Снять WEB-00-гейты с `PricingConfigPanel`/`ModelsDevAutoSyncPanel`/rebuild (таблица фазы 6).
 
 ### Task 3: гейты, PR, Plane
-- [ ] Полный набор гейтов + `cargo build --release --example server`.
-- [ ] Ветка `web-parity/web-12-usage-admin`, PR; DX-70 → In Review + ссылка. Закрыть чекбоксы, Notes.
+- [x] Полный набор гейтов + `cargo build --release --example server`.
+- [x] Ветка `web-parity/web-12-usage-admin`, PR; DX-70 → In Review + ссылка. Закрыть чекбоксы, Notes.
 
 Риски для ревью:
 - Rebuild во время идущего `sync_session_usage`: оба берут `session_sync_mutex` — тест на чередование.
@@ -38,4 +38,44 @@ Scope: `src-tauri/src/web_api.rs` (11 роутов), `src-tauri/tests/web_api_us
 
 ## Notes for next phase
 
-- (заполнить по итогам)
+- **Статус до merge (2026-10-26)**: ветка `web-parity/web-12-usage-admin` (worktree `.worktrees/web-12`), PR #14 (https://github.com/alxwlw/cc-switch-web/pull/14) открыт; DX-70 In Review (комментарий со ссылкой).
+  - Т1 одобрена с r3. r0: SHOULD-FIX DP-018, шаг notify после rebuild не закреплён тестом, закрыто в `16b15223`. r1: SHOULD-FIX DP-017, `IsolatedHome` менял `CC_SWITCH_TEST_HOME` без блокировки, закрыто модульным mutex в `8c8ee539`.
+  - После одобрения r2 финальный полный `cargo test` уронил `services::provider::tests::update_claude_desktop_route_provider_rewrites_profile_in_route_mode`: модульный mutex не исключает `#[serial]`-тесты других модулей. Т1 переоткрыта через `--force`, тесты переведены на `#[serial]` в `09c8c2b9`, r3 одобрено.
+  - Т2 одобрена с r1. r0: SHOULD-FIX DP-026, пункт «открыть папку» в `ModelsDevAutoSyncPanel` был живым в web и всегда падал, закрыто в `af44f2ca` вместе с NIT DP-027.
+  - Финальные гейты: на `74a165f` fmt и clippy `-D warnings` чисто. `cargo test --no-fail-fast` (nextest не установлен): 4344 passed / 6 failed.
+    - Baseline: omp_search_paths, 2× file_modes::switch_*.
+    - Ещё 3× `proxy::forwarder::tests::bookkeeping::*` — flake: отдельный прогон даёт 2 зелёных из 3, proxy ветка не трогает.
+    - `cargo build --release --example server` ок.
+    - `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок; `test:unit` 3717 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice) на `af44f2ca` — фронт после этого не менялся.
+  - В PR едет неподтолкнутый `ac9d7fdf` (docs закрытия фазы 12 с локального main).
+- **Post-merge**:
+  - Пересобрать server и `dist-web` (Rust менялся); перед install — `cp cc-switch-web cc-switch-web.prev`. Миграций БД нет.
+  - **На живом сервисе впервые запустится session-usage worker.** При старте он делает раунд с `backfill_missing_usage_costs` и, если включён `session_auto_sync_enabled`, импортирует сессии `~/.claude`/`~/.codex` серверного хоста. Дальше раунд каждые 10 минут. После restart проверить journal на WARN «Session usage sync completed with N error(s)» и что `GET /api/usage/last-sync` не null.
+  - DX-70 → Done.
+- **Роуты** (`web_api.rs`):
+  - `PUT|DELETE /api/usage/model-pricing/:model_id`. PUT принимает body `{displayName, inputCost, outputCost, cacheReadCost, cacheCreationCost}`. Model id со `/` приходит как `%2F` (тест есть), адаптер делает `encodeURIComponent`.
+  - `POST /api/usage/model-pricing/batch`, body `{entries}` (`ModelPricingInfo`, camelCase), отвечает числом.
+  - `GET|PUT /api/usage/models-dev/config`: **PUT принимает голый объект config**, а не `{config}`; адаптер разворачивает.
+  - `POST /api/usage/models-dev/result`, body `{syncedAt, error}`.
+  - `GET /api/usage/last-sync`, `POST /api/usage/rebuild-codex`, `GET /api/usage/data-sources`.
+  - `GET|PUT /api/:app/pricing-model-source`, body `{value}`. Неизвестный app или значение вне `request|response` → 400. Desktop принимал любую строку app.
+  - Ошибки сервисов — дословно, `fail(e.to_string())`.
+  - Мелочь, не правили: `PUT /api/usage/model-pricing/batch` матчится на `:model_id`, поэтому модель с id ровно «batch» нельзя отредактировать или удалить.
+- **Batch всё-или-ничего**, как на desktop: сервис нормализует все записи до первой записи в БД, невалидная запись посередине отклоняет весь батч (тест есть). На фронте ошибка батча → `syncModelsDevPricing` бросает → тост syncFailed, «обновлено N» не показывается (два теста).
+- **Rebuild Codex**:
+  - Последовательность вынесена в handle-free `services::session_usage::rebuild_codex_usage_unlocked`: backup → reset → import → `finish_codex_rebuild`, то есть notify. Вызывающий держит `session_sync_mutex`.
+  - Desktop-команда и web-роут вызывают одно и то же. Notify идёт в `usage_events::notify_log_recorded` → event bus фазы 8.
+  - Интеграционного теста на emit в bus нет (hub — глобальный OnceLock); notify закреплён unit-тестами в `session_usage.rs`.
+- **Session-usage worker**:
+  - Desktop-блок `lib.rs` вынесен в `services::session_usage::run_background_worker`; desktop вызывает его как раньше.
+  - Headless-сервер запускает его через `bootstrap::spawn_session_usage_worker` из `examples/server.rs`, а не внутри `run_headless_bootstrap_with`: тому нужен tokio runtime, а тесты bootstrap синхронные.
+  - Тест worker опрашивает `last-sync` до 20 с вместо fake time.
+- **Тестовые хуки**: `web_api::session_sync_lock_test_hook` (`doc(hidden)`, как прочие `*_test_hook`) и `support::web_router_with` в `src-tauri/tests/support.rs`. Env-мутирующие тесты — только `#[serial]` (см. выше).
+- **Frontend**:
+  - 11 case в `mapCommand`.
+  - Сняты WEB-00-гейты: `PricingConfigPanel`, rebuild Codex в `UsageSettingsSheet`, ранний skip стартового sync models.dev в `modelsDevAutoSync.ts`, `useSessionUsageLastSync`.
+  - Пункт «открыть папку» в `ModelsDevAutoSyncPanel` скрыт под `!isWeb`; `open_app_config_folder` остаётся за WEB-01/26. Server path показывается как есть.
+  - `check_provider_limits` остаётся под гейтом, комментарий перенацелен на фазу 31 (WEB-04).
+  - CORS: `GET https://models.dev/api.json` отвечает `access-control-allow-origin: *`, `fetchModelsDev` — простой GET без своих заголовков. Серверный fetch-роут не нужен.
+- **Инвентаризация фазы 6**: строка usage/pricing перенесена в «закрыто»; `get_usage_data_sources` убран из строки «мёртвое».
+- **Не чинили, вне scope**: `cargo clippy --all-targets -- -D warnings` падает на dead code `SystemKeychain::named` (`agy_account/keychain.rs:74`). CI запускает clippy без `--all-targets`.
