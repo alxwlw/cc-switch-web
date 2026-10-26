@@ -95,3 +95,40 @@ async fn full_router_serves_the_same_payload_when_an_error_exists() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"]["kind"], json!("db_version_too_new"));
 }
+
+#[tokio::test]
+async fn bootstrap_refuses_a_too_new_database_and_names_it() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let db_path = ensure_test_home().join(".cc-switch").join("cc-switch.db");
+    std::fs::create_dir_all(db_path.parent().unwrap()).expect("config dir");
+    let conn = rusqlite::Connection::open(&db_path).expect("open db");
+    conn.execute_batch("PRAGMA user_version = 4242;")
+        .expect("set user_version");
+    drop(conn);
+
+    let Err(BootstrapError::DbVersionTooNew { path, version }) = run_headless_bootstrap() else {
+        panic!("bootstrap must refuse a too-new database");
+    };
+    assert_eq!(path, db_path);
+    assert_eq!(version, 4242);
+
+    let (_, body) = web_call(
+        &web_api::init_error_router(),
+        "GET",
+        "/api/init-status",
+        None,
+    )
+    .await;
+    let data = &body["data"];
+    assert_eq!(data["kind"], json!("db_version_too_new"));
+    assert_eq!(data["db_version"], json!(4242));
+    assert_eq!(data["path"], json!(db_path.display().to_string()));
+    assert!(data["supported_version"].as_i64().unwrap() < 4242);
+    // Refused before any write: the database was neither migrated nor stamped.
+    let conn = rusqlite::Connection::open(&db_path).expect("reopen db");
+    let version: i32 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .expect("user_version");
+    assert_eq!(version, 4242);
+}
