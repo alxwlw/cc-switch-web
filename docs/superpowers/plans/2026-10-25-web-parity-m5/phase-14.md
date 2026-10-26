@@ -21,9 +21,9 @@ Scope: `src-tauri/src/web_api.rs` (9 роутов), `src-tauri/tests/web_api_app
 - [x] `src-tauri/tests/web_api_app_settings.rs` (temp HOME): plugin-config `official:false` пишет ожидаемый Claude-конфиг, `official:true` — снимает (так в desktop-команде `commands/plugin.rs`; исходная формулировка плана была перевёрнута); onboarding skip ставит/снимает флаг в `~/.claude.json`; compression round-trip; disk usage на подготовленных сессиях возвращает их суммарный размер; restore с подготовленным backup → `restoredJsonlFiles > 0`; restore без backup → `skippedReason` присутствует и `{ok:true}`.
 
 ### Task 2: frontend
-- [ ] 9 case в `mapCommand`.
-- [ ] `tests/lib/appSettingsApi.test.ts`: URL/метод/body; `CodexAuthSettings.test.tsx` остаётся зелёным.
-- [ ] Снять WEB-00-гейты с соответствующих controls (таблица фазы 6). В подписи restore в web — «восстанавливает историю Codex на сервере».
+- [x] 9 case в `mapCommand`.
+- [x] `tests/lib/appSettingsApi.test.ts`: URL/метод/body; `CodexAuthSettings.test.tsx` остаётся зелёным.
+- [x] Снять WEB-00-гейты с соответствующих controls (таблица фазы 6). В подписи restore в web — «восстанавливает историю Codex на сервере».
 
 ### Task 3: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server`.

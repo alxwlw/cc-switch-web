@@ -54,8 +54,6 @@ export function useProviderActions(
   const syncClaudePlugin = useCallback(
     async (provider: Provider) => {
       if (activeApp !== "claude") return;
-      // WEB-00: apply_claude_plugin_config не поддержан — снимет WEB-20
-      if (isWeb) return;
 
       try {
         const settings = await settingsApi.get();

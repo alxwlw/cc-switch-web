@@ -388,6 +388,7 @@
       "title": "Turn off unified session history",
       "message": "When turned off, the Codex CLI goes back to separate session lists for the official subscription and third-party providers (the desktop app still shows all sessions). Sessions created while this was on can't be told apart, so they stay in the third-party history and the CLI won't show them under the official subscription.",
       "restoreBackup": "Restore the official sessions migrated at enable time back to the official history (exact restore from backup)",
+      "restoreBackupWeb": "Restore the official sessions migrated at enable time back to the official history on the server (exact restore from backup)",
       "confirm": "Turn off"
     },
     "usage": {

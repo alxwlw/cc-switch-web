@@ -157,8 +157,6 @@ export function useSettings(): UseSettingsResult {
       prevEnabled: boolean | undefined,
     ): Promise<boolean> => {
       if (enabled === undefined || enabled === prevEnabled) return false;
-      // WEB-00: apply_claude_plugin_config и sync_current_providers_live не поддержаны — снимет WEB-20/WEB-09
-      if (isWeb) return false;
       try {
         if (enabled) {
           const currentId = await providersApi.getCurrent("claude");
@@ -171,6 +169,9 @@ export function useSettings(): UseSettingsResult {
         } else {
           await settingsApi.applyClaudePluginConfig({ official: true });
         }
+
+        // WEB-00: sync_current_providers_live не поддержан — снимет WEB-09
+        if (isWeb) return false;
 
         const syncResult = await syncCurrentProvidersLiveSafe();
         if (!syncResult.ok) {
@@ -255,7 +256,7 @@ export function useSettings(): UseSettingsResult {
         await saveMutation.mutateAsync(payload);
 
         // 如果开机自启状态改变，调用系统 API
-        // WEB-00: set_auto_launch не поддержан — снимет WEB-20
+        // WEB-00: set_auto_launch не поддержан (автозапуск ОС — desktop-only, в web не обслуживается)
         if (
           !isWeb &&
           payload.launchOnStartup !== undefined &&
@@ -276,9 +277,7 @@ export function useSettings(): UseSettingsResult {
         // Claude Code 初次安装确认：开=写入 hasCompletedOnboarding=true；关=删除该字段
         // 仅在本次更新包含 skipClaudeOnboarding 时触发，避免其它自动保存误触发
         const nextSkipClaudeOnboarding = updates.skipClaudeOnboarding;
-        // WEB-00: apply/clear_claude_onboarding_skip не поддержаны — снимет WEB-20
         if (
-          !isWeb &&
           nextSkipClaudeOnboarding !== undefined &&
           nextSkipClaudeOnboarding !== (data?.skipClaudeOnboarding ?? false)
         ) {
@@ -412,7 +411,7 @@ export function useSettings(): UseSettingsResult {
         commitAppConfigDir(sanitizedAppDir);
 
         // 只在开机自启状态真正改变时调用系统 API
-        // WEB-00: set_auto_launch не поддержан — снимет WEB-20
+        // WEB-00: set_auto_launch не поддержан (автозапуск ОС — desktop-only, в web не обслуживается)
         if (
           !isWeb &&
           payload.launchOnStartup !== undefined &&
@@ -433,8 +432,7 @@ export function useSettings(): UseSettingsResult {
         // Claude Code 初次安装确认：开=写入 hasCompletedOnboarding=true；关=删除该字段
         const prevSkipClaudeOnboarding = data?.skipClaudeOnboarding ?? false;
         const nextSkipClaudeOnboarding = payload.skipClaudeOnboarding ?? false;
-        // WEB-00: apply/clear_claude_onboarding_skip не поддержаны — снимет WEB-20
-        if (!isWeb && nextSkipClaudeOnboarding !== prevSkipClaudeOnboarding) {
+        if (nextSkipClaudeOnboarding !== prevSkipClaudeOnboarding) {
           try {
             if (nextSkipClaudeOnboarding) {
               await settingsApi.applyClaudeOnboardingSkip();

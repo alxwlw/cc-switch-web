@@ -453,6 +453,35 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         body: { value: a.value },
       };
 
+    // ---------- app-specific settings (WEB-20) ----------
+    case "has_codex_unify_history_backup":
+      return { method: "GET", url: "/api/codex/unify-history-backup" };
+    case "codex_forces_multi_agent_v2":
+      return { method: "GET", url: "/api/codex/forces-multi-agent-v2" };
+    case "get_codex_session_compression":
+      return { method: "GET", url: "/api/codex/session-compression" };
+    case "set_codex_session_compression":
+      return {
+        method: "PUT",
+        url: "/api/codex/session-compression",
+        body: { enabled: a.enabled },
+      };
+    case "get_codex_sessions_disk_usage":
+      return { method: "GET", url: "/api/codex/sessions-disk-usage" };
+    case "restore_codex_unified_history":
+      return { method: "POST", url: "/api/codex/restore-unified-history" };
+    case "apply_claude_plugin_config":
+      // `official: true` clears the plugin config (same as the desktop command).
+      return {
+        method: "POST",
+        url: "/api/claude/plugin-config",
+        body: { official: a.official },
+      };
+    case "apply_claude_onboarding_skip":
+      return { method: "POST", url: "/api/claude/onboarding-skip" };
+    case "clear_claude_onboarding_skip":
+      return { method: "DELETE", url: "/api/claude/onboarding-skip" };
+
     // ---------- settings & environment ----------
     case "get_settings":
       return { method: "GET", url: "/api/settings" };
