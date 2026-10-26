@@ -387,6 +387,9 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return { method: "POST", url: "/api/omo/omo-slim/disable" };
 
     // ---------- startup one-shots ----------
+    // InitErrorPayload | null (WEB-32); main.tsx shows DatabaseUpgrade / the error screen
+    case "get_init_error":
+      return { method: "GET", url: "/api/init-status" };
     case "get_migration_result":
       return {
         method: "GET",

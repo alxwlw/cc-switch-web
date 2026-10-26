@@ -5044,6 +5044,9 @@
     "sessionResumeCopied": "已复制恢复命令。请在服务器主机上的项目目录下，粘贴到终端运行",
     "hostNotice": "文件、CLI 工具和代理位于服务器主机上，而不是运行此浏览器的电脑上。",
     "hostNoticeDismiss": "关闭",
+    "initError": {
+      "message": "无法读取配置文件：\n{{path}}\n\n错误详情：\n{{detail}}\n\n请在服务器主机上修复（检查 JSON 是否有效，或从同目录的备份文件如 config.json.bak 恢复），然后重启服务器。"
+    },
     "mode": {
       "title": "Web 模式",
       "serverVersion": "服务器版本"

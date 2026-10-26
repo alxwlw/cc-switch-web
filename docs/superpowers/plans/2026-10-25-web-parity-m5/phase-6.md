@@ -89,7 +89,7 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 | область | команды | UI (file:line) | сейчас в web | класс | гейт | parity |
 |---|---|---|---|---|---|---|
 | update | `check_for_updates`, `plugin:updater\|check` | `updater.ts:31,36`; авто-чек `UpdateContext.tsx:119-125`; кнопка `AboutSection.tsx:241-253` (handler `:133-170`); dot `Sidebar.tsx:222,711` | fake success «up-to-date» | c | T2 | WEB-28 (ф.36–37) |
-| update | `install_update_and_restart`, `open_portable_update_download`, `check_app_update_available` | `AboutSection.tsx:138,150`; `DatabaseUpgrade.tsx:65,102` | недостижимо (`hasUpdate` всегда false; `get_init_error` кидает) | a | T2 | WEB-28 |
+| update | `install_update_and_restart`, `open_portable_update_download`, `check_app_update_available` | `AboutSection.tsx:138,150`; `DatabaseUpgrade.tsx:65,102` | недостижимо (`hasUpdate` всегда false; `get_init_error` кидал до ф.7) | a | T2 | WEB-28 |
 | settings | `is_portable_mode` | `useSettingsMetadata.ts:30` | mount, throws, пойман | e | T4 | WEB-28 |
 | settings | `restart_app` | `SettingsPage.tsx:293-309` | throws → toast; достижимо только после смены data dir | b | T4 | WEB-26 (ф.35) |
 | settings › routing | proxy/takeover, `get/set_rectifier_config`, `get/set_optimizer_config` | `RoutingSection` (`SettingsPage.tsx:392`), `RectifierConfigPanel.tsx:30-56` | throws | b (вся секция) | T4 | WEB-01 (ф.27–28), WEB-24 (ф.12) |
@@ -103,7 +103,6 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 | tray | `update_tray_menu` (после мутаций, ~12 мест) | `mutations.ts:132,287,381`, `useSettings.ts:320,464`, … | throws, проглочен `console.error` | d → noop в adapter | T3 | — |
 | tray | `tray_panel_*` | отдельная страница `tray-panel.html` | никто не открывает | d | — | — |
 | deeplink | `peek/ack_pending_deeplink` (noop), `merge_deeplink_config`, `fetch_deeplink_icon`, `import_from_deeplink_unified` | `DeepLinkImportDialog.tsx:59-264` | диалог не открывается | d | — | WEB-27 (ф.20) |
-| boot | `get_init_error` | `main.tsx:95` | throws, пойман | d | — | WEB-32 (ф.7) |
 | proxy | `get_proxy_status` (2 с при running), `get_proxy_takeover_status`, `get_app_mode`, `take_startup_attach_failures` | `query/proxy.ts:31,45,63`; `useSidebarStatus.ts:31-56`; `App.tsx:266,313` | mount, error state | e | T3 | WEB-01 |
 | proxy | start/stop/takeover/route/stack (≈12 команд), `codex_forces_multi_agent_v2` | `SwitchModePanel.tsx:122-365`, `useProxyStatus.ts`, `useModeActions.ts`, `CodexStaleClientsNotice.tsx`, `StackSubagentFields.tsx:90` | throws | b (SwitchModePanel/режимы) | T5 | WEB-01 |
 | failover | 11 команд (health, circuit breaker, queue, auto-failover) | `query/failover.ts:23,94` (5 с), `SwitchModePanel.tsx:26-30`, `AutoFailoverConfigPanel.tsx`, health badge `ProviderCard.tsx:223` | throws, перезапрос каждые 5 с | e + b | T3 (queries) / T5 (UI) | WEB-01 |
@@ -130,7 +129,7 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 | clipboard | `copy_text_to_clipboard` | `clipboard.ts:5` (14 файлов) | throws → фоллбэк `navigator.clipboard` (нужен secure context) | d | — | — |
 | plugins | `plugin:log`, `plugin:dialog\|message`, `plugin:process\|exit` | `frontendLogger.ts`, `main.tsx:18-19,60-78` | silent noop, путь config-error недостижим | d | — | — |
 | мёртвое | `auth_list_accounts`, `copilot_*` (11, UI идёт через `auth_*`), `parse_deeplink`, `*_claude_mcp_*`/`*_mcp_server_in_config` (6), `ensure_codex_official_provider`, `get_universal_provider`, `get_claude_code_config_path`, `get_auto_launch_status`, legacy skills (6), `get_usage_data_sources`, `update_endpoint_last_used`, дубли в `vscode.ts:74-92` | нет UI-вызывающих | — | a | — | — |
-| закрыто фазами 1–5 | `open_external` (ф.1), `import_prompt_from_file` (ф.2), custom icons (ф.3), env conflicts (ф.4), OMO/OMO Slim (ф.5) | — | работает | a | — | — |
+| закрыто фазами 1–5, 7 | `open_external` (ф.1), `import_prompt_from_file` (ф.2), custom icons (ф.3), env conflicts (ф.4), OMO/OMO Slim (ф.5), `get_init_error` (ф.7, WEB-32: `GET /api/init-status`, web-экран ошибки) | — | работает | a | — | — |
 
 Не проверено кодом (проверить при гейтинге): точный catch/toast в proxy/failover/skills/usage/workspace/hermes/openclaw; дефолтный `retry` query client; фильтрует ли что-то nav views.
 

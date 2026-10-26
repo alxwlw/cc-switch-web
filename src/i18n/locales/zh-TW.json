@@ -5045,6 +5045,9 @@
     "sessionResumeCopied": "已複製恢復指令。請在伺服器主機上的專案目錄下，貼到終端機執行",
     "hostNotice": "檔案、CLI 工具和代理位於伺服器主機上，而不是執行此瀏覽器的電腦上。",
     "hostNoticeDismiss": "關閉",
+    "initError": {
+      "message": "無法讀取設定檔：\n{{path}}\n\n錯誤詳情：\n{{detail}}\n\n請在伺服器主機上修復（檢查 JSON 是否有效，或從同目錄的備份檔如 config.json.bak 還原），然後重新啟動伺服器。"
+    },
     "mode": {
       "title": "Web 模式",
       "serverVersion": "伺服器版本"
