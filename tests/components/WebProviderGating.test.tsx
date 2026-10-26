@@ -192,7 +192,7 @@ describe("buildAdditiveSections — live membership unknown (web)", () => {
 
   it.each([
     ["openclaw", "web.removeUnverifiable"],
-    ["hermes", "web.removeUnverifiable"],
+    ["hermes", undefined],
     ["opencode", undefined],
   ] as const)(
     "%s: Remove in the unknown-membership section has reason %s",
@@ -361,15 +361,12 @@ describe("account sections in provider forms — web", () => {
 describe("app views — web", () => {
   beforeEach(() => localStorage.clear());
 
-  it("hides the openclaw/hermes sub-views", () => {
+  it("hides the openclaw sub-views; hermesMemory is served (WEB-16)", () => {
     setWeb(true);
-    for (const view of [
-      "workspace",
-      "openclawConfig",
-      "hermesMemory",
-    ] as const) {
+    for (const view of ["workspace", "openclawConfig"] as const) {
       expect(isViewAvailable(view)).toBe(false);
     }
+    expect(isViewAvailable("hermesMemory")).toBe(true);
     expect(isViewAvailable("providers")).toBe(true);
     localStorage.setItem("cc-switch-last-view", "openclawConfig");
     expect(readStoredView()).toBe("providers");

@@ -607,6 +607,46 @@ describe("App integration with MSW", () => {
     );
   });
 
+  it("web: duplicating a hermes provider still reads live ids (WEB-16)", async () => {
+    setWeb(true);
+    let liveIdsCalls = 0;
+    server.use(
+      http.post("http://tauri.local/get_hermes_live_provider_ids", () => {
+        liveIdsCalls += 1;
+        return HttpResponse.json(["deepseek-copy"]);
+      }),
+    );
+    setProviders("hermes", {
+      deepseek: {
+        id: "deepseek",
+        name: "DeepSeek",
+        settingsConfig: {
+          name: "deepseek",
+          base_url: "https://api.deepseek.com",
+          api_key: "test-key",
+          api_mode: "chat_completions",
+          models: [],
+        },
+        category: "custom",
+        sortIndex: 0,
+        createdAt: Date.now(),
+      },
+    });
+    setCurrentProviderId("hermes", "deepseek");
+
+    const { default: App } = await import("@/App");
+    renderApp(App);
+    fireEvent.click(sidebarApp("Hermes"));
+    await waitFor(() =>
+      expect(screen.getByTestId("provider-list").textContent).toContain(
+        "deepseek",
+      ),
+    );
+    liveIdsCalls = 0;
+    fireEvent.click(screen.getByText("duplicate"));
+    await waitFor(() => expect(liveIdsCalls).toBe(1));
+  });
+
   describe.each([
     ["desktop", false],
     ["web", true],
@@ -665,12 +705,13 @@ describe("App integration with MSW", () => {
     ["web", true],
   ])("openclaw/hermes sub-views and launch buttons (%s)", (_label, web) => {
     it.each([
-      ["OpenClaw", "appPage.workspace", "tab"],
-      ["Hermes", "appPage.memory", "tab"],
-      ["Hermes", "appPage.webUi", "button"],
+      // hermes memory tab and Web UI button are served in web (WEB-16); openclaw workspace is not yet
+      ["OpenClaw", "appPage.workspace", "tab", false],
+      ["Hermes", "appPage.memory", "tab", true],
+      ["Hermes", "appPage.webUi", "button", true],
     ] as const)(
-      `${web ? "hides" : "shows"} %s %s (%s)`,
-      async (appName, label, role) => {
+      `${web ? "web:" : "shows"} %s %s (%s)`,
+      async (appName, label, role, servedInWeb) => {
         setWeb(web);
         const { default: App } = await import("@/App");
         renderApp(App);
@@ -678,7 +719,7 @@ describe("App integration with MSW", () => {
         await screen.findByTestId("provider-list");
 
         const found = screen.queryByRole(role, { name: label });
-        if (web) expect(found).toBeNull();
+        if (web && !servedInWeb) expect(found).toBeNull();
         else expect(found).not.toBeNull();
       },
     );

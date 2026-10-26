@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{header, HeaderMap, StatusCode},
     routing::{any, delete, get, post, put},
     Json, Router,
 };
@@ -256,6 +256,23 @@ pub fn router(state: SharedState) -> Router {
             "/api/claude/onboarding-skip",
             post(claude_onboarding_skip_set).delete(claude_onboarding_skip_clear),
         )
+        // Hermes (WEB-16)
+        .route("/api/hermes/import-live", post(hermes_import_live))
+        .route(
+            "/api/hermes/live-provider-ids",
+            get(hermes_live_provider_ids),
+        )
+        .route("/api/hermes/model-config", get(hermes_model_config))
+        .route(
+            "/api/hermes/memory/:kind",
+            get(hermes_memory_get).put(hermes_memory_set),
+        )
+        .route("/api/hermes/memory-limits", get(hermes_memory_limits))
+        .route(
+            "/api/hermes/memory/:kind/enabled",
+            put(hermes_memory_enabled),
+        )
+        .route("/api/hermes/web-ui", get(hermes_web_ui))
         .with_state(state)
 }
 
@@ -2125,4 +2142,149 @@ async fn claude_onboarding_skip_clear() -> ApiResult {
         crate::claude_mcp::clear_has_completed_onboarding,
     )
     .await
+}
+
+// ---------- Hermes (WEB-16) ----------
+
+fn parse_memory_kind(raw: &str) -> Result<crate::hermes_config::MemoryKind, ApiResult> {
+    serde_json::from_value(Value::String(raw.to_string()))
+        .map_err(|_| bad_request(format!("unknown memory kind: {raw}")))
+}
+
+async fn hermes_import_live(State(state): State<SharedState>) -> ApiResult {
+    blocking_api("hermes import", move || {
+        crate::services::provider::import_hermes_providers_from_live(&state)
+    })
+    .await
+}
+
+async fn hermes_live_provider_ids() -> ApiResult {
+    blocking_api("hermes live provider ids", || {
+        crate::hermes_config::get_providers().map(|p| p.keys().cloned().collect::<Vec<_>>())
+    })
+    .await
+}
+
+async fn hermes_model_config() -> ApiResult {
+    blocking_api(
+        "hermes model config",
+        crate::hermes_config::get_model_config,
+    )
+    .await
+}
+
+async fn hermes_memory_get(Path(kind): Path<String>) -> ApiResult {
+    let kind = match parse_memory_kind(&kind) {
+        Ok(k) => k,
+        Err(resp) => return resp,
+    };
+    blocking_api("hermes memory read", move || {
+        crate::hermes_config::read_memory(kind)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct HermesMemoryReq {
+    content: String,
+}
+
+async fn hermes_memory_set(
+    Path(kind): Path<String>,
+    Json(body): Json<HermesMemoryReq>,
+) -> ApiResult {
+    let kind = match parse_memory_kind(&kind) {
+        Ok(k) => k,
+        Err(resp) => return resp,
+    };
+    blocking_api("hermes memory write", move || {
+        crate::hermes_config::write_memory(kind, &body.content)
+    })
+    .await
+}
+
+async fn hermes_memory_limits() -> ApiResult {
+    blocking_api(
+        "hermes memory limits",
+        crate::hermes_config::read_memory_limits,
+    )
+    .await
+}
+
+#[derive(Deserialize)]
+struct HermesMemoryEnabledReq {
+    enabled: bool,
+}
+
+async fn hermes_memory_enabled(
+    Path(kind): Path<String>,
+    Json(body): Json<HermesMemoryEnabledReq>,
+) -> ApiResult {
+    let kind = match parse_memory_kind(&kind) {
+        Ok(k) => k,
+        Err(resp) => return resp,
+    };
+    blocking_api("hermes memory toggle", move || {
+        crate::hermes_config::set_memory_enabled(kind, body.enabled)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct HermesWebUiQuery {
+    path: Option<String>,
+}
+
+/// Host part of a `Host` header without the port; `None` when it is not a plain
+/// hostname / IPv4 / bracketed IPv6 literal (anything else could smuggle a URL).
+fn host_without_port(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    let host = if raw.starts_with('[') {
+        let end = raw.find(']')?;
+        &raw[..=end]
+    } else {
+        raw.rsplit_once(':').map_or(raw, |(h, _)| h)
+    };
+    let bracketed = host.starts_with('[');
+    let inner = host.trim_start_matches('[').trim_end_matches(']');
+    // ':' is only legal inside an IPv6 literal, which must be bracketed
+    let valid = !inner.is_empty()
+        && inner.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '.' | '-') || (bracketed && c == ':')
+        });
+    valid.then(|| host.to_string())
+}
+
+/// Forces a single leading `/` and drops control characters, so the result can
+/// only be a path on the Hermes origin (`//evil.example` -> `/evil.example`).
+fn normalize_web_path(raw: Option<&str>) -> String {
+    let cleaned: String = raw
+        .unwrap_or("")
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect();
+    format!("/{}", cleaned.trim_start_matches(['/', '\\']))
+}
+
+/// Probes Hermes Web UI on the server's loopback and returns the URL a browser
+/// reaches it at: the request's own host (the client got here through it) plus
+/// the Hermes port. Plain `http`: the service has no TLS of its own.
+async fn hermes_web_ui(headers: HeaderMap, Query(q): Query<HermesWebUiQuery>) -> ApiResult {
+    let Some(host) = headers
+        .get(header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .and_then(host_without_port)
+    else {
+        return bad_request("missing or invalid Host header");
+    };
+    let port = crate::commands::hermes_web_port();
+    let reachable = match crate::commands::probe_hermes_web(port).await {
+        Ok(r) => r,
+        Err(e) => return fail(e),
+    };
+    let url = format!(
+        "http://{host}:{port}{}",
+        normalize_web_path(q.path.as_deref())
+    );
+    ok(json!({ "reachable": reachable, "port": port, "url": url }))
 }

@@ -7,10 +7,9 @@ import {
 } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
-import { hermesApi } from "@/lib/api/hermes";
+import { hermesApi, HermesWebUiUnreachableError } from "@/lib/api/hermes";
 import { providersApi } from "@/lib/api/providers";
 import { settingsApi } from "@/lib/api/settings";
-import { isWeb } from "@/lib/api/adapter";
 import type { HermesMemoryKind } from "@/types";
 import { extractErrorMessage } from "@/utils/errorUtils";
 
@@ -54,8 +53,7 @@ export function useHermesLiveProviderIds(enabled: boolean) {
   return useQuery({
     queryKey: hermesKeys.liveProviderIds,
     queryFn: () => providersApi.getHermesLiveProviderIds(),
-    // WEB-00: hermes-команды не поддержаны — снимет WEB-16
-    enabled: enabled && !isWeb,
+    enabled,
   });
 }
 
@@ -63,8 +61,7 @@ export function useHermesModelConfig(enabled: boolean) {
   return useQuery({
     queryKey: hermesKeys.modelConfig,
     queryFn: () => hermesApi.getModelConfig(),
-    // WEB-00: hermes-команды не поддержаны — снимет WEB-16
-    enabled: enabled && !isWeb,
+    enabled,
   });
 }
 
@@ -72,8 +69,7 @@ export function useHermesMemory(kind: HermesMemoryKind, enabled: boolean) {
   return useQuery({
     queryKey: hermesKeys.memory(kind),
     queryFn: () => hermesApi.getMemory(kind),
-    // WEB-00: hermes-команды не поддержаны — снимет WEB-16
-    enabled: enabled && !isWeb,
+    enabled,
   });
 }
 
@@ -82,8 +78,7 @@ export function useHermesMemoryLimits(enabled: boolean) {
     queryKey: hermesKeys.memoryLimits,
     queryFn: () => hermesApi.getMemoryLimits(),
     staleTime: 60_000,
-    // WEB-00: hermes-команды не поддержаны — снимет WEB-16
-    enabled: enabled && !isWeb,
+    enabled,
   });
 }
 
@@ -175,6 +170,13 @@ export function useOpenHermesWebUI(onOffline?: () => void) {
       try {
         await hermesApi.openWebUI(path);
       } catch (error) {
+        if (error instanceof HermesWebUiUnreachableError) {
+          // Web: there is no terminal to launch the dashboard in — tell where to look.
+          toast.error(
+            t("hermes.webui.unreachableRemote", { port: error.port }),
+          );
+          return;
+        }
         const detail = extractErrorMessage(error);
         if (detail === HERMES_WEB_OFFLINE_ERROR) {
           if (onOffline) {

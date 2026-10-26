@@ -3200,6 +3200,7 @@
       "open": "開啟 Hermes Web UI",
       "offline": "Hermes Web UI 未啟動，請先執行 `hermes dashboard` 啟動服務。",
       "openFailed": "開啟 Hermes Web UI 失敗",
+      "unreachableRemote": "伺服器上的 Hermes Web UI 沒有回應（連接埠 {{port}}）。若它只監聽 localhost，請透過 tailscale serve 開啟，或讓它監聽 0.0.0.0。",
       "launchConfirmTitle": "Hermes Dashboard 未啟動",
       "launchConfirmMessage": "是否開啟終端機並執行 `hermes dashboard` 啟動服務？\n\n啟動完成後會自動開啟瀏覽器。\n\n若終端機提示找不到 hermes 或缺少 web 相依套件，請先執行：\npip install hermes-agent[web]",
       "launchConfirmAction": "開啟終端機並啟動",

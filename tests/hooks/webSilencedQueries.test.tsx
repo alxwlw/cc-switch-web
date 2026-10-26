@@ -45,12 +45,6 @@ import {
   useOpenClawLiveProviderIds,
   useOpenClawTools,
 } from "@/hooks/useOpenClaw";
-import {
-  useHermesLiveProviderIds,
-  useHermesMemory,
-  useHermesMemoryLimits,
-  useHermesModelConfig,
-} from "@/hooks/useHermes";
 import { useSidebarStatus } from "@/hooks/useSidebarStatus";
 import { useKimiOAuth } from "@/components/providers/forms/hooks/useKimiOAuth";
 import { useManagedAuth } from "@/components/providers/forms/hooks/useManagedAuth";
@@ -100,11 +94,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "useOpenClawLiveProviderIds",
     "get_openclaw_live_provider_ids",
     () => useOpenClawLiveProviderIds(true),
-  ],
-  [
-    "useHermesLiveProviderIds",
-    "get_hermes_live_provider_ids",
-    () => useHermesLiveProviderIds(true),
   ],
   ["useKimiOAuth", "kimi_oauth_status", () => useKimiOAuth()],
   ["useManagedAuth", "auth_get_status", () => useManagedAuth("xai_oauth")],
@@ -207,21 +196,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "useOpenClawHealth",
     "scan_openclaw_config_health",
     () => useOpenClawHealth(true),
-  ],
-  [
-    "useHermesModelConfig",
-    "get_hermes_model_config",
-    () => useHermesModelConfig(true),
-  ],
-  [
-    "useHermesMemory",
-    "get_hermes_memory",
-    () => useHermesMemory("memory", true),
-  ],
-  [
-    "useHermesMemoryLimits",
-    "get_hermes_memory_limits",
-    () => useHermesMemoryLimits(true),
   ],
 ];
 
