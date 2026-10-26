@@ -17,9 +17,10 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::app_config::{AppType, McpServer};
+use crate::commands as universal_provider_emit_cmds;
 use crate::error::AppError;
 use crate::prompt::Prompt;
-use crate::provider::Provider;
+use crate::provider::{Provider, UniversalProvider};
 use crate::services::prompt::PromptService;
 use crate::services::provider::icon;
 use crate::services::provider::{EditorSave, ProviderService, ProviderSortUpdate};
@@ -89,6 +90,19 @@ pub fn router(state: SharedState) -> Router {
             post(live_remove_provider),
         )
         .route("/api/:app/providers/:id", delete(delete_provider))
+        // universal providers (cross-app)
+        .route(
+            "/api/universal-providers",
+            get(list_universal_providers).put(upsert_universal_provider),
+        )
+        .route(
+            "/api/universal-providers/:id",
+            get(get_universal_provider).delete(delete_universal_provider),
+        )
+        .route(
+            "/api/universal-providers/:id/sync",
+            post(sync_universal_provider),
+        )
         // prompts (per app)
         .route("/api/:app/prompts", get(list_prompts))
         .route(
@@ -459,6 +473,79 @@ async fn delete_provider(
         Ok(Ok(())) => ok(true),
         Ok(Err(e)) => fail(e.to_string()),
         Err(e) => fail(format!("delete task failed: {e}")),
+    }
+}
+
+// ---------- universal providers ----------
+
+async fn list_universal_providers(State(state): State<SharedState>) -> ApiResult {
+    match tokio::task::spawn_blocking(move || ProviderService::list_universal(&state)).await {
+        Ok(Ok(map)) => ok(map),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("list universal providers task failed: {e}")),
+    }
+}
+
+async fn get_universal_provider(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> ApiResult {
+    match tokio::task::spawn_blocking(move || ProviderService::get_universal(&state, &id)).await {
+        Ok(Ok(p)) => ok(p),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("get universal provider task failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct UpsertUniversalReq {
+    provider: UniversalProvider,
+}
+
+async fn upsert_universal_provider(
+    State(state): State<SharedState>,
+    Json(body): Json<UpsertUniversalReq>,
+) -> ApiResult {
+    match tokio::task::spawn_blocking(move || {
+        universal_provider_emit_cmds::upsert_universal_provider_emit(&state, body.provider)
+    })
+    .await
+    {
+        Ok(Ok(v)) => ok(v),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("upsert universal provider task failed: {e}")),
+    }
+}
+
+async fn delete_universal_provider(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> ApiResult {
+    match tokio::task::spawn_blocking(move || {
+        universal_provider_emit_cmds::delete_universal_provider_emit(&state, &id)
+    })
+    .await
+    {
+        Ok(Ok(v)) => ok(v),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("delete universal provider task failed: {e}")),
+    }
+}
+
+/// A partial failure (DB saved, a live file not written) comes back as
+/// `{ok:false,error}` with the service text verbatim; the child providers stay in the DB.
+async fn sync_universal_provider(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> ApiResult {
+    match tokio::task::spawn_blocking(move || {
+        universal_provider_emit_cmds::sync_universal_provider_emit(&state, &id)
+    })
+    .await
+    {
+        Ok(Ok(v)) => ok(v),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("sync universal provider task failed: {e}")),
     }
 }
 
