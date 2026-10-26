@@ -129,4 +129,42 @@ describe("EndpointSpeedTest (WEB-21)", () => {
       queryKey: ["providers", "claude"],
     });
   });
+
+  it("ошибка на remove: сохранённые add и remove перечислены, повторное Save не повторяет их", async () => {
+    api.getCustomEndpoints.mockResolvedValue([
+      { url: "https://old.example", addedAt: 1 },
+      { url: "https://old2.example", addedAt: 2 },
+      { url: "https://old3.example", addedAt: 3 },
+    ]);
+    const { onClose } = await renderPanel();
+    await screen.findAllByText("https://old3.example");
+    api.removeCustomEndpoint
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("rm-boom"));
+
+    await addUrl("https://a.example");
+    const urlRows = screen.getAllByText(/^https:\/\/old/);
+    for (const row of urlRows.slice(0, 2)) {
+      await userEvent.click(
+        row.closest("div[class*='group']")!.querySelector("button")!,
+      );
+    }
+    const save = screen.getByRole("button", { name: "common.save" });
+    await userEvent.click(save);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/partial .*a\.example.*old.*\/ rm-boom/),
+      ).toBeVisible(),
+    );
+    expect(api.removeCustomEndpoint).toHaveBeenCalledTimes(2);
+    expect(onClose).not.toHaveBeenCalled();
+
+    api.removeCustomEndpoint.mockResolvedValue(undefined);
+    await userEvent.click(save);
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    // add не повторяется, из remove повторяется только упавший
+    expect(api.addCustomEndpoint).toHaveBeenCalledTimes(1);
+    expect(api.removeCustomEndpoint).toHaveBeenCalledTimes(3);
+  });
 });
