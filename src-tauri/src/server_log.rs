@@ -136,6 +136,51 @@ pub fn init() {
     }
 }
 
+/// Default / maximum number of lines `GET /api/logs/tail` returns.
+pub const TAIL_DEFAULT_LINES: usize = 500;
+pub const TAIL_MAX_LINES: usize = 5000;
+const TAIL_CHUNK: u64 = 64 * 1024;
+/// Upper bound on bytes read from the end of the file, whatever the line length.
+const TAIL_MAX_BYTES: usize = 8 * 1024 * 1024;
+
+/// Last `n` lines of the file, read backwards in chunks so memory stays bounded
+/// (at most [`TAIL_MAX_BYTES`]) however large the file is. Bytes are decoded
+/// UTF-8-lossy. A line cut by the byte bound is dropped, never returned partial.
+pub fn tail_lines(path: &Path, n: usize) -> io::Result<Vec<String>> {
+    tail_lines_with(path, n, TAIL_CHUNK, TAIL_MAX_BYTES)
+}
+
+fn tail_lines_with(path: &Path, n: usize, chunk: u64, max_bytes: usize) -> io::Result<Vec<String>> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = File::open(path)?;
+    let mut pos = file.metadata()?.len();
+    let mut buf: Vec<u8> = Vec::new();
+    let mut newlines = 0usize;
+    // n + 1 newlines guarantee n complete lines after the first (maybe partial) one is cut.
+    while pos > 0 && newlines <= n && buf.len() < max_bytes {
+        let take = chunk.min(pos);
+        pos -= take;
+        file.seek(SeekFrom::Start(pos))?;
+        let mut part = vec![0u8; take as usize];
+        file.read_exact(&mut part)?;
+        newlines += part.iter().filter(|b| **b == b'\n').count();
+        part.extend_from_slice(&buf);
+        buf = part;
+    }
+    let mut start = 0;
+    if pos > 0 {
+        // The first line may be cut: drop it.
+        start = buf
+            .iter()
+            .position(|b| *b == b'\n')
+            .map_or(buf.len(), |i| i + 1);
+    }
+    let text = String::from_utf8_lossy(&buf[start..]);
+    let all: Vec<&str> = text.lines().collect();
+    let skip = all.len().saturating_sub(n);
+    Ok(all[skip..].iter().map(|l| l.to_string()).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -233,5 +278,53 @@ mod tests {
         drop(f);
         assert_eq!(fs::read(&path).unwrap(), b"fresh");
         assert_eq!(fs::read(archive_path(&path)).unwrap(), b"123456");
+    }
+
+    fn write_numbered(dir: &Path, count: usize) -> PathBuf {
+        let path = dir.join("t.log");
+        let body: String = (1..=count).map(|i| format!("line {i}\n")).collect();
+        fs::write(&path, body).unwrap();
+        path
+    }
+
+    #[test]
+    fn tail_returns_the_last_n_lines_across_chunk_boundaries() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_numbered(dir.path(), 100);
+        // 7-byte chunks: lines straddle chunk borders.
+        let got = tail_lines_with(&path, 3, 7, usize::MAX).unwrap();
+        assert_eq!(got, vec!["line 98", "line 99", "line 100"]);
+        let all = tail_lines_with(&path, 1000, 7, usize::MAX).unwrap();
+        assert_eq!(all.len(), 100);
+        assert_eq!(all[0], "line 1");
+    }
+
+    #[test]
+    fn tail_handles_missing_trailing_newline_crlf_and_invalid_utf8() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.log");
+        fs::write(&path, b"a\r\nb\xff\nc").unwrap();
+        let got = tail_lines_with(&path, 2, 4, usize::MAX).unwrap();
+        assert_eq!(got, vec!["b\u{fffd}", "c"]);
+    }
+
+    #[test]
+    fn tail_drops_a_line_cut_by_the_byte_bound() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_numbered(dir.path(), 100);
+        // 40 bytes max, 8-byte chunks: only whole trailing lines survive.
+        let got = tail_lines_with(&path, 50, 8, 40).unwrap();
+        assert!(!got.is_empty() && got.len() < 50);
+        assert_eq!(got.last().unwrap(), "line 100");
+        assert!(got.iter().all(|l| l.starts_with("line ")));
+        let first_num: usize = got[0].trim_start_matches("line ").parse().unwrap();
+        assert_eq!(got.len(), 101 - first_num);
+    }
+
+    #[test]
+    fn tail_of_missing_file_is_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let e = tail_lines(&dir.path().join("none.log"), 3).unwrap_err();
+        assert_eq!(e.kind(), io::ErrorKind::NotFound);
     }
 }

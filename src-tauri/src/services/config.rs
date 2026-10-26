@@ -9,6 +9,21 @@ const MAX_BACKUPS: usize = 10;
 pub struct ConfigService;
 
 impl ConfigService {
+    /// 保存日志配置并立即应用到全局 `log` 级别（桌面命令与 web 路由共用）。
+    pub fn set_log_config(
+        db: &crate::database::Database,
+        config: &crate::proxy::types::LogConfig,
+    ) -> Result<(), AppError> {
+        db.set_log_config(config)?;
+        log::set_max_level(config.to_level_filter());
+        log::info!(
+            "日志配置已更新: enabled={}, level={}",
+            config.enabled,
+            config.level
+        );
+        Ok(())
+    }
+
     /// 为当前 config.json 创建备份，返回备份 ID（若文件不存在则返回空字符串）。
     pub fn create_backup(config_path: &Path) -> Result<String, AppError> {
         if !config_path.exists() {
