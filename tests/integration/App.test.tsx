@@ -665,12 +665,13 @@ describe("App integration with MSW", () => {
     ["web", true],
   ])("openclaw/hermes sub-views and launch buttons (%s)", (_label, web) => {
     it.each([
-      ["OpenClaw", "appPage.workspace", "tab"],
-      ["Hermes", "appPage.memory", "tab"],
-      ["Hermes", "appPage.webUi", "button"],
+      // hermes memory tab and Web UI button are served in web (WEB-16); openclaw workspace is not yet
+      ["OpenClaw", "appPage.workspace", "tab", false],
+      ["Hermes", "appPage.memory", "tab", true],
+      ["Hermes", "appPage.webUi", "button", true],
     ] as const)(
-      `${web ? "hides" : "shows"} %s %s (%s)`,
-      async (appName, label, role) => {
+      `${web ? "web:" : "shows"} %s %s (%s)`,
+      async (appName, label, role, servedInWeb) => {
         setWeb(web);
         const { default: App } = await import("@/App");
         renderApp(App);
@@ -678,7 +679,7 @@ describe("App integration with MSW", () => {
         await screen.findByTestId("provider-list");
 
         const found = screen.queryByRole(role, { name: label });
-        if (web) expect(found).toBeNull();
+        if (web && !servedInWeb) expect(found).toBeNull();
         else expect(found).not.toBeNull();
       },
     );

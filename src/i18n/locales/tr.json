@@ -3192,6 +3192,7 @@
       "open": "Hermes Web kullanıcı arayüzünü açın",
       "offline": "Hermes Web kullanıcı arayüzü çalışmıyor. Önce `hermes dashboard` ile başlayın.",
       "openFailed": "Hermes Web kullanıcı arayüzü açılamadı",
+      "unreachableRemote": "Hermes Web kullanıcı arayüzü sunucuda yanıt vermiyor (bağlantı noktası {{port}}). Yalnızca localhost'u dinliyorsa tailscale serve ile açın veya 0.0.0.0 üzerinde başlatın.",
       "launchConfirmTitle": "Hermes Kontrol Paneli çalışmıyor",
       "launchConfirmMessage": "Bir terminal açın ve şimdi `hermes dashboard` ile başlatılsın mı?\n\nBaşlatma tamamlandığında tarayıcı otomatik olarak açılacaktır.\n\nTerminal, `hermes`'nin bulunamadığını veya web ekstralarının eksik olduğunu bildirirse önce şunu çalıştırın:\npip install hermes-agent[web]",
       "launchConfirmAction": "Terminali aç ve başlat",

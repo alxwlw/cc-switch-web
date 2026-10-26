@@ -482,6 +482,37 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "clear_claude_onboarding_skip":
       return { method: "DELETE", url: "/api/claude/onboarding-skip" };
 
+    // ---------- Hermes config & memory (WEB-16) ----------
+    // `launch_hermes_dashboard` (visible terminal on the server) stays desktop-only: unmapped.
+    case "import_hermes_providers_from_live":
+      return { method: "POST", url: "/api/hermes/import-live" };
+    case "get_hermes_live_provider_ids":
+      return { method: "GET", url: "/api/hermes/live-provider-ids" };
+    case "get_hermes_model_config":
+      return { method: "GET", url: "/api/hermes/model-config" };
+    case "get_hermes_memory":
+      return { method: "GET", url: `/api/hermes/memory/${enc(a.kind)}` };
+    case "set_hermes_memory":
+      return {
+        method: "PUT",
+        url: `/api/hermes/memory/${enc(a.kind)}`,
+        body: { content: a.content },
+      };
+    case "get_hermes_memory_limits":
+      return { method: "GET", url: "/api/hermes/memory-limits" };
+    case "set_hermes_memory_enabled":
+      return {
+        method: "PUT",
+        url: `/api/hermes/memory/${enc(a.kind)}/enabled`,
+        body: { enabled: a.enabled },
+      };
+    case "open_hermes_web_ui":
+      // Probe only: the server answers {reachable, port, url}; hermesApi.openWebUI opens the url.
+      return {
+        method: "GET",
+        url: `/api/hermes/web-ui${query({ path: a.path })}`,
+      };
+
     // ---------- settings & environment ----------
     case "get_settings":
       return { method: "GET", url: "/api/settings" };

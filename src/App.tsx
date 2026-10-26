@@ -1127,35 +1127,37 @@ function App() {
     ) {
       let liveProviderIds: string[] = [];
       try {
-        // WEB-00: live-ids (get_*_live_provider_ids / get_*_current_state) не поддержаны. Шаг только
+        // WEB-00: live-ids opencode/openclaw/pi (get_*_live_provider_ids / get_*_current_state) не поддержаны. Шаг только
         // проверяет коллизию ключа копии с записями живого конфига; в web копия получает ключ,
-        // свободный среди провайдеров БД (addToLive=false, в живой конфиг не пишется) — снимет WEB-14/15/16
-        liveProviderIds = isWeb
-          ? []
-          : activeApp === "opencode"
-            ? await queryClient.ensureQueryData({
-                queryKey: ["opencodeLiveProviderIds"],
-                queryFn: () => providersApi.getOpenCodeLiveProviderIds(),
-              })
-            : activeApp === "openclaw"
+        // свободный среди провайдеров БД (addToLive=false, в живой конфиг не пишется) — снимет WEB-14/15.
+        // Hermes live-ids в web работают (WEB-16)
+        liveProviderIds =
+          isWeb && activeApp !== "hermes"
+            ? []
+            : activeApp === "opencode"
               ? await queryClient.ensureQueryData({
-                  queryKey: openclawKeys.liveProviderIds,
-                  queryFn: () => providersApi.getOpenClawLiveProviderIds(),
+                  queryKey: ["opencodeLiveProviderIds"],
+                  queryFn: () => providersApi.getOpenCodeLiveProviderIds(),
                 })
-              : activeApp === "hermes"
+              : activeApp === "openclaw"
                 ? await queryClient.ensureQueryData({
-                    queryKey: hermesKeys.liveProviderIds,
-                    queryFn: () => providersApi.getHermesLiveProviderIds(),
+                    queryKey: openclawKeys.liveProviderIds,
+                    queryFn: () => providersApi.getOpenClawLiveProviderIds(),
                   })
-                : (
-                    await queryClient.ensureQueryData({
-                      queryKey: [activeApp, "currentState"],
-                      queryFn: () =>
-                        piApi.getCurrentState(
-                          activeApp === "omp" ? "omp" : "pi",
-                        ),
+                : activeApp === "hermes"
+                  ? await queryClient.ensureQueryData({
+                      queryKey: hermesKeys.liveProviderIds,
+                      queryFn: () => providersApi.getHermesLiveProviderIds(),
                     })
-                  ).enabledProviderIds;
+                  : (
+                      await queryClient.ensureQueryData({
+                        queryKey: [activeApp, "currentState"],
+                        queryFn: () =>
+                          piApi.getCurrentState(
+                            activeApp === "omp" ? "omp" : "pi",
+                          ),
+                      })
+                    ).enabledProviderIds;
       } catch (error) {
         console.error(
           "[App] Failed to load live provider IDs for duplication",
@@ -1385,8 +1387,7 @@ function App() {
             (settingsData?.showProfileSwitcher ?? false) && (
               <ProfileSwitcher activeApp={activeApp} />
             )}
-          {/* WEB-00: запуск Hermes Web UI/dashboard — desktop-only (launch_hermes_dashboard) — снимет WEB-16 */}
-          {activeApp === "hermes" && !isWeb && (
+          {activeApp === "hermes" && (
             <Button
               variant="quiet"
               size="regular"
@@ -1435,8 +1436,8 @@ function App() {
   // OpenClaw / Hermes 没有模式 tab，那一行放它们自己的页面导航。
   // 换整块内容的是页面导航，用下划线页签；分段控件只留给模式和页内筛选。
   const renderAppSegments = () => {
-    // WEB-00: единственная доступная вкладка — providers (workspace/config/memory скрыты) — снимет WEB-15/16/17
-    if (isWeb) return null;
+    // WEB-00: у openclaw в web единственная доступная вкладка — providers (workspace/config скрыты) — снимет WEB-15/17
+    if (isWeb && activeApp !== "hermes") return null;
     if (activeApp === "openclaw") {
       return (
         <div className="shrink-0 px-6 pt-2">

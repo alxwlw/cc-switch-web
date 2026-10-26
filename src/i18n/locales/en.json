@@ -3199,6 +3199,7 @@
       "open": "Open Hermes Web UI",
       "offline": "Hermes Web UI is not running. Start it with `hermes dashboard` first.",
       "openFailed": "Failed to open Hermes Web UI",
+      "unreachableRemote": "Hermes Web UI is not responding on the server (port {{port}}). If it listens only on localhost, open it via tailscale serve or start it on 0.0.0.0.",
       "launchConfirmTitle": "Hermes Dashboard is not running",
       "launchConfirmMessage": "Open a terminal and start it now with `hermes dashboard`?\n\nThe browser will open automatically once startup completes.\n\nIf the terminal reports that `hermes` cannot be found or the web extras are missing, run first:\npip install hermes-agent[web]",
       "launchConfirmAction": "Open terminal & launch",

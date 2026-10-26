@@ -3199,6 +3199,7 @@
       "open": "Hermes Web UI を開く",
       "offline": "Hermes Web UI が起動していません。まず `hermes dashboard` を実行してください。",
       "openFailed": "Hermes Web UI を開けませんでした",
+      "unreachableRemote": "サーバー上の Hermes Web UI が応答しません（ポート {{port}}）。localhost のみで待ち受けている場合は、tailscale serve 経由で開くか、0.0.0.0 で起動してください。",
       "launchConfirmTitle": "Hermes Dashboard が起動していません",
       "launchConfirmMessage": "ターミナルを開いて `hermes dashboard` を実行しますか？\n\n起動完了後、ブラウザが自動的に開きます。\n\nターミナルに `hermes` が見つからない、または web 依存が不足するというエラーが表示される場合は、まず次を実行してください：\npip install hermes-agent[web]",
       "launchConfirmAction": "ターミナルを開いて起動",

@@ -67,13 +67,12 @@ import {
 export type SwitchModeProps = Omit<SwitchModeInput, "app" | "t" | "providers">;
 
 /** Приложения, у которых «в конфиге ли» берётся из живого конфига (команды вне mapCommand). */
-const WEB_LIVE_MEMBERSHIP_APPS: AppId[] = ["opencode", "openclaw", "hermes"];
+const WEB_LIVE_MEMBERSHIP_APPS: AppId[] = ["opencode", "openclaw"];
 
 /** Приложения, у которых «импорт текущего» читает живой конфиг (import_*_from_live вне mapCommand). */
 const WEB_LIVE_IMPORT_APPS: AppId[] = [
   "opencode",
   "openclaw",
-  "hermes",
   "claude-desktop",
 ];
 
@@ -176,13 +175,13 @@ export function ProviderList({
   // 累加式应用要等 live 里有哪些供应商读回来（成功或失败）才知道卡片该进哪个分区；
   // 在那之前按加载中画骨架，不然卡片先全落进「可添加」，读回来再整体搬到「已添加」。
   // 一张卡都没有时不用等，直接出空状态
-  // WEB-00: в web эти запросы выключены и вечно pending — скелетон не рисуем — снимет WEB-14
+  // WEB-00: в web opencode/openclaw/pi-запросы выключены и вечно pending — скелетон не рисуем — снимет WEB-14/15
   const isLiveMembershipPending =
-    !isWeb &&
-    ((appId === "opencode" && isOpencodeLiveIdsPending) ||
-      (appId === "openclaw" && isOpenclawLiveIdsPending) ||
-      (appId === "hermes" && isHermesLiveIdsPending) ||
-      (isPiFamilyApp(appId) && isPiCurrentStatePending));
+    (appId === "hermes" && isHermesLiveIdsPending) ||
+    (!isWeb &&
+      ((appId === "opencode" && isOpencodeLiveIdsPending) ||
+        (appId === "openclaw" && isOpenclawLiveIdsPending) ||
+        (isPiFamilyApp(appId) && isPiCurrentStatePending)));
 
   const isInConfig = useCallback(
     (provider: Provider): boolean => {
@@ -398,7 +397,7 @@ export function ProviderList({
         isHermesReadOnlyProvider(provider.settingsConfig),
       piStateUnavailable: isPiFamilyApp(appId) && !isPiStateReady,
       kimiCurrentId: currentProviderId,
-      // WEB-00: живой конфиг в web не читается — членство неизвестно (default-model действий нет) — снимет WEB-14/15/16
+      // WEB-00: живой конфиг в web не читается — членство неизвестно (default-model действий нет) — снимет WEB-14/15 (hermes открыт WEB-16)
       membershipUnknown: isWeb && WEB_LIVE_MEMBERSHIP_APPS.includes(appId),
       actions: {
         add: onSwitch,
@@ -480,7 +479,7 @@ export function ProviderList({
               ? undefined
               : () => importMutation.mutate()
           }
-          // WEB-00: import_*_from_live не поддержан (import_default_config — работает) — снимет WEB-14/15/16/19
+          // WEB-00: import_*_from_live не поддержан (import_default_config — работает) — снимет WEB-14/15/19 (hermes открыт WEB-16)
           importUnavailable={isWeb && WEB_LIVE_IMPORT_APPS.includes(appId)}
         />
       </div>
