@@ -492,6 +492,21 @@ describe("ProviderList Component", () => {
     });
   });
 
+  it("web: import-from-live stays disabled on an empty opencode list (WEB-14 pending)", () => {
+    setWeb(true);
+    useDragSortMock.mockReturnValue({
+      sortedProviders: [],
+      sensors: [],
+      handleDragEnd: vi.fn(),
+    });
+    renderWithQueryClient(
+      <ProviderList {...baseProps} providers={{}} appId="opencode" />,
+    );
+    expect(
+      screen.getByRole("button", { name: "provider.importCurrent" }),
+    ).toBeDisabled();
+  });
+
   describe("web: openclaw live membership is served (WEB-15)", () => {
     const providerA = createProvider({ id: "a", name: "A" });
     const live = createProvider({ id: "live", name: "Live" });
