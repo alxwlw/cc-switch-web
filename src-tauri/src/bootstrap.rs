@@ -130,22 +130,25 @@ impl BootstrapPaths {
     }
 }
 
-/// One attempt to load the legacy `config.json`. Returns `Ok(None)` when no
-/// migration is needed (DB already exists or there is no `config.json`).
+/// Whether a legacy `config.json` must be migrated: no DB yet and a
+/// `config.json` on disk. Evaluate it ONCE, before the first load attempt, and
+/// reuse the answer across retries (the desktop retry loop does).
+pub fn needs_legacy_migration(paths: &BootstrapPaths) -> bool {
+    !paths.db_path.exists() && paths.json_path.exists()
+}
+
+/// One attempt to load the legacy `config.json`. Call only when
+/// [`needs_legacy_migration`] said so; retries call it again without
+/// re-deciding.
 ///
 /// Runs before the database is created so a failed load leaves no DB behind
 /// and the next start can retry. The desktop loops around this with a dialog.
-pub fn load_legacy_config(
-    paths: &BootstrapPaths,
-) -> Result<Option<MultiAppConfig>, BootstrapError> {
-    if paths.db_path.exists() || !paths.json_path.exists() {
-        return Ok(None);
-    }
+pub fn load_legacy_config() -> Result<MultiAppConfig, BootstrapError> {
     log::info!("检测到旧版配置文件，验证配置文件...");
     match MultiAppConfig::load() {
         Ok(config) => {
             log::info!("✓ 配置文件加载成功");
-            Ok(Some(config))
+            Ok(config)
         }
         Err(e) => {
             log::error!("加载旧配置文件失败: {e}");
@@ -742,7 +745,11 @@ pub struct Bootstrapped {
 pub fn run_headless_bootstrap() -> Result<Bootstrapped, BootstrapError> {
     let paths = BootstrapPaths::resolve();
 
-    let legacy = load_legacy_config(&paths).inspect_err(|e| record_init_error(&paths, e))?;
+    let legacy = if needs_legacy_migration(&paths) {
+        Some(load_legacy_config().inspect_err(|e| record_init_error(&paths, e))?)
+    } else {
+        None
+    };
     precheck_db_version(&paths)?;
     let db = open_database(&paths).inspect_err(|e| record_init_error(&paths, e))?;
     apply_persisted_log_level(&db);

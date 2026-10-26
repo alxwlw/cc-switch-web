@@ -600,9 +600,14 @@ pub fn run() {
 
             // 如果需要迁移，先验证 config.json 是否可以加载（在创建数据库之前）
             // 这样如果加载失败用户选择退出，数据库文件还没被创建，下次可以正常重试
+            // 是否需要迁移只在循环前判定一次，重试时不重新判断。
+            let needs_migration = bootstrap::needs_legacy_migration(&paths);
             let migration_config = loop {
-                match bootstrap::load_legacy_config(&paths) {
-                    Ok(config) => break config,
+                if !needs_migration {
+                    break None;
+                }
+                match bootstrap::load_legacy_config() {
+                    Ok(config) => break Some(config),
                     Err(e) => {
                         let message = match &e {
                             bootstrap::BootstrapError::LegacyConfig(err) => err.to_string(),

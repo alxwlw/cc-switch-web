@@ -38,3 +38,24 @@ fn first_run_creates_db_and_seeds_defaults() {
         Some(StepOutcome::Skipped(_))
     ));
 }
+
+#[test]
+fn legacy_config_retry_keeps_the_decision_taken_before_the_first_attempt() {
+    use cc_switch_lib::bootstrap::{load_legacy_config, needs_legacy_migration, BootstrapPaths};
+
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    ensure_test_home();
+    let paths = BootstrapPaths::resolve();
+    std::fs::create_dir_all(&paths.app_config_dir).expect("config dir");
+    std::fs::write(&paths.json_path, "{ not json").expect("write invalid config");
+
+    assert!(needs_legacy_migration(&paths));
+    assert!(load_legacy_config().is_err());
+
+    // config.json disappears while the error dialog is open; the retry still
+    // loads (old setup: default config), it does not silently skip migration.
+    std::fs::remove_file(&paths.json_path).expect("remove config");
+    let retried = load_legacy_config().expect("retry loads a default config");
+    assert_eq!(retried.mcp.claude.servers.len(), 0);
+}
