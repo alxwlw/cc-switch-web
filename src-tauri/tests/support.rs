@@ -105,6 +105,12 @@ pub fn web_router() -> axum::Router {
     cc_switch_lib::web_api::router(Arc::new(create_test_state().expect("create test state")))
 }
 
+/// Like [`web_router`], but over a state the test keeps (to reach `state.db`).
+#[allow(dead_code)]
+pub fn web_router_with(state: Arc<AppState>) -> axum::Router {
+    cc_switch_lib::web_api::router(state)
+}
+
 /// One request through `router` (oneshot); returns status and the parsed JSON body.
 #[allow(dead_code)]
 pub async fn web_call(

@@ -29,7 +29,7 @@ import {
   useXaiOauthQuotaByAccountId,
 } from "@/lib/query/subscription";
 import { useCopilotQuota } from "@/lib/query/copilot";
-import { useProviderLimits, useSessionUsageLastSync } from "@/lib/query/usage";
+import { useProviderLimits } from "@/lib/query/usage";
 import { usePiCurrentState } from "@/lib/query/pi";
 import {
   useCcSwitchSkillsDir,
@@ -89,11 +89,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "useSubscriptionQuota",
     "get_subscription_quota",
     () => useSubscriptionQuota("claude", true, true, 1),
-  ],
-  [
-    "useSessionUsageLastSync",
-    "get_session_usage_last_sync",
-    () => useSessionUsageLastSync(),
   ],
   ["usePiCurrentState", "get_pi_current_state", () => usePiCurrentState()],
   [

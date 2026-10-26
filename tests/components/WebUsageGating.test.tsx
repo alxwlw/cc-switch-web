@@ -89,14 +89,14 @@ beforeEach(() => {
 describe.each([true, false])("UsageSettingsSheet (web=%s)", (web) => {
   beforeEach(() => setWeb(web));
 
-  it("rebuild Codex usage is disabled only in web", async () => {
+  it("rebuild Codex usage works in web and on desktop", async () => {
     renderSheet();
     const button = screen.getByRole("button", {
       name: "usage.rebuildCodex.actionEllipsis",
     });
-    expect(button).toHaveProperty("disabled", web);
+    expect(button).toBeEnabled();
     await userEvent.click(button);
-    expect(m.onRebuild).toHaveBeenCalledTimes(web ? 0 : 1);
+    expect(m.onRebuild).toHaveBeenCalledTimes(1);
   });
 
   it("the logging status row and its link to routing settings exist only on desktop", () => {
@@ -129,28 +129,22 @@ describe.each([true, false])("PricingConfigPanel (web=%s)", (web) => {
     ["usage.addPricing", "pricing-edit"],
     ["usage.pricing.editAria", "pricing-edit"],
     ["usage.pricing.deleteAria", null],
-  ])("%s is disabled only in web", async (name, opens) => {
+  ])("%s is enabled in web and on desktop", async (name, opens) => {
     renderPricing();
     const button = screen.getByRole("button", { name });
-    expect(button).toHaveProperty("disabled", web);
+    expect(button).toBeEnabled();
     await userEvent.click(button);
     if (opens) {
-      expect(screen.queryByTestId(opens) !== null).toBe(!web);
+      expect(screen.queryByTestId(opens)).not.toBeNull();
     }
   });
 
-  it("models.dev sync panel and the pricing model source row exist only on desktop", async () => {
+  it("models.dev sync panel and the pricing model source row render in web and on desktop", async () => {
     renderPricing();
-    expect(screen.queryByTestId("models-dev-sync") === null).toBe(web);
+    expect(screen.queryByTestId("models-dev-sync")).not.toBeNull();
     expect(
-      screen.queryByText("settings.globalProxy.pricingDefaultsTitle") === null,
-    ).toBe(web);
-    if (web) {
-      expect(m.getPricingModelSource).not.toHaveBeenCalled();
-    } else {
-      await vi.waitFor(() =>
-        expect(m.getPricingModelSource).toHaveBeenCalled(),
-      );
-    }
+      screen.queryByText("settings.globalProxy.pricingDefaultsTitle"),
+    ).not.toBeNull();
+    await vi.waitFor(() => expect(m.getPricingModelSource).toHaveBeenCalled());
   });
 });

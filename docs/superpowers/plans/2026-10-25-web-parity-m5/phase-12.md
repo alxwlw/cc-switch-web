@@ -38,6 +38,12 @@ Scope: `src-tauri/src/web_api.rs` (6 роутов конфигурации + 2 �
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-26**: PR #13 merged `d94f812b` → main; live на `cc-switch-web.service`.
+  - Server пересобран из main (`cargo build --release --example server` → `~/.local/bin/cc-switch-web`); бинарник фазы 11 сохранён в `cc-switch-web.prev`. `pnpm build:web` выполнен в main-checkout.
+  - С подтверждения владельца из `~/.config/systemd/user/cc-switch-web.service` убрана строка `Environment=RUST_LOG=info`, затем `daemon-reload` + restart. Миграций нет.
+  - Проверено: unit active, WARN/ERROR в journal нет. `/api/health`, `/api/init-status`, `GET /api/settings/{rectifier,optimizer,log}`, `/api/logs/tail` → 200; download отдаёт `attachment`; отдаваемый `index.html` совпадает со сборкой.
+  - Лог живого сервиса — `~/.cc-switch-web/logs/cc-switch-web.log`. На живом сервисе `PUT log error` гасит info-строку «日志配置已更新», `PUT info` её возвращает. Уровень оставлен `info`.
+  - DX-82 Done (комментарий со ссылками file:line). Worktree `.worktrees/web-24`, локальная и remote ветки удалены; ledgers прогона перенесены в `.claude/plans/2026-10-25-web-parity-m5-p12` main-checkout.
 - **Статус до merge (2026-10-26)**: ветка `web-parity/web-24-rectifier-log` (worktree `.worktrees/web-24`), PR #13 (https://github.com/alxwlw/cc-switch-web/pull/13) открыт, DX-82 In Review (комментарий со ссылкой). Т1 одобрена с r1: в r0 был SHOULD-FIX DP-256 — пустой `RUST_LOG=` три места читали по-разному. Закрыто в `cf64f67e`. Т2–Т4 одобрены с r0. NIT 1/2/4 из ревью Т3 закрыты в `3108e3ea`, NIT DP-017 из ревью Т2 — в `e2744bae`. Финальные гейты на `3108e3ea`:
   - fmt и clippy `-D warnings` чисто; `cargo build --release --example server` ок.
   - `cargo test --no-fail-fast` (nextest не установлен): 4330 passed / 6 failed. Baseline: omp_search_paths, 2× file_modes::switch_*. Ещё 3× `forwarder::tests::bookkeeping::*` — нестабильны и на merge-base, ветка proxy не трогает.

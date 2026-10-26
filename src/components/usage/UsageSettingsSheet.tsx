@@ -10,7 +10,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { isWeb } from "@/lib/api/adapter";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Switch } from "@/components/ui/switch";
@@ -300,25 +299,22 @@ export function UsageSettingsSheet({
                   body: t("usage.rebuildCodex.description"),
                 }}
                 trailing={
-                  // WEB-00: rebuild_codex_usage не замаплен — снимет WEB-12
-                  <WebUnavailableTip active={isWeb}>
-                    <Button
-                      type="button"
-                      variant="neutral"
-                      size="compact"
-                      className="shrink-0"
-                      disabled={isWeb || rebuildingCodex}
-                      onClick={onRebuildCodex}
-                    >
-                      {rebuildingCodex && (
-                        <Loader2
-                          aria-hidden="true"
-                          className="h-3.5 w-3.5 motion-safe:animate-spin"
-                        />
-                      )}
-                      {t("usage.rebuildCodex.actionEllipsis")}
-                    </Button>
-                  </WebUnavailableTip>
+                  <Button
+                    type="button"
+                    variant="neutral"
+                    size="compact"
+                    className="shrink-0"
+                    disabled={rebuildingCodex}
+                    onClick={onRebuildCodex}
+                  >
+                    {rebuildingCodex && (
+                      <Loader2
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5 motion-safe:animate-spin"
+                      />
+                    )}
+                    {t("usage.rebuildCodex.actionEllipsis")}
+                  </Button>
                 }
               >
                 <p className="m-0 text-caption text-fg-2">

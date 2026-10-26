@@ -800,3 +800,10 @@ fn record_init_error(paths: &BootstrapPaths, err: &BootstrapError) {
         supported_version: None,
     });
 }
+
+/// Headless counterpart of the desktop session-usage worker (`lib.rs` setup):
+/// one startup round (cost backfill + scan), then a scan every ten minutes.
+/// Needs a running tokio runtime; the returned handle lets the caller abort it.
+pub fn spawn_session_usage_worker(db: Arc<Database>) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(crate::services::session_usage::run_background_worker(db))
+}
