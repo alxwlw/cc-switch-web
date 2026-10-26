@@ -26,7 +26,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 10 — WEB-06 / DX-64: Project Profiles](2026-10-25-web-parity-m5/phase-10.md) — PR #11, merged `e4dc248d` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны); DX-64 Done.
 - [x] [Phase 11 — WEB-21 / DX-79: endpoint speed test и custom endpoints](2026-10-25-web-parity-m5/phase-11.md) — PR #12, merged `e85a5ae5` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны); DX-79 Done.
 - [x] [Phase 12 — WEB-24 / DX-82: Rectifier/optimizer и log config](2026-10-25-web-parity-m5/phase-12.md) — PR #13, merged `d94f812b` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны, из юнита убран `RUST_LOG=info`); DX-82 Done.
-- [ ] [Phase 13 — WEB-12 / DX-70: администрирование usage и pricing](2026-10-25-web-parity-m5/phase-13.md)
+- [x] [Phase 13 — WEB-12 / DX-70: администрирование usage и pricing](2026-10-25-web-parity-m5/phase-13.md) — PR #14, merged `cf41a7ec` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-70 Done.
 - [ ] [Phase 14 — WEB-20 / DX-78: app-specific settings Claude и Codex](2026-10-25-web-parity-m5/phase-14.md)
 - [ ] [Phase 15 — WEB-16 / DX-74: Hermes config и memory](2026-10-25-web-parity-m5/phase-15.md)
 - [ ] [Phase 16 — WEB-15 / DX-73: OpenClaw config, workspace и memory](2026-10-25-web-parity-m5/phase-16.md)
