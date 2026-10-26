@@ -24,7 +24,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 Быстрые HTTP-wrappers:
 - [x] [Phase 9 — WEB-07 / DX-65: Universal Providers CRUD, duplicate и sync](2026-10-25-web-parity-m5/phase-9.md) — PR #10, merged `d9d6f2c4` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны); DX-65 Done.
 - [x] [Phase 10 — WEB-06 / DX-64: Project Profiles](2026-10-25-web-parity-m5/phase-10.md) — PR #11, merged `e4dc248d` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны); DX-64 Done.
-- [ ] [Phase 11 — WEB-21 / DX-79: endpoint speed test и custom endpoints](2026-10-25-web-parity-m5/phase-11.md)
+- [x] [Phase 11 — WEB-21 / DX-79: endpoint speed test и custom endpoints](2026-10-25-web-parity-m5/phase-11.md) — PR #12, merged `e85a5ae5` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны); DX-79 Done.
 - [ ] [Phase 12 — WEB-24 / DX-82: Rectifier/optimizer и log config](2026-10-25-web-parity-m5/phase-12.md)
 - [ ] [Phase 13 — WEB-12 / DX-70: администрирование usage и pricing](2026-10-25-web-parity-m5/phase-13.md)
 - [ ] [Phase 14 — WEB-20 / DX-78: app-specific settings Claude и Codex](2026-10-25-web-parity-m5/phase-14.md)
