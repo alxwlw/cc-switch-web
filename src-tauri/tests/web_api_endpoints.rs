@@ -102,6 +102,38 @@ async fn speedtest_probes_urls_concurrently_and_reports_latency() {
     assert_eq!(misses.load(Ordering::SeqCst), 0, "requests were serialized");
 }
 
+/// Pins the `timeoutSecs` wire name: the service default is 8 s per request
+/// (warmup + timed = 16 s), `timeoutSecs: 2` must cut that to ~4 s.
+#[tokio::test]
+async fn speedtest_honours_timeout_secs_from_the_request() {
+    let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let f = fixture();
+    let app = axum::Router::new().route(
+        "/",
+        axum::routing::get(|| async {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            "late"
+        }),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+    let started = std::time::Instant::now();
+    let (status, body) = web_call(
+        &f.router,
+        "POST",
+        "/api/endpoints/speedtest",
+        Some(json!({ "urls": [url], "timeoutSecs": 2 })),
+    )
+    .await;
+    let elapsed = started.elapsed();
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["data"][0]["error"], json!("请求超时"));
+    assert!(body["data"][0]["latency"].is_null(), "{body}");
+    assert!(elapsed < Duration::from_secs(10), "took {elapsed:?}");
+}
+
 #[tokio::test]
 async fn speedtest_unreachable_url_is_a_row_with_error_not_a_500() {
     let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
