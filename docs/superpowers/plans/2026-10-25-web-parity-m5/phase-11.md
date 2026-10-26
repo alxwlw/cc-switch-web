@@ -18,10 +18,10 @@ Scope: `src-tauri/src/web_api.rs` (6 роутов), `src-tauri/tests/web_api_end
 - [ ] `src-tauri/tests/web_api_endpoints.rs`: speedtest против локальной axum-заглушки возвращает `latency` и `status: 200`; недоступный URL → запись с `error`, а не 500; add → get содержит, повторный add не дублирует; remove удаляет; неизвестный provider → `{ok:false}`; live-settings читает подготовленный live-файл из temp HOME.
 
 ### Task 2: frontend
-- [ ] 6 case в `mapCommand`.
-- [ ] `EndpointSpeedTest`: в web подпись «замер выполняется с сервера cc-switch-web; задержка из вашего браузера может отличаться»; после цикла add/remove — всегда инвалидировать `["providers", appId]` (и при ошибке посередине), ошибку показать с указанием, какие URL сохранились.
-- [ ] Тесты: `tests/lib/endpointsApi.test.ts`; компонент — подпись видна в web, ошибка на втором add инвалидирует providers-query.
-- [ ] Снять WEB-00-гейт с speed test (таблица фазы 6).
+- [x] 6 case в `mapCommand`.
+- [x] `EndpointSpeedTest`: в web подпись «замер выполняется с сервера cc-switch-web; задержка из вашего браузера может отличаться»; после цикла add/remove — всегда инвалидировать `["providers", appId]` (и при ошибке посередине), ошибку показать с указанием, какие URL сохранились.
+- [x] Тесты: `tests/lib/endpointsApi.test.ts`; компонент — подпись видна в web, ошибка на втором add инвалидирует providers-query.
+- [x] Снять WEB-00-гейт с speed test (таблица фазы 6).
 
 ### Task 3: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server`.

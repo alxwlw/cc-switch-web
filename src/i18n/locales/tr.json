@@ -1936,7 +1936,9 @@
     "testUnavailable": "Hız testi kullanılamıyor",
     "noResult": "Sonuç döndürülmedi",
     "testFailed": "Hız testi başarısız oldu: {{error}}",
-    "empty": "Uç nokta yok"
+    "empty": "Uç nokta yok",
+    "serverSideNote": "Gecikme bu tarayıcıdan değil cc-switch-web sunucusundan ölçülür ve sizin deneyiminizden farklı olabilir. http://127.0.0.1 veya localhost gibi adresler sunucunun kendi servislerini gösterir.",
+    "savePartial": "Hatadan önce kaydedilenler: {{saved}}. Hata: {{error}}"
   },
   "codexConfig": {
     "authJson": "auth.json (JSON) *",

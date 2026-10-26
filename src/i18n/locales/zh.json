@@ -1943,7 +1943,9 @@
     "testUnavailable": "测速功能不可用",
     "noResult": "未返回结果",
     "testFailed": "测速失败: {{error}}",
-    "empty": "暂无端点"
+    "empty": "暂无端点",
+    "serverSideNote": "延迟由 cc-switch-web 服务器测得，而非当前浏览器，可能与你的实际体验不同。http://127.0.0.1、localhost 等地址指向服务器本机的服务。",
+    "savePartial": "出错前已保存：{{saved}}。错误：{{error}}"
   },
   "codexConfig": {
     "authJson": "auth.json (JSON) *",

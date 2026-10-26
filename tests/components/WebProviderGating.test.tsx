@@ -268,7 +268,7 @@ describe("shared form controls — web", () => {
     ).toBeEnabled();
   });
 
-  it("hides the endpoint speed-test entry in web only", () => {
+  it("shows the endpoint speed-test entry in web and desktop (WEB-21)", () => {
     const props = {
       id: "u",
       label: "url",
@@ -278,26 +278,18 @@ describe("shared form controls — web", () => {
       onManageClick: vi.fn(),
       manageButtonLabel: "manage-endpoints",
     };
-    setWeb(true);
-    const { unmount } = render(
-      <WithForm>
-        <EndpointField {...props} />
-      </WithForm>,
-    );
-    expect(
-      screen.queryByRole("button", { name: "manage-endpoints" }),
-    ).not.toBeInTheDocument();
-    unmount();
-
-    setWeb(false);
-    render(
-      <WithForm>
-        <EndpointField {...props} />
-      </WithForm>,
-    );
-    expect(
-      screen.getByRole("button", { name: "manage-endpoints" }),
-    ).toBeInTheDocument();
+    for (const web of [true, false]) {
+      setWeb(web);
+      const { unmount } = render(
+        <WithForm>
+          <EndpointField {...props} />
+        </WithForm>,
+      );
+      expect(
+        screen.getByRole("button", { name: "manage-endpoints" }),
+      ).toBeInTheDocument();
+      unmount();
+    }
   });
 
   it("replaces the account picker with a notice instead of an endless spinner", () => {
