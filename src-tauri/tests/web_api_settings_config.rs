@@ -7,7 +7,10 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use support::{create_test_state, ensure_test_home, reset_test_fs, test_mutex, web_call};
 
+/// Callers hold `test_mutex()`. An exported `CC_SWITCH_CONFIG_DIR` would redirect the DB
+/// and the server log to a real directory, so every test drops it first.
 fn fixture() -> axum::Router {
+    std::env::remove_var("CC_SWITCH_CONFIG_DIR");
     reset_test_fs();
     ensure_test_home();
     let state = Arc::new(create_test_state().expect("test state"));
@@ -29,6 +32,19 @@ fn lines_of(body: &Value) -> Vec<String> {
         .iter()
         .map(|v| v.as_str().unwrap().to_string())
         .collect()
+}
+
+#[tokio::test]
+async fn an_exported_config_dir_does_not_redirect_the_log_file() {
+    let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    std::env::set_var("CC_SWITCH_CONFIG_DIR", "/nonexistent/real-config-dir");
+    let _router = fixture();
+    let path = log_file_path();
+    assert!(
+        path.starts_with(ensure_test_home()),
+        "log path escaped the test home: {}",
+        path.display()
+    );
 }
 
 #[tokio::test]
