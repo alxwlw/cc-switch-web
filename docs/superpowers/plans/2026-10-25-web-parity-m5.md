@@ -22,7 +22,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 8 — WEB-29 / DX-87: realtime events через SSE/WebSocket](2026-10-25-web-parity-m5/phase-8.md) — PR #9, merged `8c6d681b` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны); DX-87 Done.
 
 Быстрые HTTP-wrappers:
-- [ ] [Phase 9 — WEB-07 / DX-65: Universal Providers CRUD, duplicate и sync](2026-10-25-web-parity-m5/phase-9.md)
+- [ ] [Phase 9 — WEB-07 / DX-65: Universal Providers CRUD, duplicate и sync](2026-10-25-web-parity-m5/phase-9.md) — PR #10 open (ветка `web-parity/web-07-universal-providers`), DX-65 In Review.
 - [ ] [Phase 10 — WEB-06 / DX-64: Project Profiles](2026-10-25-web-parity-m5/phase-10.md)
 - [ ] [Phase 11 — WEB-21 / DX-79: endpoint speed test и custom endpoints](2026-10-25-web-parity-m5/phase-11.md)
 - [ ] [Phase 12 — WEB-24 / DX-82: Rectifier/optimizer и log config](2026-10-25-web-parity-m5/phase-12.md)
