@@ -82,7 +82,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             for (step, err) in boot.report.failures() {
                 log::warn!("startup step `{step}` failed: {err}");
             }
-            web_api::router(Arc::new(boot.state))
+            let state = Arc::new(boot.state);
+            // Same background session-usage scan as the desktop app.
+            cc_switch_lib::bootstrap::spawn_session_usage_worker(state.db.clone());
+            web_api::router(state)
         }
         Err(e) => {
             // init_status already holds the error; keep serving so the console

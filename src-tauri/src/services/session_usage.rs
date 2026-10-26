@@ -73,6 +73,73 @@ pub fn last_sync_completed_at() -> Option<i64> {
     (value > 0).then_some(value)
 }
 
+/// 后台兜底扫描间隔（防 CLI 清理旧会话文件前漏导入）。
+pub const SESSION_SYNC_INTERVAL_SECS: u64 = 10 * 60;
+
+/// 后台扫描的一轮：拿 [`session_sync_mutex`]，在阻塞线程里跑（可选的费用回填 +）完整扫描。
+/// 手动扫描模式下的定时轮次直接跳过；`backfill` 轮（启动首轮）仍进入，
+/// 费用回填只修补数据库既有行（含代理记账行），不读会话文件。
+pub async fn run_session_sync_round(db: std::sync::Arc<Database>, backfill: bool) {
+    if !backfill && !crate::settings::get_settings().session_auto_sync_enabled {
+        return;
+    }
+    let _guard = session_sync_mutex().lock().await;
+    let task = tokio::task::spawn_blocking(move || {
+        if backfill {
+            if let Err(error) = db.backfill_missing_usage_costs() {
+                log::warn!("Usage cost startup backfill failed: {error}");
+            }
+        }
+        if !crate::settings::get_settings().session_auto_sync_enabled {
+            return SessionSyncResult::default();
+        }
+        sync_all_unlocked(&db)
+    });
+    match task.await {
+        Ok(result) if !result.errors.is_empty() => {
+            log::warn!(
+                "Session usage sync completed with {} error(s)",
+                result.errors.len()
+            );
+        }
+        Ok(_) => {}
+        Err(error) => log::warn!("Session usage blocking task failed: {error}"),
+    }
+}
+
+/// 后台 worker：启动时同步一次（含费用回填），之后每 10 分钟兜底一次。
+/// 桌面（`tauri::async_runtime::spawn`）和 headless server（`tokio::spawn`）共用。
+pub async fn run_background_worker(db: std::sync::Arc<Database>) {
+    run_session_sync_round(db.clone(), true).await;
+
+    let mut interval =
+        tokio::time::interval(std::time::Duration::from_secs(SESSION_SYNC_INTERVAL_SECS));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    interval.tick().await; // skip immediate first tick
+    loop {
+        interval.tick().await;
+        run_session_sync_round(db.clone(), false).await;
+    }
+}
+
+/// Codex reset 成功后，无论重导是否导入新行或返回错误，都必须通知前端刷新。
+/// 调用方应只在 reset 成功后调用，避免把未发生的数据变更误报为重建完成。
+pub(crate) fn finish_codex_rebuild(
+    result: Result<SessionSyncResult, AppError>,
+) -> Result<SessionSyncResult, AppError> {
+    crate::usage_events::notify_log_recorded();
+    result
+}
+
+/// 备份数据库后，仅重建 Codex session 用量（阻塞）：backup → reset → import → notify。
+/// 调用方必须持有 [`session_sync_mutex`]，锁覆盖整个序列，避免后台同步在清理和重导之间插入数据。
+pub fn rebuild_codex_usage_unlocked(db: &Database) -> Result<SessionSyncResult, AppError> {
+    db.backup_database_file()?;
+    db.reset_codex_usage()?;
+    let result = crate::services::session_usage_codex::sync_codex_usage(db);
+    finish_codex_rebuild(result)
+}
+
 /// session_log_sync 表一行的内存快照。
 ///
 /// 各解析器在一轮扫描开头用 [`load_sync_cursors`] 一次性预取全表，替代

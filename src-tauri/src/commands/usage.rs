@@ -331,15 +331,6 @@ pub fn get_session_usage_last_sync() -> Option<i64> {
     crate::services::session_usage::last_sync_completed_at()
 }
 
-/// Codex reset 成功后，无论重导是否导入新行或返回错误，都必须通知前端刷新。
-/// 调用方应只在 reset 成功后调用，避免把未发生的数据变更误报为重建完成。
-fn finish_codex_rebuild(
-    result: Result<crate::services::session_usage::SessionSyncResult, AppError>,
-) -> Result<crate::services::session_usage::SessionSyncResult, AppError> {
-    crate::usage_events::notify_log_recorded();
-    result
-}
-
 /// 备份数据库后，仅重建 Codex session 用量。锁覆盖 backup → reset → import
 /// 整个序列，避免后台同步在清理和重导之间插入数据。
 #[tauri::command]
@@ -351,10 +342,7 @@ pub async fn rebuild_codex_usage(
         .lock()
         .await;
     tauri::async_runtime::spawn_blocking(move || {
-        db.backup_database_file()?;
-        db.reset_codex_usage()?;
-        let result = crate::services::session_usage_codex::sync_codex_usage(&db);
-        finish_codex_rebuild(result)
+        crate::services::session_usage::rebuild_codex_usage_unlocked(&db)
     })
     .await
     .map_err(|error| AppError::Message(format!("Codex 用量重建任务失败: {error}")))?
@@ -371,6 +359,7 @@ pub fn get_usage_data_sources(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::session_usage::finish_codex_rebuild;
 
     #[test]
     fn codex_rebuild_notifies_when_reimport_is_empty() {

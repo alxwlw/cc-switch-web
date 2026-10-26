@@ -183,6 +183,29 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/usage/request-detail/:id", get(request_detail))
         .route("/api/usage/model-pricing", get(model_pricing))
         .route("/api/usage/sync", post(sync_session_usage))
+        .route("/api/usage/last-sync", get(session_usage_last_sync))
+        .route("/api/usage/rebuild-codex", post(rebuild_codex_usage))
+        .route("/api/usage/data-sources", get(usage_data_sources))
+        .route(
+            "/api/usage/model-pricing/batch",
+            post(update_model_pricing_batch),
+        )
+        .route(
+            "/api/usage/model-pricing/:model_id",
+            put(update_model_pricing).delete(delete_model_pricing),
+        )
+        .route(
+            "/api/usage/models-dev/config",
+            get(models_dev_config).put(save_models_dev_config),
+        )
+        .route(
+            "/api/usage/models-dev/result",
+            post(record_models_dev_result),
+        )
+        .route(
+            "/api/:app/pricing-model-source",
+            get(get_pricing_model_source).put(set_pricing_model_source),
+        )
         // settings & environment
         .route("/api/settings", get(get_settings).put(save_settings))
         .route("/api/paths", get(paths))
@@ -1472,6 +1495,218 @@ async fn sync_session_usage(State(state): State<SharedState>) -> ApiResult {
     {
         Ok(result) => ok(result),
         Err(e) => fail(format!("sync task failed: {e}")),
+    }
+}
+
+/// Test seam: hold the session-sync mutex from an integration test (the `services`
+/// module is private) to prove that usage routes queue behind it.
+#[cfg_attr(not(feature = "test-hooks"), doc(hidden))]
+pub async fn session_sync_lock_test_hook() -> tokio::sync::MutexGuard<'static, ()> {
+    crate::services::session_usage::session_sync_mutex()
+        .lock()
+        .await
+}
+
+async fn session_usage_last_sync() -> ApiResult {
+    ok(crate::services::session_usage::last_sync_completed_at())
+}
+
+/// Same order as the desktop command: mutex → backup → reset → sync → notify.
+async fn rebuild_codex_usage(State(state): State<SharedState>) -> ApiResult {
+    let db = state.db.clone();
+    let _guard = crate::services::session_usage::session_sync_mutex()
+        .lock()
+        .await;
+    match tokio::task::spawn_blocking(move || {
+        crate::services::session_usage::rebuild_codex_usage_unlocked(&db)
+    })
+    .await
+    {
+        Ok(Ok(result)) => ok(result),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("Codex 用量重建任务失败: {e}")),
+    }
+}
+
+async fn usage_data_sources(State(state): State<SharedState>) -> ApiResult {
+    let db = state.db.clone();
+    match tokio::task::spawn_blocking(move || {
+        crate::services::session_usage::get_data_source_breakdown(&db)
+    })
+    .await
+    {
+        Ok(Ok(sources)) => ok(sources),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("usage query failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ModelPricingReq {
+    display_name: String,
+    input_cost: String,
+    output_cost: String,
+    cache_read_cost: String,
+    cache_creation_cost: String,
+}
+
+async fn update_model_pricing(
+    State(state): State<SharedState>,
+    Path(model_id): Path<String>,
+    Json(body): Json<ModelPricingReq>,
+) -> ApiResult {
+    let db = state.db.clone();
+    match tokio::task::spawn_blocking(move || {
+        crate::services::model_pricing::update_model_pricing(
+            &db,
+            crate::services::model_pricing::ModelPricingInfo {
+                model_id,
+                display_name: body.display_name,
+                input_cost_per_million: body.input_cost,
+                output_cost_per_million: body.output_cost,
+                cache_read_cost_per_million: body.cache_read_cost,
+                cache_creation_cost_per_million: body.cache_creation_cost,
+            },
+        )
+    })
+    .await
+    {
+        Ok(Ok(_)) => ok(Value::Null),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("update pricing failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct ModelPricingBatchReq {
+    entries: Vec<crate::services::model_pricing::ModelPricingInfo>,
+}
+
+async fn update_model_pricing_batch(
+    State(state): State<SharedState>,
+    Json(body): Json<ModelPricingBatchReq>,
+) -> ApiResult {
+    let db = state.db.clone();
+    match tokio::task::spawn_blocking(move || {
+        crate::services::model_pricing::update_model_pricing_batch(&db, body.entries)
+    })
+    .await
+    {
+        Ok(Ok(changed)) => ok(changed),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("update pricing failed: {e}")),
+    }
+}
+
+async fn delete_model_pricing(
+    State(state): State<SharedState>,
+    Path(model_id): Path<String>,
+) -> ApiResult {
+    let db = state.db.clone();
+    match tokio::task::spawn_blocking(move || {
+        crate::services::model_pricing::delete_model_pricing(&db, &model_id)
+    })
+    .await
+    {
+        Ok(Ok(())) => ok(Value::Null),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("delete pricing failed: {e}")),
+    }
+}
+
+async fn models_dev_config(State(state): State<SharedState>) -> ApiResult {
+    let db = state.db.clone();
+    match tokio::task::spawn_blocking(move || {
+        crate::services::model_pricing::get_models_dev_sync_state(&db)
+    })
+    .await
+    {
+        Ok(Ok(sync_state)) => ok(sync_state),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("models.dev config failed: {e}")),
+    }
+}
+
+async fn save_models_dev_config(
+    State(state): State<SharedState>,
+    Json(config): Json<crate::services::model_pricing::ModelsDevSyncConfig>,
+) -> ApiResult {
+    let db = state.db.clone();
+    match tokio::task::spawn_blocking(move || {
+        crate::services::model_pricing::save_models_dev_sync_config(&db, config)
+    })
+    .await
+    {
+        Ok(Ok(())) => ok(Value::Null),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("models.dev config failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ModelsDevResultReq {
+    synced_at: Option<i64>,
+    error: Option<String>,
+}
+
+async fn record_models_dev_result(
+    State(state): State<SharedState>,
+    Json(body): Json<ModelsDevResultReq>,
+) -> ApiResult {
+    let db = state.db.clone();
+    match tokio::task::spawn_blocking(move || {
+        crate::services::model_pricing::record_models_dev_sync_result(
+            &db,
+            body.synced_at,
+            body.error,
+        )
+    })
+    .await
+    {
+        Ok(Ok(())) => ok(Value::Null),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("models.dev result failed: {e}")),
+    }
+}
+
+async fn get_pricing_model_source(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+) -> ApiResult {
+    let app_type = app_type!(&app);
+    match state.db.get_pricing_model_source(app_type.as_str()).await {
+        Ok(source) => ok(source),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct PricingModelSourceReq {
+    value: String,
+}
+
+async fn set_pricing_model_source(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+    Json(body): Json<PricingModelSourceReq>,
+) -> ApiResult {
+    let app_type = app_type!(&app);
+    match state
+        .db
+        .set_pricing_model_source(app_type.as_str(), &body.value)
+        .await
+    {
+        Ok(()) => ok(Value::Null),
+        // The only client error the DAO raises: a value other than request/response.
+        Err(
+            e @ AppError::Localized {
+                key: "error.invalidPricingMode",
+                ..
+            },
+        ) => bad_request(e.to_string()),
+        Err(e) => fail(e.to_string()),
     }
 }
 
