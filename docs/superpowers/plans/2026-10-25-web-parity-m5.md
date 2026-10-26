@@ -19,7 +19,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 5 — WEB-18 / DX-76: OMO / OMO Slim live config](2026-10-25-web-parity-m5/phase-5.md) — PR #6, merged `68859cf8` → main 2026-10-25, live на cc-switch-web.service (server + dist-web пересобраны); DX-76 Done.
 - [x] [Phase 6 — WEB-00 / DX-58: честный feature gating](2026-10-25-web-parity-m5/phase-6.md) — PR #7, merged `1d542388` → main 2026-10-26, live на cc-switch-web.service (dist-web пересобран, server не менялся); DX-58 Done.
 - [x] [Phase 7 — WEB-32 / DX-90: общий headless startup/bootstrap и migrations](2026-10-25-web-parity-m5/phase-7.md) — PR #8, merged `6bd1eb1b` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-90 Done.
-- [ ] [Phase 8 — WEB-29 / DX-87: realtime events через SSE/WebSocket](2026-10-25-web-parity-m5/phase-8.md) — PR #9 open (ветка `web-parity/web-29-realtime-sse`), DX-87 In Review.
+- [x] [Phase 8 — WEB-29 / DX-87: realtime events через SSE/WebSocket](2026-10-25-web-parity-m5/phase-8.md) — PR #9, merged `8c6d681b` → main 2026-10-26, live на cc-switch-web.service (server + dist-web пересобраны); DX-87 Done.
 
 Быстрые HTTP-wrappers:
 - [ ] [Phase 9 — WEB-07 / DX-65: Universal Providers CRUD, duplicate и sync](2026-10-25-web-parity-m5/phase-9.md)
