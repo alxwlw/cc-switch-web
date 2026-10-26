@@ -21,6 +21,7 @@ use crate::commands as universal_provider_emit_cmds;
 use crate::error::AppError;
 use crate::prompt::Prompt;
 use crate::provider::{Provider, UniversalProvider};
+use crate::services::profile::{ProfileDto, ProfileScope, ProfileService};
 use crate::services::prompt::PromptService;
 use crate::services::provider::icon;
 use crate::services::provider::{EditorSave, ProviderService, ProviderSortUpdate};
@@ -103,6 +104,14 @@ pub fn router(state: SharedState) -> Router {
             "/api/universal-providers/:id/sync",
             post(sync_universal_provider),
         )
+        // project profiles (cross-app; `clear-current` is a static segment and wins over `:id`)
+        .route("/api/profiles", get(list_profiles).post(create_profile))
+        .route("/api/profiles/clear-current", post(clear_current_profile))
+        .route(
+            "/api/profiles/:id",
+            axum::routing::patch(update_profile).delete(delete_profile),
+        )
+        .route("/api/profiles/:id/apply", post(apply_profile))
         // prompts (per app)
         .route("/api/:app/prompts", get(list_prompts))
         .route(
@@ -546,6 +555,125 @@ async fn sync_universal_provider(
         Ok(Ok(v)) => ok(v),
         Ok(Err(e)) => fail(e.to_string()),
         Err(e) => fail(format!("sync universal provider task failed: {e}")),
+    }
+}
+
+// ---------- project profiles ----------
+
+fn parse_scope(scope: &str) -> Result<ProfileScope, ApiResult> {
+    ProfileScope::parse(scope).map_err(|e| bad_request(e.to_string()))
+}
+
+async fn list_profiles(State(state): State<SharedState>) -> ApiResult {
+    match tokio::task::spawn_blocking(move || ProfileService::list_response(&state)).await {
+        Ok(Ok(v)) => ok(v),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("list profiles task failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct CreateProfileReq {
+    name: String,
+    scope: String,
+}
+
+async fn create_profile(
+    State(state): State<SharedState>,
+    Json(body): Json<CreateProfileReq>,
+) -> ApiResult {
+    let scope = match parse_scope(&body.scope) {
+        Ok(s) => s,
+        Err(r) => return r,
+    };
+    match tokio::task::spawn_blocking(move || ProfileService::create(&state, &body.name, scope))
+        .await
+    {
+        Ok(Ok(p)) => ok(ProfileDto::from(p)),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("create profile task failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct UpdateProfileReq {
+    name: Option<String>,
+    resnapshot: Option<bool>,
+    scope: Option<String>,
+}
+
+async fn update_profile(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateProfileReq>,
+) -> ApiResult {
+    let scope = match body.scope.as_deref().map(parse_scope).transpose() {
+        Ok(s) => s,
+        Err(r) => return r,
+    };
+    let resnapshot = body.resnapshot.unwrap_or(false);
+    match tokio::task::spawn_blocking(move || {
+        ProfileService::update(&state, &id, body.name, resnapshot, scope)
+    })
+    .await
+    {
+        Ok(Ok(p)) => ok(ProfileDto::from(p)),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("update profile task failed: {e}")),
+    }
+}
+
+async fn delete_profile(State(state): State<SharedState>, Path(id): Path<String>) -> ApiResult {
+    match tokio::task::spawn_blocking(move || ProfileService::delete(&state, &id)).await {
+        Ok(Ok(())) => ok(true),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("delete profile task failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct ScopeReq {
+    scope: String,
+}
+
+async fn clear_current_profile(
+    State(state): State<SharedState>,
+    Json(body): Json<ScopeReq>,
+) -> ApiResult {
+    let scope = match parse_scope(&body.scope) {
+        Ok(s) => s,
+        Err(r) => return r,
+    };
+    match tokio::task::spawn_blocking(move || state.db.set_current_profile_id(scope.as_str(), None))
+        .await
+    {
+        Ok(Ok(())) => ok(true),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("clear current profile task failed: {e}")),
+    }
+}
+
+/// `ProviderService::switch` uses `block_on` internally, so apply must run on the
+/// blocking pool. Events go out only after a successful apply, in desktop order.
+async fn apply_profile(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+    Json(body): Json<ScopeReq>,
+) -> ApiResult {
+    let scope = match parse_scope(&body.scope) {
+        Ok(s) => s,
+        Err(r) => return r,
+    };
+    match tokio::task::spawn_blocking(move || {
+        let warnings = ProfileService::apply(&state, &id, scope)?;
+        ProfileService::emit_apply_events(&state, &id, scope);
+        Ok::<_, AppError>(warnings)
+    })
+    .await
+    {
+        Ok(Ok(w)) => ok(w),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("apply profile task failed: {e}")),
     }
 }
 
