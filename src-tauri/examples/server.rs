@@ -15,7 +15,10 @@
 
 use std::{env, net::SocketAddr, path::PathBuf, sync::Arc};
 
-use cc_switch_lib::{store::AppState, web_api, Database};
+use cc_switch_lib::{
+    bootstrap::{run_headless_bootstrap_with, CodexHistory},
+    web_api,
+};
 
 fn env_truthy(name: &str) -> bool {
     env::var(name).is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "on"))
@@ -61,9 +64,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(1);
     }
 
-    let db = Arc::new(Database::init()?);
-    let state: web_api::SharedState = Arc::new(AppState::new(db));
-    let api = web_api::router(state);
+    // Same startup bootstrap as the desktop `setup` hook (legacy config
+    // migration, seeds, first-run imports, crash recovery). It is blocking and
+    // may reach `block_on`, so it runs on the blocking pool, not on this
+    // runtime thread. The Codex history migrations go to the blocking pool too
+    // so a large history does not delay the listener.
+    let rust_log_max = env::var_os("RUST_LOG").map(|_| log::max_level());
+    let bootstrapped = tokio::task::spawn_blocking(|| {
+        run_headless_bootstrap_with(CodexHistory::Spawn(&|job| {
+            tokio::task::spawn_blocking(job);
+        }))
+    })
+    .await?;
+    // The persisted log level (applied inside the bootstrap) must not silence
+    // an explicit RUST_LOG.
+    if let Some(max) = rust_log_max {
+        log::set_max_level(max);
+    }
+
+    let api = match bootstrapped {
+        Ok(boot) => {
+            for (step, err) in boot.report.failures() {
+                log::warn!("startup step `{step}` failed: {err}");
+            }
+            web_api::router(Arc::new(boot.state))
+        }
+        Err(e) => {
+            // init_status already holds the error; keep serving so the console
+            // can show the upgrade / config-error screen.
+            log::error!("Startup bootstrap failed, serving in init-error mode: {e}");
+            web_api::init_error_router()
+        }
+    };
 
     let web_dist = env::var("WEB_DIST")
         .map(PathBuf::from)

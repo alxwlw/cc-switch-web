@@ -736,13 +736,25 @@ pub struct Bootstrapped {
     pub report: BootstrapReport,
 }
 
+/// [`run_headless_bootstrap_with`] with the Codex history migrations run
+/// inline (what tests want: everything is done when this returns).
+pub fn run_headless_bootstrap() -> Result<Bootstrapped, BootstrapError> {
+    run_headless_bootstrap_with(CodexHistory::Inline)
+}
+
 /// Full headless startup: paths, legacy config, version precheck, DB open,
-/// log level, legacy migration, `AppState`, post-DB steps (Codex history
-/// migrations run inline). No dialogs, no Tauri runtime.
+/// log level, legacy migration, `AppState`, post-DB steps. No dialogs, no
+/// Tauri runtime. `codex_history` decides where the (slow) Codex history
+/// migrations run, see [`CodexHistory`].
+///
+/// Blocking and may drive `block_on` internally: from async code call it
+/// through `tokio::task::spawn_blocking`.
 ///
 /// Errors are fatal pre-DB problems; they are also recorded in `init_status`
 /// (so `get_init_error` reports them) before being returned.
-pub fn run_headless_bootstrap() -> Result<Bootstrapped, BootstrapError> {
+pub fn run_headless_bootstrap_with(
+    codex_history: CodexHistory<'_>,
+) -> Result<Bootstrapped, BootstrapError> {
     let paths = BootstrapPaths::resolve();
 
     let legacy = if needs_legacy_migration(&paths) {
@@ -762,7 +774,7 @@ pub fn run_headless_bootstrap() -> Result<Bootstrapped, BootstrapError> {
     }
 
     let state = AppState::new(db);
-    run_post_db_bootstrap(&state, CodexHistory::Inline, &mut report);
+    run_post_db_bootstrap(&state, codex_history, &mut report);
     Ok(Bootstrapped { state, report })
 }
 
