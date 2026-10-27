@@ -177,8 +177,8 @@ pub fn list_db_backups() -> Result<Vec<BackupEntry>, String> {
 }
 
 /// Handle-free core of `restore_db_backup`: global lock -> skill-state guard ->
-/// restore -> post-import sync (a sync warning is only logged). Returns the
-/// restored file name.
+/// restore -> post-import sync (a sync warning is only logged). Returns the id
+/// of the safety backup taken before the restore (not the restored file name).
 pub(crate) async fn restore_db_backup_file(
     state: AppState,
     filename: String,
@@ -192,7 +192,7 @@ pub(crate) async fn restore_db_backup_file(
             };
             let warning = post_sync_warning_from_result(Ok(run_post_import_sync(&state)));
             if let Some(message) = warning {
-                // This legacy command returns only the restored filename, so keep
+                // This legacy command returns only the safety backup id, so keep
                 // restore success and surface incomplete projection in the log.
                 log::warn!("[Restore] post-import sync warning: {message}");
             }

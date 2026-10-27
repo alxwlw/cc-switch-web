@@ -304,6 +304,9 @@ async fn delete_removes_the_backup_and_a_missing_one_is_400() {
 #[tokio::test]
 #[serial]
 async fn concurrent_restores_and_delete_give_meaningful_answers_and_a_sound_db() {
+    // Pins soundness only: no join error, meaningful answers, a consistent DB.
+    // Lock ordering is pinned elsewhere (import_export.rs manual_restore_... test
+    // and backup.rs delete-during-restore).
     let fx = fresh();
     switch(&fx.router, "old-provider").await;
     let filename = create(&fx.router).await;
