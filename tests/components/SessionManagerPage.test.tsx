@@ -236,6 +236,17 @@ describe("SessionManagerPage", () => {
     discovery.mockRestore();
   });
 
+  it("does not probe Pi session discovery for other apps", async () => {
+    setWeb(true);
+    const discovery = vi.spyOn(piApi, "getSessionDiscovery");
+
+    renderPage("codex");
+    await screen.findByRole("button", { name: "Alpha Session" });
+
+    expect(discovery).not.toHaveBeenCalled();
+    discovery.mockRestore();
+  });
+
   it("lists the current app's sessions grouped by project with unknown last", async () => {
     renderPage("codex");
 
