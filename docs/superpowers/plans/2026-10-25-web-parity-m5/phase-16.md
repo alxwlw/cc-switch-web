@@ -48,6 +48,10 @@ Scope: `src-tauri/src/web_api.rs` (≈21 роут), `src-tauri/tests/web_api_ope
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-27**: PR #17 merged `543a90de` → main; live на `cc-switch-web.service`.
+  - Server пересобран из main (`cargo build --release --example server` → `~/.local/bin/cc-switch-web`); бинарник фазы 15 сохранён в `cc-switch-web.prev`. `pnpm build:web` выполнен в main-checkout. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p16-<ts>/`. Миграций нет.
+  - Проверено: unit active, WARN/ERROR в journal нет. `/api/health` и `GET /api/openclaw/{health,live-provider-ids,default-model,workspace-paths,daily-memory}` → 200, `workspace/notes.md` → 400; отдаваемый `index.html` совпадает со сборкой.
+  - DX-73 Done (комментарий со ссылками file:line). Worktree `.worktrees/web-15` удалён, ledgers прогона p16 скопированы в `.claude/plans/` main-checkout. Локальную ветку `web-parity/web-15-openclaw` и remote-ветки `web-15-openclaw`, `web-16-hermes`, `web-20-app-settings` удаляет владелец (`branch -D` / `push --delete` заблокированы классификатором; скрипт `~/tmp/cc-switch-web-branch-cleanup.sh`).
 - Т3 (frontend): сняты гейты `navigation.ts` (workspace/openclawConfig), `App.tsx` (табы openclaw, live ids при duplicate), `useOpenClaw.ts` (6 хуков), `useProviderActions.ts` (catalog/default после add), `ProviderList.tsx` (membership/import/skeleton для openclaw), `presentation.ts` (Remove openclaw больше не disabled — секция «неизвестно» осталась только у opencode; ключ i18n `web.removeUnverifiable` удалён из 5 локалей в fix round 1). «Открыть каталог» в web — `WorkspaceDirLink` (серверный путь из `get_openclaw_workspace_paths` + копирование). `OpenClawFormFields.tsx:312-318` (fetch models) не тронут.
 - **Статус до merge (2026-10-26)**: ветка `web-parity/web-15-openclaw` (worktree `.worktrees/web-15`), PR #17 (https://github.com/alxwlw/cc-switch-web/pull/17) открыт; DX-73 In Review (комментарий со ссылкой).
   - Т1 и Т2 одобрены с r0. Concern r0 по Т1 (`put_with_wrong_body_key_is_rejected` оставался зелёным и без PUT-роута) закрыт в Т2: тест проверяет ровно 422.
