@@ -583,6 +583,19 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "delete_backup_location":
       return { method: "DELETE", url: `/api/backup-locations/${enc(a.id)}` };
 
+    // ---------- Config import/export & manual live sync (WEB-09) ----------
+    // The native file dialogs and *_to_file/_from_file commands stay desktop-only: unmapped.
+    case "export_config_to_string":
+      return { method: "GET", url: "/api/config/export" };
+    case "import_config_from_string":
+      return {
+        method: "POST",
+        url: "/api/config/import",
+        body: { content: a.content },
+      };
+    case "sync_current_providers_live":
+      return { method: "POST", url: "/api/providers/sync-live" };
+
     // ---------- OpenClaw config, workspace & daily memory (WEB-15) ----------
     // `open_workspace_directory` (file manager on the server) stays desktop-only: unmapped.
     case "import_openclaw_providers_from_live":

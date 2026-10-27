@@ -316,7 +316,7 @@ describe("SettingsPage · WEB-00", () => {
     expect(screen.queryByText("rectifier-block")).toBeNull();
   });
 
-  it("web: data shows backups and the log block; location, import/export and cloud sync stay hidden", async () => {
+  it("web: data shows backups, import/export and the log block; location and cloud sync stay hidden", async () => {
     setWeb(true);
     renderPage("data");
     expect(screen.getByText("log-config-panel")).toBeInTheDocument();
@@ -325,7 +325,7 @@ describe("SettingsPage · WEB-00", () => {
       screen.getByText("settings.advanced.backup.title"),
     ).toBeInTheDocument();
     expect(screen.queryByText("settings.data.location")).toBeNull();
-    expect(screen.queryByText("import-export-section")).toBeNull();
+    expect(screen.getByText("import-export-section")).toBeInTheDocument();
     expect(screen.queryByText("webdav-section")).toBeNull();
     expect(screen.queryByText("server-log-viewer")).toBeNull();
     await userEvent.click(

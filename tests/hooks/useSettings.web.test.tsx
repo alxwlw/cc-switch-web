@@ -146,12 +146,8 @@ const createMetadataMock = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-// Не обслуживаются в web (WEB-26/WEB-09/desktop-only); plugin/onboarding закрыты WEB-20.
-const DESKTOP_ONLY = () => [
-  setAppConfigDirOverrideMock,
-  setAutoLaunchMock,
-  syncCurrentProvidersLiveMock,
-];
+// Не обслуживаются в web (WEB-26/desktop-only); plugin/onboarding закрыты WEB-20.
+const DESKTOP_ONLY = () => [setAppConfigDirOverrideMock, setAutoLaunchMock];
 const SIDE_EFFECTS = () => [
   ...DESKTOP_ONLY(),
   applyClaudePluginConfigMock,
@@ -242,6 +238,8 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     expect(applyClaudePluginConfigMock).toHaveBeenCalledWith({
       official: false,
     });
+    // WEB-09: sync_current_providers_live is served, the web save runs it like desktop.
+    expect(syncCurrentProvidersLiveMock).toHaveBeenCalledTimes(1);
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
@@ -257,7 +255,7 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
-  it("web: autosave applies plugin/onboarding, skips auto-launch and live sync", async () => {
+  it("web: autosave applies plugin/onboarding and live sync, skips auto-launch", async () => {
     setWeb(true);
     const { result } = renderHook(() => useSettings());
     await act(async () => {
@@ -271,6 +269,7 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     for (const m of DESKTOP_ONLY()) expect(m).not.toHaveBeenCalled();
     expect(applyClaudeOnboardingSkipMock).toHaveBeenCalledTimes(1);
     expect(applyClaudePluginConfigMock).toHaveBeenCalledTimes(1);
+    expect(syncCurrentProvidersLiveMock).toHaveBeenCalledTimes(1);
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 

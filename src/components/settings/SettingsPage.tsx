@@ -421,70 +421,68 @@ export function SettingsPage({
       case "data":
         return (
           <>
-            {/* WEB-00: location/import/sync are desktop-only until WEB-26/09/11; backups (WEB-10) work in web. */}
+            {/* WEB-00: location/sync are desktop-only until WEB-26/11; backups (WEB-10) and import/export (WEB-09) work in web. */}
             {!isWeb && (
-              <>
-                <SettingsBlock
-                  title={t("settings.data.location")}
-                  actions={
-                    appConfigDirty ? (
-                      <Button
-                        variant="solid"
-                        size="compact"
-                        disabled={isSaving}
-                        onClick={() => void handleSave()}
-                      >
-                        {isSaving && (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        )}
-                        {t("common.save")}
-                      </Button>
-                    ) : null
-                  }
-                >
-                  <SettingsCard>
-                    <SettingsRow
-                      label={t("settings.appConfigDir")}
-                      help={{
-                        title: t("settings.appConfigDir"),
-                        body: t("settings.appConfigDirDescription"),
-                      }}
+              <SettingsBlock
+                title={t("settings.data.location")}
+                actions={
+                  appConfigDirty ? (
+                    <Button
+                      variant="solid"
+                      size="compact"
+                      disabled={isSaving}
+                      onClick={() => void handleSave()}
                     >
-                      <DirectoryInput
-                        label=""
-                        value={appConfigDir}
-                        resolvedValue={resolvedDirs.appConfig}
-                        placeholder={t("settings.browsePlaceholderApp")}
-                        onChange={updateAppConfigDir}
-                        onBrowse={browseAppConfigDir}
-                        onReset={resetAppConfigDir}
-                      />
-                    </SettingsRow>
-                  </SettingsCard>
-                </SettingsBlock>
-                <SettingsBlock
-                  title={t("settings.advanced.data.title")}
-                  help={{
-                    title: t("settings.advanced.data.title"),
-                    body: t("settings.advanced.data.description"),
-                  }}
-                >
-                  <div className="rounded-panel border border-border bg-surface p-5">
-                    <ImportExportSection
-                      status={importStatus}
-                      selectedFile={selectedFile}
-                      errorMessage={errorMessage}
-                      backupId={backupId}
-                      isImporting={isImporting}
-                      onSelectFile={selectImportFile}
-                      onImport={importConfig}
-                      onExport={exportConfig}
-                      onClear={clearSelection}
+                      {isSaving && (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      )}
+                      {t("common.save")}
+                    </Button>
+                  ) : null
+                }
+              >
+                <SettingsCard>
+                  <SettingsRow
+                    label={t("settings.appConfigDir")}
+                    help={{
+                      title: t("settings.appConfigDir"),
+                      body: t("settings.appConfigDirDescription"),
+                    }}
+                  >
+                    <DirectoryInput
+                      label=""
+                      value={appConfigDir}
+                      resolvedValue={resolvedDirs.appConfig}
+                      placeholder={t("settings.browsePlaceholderApp")}
+                      onChange={updateAppConfigDir}
+                      onBrowse={browseAppConfigDir}
+                      onReset={resetAppConfigDir}
                     />
-                  </div>
-                </SettingsBlock>
-              </>
+                  </SettingsRow>
+                </SettingsCard>
+              </SettingsBlock>
             )}
+            <SettingsBlock
+              title={t("settings.advanced.data.title")}
+              help={{
+                title: t("settings.advanced.data.title"),
+                body: t("settings.advanced.data.description"),
+              }}
+            >
+              <div className="rounded-panel border border-border bg-surface p-5">
+                <ImportExportSection
+                  status={importStatus}
+                  selectedFile={selectedFile}
+                  errorMessage={errorMessage}
+                  backupId={backupId}
+                  isImporting={isImporting}
+                  onSelectFile={selectImportFile}
+                  onImport={importConfig}
+                  onExport={exportConfig}
+                  onClear={clearSelection}
+                />
+              </div>
+            </SettingsBlock>
             <SettingsBlock
               title={t("settings.advanced.backup.title")}
               help={{
