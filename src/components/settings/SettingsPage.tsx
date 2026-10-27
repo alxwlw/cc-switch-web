@@ -421,7 +421,7 @@ export function SettingsPage({
       case "data":
         return (
           <>
-            {/* WEB-00: location/import/backup/sync are desktop-only until WEB-26/09/10/11. */}
+            {/* WEB-00: location/import/sync are desktop-only until WEB-26/09/11; backups (WEB-10) work in web. */}
             {!isWeb && (
               <>
                 <SettingsBlock
@@ -483,38 +483,40 @@ export function SettingsPage({
                     />
                   </div>
                 </SettingsBlock>
-                <SettingsBlock
-                  title={t("settings.advanced.backup.title")}
-                  help={{
-                    title: t("settings.advanced.backup.title"),
-                    body: t("settings.advanced.backup.description"),
-                  }}
-                >
-                  <div className="rounded-panel border border-border bg-surface p-5">
-                    <BackupListSection
-                      backupIntervalHours={settings.backupIntervalHours}
-                      backupRetainCount={settings.backupRetainCount}
-                      onSettingsChange={(updates) => handleAutoSave(updates)}
-                    />
-                  </div>
-                </SettingsBlock>
-                <SettingsBlock
-                  title={t("settings.advanced.cloudSync.title")}
-                  help={{
-                    title: t("settings.advanced.cloudSync.title"),
-                    body: t("settings.advanced.cloudSync.description"),
-                  }}
-                >
-                  <div className="rounded-panel border border-border bg-surface p-5">
-                    <WebdavSyncSection
-                      config={settings.webdavSync}
-                      s3Config={settings.s3Sync}
-                      settings={settings}
-                      onAutoSave={handleAutoSave}
-                    />
-                  </div>
-                </SettingsBlock>
               </>
+            )}
+            <SettingsBlock
+              title={t("settings.advanced.backup.title")}
+              help={{
+                title: t("settings.advanced.backup.title"),
+                body: t("settings.advanced.backup.description"),
+              }}
+            >
+              <div className="rounded-panel border border-border bg-surface p-5">
+                <BackupListSection
+                  backupIntervalHours={settings.backupIntervalHours}
+                  backupRetainCount={settings.backupRetainCount}
+                  onSettingsChange={(updates) => handleAutoSave(updates)}
+                />
+              </div>
+            </SettingsBlock>
+            {!isWeb && (
+              <SettingsBlock
+                title={t("settings.advanced.cloudSync.title")}
+                help={{
+                  title: t("settings.advanced.cloudSync.title"),
+                  body: t("settings.advanced.cloudSync.description"),
+                }}
+              >
+                <div className="rounded-panel border border-border bg-surface p-5">
+                  <WebdavSyncSection
+                    config={settings.webdavSync}
+                    s3Config={settings.s3Sync}
+                    settings={settings}
+                    onAutoSave={handleAutoSave}
+                  />
+                </div>
+              </SettingsBlock>
             )}
             <SettingsBlock
               title={t("settings.advanced.logConfig.title")}

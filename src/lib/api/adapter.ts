@@ -559,6 +559,30 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         body: { expectedRevision: a.expectedRevision },
       };
 
+    // ---------- DB backups & backup locations (WEB-10) ----------
+    // `reveal_backup_location` (file manager on the server) stays desktop-only: unmapped.
+    case "create_db_backup":
+      return { method: "POST", url: "/api/backups" };
+    case "list_db_backups":
+      return { method: "GET", url: "/api/backups" };
+    case "restore_db_backup":
+      return {
+        method: "POST",
+        url: `/api/backups/${enc(a.filename)}/restore`,
+      };
+    case "rename_db_backup":
+      return {
+        method: "PATCH",
+        url: `/api/backups/${enc(a.oldFilename)}`,
+        body: { newName: a.newName },
+      };
+    case "delete_db_backup":
+      return { method: "DELETE", url: `/api/backups/${enc(a.filename)}` };
+    case "list_backup_locations":
+      return { method: "GET", url: "/api/backup-locations" };
+    case "delete_backup_location":
+      return { method: "DELETE", url: `/api/backup-locations/${enc(a.id)}` };
+
     // ---------- OpenClaw config, workspace & daily memory (WEB-15) ----------
     // `open_workspace_directory` (file manager on the server) stays desktop-only: unmapped.
     case "import_openclaw_providers_from_live":
