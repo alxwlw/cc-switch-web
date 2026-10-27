@@ -345,4 +345,37 @@ mod tests {
             "stop"
         );
     }
+
+    #[tokio::test]
+    async fn sql_import_waits_for_skill_state_write_guard() {
+        use crate::services::skill::skill_state_write_guard;
+        let state = AppState::new(Arc::new(Database::memory().expect("memory db")));
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+        let skill_guard = skill_state_write_guard();
+        let import = tokio::spawn(import_config_with(state, move |_db| {
+            let _ = tx.send(());
+            // Fail the import so the post-import sync never touches the real HOME.
+            Err(crate::error::AppError::Message("stop".to_string()))
+        }));
+
+        // No deterministic "blocked" signal exists for a std RwLock writer, so a
+        // short negative wait stands in; the positive half below is bounded by a
+        // channel, not a sleep.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            rx.try_recv().is_err(),
+            "import closure must not run while a Skill mutation holds the state guard"
+        );
+
+        drop(skill_guard);
+        tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("import should start after the skill guard is released")
+            .expect("closure signals start");
+        let result = import.await.expect("import task joins");
+        assert_eq!(
+            result.expect_err("closure error propagates").to_string(),
+            "stop"
+        );
+    }
 }
