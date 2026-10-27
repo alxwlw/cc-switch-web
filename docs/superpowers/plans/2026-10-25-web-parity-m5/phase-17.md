@@ -18,18 +18,18 @@ Scope: `src-tauri/src/commands/omp.rs` (`current_state` → `pub(crate)`), `src-
 - Тесты: 6 unit в pi_prompt_files.rs, тест в omp.rs; фронт — `PiNativePromptResources.test.tsx`, `PiPromptPanel.test.tsx`, MSW-хендлер `tests/msw/handlers.ts:386`.
 
 ### Task 1: backend — роуты + тесты
-- [ ] `GET /api/:app/current-state` (`app ∈ {pi, omp}`, иначе 400; `spawn_blocking`), `PUT /api/:app/providers/:id/usage-script` (`{usageScript}`; `app ∈ {pi, omp}`), `GET /api/pi/session-discovery`, `GET/PUT/DELETE /api/pi/prompt-files/:kind` (`{expectedRevision, content}` / `{expectedRevision}`), `GET /api/pi/prompt-templates`, `PUT /api/pi/prompt-templates/:slug` (`{originalSlug, expectedRevision, content}`), `DELETE /api/pi/prompt-templates/:slug` (`{expectedRevision}`).
-- [ ] Хендлеры prompt-роутов вызывают сервисы (не команды), чтобы видеть `AppError::Conflict` → HTTP 409 с `{ok:false, error: <тот же текст>}`; прочие ошибки → 500.
-- [ ] `src-tauri/tests/web_api_pi.rs` (temp agent dir, как `TestAgentDir`): read missing → `revision:"missing"`; replace с верной ревизией → новая ревизия; replace со старой ревизией после внешней правки файла → 409 и текст «changed outside CC Switch»; шаблоны: upsert, rename через `originalSlug`, delete с неверной ревизией → 409; current-state pi/omp → 200 из async-контекста без паники; usage-script сохраняется в провайдере.
+- [x] `GET /api/:app/current-state` (`app ∈ {pi, omp}`, иначе 400; `spawn_blocking`), `PUT /api/:app/providers/:id/usage-script` (`{usageScript}`; `app ∈ {pi, omp}`), `GET /api/pi/session-discovery`, `GET/PUT/DELETE /api/pi/prompt-files/:kind` (`{expectedRevision, content}` / `{expectedRevision}`), `GET /api/pi/prompt-templates`, `PUT /api/pi/prompt-templates/:slug` (`{originalSlug, expectedRevision, content}`), `DELETE /api/pi/prompt-templates/:slug` (`{expectedRevision}`).
+- [x] Хендлеры prompt-роутов вызывают сервисы (не команды), чтобы видеть `AppError::Conflict` → HTTP 409 с `{ok:false, error: <тот же текст>}`; прочие ошибки → 500.
+- [x] `src-tauri/tests/web_api_pi.rs` (temp agent dir, как `TestAgentDir`): read missing → `revision:"missing"`; replace с верной ревизией → новая ревизия; replace со старой ревизией после внешней правки файла → 409 и текст «changed outside CC Switch»; шаблоны: upsert, rename через `originalSlug`, delete с неверной ревизией → 409; current-state pi/omp → 200 из async-контекста без паники; usage-script сохраняется в провайдере.
 
 ### Task 2: frontend
-- [ ] adapter: case для `get_pi_current_state`, `get_omp_current_state` и остальных 8 команд. `invoke` бросает `Error(payload.error)` и при 409 — проверить, что `PiNativePromptResources` показывает тот же conflict-UI, что на desktop (он разбирает текст ошибки).
-- [ ] Тесты: `tests/lib/piApi.test.ts`; компонент — 409 от сервера даёт conflict-состояние.
-- [ ] Снять WEB-00-гейты (таблица фазы 6).
+- [x] adapter: case для `get_pi_current_state`, `get_omp_current_state` и остальных 8 команд. `invoke` бросает `Error(payload.error)` и при 409 — проверить, что `PiNativePromptResources` показывает тот же conflict-UI, что на desktop (он разбирает текст ошибки).
+- [x] Тесты: `tests/lib/piApi.test.ts`; компонент — 409 от сервера даёт conflict-состояние.
+- [x] Снять WEB-00-гейты (таблица фазы 6).
 
 ### Task 3: гейты, PR, Plane
-- [ ] Полный набор гейтов + `cargo build --release --example server`.
-- [ ] Ветка `web-parity/web-17-pi-omp`, PR; DX-75 → In Review + ссылка. Закрыть чекбоксы, Notes.
+- [x] Полный набор гейтов + `cargo build --release --example server`.
+- [x] Ветка `web-parity/web-17-pi-omp`, PR; DX-75 → In Review + ссылка. Закрыть чекбоксы, Notes.
 
 Риски для ревью:
 - Две вкладки web правят один prompt-файл: вторая запись с устаревшей ревизией обязана получить 409, а не перезаписать (тест — два replace подряд с одной ревизией).
@@ -47,4 +47,18 @@ Scope: `src-tauri/src/commands/omp.rs` (`current_state` → `pub(crate)`), `src-
 
 ## Notes for next phase
 
-- (заполнить по итогам)
+- **Статус до merge (2026-10-27)**: ветка `web-parity/web-17-pi-omp` (worktree `.worktrees/web-17`), PR открыт; DX-75 In Review (комментарий со ссылкой). Ветка также несёт закрытие фазы 16 в плане (`56ce8427`).
+  - Т1 одобрена с r0. 2 NIT (DP-018: 500-ветка `blocking_api_conflict` без теста; DP-011: Pi current-state с провайдерами не закреплён на уровне роута) перенесены в Т2 и закрыты там Rust-тестами.
+  - Т2 одобрена с r1. r0: SHOULD-FIX DP-026, в `ProviderList.isLiveMembershipPending` pi/omp-терм оставался под `!isWeb`: после снятия гейта `usePiCurrentState` карточки в web на время загрузки рисовались заблокированными вместо skeleton. NIT DP-019: задвоенные хвосты переписанных комментариев. Оба закрыты в `b17dca1e`.
+  - Финальные гейты на `b17dca1e`: `cargo fmt --check` и `cargo clippy -- -D warnings` чисто. `cargo test --no-fail-fast`: 4385 passed / 8 failed. Три из восьми — baseline (omp_search_paths, 2× file_modes::switch_*). Пять — `proxy::forwarder::tests::{bookkeeping ×4, codex_stack ×1}` с `upstream script exhausted`: в изоляции 129/129 зелёные, повторный полный `--lib` — только baseline. Это флейк под нагрузкой, diff proxy не трогает. `cargo build --release --example server` ок. `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок; `test:unit` 3772 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice).
+- **Post-merge**: пересобрать server и `dist-web` (Rust менялся); перед install — `cp cc-switch-web cc-switch-web.prev`, бэкап БД при остановленном unit. Миграций БД нет. Smoke: `GET /api/{pi,omp}/current-state` → 200, `GET /api/claude/current-state` → 400, `GET /api/pi/session-discovery`, `GET /api/pi/prompt-files/system_override` → 200 (`revision`), `GET /api/pi/prompt-files/bogus` → 400, `GET /api/pi/prompt-templates` → 200. DX-75 → Done.
+- **Роуты** (`web_api.rs`, блок «Pi / Oh My Pi (WEB-17)», :348-366; хендлеры с :2323):
+  - `GET /api/:app/current-state` и `PUT /api/:app/providers/:id/usage-script` (`{usageScript}`); `app` только pi/omp, иначе JSON 400. Статические `/api/pi/*` соседствуют с `/api/:app/*`, matchit 0.7.3 доходит до `:app`, что закреплено тестом `current_state_routes_reach_app_route`.
+  - `GET /api/pi/session-discovery`, `GET|PUT|DELETE /api/pi/prompt-files/:kind` (`{expectedRevision, content}` / `{expectedRevision}`), `GET /api/pi/prompt-templates`, `PUT|DELETE /api/pi/prompt-templates/:slug` (`{originalSlug, expectedRevision, content}` / `{expectedRevision}`). DELETE несёт JSON-тело, `invoke` шлёт тело для любого не-GET.
+  - `kind` и `app` приходят как `Path<String>` и разбираются вручную: plain-text rejection axum ломает `support::web_call`.
+  - **Новый helper `blocking_api_conflict`** (`web_api.rs:55-72`): `AppError::Conflict` → 409 `{ok:false,error:e.to_string()}` (текст с префиксом `并发冲突: `, как на desktop), прочие `AppError` → 500. Переиспользовать для будущих сервисов с ревизиями. Прочие ошибки, включая `InvalidInput` для плохого slug, по брифу дают 500; ревьюеры дважды отметили, что 4xx было бы точнее. Если понадобится, это отдельное решение.
+  - `commands::omp` стал `pub(crate) mod`, `current_state` — `pub(crate)`.
+- **Frontend**: 10 `case` в `mapCommand`. Conflict-UI на фронте — это toast с текстом сервера (`showMutationError`), разбора текста нет; `adapter.invoke` не менялся. Мёртвый prop `configureUsageUnavailable` удалён из `ProviderCard`/`ProviderCardActions`.
+- **Снятые гейты WEB-00**: `query/pi.ts` (`usePiCurrentState`), templates query в `PiNativePromptResources`, сегменты system/templates в `PiPromptPanel`, `get_pi_session_discovery` в `SessionManagerPage`, configure usage-script для pi/omp, live ids pi/omp в `handleDuplicate`, skeleton pi/omp в `ProviderList`. Под гейтом остался только opencode (WEB-14). Строки фазы 6 закрыты: `phase-6.md` :65, :119, :122, :124, :147, :163, :176.
+- **Перемаркировка ложных «снимет WEB-17»** (меняли только комментарии): терминал (`GeneralSection.tsx:282`, `presentation.ts:654`, `ProviderList.tsx:353`, `OpenTerminalDialog.tsx:144`) теперь desktop-only; `OpenTerminalDialog.tsx:133` (`auth_get_status`) — WEB-02; `usePromptPageCommon.ts:29` (`open_config_folder`) — desktop-only, путь можно скопировать. `grep 'WEB-17' src` оставляет только заголовок блока в adapter и `App.tsx:1133`.
+- **Ловушка для следующих фаз**: тест на `isWeb`-гейт query надо делать и для производных флагов (`isLiveMembershipPending`, `isPiStateReady`). Снятие гейта у query без снятия у производного pending-флага даёт заблокированную карточку вместо skeleton (DP-026, r0 Т2).
