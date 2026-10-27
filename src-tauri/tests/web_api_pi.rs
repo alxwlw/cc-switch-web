@@ -53,6 +53,23 @@ async fn current_state_routes_reach_app_route() {
         assert_eq!(state["enabledProviderIds"], json!([]), "{app}: {state}");
         assert_eq!(state["defaultProviderId"], Value::Null, "{app}: {state}");
     }
+    // OMP reads its own models.yml, not Pi's state.
+    let omp = ensure_test_home().join(".omp-web-api");
+    fs::write(
+        omp.join("models.yml"),
+        "providers:\n  managed:\n    baseUrl: https://api.example.com/v1\n    api: openai-completions\n    models:\n      - id: model-a\n",
+    )
+    .unwrap();
+    fs::write(
+        omp.join("config.yml"),
+        "modelRoles:\n  default: managed/model-a\n",
+    )
+    .unwrap();
+    let state = data(&router, "GET", "/api/omp/current-state", None).await;
+    assert_eq!(state["enabledProviderIds"], json!(["managed"]), "{state}");
+    assert_eq!(state["defaultProviderId"], json!("managed"), "{state}");
+    let state = data(&router, "GET", "/api/pi/current-state", None).await;
+    assert_eq!(state["enabledProviderIds"], json!([]), "{state}");
     let (status, resp) = web_call(&router, "GET", "/api/claude/current-state", None).await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{resp}");
     assert_eq!(resp["ok"], json!(false));
