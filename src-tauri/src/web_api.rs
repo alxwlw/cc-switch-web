@@ -8,7 +8,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{DefaultBodyLimit, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     routing::{any, delete, get, patch, post, put},
     Json, Router,
@@ -373,6 +373,13 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/backups/:filename/restore", post(backup_restore))
         .route("/api/backup-locations", get(backup_locations_list))
         .route("/api/backup-locations/:id", delete(backup_location_delete))
+        // Config import/export + manual live sync (WEB-09)
+        .route("/api/config/export", get(config_export))
+        .route(
+            "/api/config/import",
+            post(config_import).layer(DefaultBodyLimit::max(CONFIG_IMPORT_BODY_LIMIT)),
+        )
+        .route("/api/providers/sync-live", post(providers_sync_live))
         .with_state(state)
 }
 
@@ -2816,4 +2823,45 @@ async fn backup_location_delete(Path(id): Path<String>) -> ApiResult {
         crate::services::backup_storage::delete_location(&id)
     })
     .await
+}
+
+// ─── Config import/export (WEB-09) ───────────────────────────
+
+/// SQL dumps of big installs (usage logs) exceed axum's 2 MiB default.
+const CONFIG_IMPORT_BODY_LIMIT: usize = 64 * 1024 * 1024;
+
+/// Full SQL dump as text (the browser saves it); `dump_sql` yields valid UTF-8.
+async fn config_export(State(state): State<SharedState>) -> ApiResult {
+    let db = state.db.clone();
+    backup_blocking("config export", move || {
+        let content = db.export_sql_string()?;
+        let filename = format!(
+            "cc-switch-{}.sql",
+            chrono::Local::now().format("%Y%m%d-%H%M%S")
+        );
+        Ok(json!({ "filename": filename, "content": content }))
+    })
+    .await
+}
+
+async fn config_import(State(state): State<SharedState>, Json(body): Json<Value>) -> ApiResult {
+    let Some(content) = body
+        .get("content")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+    else {
+        return bad_request("content is required");
+    };
+    backup_result(
+        crate::commands::import_export::import_config_with((*state).clone(), move |db| {
+            db.import_sql_string(&content)
+        })
+        .await,
+    )
+}
+
+async fn providers_sync_live(State(state): State<SharedState>) -> ApiResult {
+    backup_result(
+        crate::commands::import_export::sync_current_providers_live_core(state.db.clone()).await,
+    )
 }
