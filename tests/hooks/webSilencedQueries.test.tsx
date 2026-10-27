@@ -84,7 +84,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "get_subscription_quota",
     () => useSubscriptionQuota("claude", true, true, 1),
   ],
-  ["usePiCurrentState", "get_pi_current_state", () => usePiCurrentState()],
   [
     "useScanUnmanagedSkills",
     "scan_unmanaged_skills",
@@ -227,6 +226,12 @@ describe("WEB-00: фоновые query молчат в web", () => {
   );
 
   it.each([
+    ["usePiCurrentState", "get_pi_current_state", () => usePiCurrentState()],
+    [
+      "usePiCurrentState(omp)",
+      "get_omp_current_state",
+      () => usePiCurrentState(true, "omp"),
+    ],
     [
       "useOpenClawLiveProviderIds",
       "get_openclaw_live_provider_ids",
@@ -250,7 +255,7 @@ describe("WEB-00: фоновые query молчат в web", () => {
       () => useOpenClawHealth(true),
     ],
   ] as Array<[string, string, () => unknown]>)(
-    "%s в web зовёт %s (WEB-15, гейт снят)",
+    "%s в web зовёт %s (гейт снят: WEB-15 / WEB-17)",
     async (_name, command, useHook) => {
       setWeb(true);
       const { wrapper } = wrapperFor();

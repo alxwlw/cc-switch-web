@@ -647,6 +647,55 @@ describe("App integration with MSW", () => {
     await waitFor(() => expect(liveIdsCalls).toBe(1));
   });
 
+  it.each([
+    ["pi", "Pi", "get_pi_current_state"],
+    ["omp", "Oh My Pi", "get_omp_current_state"],
+  ] as const)(
+    "web: duplicating a %s provider avoids ids the live state reports (%s, WEB-17)",
+    async (appId, label, command) => {
+      setWeb(true);
+      server.use(
+        http.post(`http://tauri.local/${command}`, () =>
+          HttpResponse.json({
+            enabledProviderIds: ["deepseek-copy"],
+            defaultProviderId: null,
+          }),
+        ),
+      );
+      setProviders(appId, {
+        deepseek: {
+          id: "deepseek",
+          name: "DeepSeek",
+          settingsConfig: {
+            baseUrl: "https://api.deepseek.com",
+            apiKey: "test-key",
+            api: "openai-completions",
+            models: [],
+          },
+          category: "custom",
+          sortIndex: 0,
+          createdAt: Date.now(),
+        },
+      });
+      setCurrentProviderId(appId, "deepseek");
+
+      const { default: App } = await import("@/App");
+      renderApp(App);
+      fireEvent.click(sidebarApp(label));
+      await waitFor(() =>
+        expect(screen.getByTestId("provider-list").textContent).toContain(
+          "deepseek",
+        ),
+      );
+      fireEvent.click(screen.getByText("duplicate"));
+      await waitFor(() =>
+        expect(screen.getByTestId("provider-list").textContent).toContain(
+          "deepseek-copy-2",
+        ),
+      );
+    },
+  );
+
   describe.each([
     ["desktop", false],
     ["web", true],

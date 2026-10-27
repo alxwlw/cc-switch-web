@@ -586,6 +586,51 @@ describe("ProviderList Component", () => {
       expect(await screen.findByTestId("add-a")).toBeInTheDocument();
     });
 
+    it.each([
+      ["pi", "get_pi_current_state"],
+      ["omp", "get_omp_current_state"],
+    ] as const)(
+      "%s: draws a skeleton, not blocked cards, while current state is pending (WEB-17)",
+      async (appId, command) => {
+        setWeb(true);
+        useDragSortMock.mockReturnValue({
+          sortedProviders: [providerA],
+          sensors: [],
+          handleDragEnd: vi.fn(),
+        });
+        let release: () => void = () => {};
+        const gate = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        server.use(
+          http.post(`${TAURI_ENDPOINT}/${command}`, async () => {
+            await gate;
+            return HttpResponse.json({
+              enabledProviderIds: ["a"],
+              defaultProviderId: null,
+            });
+          }),
+        );
+
+        const { container } = renderWithQueryClient(
+          <ProviderList
+            {...baseProps}
+            providers={{ a: providerA }}
+            appId={appId}
+          />,
+        );
+
+        expect(
+          container.querySelectorAll(".border-dashed").length,
+        ).toBeGreaterThan(0);
+        expect(screen.queryByTestId("provider-card-a")).not.toBeInTheDocument();
+        release();
+        expect(
+          await screen.findByTestId("provider-card-a"),
+        ).toBeInTheDocument();
+      },
+    );
+
     it("keeps import-from-live enabled on an empty list", () => {
       setWeb(true);
       useDragSortMock.mockReturnValue({

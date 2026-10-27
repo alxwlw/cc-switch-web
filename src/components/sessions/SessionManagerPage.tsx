@@ -190,8 +190,7 @@ export function SessionManagerPage({
   const piSessionDiscovery = useQuery({
     queryKey: piKeys.sessionDiscovery,
     queryFn: () => piApi.getSessionDiscovery(),
-    // WEB-00: get_pi_session_discovery не поддержан — снимет WEB-17
-    enabled: appFilter === "pi" && !isWeb,
+    enabled: appFilter === "pi",
     staleTime: 30 * 1000,
   });
 

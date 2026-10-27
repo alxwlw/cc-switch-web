@@ -75,8 +75,6 @@ interface ProviderCardActionsProps {
   onTest?: () => void;
   isTesting?: boolean;
   onConfigureUsage?: () => void;
-  /** WEB-00: сохранение скрипта pi/omp идёт через update_pi_provider_usage_script (вне mapCommand) — снимет WEB-17 */
-  configureUsageUnavailable?: boolean;
   onOpenTerminal?: () => void;
 }
 
@@ -95,7 +93,6 @@ export function ProviderCardActions({
   onTest,
   isTesting,
   onConfigureUsage,
-  configureUsageUnavailable = false,
   onOpenTerminal,
 }: ProviderCardActionsProps) {
   const { t } = useTranslation();
@@ -204,15 +201,8 @@ export function ProviderCardActions({
             </DropdownMenuItem>
           )}
           {onConfigureUsage && (
-            <DropdownMenuItem
-              disabled={configureUsageUnavailable}
-              onSelect={onConfigureUsage}
-              className={cn(
-                configureUsageUnavailable && "flex-col items-start gap-0.5",
-              )}
-            >
+            <DropdownMenuItem onSelect={onConfigureUsage}>
               {t("provider.configureUsage")}
-              {configureUsageUnavailable && <WebUnavailableCaption />}
             </DropdownMenuItem>
           )}
           {/* WEB-00: open_provider_terminal запускает терминал на хосте приложения — в web нет; desktop-only */}

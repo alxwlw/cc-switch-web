@@ -16,8 +16,11 @@ const provider = (id: string, extra: Partial<Provider> = {}): Provider => ({
 });
 const baseCard = { buttons: [], chips: [] };
 
-describe("usage configuration for pi/omp cards — web", () => {
-  const renderCard = (appId: "pi" | "claude") =>
+describe("usage configuration for pi/omp cards — web (WEB-17)", () => {
+  const renderCard = (
+    appId: "pi" | "omp" | "claude",
+    onConfigureUsage: () => void,
+  ) =>
     render(
       <QueryClientProvider client={createTestQueryClient()}>
         <ProviderCard
@@ -29,21 +32,19 @@ describe("usage configuration for pi/omp cards — web", () => {
           presentation={baseCard}
           onEdit={vi.fn()}
           onDelete={vi.fn()}
-          onConfigureUsage={vi.fn()}
+          onConfigureUsage={onConfigureUsage}
           onOpenWebsite={vi.fn()}
         />
       </QueryClientProvider>,
     );
 
-  it.each([
-    ["pi", true],
-    ["claude", false],
-  ] as const)(
-    "configure-usage on a %s card is disabled=%s",
-    async (appId, disabled) => {
+  it.each(["pi", "omp", "claude"] as const)(
+    "configure-usage on a %s card is enabled and fires",
+    async (appId) => {
       setWeb(true);
+      const onConfigureUsage = vi.fn();
       const user = userEvent.setup();
-      renderCard(appId);
+      renderCard(appId, onConfigureUsage);
       await user.click(
         screen.getByRole("button", { name: "providerCard.action.more" }),
       );
@@ -51,12 +52,10 @@ describe("usage configuration for pi/omp cards — web", () => {
         "menuitem",
         { name: /provider\.configureUsage/ },
       );
-      if (disabled) {
-        expect(item).toHaveAttribute("aria-disabled", "true");
-        expect(item).toHaveTextContent("web.unavailable");
-      } else {
-        expect(item).not.toHaveAttribute("aria-disabled", "true");
-      }
+      expect(item).not.toHaveAttribute("aria-disabled", "true");
+      expect(item).not.toHaveTextContent("web.unavailable");
+      await user.click(item);
+      expect(onConfigureUsage).toHaveBeenCalledTimes(1);
     },
   );
 });

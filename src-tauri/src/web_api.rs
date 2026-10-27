@@ -53,6 +53,25 @@ fn bad_request(msg: impl ToString) -> ApiResult {
     )
 }
 
+/// Like `blocking_api` for services returning `AppError`: `Conflict` (a file
+/// changed outside CC Switch) maps to 409, everything else to 500. The body is
+/// `e.to_string()`, the same text the desktop command returns.
+async fn blocking_api_conflict<T, F>(what: &'static str, f: F) -> ApiResult
+where
+    T: serde::Serialize + Send + 'static,
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
+{
+    match tokio::task::spawn_blocking(f).await {
+        Ok(Ok(v)) => ok(v),
+        Ok(Err(e @ AppError::Conflict(_))) => (
+            StatusCode::CONFLICT,
+            Json(json!({ "ok": false, "error": e.to_string() })),
+        ),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("{what} task failed: {e}")),
+    }
+}
+
 macro_rules! app_type {
     ($app:expr) => {
         match AppType::from_str($app) {
@@ -325,6 +344,24 @@ pub fn router(state: SharedState) -> Router {
             get(openclaw_daily_memory_get)
                 .put(openclaw_daily_memory_set)
                 .delete(openclaw_daily_memory_delete),
+        )
+        // Pi / Oh My Pi (WEB-17)
+        .route("/api/:app/current-state", get(pi_current_state))
+        .route(
+            "/api/:app/providers/:id/usage-script",
+            put(pi_usage_script_set),
+        )
+        .route("/api/pi/session-discovery", get(pi_session_discovery))
+        .route(
+            "/api/pi/prompt-files/:kind",
+            get(pi_prompt_file_get)
+                .put(pi_prompt_file_replace)
+                .delete(pi_prompt_file_delete),
+        )
+        .route("/api/pi/prompt-templates", get(pi_prompt_templates_list))
+        .route(
+            "/api/pi/prompt-templates/:slug",
+            put(pi_prompt_template_upsert).delete(pi_prompt_template_delete),
         )
         .with_state(state)
 }
@@ -2279,6 +2316,161 @@ async fn hermes_memory_enabled(
     };
     blocking_api("hermes memory toggle", move || {
         crate::hermes_config::set_memory_enabled(kind, body.enabled)
+    })
+    .await
+}
+
+// ---------- Pi / Oh My Pi (WEB-17) ----------
+
+fn parse_pi_app(raw: &str) -> Result<AppType, ApiResult> {
+    match AppType::from_str(raw) {
+        Ok(t @ (AppType::Pi | AppType::Omp)) => Ok(t),
+        _ => Err(bad_request(format!("unsupported app: {raw}"))),
+    }
+}
+
+fn parse_pi_prompt_kind(
+    raw: &str,
+) -> Result<crate::services::pi_prompt_files::PiPromptFileKind, ApiResult> {
+    serde_json::from_value(Value::String(raw.to_string()))
+        .map_err(|_| bad_request(format!("unknown prompt file kind: {raw}")))
+}
+
+async fn pi_current_state(State(state): State<SharedState>, Path(app): Path<String>) -> ApiResult {
+    let app_type = match parse_pi_app(&app) {
+        Ok(t) => t,
+        Err(resp) => return resp,
+    };
+    blocking_api("pi current state", move || match app_type {
+        AppType::Omp => crate::commands::omp::current_state(&state),
+        _ => crate::services::pi_state::PiStateService::current(&state),
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PiUsageScriptReq {
+    usage_script: crate::provider::UsageScript,
+}
+
+async fn pi_usage_script_set(
+    State(state): State<SharedState>,
+    Path((app, id)): Path<(String, String)>,
+    Json(body): Json<PiUsageScriptReq>,
+) -> ApiResult {
+    let app_type = match parse_pi_app(&app) {
+        Ok(t) => t,
+        Err(resp) => return resp,
+    };
+    blocking_api("pi usage script", move || {
+        ProviderService::update_pi_usage_script(&state, app_type, &id, body.usage_script)
+    })
+    .await
+}
+
+async fn pi_session_discovery() -> ApiResult {
+    blocking_api("pi session discovery", || {
+        Ok::<_, String>(crate::session_manager::providers::pi::session_discovery())
+    })
+    .await
+}
+
+async fn pi_prompt_file_get(Path(kind): Path<String>) -> ApiResult {
+    let kind = match parse_pi_prompt_kind(&kind) {
+        Ok(k) => k,
+        Err(resp) => return resp,
+    };
+    blocking_api_conflict("pi prompt file read", move || {
+        crate::services::pi_prompt_files::PiPromptFileService::read(kind)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PiPromptReplaceReq {
+    expected_revision: String,
+    content: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PiPromptDeleteReq {
+    expected_revision: String,
+}
+
+async fn pi_prompt_file_replace(
+    Path(kind): Path<String>,
+    Json(body): Json<PiPromptReplaceReq>,
+) -> ApiResult {
+    let kind = match parse_pi_prompt_kind(&kind) {
+        Ok(k) => k,
+        Err(resp) => return resp,
+    };
+    blocking_api_conflict("pi prompt file replace", move || {
+        crate::services::pi_prompt_files::PiPromptFileService::replace(
+            kind,
+            &body.expected_revision,
+            &body.content,
+        )
+    })
+    .await
+}
+
+async fn pi_prompt_file_delete(
+    Path(kind): Path<String>,
+    Json(body): Json<PiPromptDeleteReq>,
+) -> ApiResult {
+    let kind = match parse_pi_prompt_kind(&kind) {
+        Ok(k) => k,
+        Err(resp) => return resp,
+    };
+    blocking_api_conflict("pi prompt file delete", move || {
+        crate::services::pi_prompt_files::PiPromptFileService::delete(kind, &body.expected_revision)
+    })
+    .await
+}
+
+async fn pi_prompt_templates_list() -> ApiResult {
+    blocking_api_conflict("pi prompt templates list", || {
+        crate::services::pi_prompt_files::PiPromptTemplateService::list()
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PiTemplateUpsertReq {
+    original_slug: Option<String>,
+    expected_revision: String,
+    content: String,
+}
+
+async fn pi_prompt_template_upsert(
+    Path(slug): Path<String>,
+    Json(body): Json<PiTemplateUpsertReq>,
+) -> ApiResult {
+    blocking_api_conflict("pi prompt template upsert", move || {
+        crate::services::pi_prompt_files::PiPromptTemplateService::upsert(
+            &slug,
+            body.original_slug.as_deref(),
+            &body.expected_revision,
+            &body.content,
+        )
+    })
+    .await
+}
+
+async fn pi_prompt_template_delete(
+    Path(slug): Path<String>,
+    Json(body): Json<PiPromptDeleteReq>,
+) -> ApiResult {
+    blocking_api_conflict("pi prompt template delete", move || {
+        crate::services::pi_prompt_files::PiPromptTemplateService::delete(
+            &slug,
+            &body.expected_revision,
+        )
     })
     .await
 }

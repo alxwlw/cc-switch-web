@@ -279,7 +279,7 @@ export function GeneralSection({
               body: t("settings.general.terminalHelp"),
             }}
             control={
-              // WEB-00: запуск терминала desktop-only (resume в web — copy-command) — снимет WEB-17
+              // WEB-00: запуск терминала desktop-only (resume в web — copy-command; терминал на сервере не открыть)
               <WebUnavailableTip active={isWeb}>
                 <TerminalSelect
                   className="h-8 w-[160px]"

@@ -33,7 +33,6 @@ import {
   utf8Bytes,
 } from "./promptUtils";
 import { toast } from "@/lib/toast";
-import { isWeb } from "@/lib/api/adapter";
 
 export type PiPromptTab = "global" | "system" | "templates";
 
@@ -427,27 +426,23 @@ const PiPromptPanel: React.FC<PiPromptPanelProps> = ({
                   : agentDirFull),
             },
       )}
-      // WEB-00: вкладки system/templates (get_pi_prompt_file, *_pi_prompt_template) не замаплены —
-      // в web остаётся только global, переключатель скрыт — снимет WEB-17
       segments={
-        isWeb ? undefined : (
-          <SegmentedControl
-            size="sm"
-            aria-label={t("pi.prompts.kindLabel")}
-            value={activeTab}
-            onValueChange={(tab) => {
-              setActiveTab(tab);
-              setSearchQuery("");
-              setTemplateQuery("");
-            }}
-            items={[
-              { value: "global", label: t("pi.prompts.globalTab") },
-              { value: "system", label: t("pi.prompts.systemTab") },
-              { value: "templates", label: t("pi.prompts.templatesTab") },
-            ]}
-            className="h-8 shrink-0"
-          />
-        )
+        <SegmentedControl
+          size="sm"
+          aria-label={t("pi.prompts.kindLabel")}
+          value={activeTab}
+          onValueChange={(tab) => {
+            setActiveTab(tab);
+            setSearchQuery("");
+            setTemplateQuery("");
+          }}
+          items={[
+            { value: "global", label: t("pi.prompts.globalTab") },
+            { value: "system", label: t("pi.prompts.systemTab") },
+            { value: "templates", label: t("pi.prompts.templatesTab") },
+          ]}
+          className="h-8 shrink-0"
+        />
       }
       target={target}
       search={search}
