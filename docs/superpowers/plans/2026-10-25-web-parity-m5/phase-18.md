@@ -30,27 +30,35 @@ Scope: `src-tauri/src/commands/import_export.rs:19-26` (restore-lock → `pub(cr
 - Периодический backup: общий `async fn` воркер (стартовая проверка + 24 ч), desktop `lib.rs` и headless (`bootstrap.rs` рядом с `spawn_session_usage_worker`, вызов из `examples/server.rs`) используют его; блокирующий `periodic_backup_if_needed` — через `spawn_blocking`. `start_background_checks` не трогать: это Stack-routing, фаза-владелец WEB-01 (ф.27–28) — записать в Notes.
 
 ### Task 1: общий restore-lock
-- [ ] `run_with_database_restore_lock` → `pub(crate)` (или перенос в `commands/sync_support.rs`); restore-команда и будущий web import (фаза 19) используют одну функцию. Тест порядка lock (import_export.rs:252) зелёный.
+- [x] `run_with_database_restore_lock` → `pub(crate)` (или перенос в `commands/sync_support.rs`); restore-команда и будущий web import (фаза 19) используют одну функцию. Тест порядка lock (import_export.rs:252) зелёный.
 
-- [ ] Периодический backup: фаза 7 оставила desktop-блок lib.rs:1381-1392 («codex models checks/periodic backup») вне bootstrap. Прочитать его; если это backup DB по расписанию — запускать его же из headless bootstrap (handle-free часть) с тестом «после старта планировщик зарегистрирован»; codex models checks — записать в Notes, куда относятся.
+- [x] Периодический backup: фаза 7 оставила desktop-блок lib.rs:1381-1392 («codex models checks/periodic backup») вне bootstrap. Прочитать его; если это backup DB по расписанию — запускать его же из headless bootstrap (handle-free часть) с тестом «после старта планировщик зарегистрирован»; codex models checks — записать в Notes, куда относятся.
 
 ### Task 2: backend — роуты + тесты
-- [ ] `POST /api/backups` → filename; `GET /api/backups`; `POST /api/backups/:filename/restore` (lock → guard → restore → post-import sync в `spawn_blocking`); `PATCH /api/backups/:filename` (`{newName}`); `DELETE /api/backups/:filename`; `GET /api/backup-locations` (к каждой записи — серверный путь `location_dir`); `DELETE /api/backup-locations/:id` → освобождённые байты.
-- [ ] `src-tauri/tests/web_api_backups.rs`: create → list содержит; изменение провайдера → restore → провайдер вернулся и live-файл в temp HOME пересинхронизирован; restore битого backup → `{ok:false}`, DB не тронута; restore backup-а с будущей schema → `{ok:false}`; `filename` с `../` → 400; rename на занятое имя → `{ok:false}`; два параллельных restore + delete того же backup во время restore → delete отклонён (как в backup.rs:2880), restore-ы сериализованы.
+- [x] `POST /api/backups` → filename; `GET /api/backups`; `POST /api/backups/:filename/restore` (lock → guard → restore → post-import sync в `spawn_blocking`); `PATCH /api/backups/:filename` (`{newName}`); `DELETE /api/backups/:filename`; `GET /api/backup-locations` (к каждой записи — серверный путь `location_dir`); `DELETE /api/backup-locations/:id` → освобождённые байты.
+- [x] `src-tauri/tests/web_api_backups.rs`: create → list содержит; изменение провайдера → restore → провайдер вернулся и live-файл в temp HOME пересинхронизирован; restore битого backup → `{ok:false}`, DB не тронута; restore backup-а с будущей schema → `{ok:false}`; `filename` с `../` → 400; rename на занятое имя → `{ok:false}`; два параллельных restore + delete того же backup во время restore → delete отклонён (как в backup.rs:2880), restore-ы сериализованы.
 
 ### Task 3: frontend
-- [ ] 7 case в `mapCommand`; `reveal_backup_location` в web не мапить.
-- [ ] `BackupStorageSection`: в web вместо кнопки reveal — серверный путь location с копированием (`copyText`).
-- [ ] Тесты: `tests/hooks/useBackupManager.test.tsx` (create/restore/rename/delete через adapter, mock fetch); компонент — в web путь виден, reveal скрыт.
-- [ ] Снять WEB-00-гейты (таблица фазы 6).
+- [x] 7 case в `mapCommand`; `reveal_backup_location` в web не мапить.
+- [x] `BackupStorageSection`: в web вместо кнопки reveal — серверный путь location с копированием (`copyText`).
+- [x] Тесты: `tests/hooks/useBackupManager.test.tsx` (create/restore/rename/delete через adapter, mock fetch); компонент — в web путь виден, reveal скрыт.
+- [x] Снять WEB-00-гейты (таблица фазы 6).
 
 ### Task 4: гейты, PR, Plane
-- [ ] Полный набор гейтов + `cargo build --release --example server`.
-- [ ] Ветка `web-parity/web-10-db-backups`, PR; DX-68 → In Review + ссылка. Закрыть чекбоксы, Notes (имя общего restore-lock — для фазы 19).
+- [x] Полный набор гейтов + `cargo build --release --example server`.
+- [x] Ветка `web-parity/web-10-db-backups`, PR; DX-68 → In Review + ссылка. Закрыть чекбоксы, Notes (имя общего restore-lock — для фазы 19).
 
 Риски для ревью:
 - Restore во время активного proxy takeover (после фаз 27–28): restore меняет DB под работающим proxy. Поведение должно совпадать с desktop; тест или явная заметка в Notes фазы 27.
 
 ## Notes for next phase
 
-- (заполнить по итогам)
+- **Статус до merge (2026-10-27)**: ветка `web-parity/web-10-db-backups` (worktree `.worktrees/web-10`), PR — см. index-план; DX-68 In Review. Ветка также несёт закрытие фазы 17 в плане (`6180462f`).
+  - Т1, Т2, Т3 одобрены с r0, без SHOULD-FIX. NIT Т1 DP-021 (doc lock-а) и NIT Т2 DP-021/DP-011 (doc возвращаемого значения restore, имя конкурентного теста) закрыты в Т2/Т3. Приняты как есть: DP-018 (лог-ветки `round()` воркера без теста), DP-050 (500 мс негативное ожидание в `tests/bootstrap.rs` zero-interval: детерминированное ожидание требует production-hook).
+- **Общий restore-lock для фазы 19**: `commands::import_export::run_with_database_restore_lock` (`import_export.rs:22`, `pub(crate) async`; модуль `commands::import_export` стал `pub(crate) mod`). Web import фазы 19 оборачивает свой `spawn_blocking` (guard → `import_sql_string` → `run_post_import_sync`) именно в него, как `import_config_from_file` :59. Handle-free ядра: `create_db_backup_file(Arc<Database>)` :149 → filename, `restore_db_backup_file(AppState, filename)` :182 → **id safety-backup-а** (без `.db`), оба `Result<_, AppError>`; tauri-команды делегируют им.
+- **Роуты** (`web_api.rs:367-375`, хендлеры с :2750; helpers `backup_result`/`backup_blocking`): `POST|GET /api/backups`, `POST /api/backups/:filename/restore`, `PATCH|DELETE /api/backups/:filename` (`{newName}`), `GET /api/backup-locations` (записи уже несут `path`), `DELETE /api/backup-locations/:id` → освобождённые байты. `AppError::InvalidInput` → 400 (плохое/занятое имя, `..%2F`, нет файла, неизвестный/`database` location), прочие → 500 (битый backup и будущая schema — `AppError::Database`). Тесты — `src-tauri/tests/web_api_backups.rs` (9, `#[serial]`).
+- **Restore не меняет device-local current provider** (`settings::get_effective_current_provider`, settings.rs:1402, как на desktop): после restore UI может остаться на провайдере, выбранном до restore. Поэтому тест re-sync — «правка текущего провайдера → restore → строка DB и live-файл откатились», а не «переключение → restore».
+- **Периодический backup в headless**: `bootstrap::run_periodic_backup_worker` (:811, стартовая проверка + 24 ч, блокирующий вызов через `spawn_blocking`) — desktop `lib.rs:974` и server (`spawn_periodic_backup_worker` :834, `examples/server.rs:89`, только при успешном bootstrap). `periodic_backup_if_needed` заодно делает обслуживание (чистка логов, `rollup_and_prune(30)`, vacuum) — теперь и на сервере, даже при нулевом интервале backup-а, как на desktop.
+- **`codex_official_models::start_background_checks`** (`lib.rs:967`) — фоновое обновление официального списка моделей Codex для Stack-routing; только desktop, фаза-владелец WEB-01 (ф.27–28).
+- **Frontend**: 7 `case` (блок «DB backups (WEB-10)» в `adapter.ts`), `reveal_backup_location` в web не мапится (тест: запроса нет). `SettingsPage` — из-под `!isWeb` вынесен только блок backup; location (WEB-26), import/export (WEB-09), cloud sync (WEB-11) скрыты (`WebShellGating.test.tsx`). `BackupStorageSection` в web — серверный путь + копирование (ключи `workspace.copyPath`/`pathCopied`/`pathCopyFailed`, новых нет). Строки `phase-6.md` :97, :147 помечены.
+- **Post-merge**: пересобрать server и `dist-web` (Rust менялся); перед install — `cp cc-switch-web cc-switch-web.prev`, бэкап БД при остановленном unit. Миграций БД нет. Smoke: `GET /api/backups`, `GET /api/backup-locations` → 200; `POST /api/backups/..%2Fx.db/restore` → 400; после рестарта в `~/.cc-switch-web/backups/` есть backup не старше интервала (стартовая проверка воркера). Деструктивный restore на живой БД в smoke не делать. DX-68 → Done.
