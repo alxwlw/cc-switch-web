@@ -95,7 +95,25 @@ export function useImportExport(
           );
           return;
         }
-        webContentRef.current = await file.text();
+        // Strict decode: `file.text()` would replace invalid bytes with U+FFFD silently.
+        let content: string;
+        try {
+          content = new TextDecoder("utf-8", { fatal: true }).decode(
+            await file.arrayBuffer(),
+          );
+        } catch (error) {
+          if (error instanceof TypeError) {
+            toast.error(
+              t("settings.importFileNotUtf8", {
+                defaultValue:
+                  "The file is not valid UTF-8 text. Export the configuration again from CC Switch and import that file.",
+              }),
+            );
+            return;
+          }
+          throw error;
+        }
+        webContentRef.current = content;
         setSelectedFile(file.name);
         setStatus("idle");
         setErrorMessage(null);

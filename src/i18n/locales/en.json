@@ -557,6 +557,7 @@
     "configDownloaded": "Config downloaded:",
     "importFileReadFailed": "Failed to read the file: {{message}}",
     "importFileTooLarge": "File is too large to import (limit {{limit}} MiB)",
+    "importFileNotUtf8": "The file is not valid UTF-8 text. Export the configuration again from CC Switch and import that file.",
     "exportFailed": "Export failed",
     "selectFileFailed": "Please choose a valid SQL backup file",
     "configCorrupted": "SQL file may be corrupted or invalid",

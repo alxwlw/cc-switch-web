@@ -51,11 +51,21 @@ function pickNext(file: unknown | null) {
     });
 }
 
-const fakeFile = (name: string, text: string, size = text.length) => ({
-  name,
-  size,
-  text: vi.fn().mockResolvedValue(text),
-});
+/** Like a browser File: text() decodes leniently (U+FFFD), arrayBuffer() gives the raw bytes. */
+const fakeFile = (
+  name: string,
+  content: string | Uint8Array,
+  size?: number,
+) => {
+  const bytes =
+    typeof content === "string" ? new TextEncoder().encode(content) : content;
+  return {
+    name,
+    size: size ?? bytes.byteLength,
+    text: vi.fn(async () => new TextDecoder("utf-8").decode(bytes)),
+    arrayBuffer: vi.fn(async () => bytes.slice().buffer),
+  };
+};
 
 const readBlob = (blob: Blob) =>
   new Promise<string>((resolve, reject) => {
@@ -198,13 +208,39 @@ describe("useImportExport · web branch (WEB-09)", () => {
 
     expect(toastErrorMock).toHaveBeenCalledTimes(1);
     expect(toastErrorMock.mock.calls[0][0]).toContain("64");
-    expect(file.text).not.toHaveBeenCalled();
+    expect(file.arrayBuffer).not.toHaveBeenCalled();
     expect(result.current.selectedFile).toBe("");
+  });
+
+  it("import: bytes that are not UTF-8 are refused with a toast and never selected", async () => {
+    const file = fakeFile(
+      "legacy.sql",
+      new Uint8Array([0x49, 0x4e, 0x53, 0xff, 0xfe]),
+    );
+    importFromTextMock.mockResolvedValue({ success: true, backupId: "b2" });
+    pickNext(file);
+    const { result } = renderHook(() => useImportExport());
+
+    await act(async () => {
+      await result.current.selectImportFile();
+    });
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+    expect(toastErrorMock.mock.calls[0][0]).toBe(
+      "The file is not valid UTF-8 text. Export the configuration again from CC Switch and import that file.",
+    );
+    expect(result.current.selectedFile).toBe("");
+
+    await act(async () => {
+      await result.current.importConfig();
+    });
+
+    expect(importFromTextMock).not.toHaveBeenCalled();
   });
 
   it("import: a file read failure is a toast with the reason", async () => {
     const file = fakeFile("x.sql", "");
-    file.text.mockRejectedValue(new Error("NotReadableError"));
+    file.arrayBuffer.mockRejectedValue(new Error("NotReadableError"));
     pickNext(file);
     const { result } = renderHook(() => useImportExport());
 

@@ -557,6 +557,7 @@
     "configDownloaded": "設定已下載：",
     "importFileReadFailed": "讀取檔案失敗：{{message}}",
     "importFileTooLarge": "檔案過大，無法匯入（上限 {{limit}} MiB）",
+    "importFileNotUtf8": "檔案不是有效的 UTF-8 文字。請從 CC Switch 重新匯出設定，然後匯入該檔案。",
     "exportFailed": "匯出失敗",
     "selectFileFailed": "請選擇有效的 SQL 備份檔案",
     "configCorrupted": "SQL 檔案可能已損壞或格式不正確",

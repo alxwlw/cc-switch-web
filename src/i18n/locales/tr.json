@@ -557,6 +557,7 @@
     "configDownloaded": "Yapılandırma indirildi:",
     "importFileReadFailed": "Dosya okunamadı: {{message}}",
     "importFileTooLarge": "Dosya içe aktarmak için çok büyük (sınır {{limit}} MiB)",
+    "importFileNotUtf8": "Dosya geçerli bir UTF-8 metni değil. Yapılandırmayı CC Switch'ten yeniden dışa aktarın ve bu dosyayı içe aktarın.",
     "exportFailed": "Dışa aktarma başarısız oldu",
     "selectFileFailed": "Lütfen geçerli bir SQL yedekleme dosyası seçin",
     "configCorrupted": "SQL dosyası bozuk veya geçersiz olabilir",
