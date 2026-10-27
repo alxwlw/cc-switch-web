@@ -10,7 +10,7 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, Query, State},
     http::{header, HeaderMap, StatusCode},
-    routing::{any, delete, get, post, put},
+    routing::{any, delete, get, patch, post, put},
     Json, Router,
 };
 use serde::Deserialize;
@@ -18,6 +18,7 @@ use serde_json::{json, Value};
 
 use crate::app_config::{AppType, McpServer};
 use crate::commands as universal_provider_emit_cmds;
+use crate::database::Database;
 use crate::error::AppError;
 use crate::prompt::Prompt;
 use crate::provider::{Provider, UniversalProvider};
@@ -363,6 +364,15 @@ pub fn router(state: SharedState) -> Router {
             "/api/pi/prompt-templates/:slug",
             put(pi_prompt_template_upsert).delete(pi_prompt_template_delete),
         )
+        // DB backups (WEB-10)
+        .route("/api/backups", get(backups_list).post(backups_create))
+        .route(
+            "/api/backups/:filename",
+            patch(backup_rename).delete(backup_delete),
+        )
+        .route("/api/backups/:filename/restore", post(backup_restore))
+        .route("/api/backup-locations", get(backup_locations_list))
+        .route("/api/backup-locations/:id", delete(backup_location_delete))
         .with_state(state)
 }
 
@@ -2735,4 +2745,75 @@ async fn openclaw_daily_memory_delete(Path(filename): Path<String>) -> ApiResult
         return bad_request(e);
     }
     cmd_result(crate::commands::delete_daily_memory_file(filename).await)
+}
+
+// ─── DB backups (WEB-10) ─────────────────────────────────────
+
+/// `AppError` -> response: `InvalidInput` is the caller's fault (400), the rest 500.
+fn backup_result<T: serde::Serialize>(r: Result<T, AppError>) -> ApiResult {
+    match r {
+        Ok(v) => ok(v),
+        Err(AppError::InvalidInput(m)) => bad_request(m),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+async fn backup_blocking<T, F>(what: &'static str, f: F) -> ApiResult
+where
+    T: serde::Serialize + Send + 'static,
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
+{
+    match tokio::task::spawn_blocking(f).await {
+        Ok(r) => backup_result(r),
+        Err(e) => fail(format!("{what} task failed: {e}")),
+    }
+}
+
+async fn backups_create(State(state): State<SharedState>) -> ApiResult {
+    backup_result(crate::commands::import_export::create_db_backup_file(state.db.clone()).await)
+}
+
+async fn backups_list() -> ApiResult {
+    backup_blocking("backup list", Database::list_backups).await
+}
+
+async fn backup_restore(
+    State(state): State<SharedState>,
+    Path(filename): Path<String>,
+) -> ApiResult {
+    backup_result(
+        crate::commands::import_export::restore_db_backup_file((*state).clone(), filename).await,
+    )
+}
+
+async fn backup_rename(Path(filename): Path<String>, Json(body): Json<Value>) -> ApiResult {
+    let Some(new_name) = body
+        .get("newName")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+    else {
+        return bad_request("newName is required");
+    };
+    backup_blocking("backup rename", move || {
+        Database::rename_backup(&filename, &new_name)
+    })
+    .await
+}
+
+async fn backup_delete(Path(filename): Path<String>) -> ApiResult {
+    backup_blocking("backup delete", move || Database::delete_backup(&filename)).await
+}
+
+async fn backup_locations_list() -> ApiResult {
+    backup_blocking("backup locations", || {
+        Ok(crate::services::backup_storage::list_locations())
+    })
+    .await
+}
+
+async fn backup_location_delete(Path(id): Path<String>) -> ApiResult {
+    backup_blocking("backup location delete", move || {
+        crate::services::backup_storage::delete_location(&id)
+    })
+    .await
 }
