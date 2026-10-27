@@ -47,7 +47,7 @@ Scope: `src-tauri/src/commands/omp.rs` (`current_state` → `pub(crate)`), `src-
 
 ## Notes for next phase
 
-- **Статус до merge (2026-10-27)**: ветка `web-parity/web-17-pi-omp` (worktree `.worktrees/web-17`), PR открыт; DX-75 In Review (комментарий со ссылкой). Ветка также несёт закрытие фазы 16 в плане (`56ce8427`).
+- **Статус до merge (2026-10-27)**: ветка `web-parity/web-17-pi-omp` (worktree `.worktrees/web-17`), PR #18 (https://github.com/alxwlw/cc-switch-web/pull/18) открыт; DX-75 In Review (комментарий со ссылкой). Ветка также несёт закрытие фазы 16 в плане (`56ce8427`).
   - Т1 одобрена с r0. 2 NIT (DP-018: 500-ветка `blocking_api_conflict` без теста; DP-011: Pi current-state с провайдерами не закреплён на уровне роута) перенесены в Т2 и закрыты там Rust-тестами.
   - Т2 одобрена с r1. r0: SHOULD-FIX DP-026, в `ProviderList.isLiveMembershipPending` pi/omp-терм оставался под `!isWeb`: после снятия гейта `usePiCurrentState` карточки в web на время загрузки рисовались заблокированными вместо skeleton. NIT DP-019: задвоенные хвосты переписанных комментариев. Оба закрыты в `b17dca1e`.
   - Финальные гейты на `b17dca1e`: `cargo fmt --check` и `cargo clippy -- -D warnings` чисто. `cargo test --no-fail-fast`: 4385 passed / 8 failed. Три из восьми — baseline (omp_search_paths, 2× file_modes::switch_*). Пять — `proxy::forwarder::tests::{bookkeeping ×4, codex_stack ×1}` с `upstream script exhausted`: в изоляции 129/129 зелёные, повторный полный `--lib` — только baseline. Это флейк под нагрузкой, diff proxy не трогает. `cargo build --release --example server` ок. `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок; `test:unit` 3772 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice).
