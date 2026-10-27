@@ -17,7 +17,8 @@ use crate::services::sync_protocol::sync_mutex;
 use crate::store::AppState;
 
 /// Serialises database-replacing operations (manual restore, SQL import) behind the
-/// global sync lock; shared with the web import (phase 19) and the web backup routes.
+/// global sync lock. Used by `restore_db_backup_file` (desktop command and web backup
+/// restore route); the web SQL import (phase 19) will take the same lock.
 pub(crate) async fn run_with_database_restore_lock<T, Start, Fut>(start_operation: Start) -> T
 where
     Start: FnOnce() -> Fut,
