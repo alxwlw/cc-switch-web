@@ -47,6 +47,10 @@ Scope: `src-tauri/src/commands/omp.rs` (`current_state` → `pub(crate)`), `src-
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-27**: PR #18 merged `ede8b84a` → main; live на `cc-switch-web.service`.
+  - Server пересобран из main (`cargo build --release --example server` → `~/.local/bin/cc-switch-web`); бинарник фазы 16 сохранён в `cc-switch-web.prev`. `pnpm build:web` выполнен в main-checkout. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p17-20261027-141934/`. Миграций нет.
+  - Проверено: unit active, WARN/ERROR в journal нет. `/api/health`, `/api/{pi,omp}/current-state`, `/api/pi/session-discovery`, `/api/pi/prompt-files/system_override` (`revision:"missing"`), `/api/pi/prompt-templates` → 200; `/api/claude/current-state`, `/api/pi/prompt-files/bogus` → 400; отдаваемый `index.html` совпадает со сборкой.
+  - DX-75 Done (комментарий со ссылками file:line). Worktree `.worktrees/web-17` удалён, ledgers прогона p17 скопированы в `.claude/plans/` main-checkout. Локальные ветки `web-15-openclaw`, `web-17-pi-omp` и remote-ветки `web-15/16/17/20-*` удаляет владелец (скрипт `~/tmp/delete-merged-branches.sh`).
 - **Статус до merge (2026-10-27)**: ветка `web-parity/web-17-pi-omp` (worktree `.worktrees/web-17`), PR #18 (https://github.com/alxwlw/cc-switch-web/pull/18) открыт; DX-75 In Review (комментарий со ссылкой). Ветка также несёт закрытие фазы 16 в плане (`56ce8427`).
   - Т1 одобрена с r0. 2 NIT (DP-018: 500-ветка `blocking_api_conflict` без теста; DP-011: Pi current-state с провайдерами не закреплён на уровне роута) перенесены в Т2 и закрыты там Rust-тестами.
   - Т2 одобрена с r1. r0: SHOULD-FIX DP-026, в `ProviderList.isLiveMembershipPending` pi/omp-терм оставался под `!isWeb`: после снятия гейта `usePiCurrentState` карточки в web на время загрузки рисовались заблокированными вместо skeleton. NIT DP-019: задвоенные хвосты переписанных комментариев. Оба закрыты в `b17dca1e`.
