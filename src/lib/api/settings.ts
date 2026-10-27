@@ -14,6 +14,11 @@ export interface ConfigTransferResult {
   backupId?: string;
 }
 
+export interface ConfigExportPayload {
+  filename: string;
+  content: string;
+}
+
 export interface WebDavTestResult {
   success: boolean;
   message?: string;
@@ -158,6 +163,16 @@ export const settingsApi = {
 
   async importConfigFromFile(filePath: string): Promise<ConfigTransferResult> {
     return await invoke("import_config_from_file", { filePath });
+  },
+
+  /** Web build: dump the server DB as text; the browser saves it as `filename`. */
+  async exportConfigForDownload(): Promise<ConfigExportPayload> {
+    return await invoke("export_config_to_string");
+  },
+
+  /** Web build: import an uploaded SQL dump (file text) into the server DB. */
+  async importConfigFromText(content: string): Promise<ConfigTransferResult> {
+    return await invoke("import_config_from_string", { content });
   },
 
   // ─── WebDAV sync ──────────────────────────────────────────

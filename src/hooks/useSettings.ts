@@ -170,9 +170,6 @@ export function useSettings(): UseSettingsResult {
           await settingsApi.applyClaudePluginConfig({ official: true });
         }
 
-        // WEB-00: sync_current_providers_live не поддержан — снимет WEB-09
-        if (isWeb) return false;
-
         const syncResult = await syncCurrentProvidersLiveSafe();
         if (!syncResult.ok) {
           console.warn(
@@ -488,9 +485,7 @@ export function useSettings(): UseSettingsResult {
         const openclawDirChanged = sanitizedOpenclawDir !== previousOpenclawDir;
         const piDirChanged = sanitizedPiDir !== previousPiDir;
         const ompDirChanged = sanitizedOmpDir !== previousOmpDir;
-        // WEB-00: sync_current_providers_live не поддержан — снимет WEB-09
         if (
-          !isWeb &&
           !pluginSynced &&
           (claudeDirChanged ||
             codexDirChanged ||
