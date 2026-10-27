@@ -16,7 +16,9 @@ use crate::services::skill::skill_state_write_guard;
 use crate::services::sync_protocol::sync_mutex;
 use crate::store::AppState;
 
-async fn run_with_database_restore_lock<T, Start, Fut>(start_operation: Start) -> T
+/// Serialises database-replacing operations (manual restore, SQL import) behind the
+/// global sync lock; shared with the web import (phase 19) and the web backup routes.
+pub(crate) async fn run_with_database_restore_lock<T, Start, Fut>(start_operation: Start) -> T
 where
     Start: FnOnce() -> Fut,
     Fut: std::future::Future<Output = T>,
@@ -142,11 +144,11 @@ pub async fn open_zip_file_dialog<R: tauri::Runtime>(
 
 // ─── Database backup management ─────────────────────────────
 
-/// Manually create a database backup
-#[tauri::command]
-pub async fn create_db_backup(state: State<'_, AppState>) -> Result<String, String> {
-    let db = state.db.clone();
-    tauri::async_runtime::spawn_blocking(move || match db.backup_database_file()? {
+/// Handle-free core of `create_db_backup`: snapshot the DB, return the new file name.
+pub(crate) async fn create_db_backup_file(
+    db: std::sync::Arc<Database>,
+) -> Result<String, AppError> {
+    tokio::task::spawn_blocking(move || match db.backup_database_file()? {
         Some(path) => Ok(path
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())
@@ -156,8 +158,15 @@ pub async fn create_db_backup(state: State<'_, AppState>) -> Result<String, Stri
         )),
     })
     .await
-    .map_err(|e| format!("Backup failed: {e}"))?
-    .map_err(|e: AppError| e.to_string())
+    .map_err(|e| AppError::Message(format!("Backup failed: {e}")))?
+}
+
+/// Manually create a database backup
+#[tauri::command]
+pub async fn create_db_backup(state: State<'_, AppState>) -> Result<String, String> {
+    create_db_backup_file(state.db.clone())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// List all database backup files
@@ -166,22 +175,21 @@ pub fn list_db_backups() -> Result<Vec<BackupEntry>, String> {
     Database::list_backups().map_err(|e| e.to_string())
 }
 
-/// Restore database from a backup file
-#[tauri::command]
-pub async fn restore_db_backup(
-    state: State<'_, AppState>,
+/// Handle-free core of `restore_db_backup`: global lock -> skill-state guard ->
+/// restore -> post-import sync (a sync warning is only logged). Returns the
+/// restored file name.
+pub(crate) async fn restore_db_backup_file(
+    state: AppState,
     filename: String,
-) -> Result<String, String> {
-    let app_state_for_sync = state.inner().clone();
-    let db = app_state_for_sync.db.clone();
+) -> Result<String, AppError> {
+    let db = state.db.clone();
     run_with_database_restore_lock(move || {
-        tauri::async_runtime::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
             let restored = {
                 let _skill_state_guard = skill_state_write_guard();
                 db.restore_from_backup(&filename)?
             };
-            let warning =
-                post_sync_warning_from_result(Ok(run_post_import_sync(&app_state_for_sync)));
+            let warning = post_sync_warning_from_result(Ok(run_post_import_sync(&state)));
             if let Some(message) = warning {
                 // This legacy command returns only the restored filename, so keep
                 // restore success and surface incomplete projection in the log.
@@ -191,8 +199,18 @@ pub async fn restore_db_backup(
         })
     })
     .await
-    .map_err(|e| format!("Restore failed: {e}"))?
-    .map_err(|e: AppError| e.to_string())
+    .map_err(|e| AppError::Message(format!("Restore failed: {e}")))?
+}
+
+/// Restore database from a backup file
+#[tauri::command]
+pub async fn restore_db_backup(
+    state: State<'_, AppState>,
+    filename: String,
+) -> Result<String, String> {
+    restore_db_backup_file(state.inner().clone(), filename)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Rename a database backup file
