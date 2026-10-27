@@ -34,10 +34,14 @@ vi.mock("@/lib/api", () => ({
 }));
 
 /** Make the next `<input type=file>.click()` "choose" the given file (or cancel). */
+const pickers: { type: string; accept: string }[] = [];
+
 function pickNext(file: unknown | null) {
+  pickers.length = 0;
   return vi
     .spyOn(HTMLInputElement.prototype, "click")
     .mockImplementation(function (this: HTMLInputElement) {
+      pickers.push({ type: this.type, accept: this.accept });
       if (file === null) {
         this.dispatchEvent(new Event("cancel"));
         return;
@@ -144,6 +148,7 @@ describe("useImportExport · web branch (WEB-09)", () => {
       await result.current.selectImportFile();
     });
 
+    expect(pickers).toEqual([{ type: "file", accept: ".sql" }]);
     expect(result.current.selectedFile).toBe("my.sql");
     expect(importFromTextMock).not.toHaveBeenCalled();
     expect(openFileDialogMock).not.toHaveBeenCalled();
@@ -209,6 +214,20 @@ describe("useImportExport · web branch (WEB-09)", () => {
 
     expect(toastErrorMock.mock.calls[0][0]).toContain("NotReadableError");
     expect(result.current.selectedFile).toBe("");
+  });
+
+  it("import: a change event with no file selects nothing", async () => {
+    vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(function (
+      this: HTMLInputElement,
+    ) {
+      this.dispatchEvent(new Event("change"));
+    });
+    const { result } = renderHook(() => useImportExport());
+    await act(async () => {
+      await result.current.selectImportFile();
+    });
+    expect(result.current.selectedFile).toBe("");
+    expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
   it("import: cancelling the picker changes nothing; clear drops the text", async () => {
