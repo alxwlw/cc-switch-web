@@ -273,6 +273,59 @@ pub fn router(state: SharedState) -> Router {
             put(hermes_memory_enabled),
         )
         .route("/api/hermes/web-ui", get(hermes_web_ui))
+        // OpenClaw (WEB-15)
+        .route("/api/openclaw/import-live", post(openclaw_import_live))
+        .route(
+            "/api/openclaw/live-provider-ids",
+            get(openclaw_live_provider_ids),
+        )
+        .route(
+            "/api/openclaw/live-provider/:id",
+            get(openclaw_live_provider),
+        )
+        .route("/api/openclaw/health", get(openclaw_health))
+        .route(
+            "/api/openclaw/default-model",
+            get(openclaw_default_model_get).put(openclaw_default_model_set),
+        )
+        .route(
+            "/api/openclaw/model-catalog",
+            get(openclaw_model_catalog_get).put(openclaw_model_catalog_set),
+        )
+        .route(
+            "/api/openclaw/agents-defaults",
+            get(openclaw_agents_defaults_get).put(openclaw_agents_defaults_set),
+        )
+        .route(
+            "/api/openclaw/env",
+            get(openclaw_env_get).put(openclaw_env_set),
+        )
+        .route(
+            "/api/openclaw/tools",
+            get(openclaw_tools_get).put(openclaw_tools_set),
+        )
+        .route(
+            "/api/openclaw/workspace/:filename",
+            get(openclaw_workspace_get).put(openclaw_workspace_set),
+        )
+        .route(
+            "/api/openclaw/workspace-paths",
+            get(openclaw_workspace_paths),
+        )
+        .route(
+            "/api/openclaw/daily-memory",
+            get(openclaw_daily_memory_list),
+        )
+        .route(
+            "/api/openclaw/daily-memory/search",
+            get(openclaw_daily_memory_search),
+        )
+        .route(
+            "/api/openclaw/daily-memory/:filename",
+            get(openclaw_daily_memory_get)
+                .put(openclaw_daily_memory_set)
+                .delete(openclaw_daily_memory_delete),
+        )
         .with_state(state)
 }
 
@@ -2230,6 +2283,129 @@ async fn hermes_memory_enabled(
     .await
 }
 
+// ---------- OpenClaw (WEB-15) ----------
+
+async fn openclaw_import_live(State(state): State<SharedState>) -> ApiResult {
+    blocking_api("openclaw import", move || {
+        crate::services::provider::import_openclaw_providers_from_live(&state)
+    })
+    .await
+}
+
+async fn openclaw_live_provider_ids() -> ApiResult {
+    blocking_api("openclaw live provider ids", || {
+        crate::openclaw_config::get_providers().map(|p| p.keys().cloned().collect::<Vec<_>>())
+    })
+    .await
+}
+
+async fn openclaw_live_provider(Path(id): Path<String>) -> ApiResult {
+    blocking_api("openclaw live provider", move || {
+        crate::openclaw_config::get_provider(&id)
+    })
+    .await
+}
+
+async fn openclaw_health() -> ApiResult {
+    blocking_api(
+        "openclaw health",
+        crate::openclaw_config::scan_openclaw_config_health,
+    )
+    .await
+}
+
+#[derive(Deserialize)]
+struct OpenClawDefaultModelReq {
+    model: crate::openclaw_config::OpenClawDefaultModel,
+}
+
+async fn openclaw_default_model_get() -> ApiResult {
+    blocking_api(
+        "openclaw default model",
+        crate::openclaw_config::get_default_model,
+    )
+    .await
+}
+
+async fn openclaw_default_model_set(Json(body): Json<OpenClawDefaultModelReq>) -> ApiResult {
+    blocking_api("openclaw default model write", move || {
+        crate::openclaw_config::set_default_model(&body.model)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct OpenClawModelCatalogReq {
+    catalog: std::collections::HashMap<String, crate::openclaw_config::OpenClawModelCatalogEntry>,
+}
+
+async fn openclaw_model_catalog_get() -> ApiResult {
+    blocking_api(
+        "openclaw model catalog",
+        crate::openclaw_config::get_model_catalog,
+    )
+    .await
+}
+
+async fn openclaw_model_catalog_set(Json(body): Json<OpenClawModelCatalogReq>) -> ApiResult {
+    blocking_api("openclaw model catalog write", move || {
+        crate::openclaw_config::set_model_catalog(&body.catalog)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct OpenClawAgentsDefaultsReq {
+    defaults: crate::openclaw_config::OpenClawAgentsDefaults,
+}
+
+async fn openclaw_agents_defaults_get() -> ApiResult {
+    blocking_api(
+        "openclaw agents defaults",
+        crate::openclaw_config::get_agents_defaults,
+    )
+    .await
+}
+
+async fn openclaw_agents_defaults_set(Json(body): Json<OpenClawAgentsDefaultsReq>) -> ApiResult {
+    blocking_api("openclaw agents defaults write", move || {
+        crate::openclaw_config::set_agents_defaults(&body.defaults)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct OpenClawEnvReq {
+    env: crate::openclaw_config::OpenClawEnvConfig,
+}
+
+async fn openclaw_env_get() -> ApiResult {
+    blocking_api("openclaw env", crate::openclaw_config::get_env_config).await
+}
+
+async fn openclaw_env_set(Json(body): Json<OpenClawEnvReq>) -> ApiResult {
+    blocking_api("openclaw env write", move || {
+        crate::openclaw_config::set_env_config(&body.env)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct OpenClawToolsReq {
+    tools: crate::openclaw_config::OpenClawToolsConfig,
+}
+
+async fn openclaw_tools_get() -> ApiResult {
+    blocking_api("openclaw tools", crate::openclaw_config::get_tools_config).await
+}
+
+async fn openclaw_tools_set(Json(body): Json<OpenClawToolsReq>) -> ApiResult {
+    blocking_api("openclaw tools write", move || {
+        crate::openclaw_config::set_tools_config(&body.tools)
+    })
+    .await
+}
+
 #[derive(Deserialize)]
 struct HermesWebUiQuery {
     path: Option<String>,
@@ -2287,4 +2463,84 @@ async fn hermes_web_ui(headers: HeaderMap, Query(q): Query<HermesWebUiQuery>) ->
         normalize_web_path(q.path.as_deref())
     );
     ok(json!({ "reachable": reachable, "port": port, "url": url }))
+}
+
+// ---------- OpenClaw workspace + daily memory (WEB-15) ----------
+//
+// Filename validation lives in `commands::workspace`; the handlers call the
+// same validators first only so a bad name answers 400 (errors that come out
+// of `blocking_api`-style paths are 500).
+
+fn cmd_result<T: serde::Serialize>(r: Result<T, String>) -> ApiResult {
+    match r {
+        Ok(v) => ok(v),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct OpenClawContentReq {
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct OpenClawMemorySearchQuery {
+    #[serde(default)]
+    q: String,
+}
+
+async fn openclaw_workspace_get(Path(filename): Path<String>) -> ApiResult {
+    if let Err(e) = crate::commands::validate_filename(&filename) {
+        return bad_request(e);
+    }
+    cmd_result(crate::commands::read_workspace_file(filename).await)
+}
+
+async fn openclaw_workspace_set(
+    Path(filename): Path<String>,
+    Json(body): Json<OpenClawContentReq>,
+) -> ApiResult {
+    if let Err(e) = crate::commands::validate_filename(&filename) {
+        return bad_request(e);
+    }
+    cmd_result(crate::commands::write_workspace_file(filename, body.content).await)
+}
+
+async fn openclaw_workspace_paths() -> ApiResult {
+    ok(json!({
+        "workspace": crate::commands::workspace_subdir("workspace"),
+        "memory": crate::commands::workspace_subdir("memory"),
+    }))
+}
+
+async fn openclaw_daily_memory_list() -> ApiResult {
+    cmd_result(crate::commands::list_daily_memory_files().await)
+}
+
+async fn openclaw_daily_memory_search(Query(q): Query<OpenClawMemorySearchQuery>) -> ApiResult {
+    cmd_result(crate::commands::search_daily_memory_files(q.q).await)
+}
+
+async fn openclaw_daily_memory_get(Path(filename): Path<String>) -> ApiResult {
+    if let Err(e) = crate::commands::validate_daily_memory_filename(&filename) {
+        return bad_request(e);
+    }
+    cmd_result(crate::commands::read_daily_memory_file(filename).await)
+}
+
+async fn openclaw_daily_memory_set(
+    Path(filename): Path<String>,
+    Json(body): Json<OpenClawContentReq>,
+) -> ApiResult {
+    if let Err(e) = crate::commands::validate_daily_memory_filename(&filename) {
+        return bad_request(e);
+    }
+    cmd_result(crate::commands::write_daily_memory_file(filename, body.content).await)
+}
+
+async fn openclaw_daily_memory_delete(Path(filename): Path<String>) -> ApiResult {
+    if let Err(e) = crate::commands::validate_daily_memory_filename(&filename) {
+        return bad_request(e);
+    }
+    cmd_result(crate::commands::delete_daily_memory_file(filename).await)
 }

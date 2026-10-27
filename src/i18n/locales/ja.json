@@ -3039,6 +3039,9 @@
     "saveFailed": "保存に失敗しました",
     "loadFailed": "読み込みに失敗しました",
     "openDirectory": "ファイルマネージャーで開く",
+    "copyPath": "パスをコピー",
+    "pathCopied": "パスをコピーしました",
+    "pathCopyFailed": "パスのコピーに失敗しました",
     "dailyMemory": {
       "title": "デイリーメモリー",
       "sectionTitle": "デイリーメモリー",
@@ -5052,7 +5055,6 @@
     "accountLogin": "Webモードではアカウントログイン（OAuth）を利用できません",
     "needsRouting": "このプロバイダーにはルーティングプロキシが必要ですが、Webモードでは利用できません",
     "liveUnknownTitle": "プロバイダー（Webモードでは実際の設定状態を読み取れません）",
-    "removeUnverifiable": "Webモードではデフォルト／現在のプロバイダーかどうかを確認できないため、設定から削除できません",
     "sessionImage": "Webモードでは画像を表示できません",
     "sessionResumeCopied": "再開コマンドをコピーしました。サーバーホスト上のプロジェクトフォルダーで、ターミナルに貼り付けて実行してください",
     "hostNotice": "ファイル、CLI ツール、プロキシはサーバーホスト上にあり、このブラウザを実行しているコンピューター上にはありません。",

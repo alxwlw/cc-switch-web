@@ -90,11 +90,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "scan_unmanaged_skills",
     () => useScanUnmanagedSkills({ enabled: true }),
   ],
-  [
-    "useOpenClawLiveProviderIds",
-    "get_openclaw_live_provider_ids",
-    () => useOpenClawLiveProviderIds(true),
-  ],
   ["useKimiOAuth", "kimi_oauth_status", () => useKimiOAuth()],
   ["useManagedAuth", "auth_get_status", () => useManagedAuth("xai_oauth")],
   [
@@ -180,23 +175,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "get_cc_switch_skills_dir",
     () => useCcSwitchSkillsDir(),
   ],
-  [
-    "useOpenClawDefaultModel",
-    "get_openclaw_default_model",
-    () => useOpenClawDefaultModel(true),
-  ],
-  ["useOpenClawEnv", "get_openclaw_env", () => useOpenClawEnv()],
-  ["useOpenClawTools", "get_openclaw_tools", () => useOpenClawTools()],
-  [
-    "useOpenClawAgentsDefaults",
-    "get_openclaw_agents_defaults",
-    () => useOpenClawAgentsDefaults(),
-  ],
-  [
-    "useOpenClawHealth",
-    "scan_openclaw_config_health",
-    () => useOpenClawHealth(true),
-  ],
 ];
 
 function wrapperFor() {
@@ -245,6 +223,42 @@ describe("WEB-00: фоновые query молчат в web", () => {
         .getAll()
         .map((q) => q.state.status);
       expect(states).not.toContain("error");
+    },
+  );
+
+  it.each([
+    [
+      "useOpenClawLiveProviderIds",
+      "get_openclaw_live_provider_ids",
+      () => useOpenClawLiveProviderIds(true),
+    ],
+    [
+      "useOpenClawDefaultModel",
+      "get_openclaw_default_model",
+      () => useOpenClawDefaultModel(true),
+    ],
+    ["useOpenClawEnv", "get_openclaw_env", () => useOpenClawEnv()],
+    ["useOpenClawTools", "get_openclaw_tools", () => useOpenClawTools()],
+    [
+      "useOpenClawAgentsDefaults",
+      "get_openclaw_agents_defaults",
+      () => useOpenClawAgentsDefaults(),
+    ],
+    [
+      "useOpenClawHealth",
+      "scan_openclaw_config_health",
+      () => useOpenClawHealth(true),
+    ],
+  ] as Array<[string, string, () => unknown]>)(
+    "%s в web зовёт %s (WEB-15, гейт снят)",
+    async (_name, command, useHook) => {
+      setWeb(true);
+      const { wrapper } = wrapperFor();
+      renderHook(useHook, { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(calledCommands()).toContain(command);
     },
   );
 

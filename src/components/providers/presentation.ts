@@ -714,7 +714,7 @@ export interface AdditiveInput {
   /**
    * WEB-00: web не читает живой конфиг (get_*_live_provider_ids), «в конфиге ли» неизвестно. Не
    * делим на «добавленные/доступные» (иначе все ложно «не в конфиге»): одна секция, у каждой
-   * карточки и «добавить», и «убрать» — снимет WEB-14/15 (hermes открыт WEB-16)
+   * карточки и «добавить», и «убрать» — снимет WEB-14 (openclaw открыт WEB-15, hermes — WEB-16)
    */
   membershipUnknown?: boolean;
   actions: {
@@ -870,12 +870,9 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
               key: "remove",
               label: t("providerCard.action.remove"),
               onClick: () => actions.remove(p),
-              // WEB-00: guard добавленного пути (openclaw default) в web не проверить
-              // (живой конфиг не читается), бэкенд его не проверяет — снимет WEB-15.
-              // opencode: guard-а на удаление «default» нет (см. ниже), Remove остаётся
-              disabledReason:
-                readOnlyReason ??
-                (app === "openclaw" ? t("web.removeUnverifiable") : undefined),
+              // Секция «членство неизвестно» в web осталась только у opencode (openclaw — WEB-15,
+              // hermes — WEB-16 читают живой конфиг); guard-а на удаление «default» у opencode нет
+              disabledReason: readOnlyReason,
             },
           ],
         },

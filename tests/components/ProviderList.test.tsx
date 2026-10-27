@@ -492,6 +492,116 @@ describe("ProviderList Component", () => {
     });
   });
 
+  it("web: import-from-live stays disabled on an empty opencode list (WEB-14 pending)", () => {
+    setWeb(true);
+    useDragSortMock.mockReturnValue({
+      sortedProviders: [],
+      sensors: [],
+      handleDragEnd: vi.fn(),
+    });
+    renderWithQueryClient(
+      <ProviderList {...baseProps} providers={{}} appId="opencode" />,
+    );
+    expect(
+      screen.getByRole("button", { name: "provider.importCurrent" }),
+    ).toBeDisabled();
+  });
+
+  describe("web: openclaw live membership is served (WEB-15)", () => {
+    const providerA = createProvider({ id: "a", name: "A" });
+    const live = createProvider({ id: "live", name: "Live" });
+
+    it("splits cards into added/available from the live ids, no unknown-membership section", async () => {
+      setWeb(true);
+      let liveIdsRequests = 0;
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [providerA, live],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      server.use(
+        http.post(`${TAURI_ENDPOINT}/get_openclaw_live_provider_ids`, () => {
+          liveIdsRequests += 1;
+          return HttpResponse.json(["live"]);
+        }),
+        http.post(`${TAURI_ENDPOINT}/get_openclaw_default_model`, () =>
+          HttpResponse.json(null),
+        ),
+      );
+
+      renderWithQueryClient(
+        <ProviderList
+          {...baseProps}
+          providers={{ a: providerA, live }}
+          appId="openclaw"
+        />,
+      );
+
+      expect(await screen.findByTestId("remove-live")).toBeInTheDocument();
+      expect(liveIdsRequests).toBe(1);
+      expect(screen.getByTestId("add-a")).toBeInTheDocument();
+      expect(screen.queryByTestId("remove-a")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: "web.liveUnknownTitle" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("draws a skeleton, not cards, while the live ids are pending", async () => {
+      setWeb(true);
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [providerA],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      server.use(
+        http.post(
+          `${TAURI_ENDPOINT}/get_openclaw_live_provider_ids`,
+          async () => {
+            await gate;
+            return HttpResponse.json([]);
+          },
+        ),
+        http.post(`${TAURI_ENDPOINT}/get_openclaw_default_model`, () =>
+          HttpResponse.json(null),
+        ),
+      );
+
+      const { container } = renderWithQueryClient(
+        <ProviderList
+          {...baseProps}
+          providers={{ a: providerA }}
+          appId="openclaw"
+        />,
+      );
+
+      expect(
+        container.querySelectorAll(".border-dashed").length,
+      ).toBeGreaterThan(0);
+      expect(screen.queryByTestId("add-a")).not.toBeInTheDocument();
+      release();
+      expect(await screen.findByTestId("add-a")).toBeInTheDocument();
+    });
+
+    it("keeps import-from-live enabled on an empty list", () => {
+      setWeb(true);
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      renderWithQueryClient(
+        <ProviderList {...baseProps} providers={{}} appId="openclaw" />,
+      );
+      expect(
+        screen.getByRole("button", { name: "provider.importCurrent" }),
+      ).toBeEnabled();
+    });
+  });
+
   it.each([
     ["web", true, true],
     ["desktop", false, false],

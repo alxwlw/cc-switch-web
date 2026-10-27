@@ -34,6 +34,10 @@ Scope: `src-tauri/src/web_api.rs` (8 роутов), `src-tauri/tests/web_api_her
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-26**: PR #16 merged `764d6649` → main; live на `cc-switch-web.service`.
+  - Server пересобран из main (`cargo build --release --example server` → `~/.local/bin/cc-switch-web`); бинарник фазы 14 сохранён в `cc-switch-web.prev`. `pnpm build:web` выполнен в main-checkout. Перед restart БД скопирована в `~/.cc-switch-web/backups-predeploy-p15-<ts>/`. Миграций нет.
+  - Проверено: unit active, WARN/ERROR в journal нет. `/api/health`, `/api/init-status`, `GET /api/hermes/{live-provider-ids,model-config,memory-limits,memory/memory,web-ui}` → 200, `memory/bogus` → 400; `web-ui` → `reachable:false` (Hermes на сервере не установлен); отдаваемый `index.html` совпадает со сборкой.
+  - DX-74 Done (комментарий со ссылками file:line). Worktree `.worktrees/web-16` и локальная ветка удалены; remote-ветку `web-parity/web-16-hermes` удаляет владелец (push --delete заблокирован классификатором). Ledgers прогона p15 скопированы в `.claude/plans/` main-checkout.
 - **Статус до merge (2026-10-26)**: ветка `web-parity/web-16-hermes` (worktree `.worktrees/web-16`), PR #16 (https://github.com/alxwlw/cc-switch-web/pull/16) открыт; DX-74 In Review (комментарий со ссылкой).
   - Т1 одобрена с r1. r0: SHOULD-FIX DP-018, фильтр управляющих символов в `normalize_web_path` не был закреплён тестом, закрыто в `ba84aced` (кейсы `/%09/x`, `%0A//x`) вместе с NIT: голый IPv6 `::1` в `Host` → 400.
   - Т2 одобрена с r1. r0: SHOULD-FIX DP-018, снятые сверх брифа Hermes-гейты в `ProviderList`/`App.handleDuplicate` не были закреплены, закрыто в `c636bcc4` (3 теста ProviderList, 1 в App.test) вместе с NIT DP-019 (строки фазы 6).

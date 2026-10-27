@@ -14,13 +14,12 @@ import {
   Circle,
   Calendar,
   ChevronRight,
-  FolderOpen,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { HoverTip } from "@/components/ui/hover-tip";
 import { workspaceApi } from "@/lib/api/workspace";
 import WorkspaceFileEditor from "./WorkspaceFileEditor";
 import DailyMemoryPanel from "./DailyMemoryPanel";
+import WorkspaceDirLink from "./WorkspaceDirLink";
 
 interface WorkspaceFile {
   filename: string;
@@ -85,15 +84,11 @@ const WorkspaceFilesPanel: React.FC = () => {
 
   return (
     <div className="px-6 pt-4 pb-8">
-      <HoverTip content={t("workspace.openDirectory")}>
-        <p
-          className="text-sm text-fg-2 mb-6 cursor-pointer hover:text-fg-1 transition-colors inline-flex items-center gap-1"
-          onClick={() => workspaceApi.openDirectory("workspace")}
-        >
-          ~/.openclaw/workspace/
-          <FolderOpen className="w-3.5 h-3.5" />
-        </p>
-      </HoverTip>
+      <WorkspaceDirLink
+        subdir="workspace"
+        label="~/.openclaw/workspace/"
+        className="mb-6"
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {WORKSPACE_FILES.map((file) => {

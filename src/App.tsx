@@ -1127,12 +1127,12 @@ function App() {
     ) {
       let liveProviderIds: string[] = [];
       try {
-        // WEB-00: live-ids opencode/openclaw/pi (get_*_live_provider_ids / get_*_current_state) не поддержаны. Шаг только
+        // WEB-00: live-ids opencode/pi (get_*_live_provider_ids / get_*_current_state) не поддержаны. Шаг только
         // проверяет коллизию ключа копии с записями живого конфига; в web копия получает ключ,
-        // свободный среди провайдеров БД (addToLive=false, в живой конфиг не пишется) — снимет WEB-14/15.
-        // Hermes live-ids в web работают (WEB-16)
+        // свободный среди провайдеров БД (addToLive=false, в живой конфиг не пишется) — снимет WEB-14.
+        // Hermes (WEB-16) и openclaw (WEB-15) live-ids в web работают
         liveProviderIds =
-          isWeb && activeApp !== "hermes"
+          isWeb && activeApp !== "hermes" && activeApp !== "openclaw"
             ? []
             : activeApp === "opencode"
               ? await queryClient.ensureQueryData({
@@ -1436,8 +1436,9 @@ function App() {
   // OpenClaw / Hermes 没有模式 tab，那一行放它们自己的页面导航。
   // 换整块内容的是页面导航，用下划线页签；分段控件只留给模式和页内筛选。
   const renderAppSegments = () => {
-    // WEB-00: у openclaw в web единственная доступная вкладка — providers (workspace/config скрыты) — снимет WEB-15/17
-    if (isWeb && activeApp !== "hermes") return null;
+    // Web: вкладки есть только у openclaw (WEB-15) и hermes (WEB-16)
+    if (isWeb && activeApp !== "hermes" && activeApp !== "openclaw")
+      return null;
     if (activeApp === "openclaw") {
       return (
         <div className="shrink-0 px-6 pt-2">

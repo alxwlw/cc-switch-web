@@ -163,10 +163,10 @@ describe("useProviderActions", () => {
   });
 
   it.each([
-    ["web", true, 0],
+    ["web", true, 1],
     ["desktop", false, 1],
   ])(
-    "openclaw addProvider with suggestedDefaults reads the model catalog %s times (%s)",
+    "openclaw addProvider with suggestedDefaults reads the model catalog %s times (%s; web served since WEB-15)",
     async (_label, web, catalogCalls) => {
       setWeb(web);
       addProviderMutateAsync.mockResolvedValueOnce(undefined);

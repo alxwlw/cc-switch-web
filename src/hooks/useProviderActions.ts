@@ -32,7 +32,6 @@ import { openclawKeys } from "@/hooks/useOpenClaw";
 import { supportsOfficialProxyTakeover } from "@/utils/providerCapabilities";
 import { getRoutingReason } from "@/utils/routingReason";
 import { logFrontendInfo } from "@/lib/frontendLogger";
-import { isWeb } from "@/lib/api/adapter";
 
 /**
  * Hook for managing provider actions (add, update, delete, switch)
@@ -93,9 +92,7 @@ export function useProviderActions(
       await addProviderMutation.mutateAsync(enhanced);
 
       // OpenClaw: register models to allowlist after adding provider
-      // WEB-00: get/set_openclaw_model_catalog и default_model не поддержаны — регистрация моделей
-      // пропускается (провайдер уже сохранён) — снимет WEB-15
-      if (activeApp === "openclaw" && provider.suggestedDefaults && !isWeb) {
+      if (activeApp === "openclaw" && provider.suggestedDefaults) {
         const { model, modelCatalog } = provider.suggestedDefaults;
         let modelsRegistered = false;
 
