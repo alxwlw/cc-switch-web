@@ -513,6 +513,52 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: `/api/hermes/web-ui${query({ path: a.path })}`,
       };
 
+    // ---------- Pi / Oh My Pi state, usage script, sessions, prompts (WEB-17) ----------
+    case "get_pi_current_state":
+      return { method: "GET", url: "/api/pi/current-state" };
+    case "get_omp_current_state":
+      return { method: "GET", url: "/api/omp/current-state" };
+    case "update_pi_provider_usage_script":
+      return {
+        method: "PUT",
+        url: `${appBase(a.app)}/providers/${enc(a.id)}/usage-script`,
+        body: { usageScript: a.usageScript },
+      };
+    case "get_pi_session_discovery":
+      return { method: "GET", url: "/api/pi/session-discovery" };
+    case "get_pi_prompt_file":
+      return { method: "GET", url: `/api/pi/prompt-files/${enc(a.kind)}` };
+    case "replace_pi_prompt_file":
+      return {
+        method: "PUT",
+        url: `/api/pi/prompt-files/${enc(a.kind)}`,
+        body: { expectedRevision: a.expectedRevision, content: a.content },
+      };
+    case "delete_pi_prompt_file":
+      return {
+        method: "DELETE",
+        url: `/api/pi/prompt-files/${enc(a.kind)}`,
+        body: { expectedRevision: a.expectedRevision },
+      };
+    case "list_pi_prompt_templates":
+      return { method: "GET", url: "/api/pi/prompt-templates" };
+    case "upsert_pi_prompt_template":
+      return {
+        method: "PUT",
+        url: `/api/pi/prompt-templates/${enc(a.slug)}`,
+        body: {
+          originalSlug: a.originalSlug ?? null,
+          expectedRevision: a.expectedRevision,
+          content: a.content,
+        },
+      };
+    case "delete_pi_prompt_template":
+      return {
+        method: "DELETE",
+        url: `/api/pi/prompt-templates/${enc(a.slug)}`,
+        body: { expectedRevision: a.expectedRevision },
+      };
+
     // ---------- OpenClaw config, workspace & daily memory (WEB-15) ----------
     // `open_workspace_directory` (file manager on the server) stays desktop-only: unmapped.
     case "import_openclaw_providers_from_live":

@@ -651,7 +651,7 @@ export interface LaunchInput {
   t: TFunction;
   providers: Provider[];
   openTerminal: (provider: Provider) => void;
-  /** WEB-00: терминал на сервере не открыть — текст причины (только в web), кнопка disabled — снимет WEB-17 */
+  /** WEB-00: терминал на сервере не открыть — текст причины (только в web), кнопка disabled — desktop-only (терминал на сервере не открыть) */
   terminalUnavailableReason?: string;
 }
 

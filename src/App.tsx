@@ -1127,12 +1127,12 @@ function App() {
     ) {
       let liveProviderIds: string[] = [];
       try {
-        // WEB-00: live-ids opencode/pi (get_*_live_provider_ids / get_*_current_state) не поддержаны. Шаг только
+        // WEB-00: live-ids opencode (get_opencode_live_provider_ids) не поддержаны. Шаг только
         // проверяет коллизию ключа копии с записями живого конфига; в web копия получает ключ,
         // свободный среди провайдеров БД (addToLive=false, в живой конфиг не пишется) — снимет WEB-14.
-        // Hermes (WEB-16) и openclaw (WEB-15) live-ids в web работают
+        // Hermes (WEB-16), openclaw (WEB-15) и pi/omp (WEB-17) live-ids в web работают
         liveProviderIds =
-          isWeb && activeApp !== "hermes" && activeApp !== "openclaw"
+          isWeb && activeApp === "opencode"
             ? []
             : activeApp === "opencode"
               ? await queryClient.ensureQueryData({

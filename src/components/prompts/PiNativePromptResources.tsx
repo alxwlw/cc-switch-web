@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
-import { isWeb } from "@/lib/api/adapter";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { HelpTip } from "@/components/ui/help-tip";
@@ -95,8 +94,6 @@ export function usePiPromptTemplatesQuery() {
   return useQuery({
     queryKey: promptTemplatesKey,
     queryFn: () => promptsApi.listPiPromptTemplates(),
-    // WEB-00: list_pi_prompt_templates не замаплен — в web не опрашиваем — снимет WEB-17
-    enabled: !isWeb,
   });
 }
 

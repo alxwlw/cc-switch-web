@@ -124,23 +124,25 @@ describe("Pi prompts page", () => {
     expect(screen.getByText("~/.pi/agent/prompts/")).toBeInTheDocument();
   });
 
-  it("web: only the library is offered, native system/template tabs are hidden and not queried", async () => {
+  it("web: system and templates tabs are offered and read through the native prompt APIs (WEB-17)", async () => {
     setWeb(true);
     renderWithClient(
       <PromptPanel appId="pi" apps={["claude", "pi"]} onAppChange={vi.fn()} />,
     );
 
     expect(
-      await screen.findByRole("button", { name: "prompts.add" }),
+      await screen.findByRole("button", { name: "pi.prompts.systemTab" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "pi.prompts.systemTab" }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "pi.prompts.templatesTab" }),
-    ).toBeNull();
-    expect(promptsApi.listPiPromptTemplates).not.toHaveBeenCalled();
-    expect(promptsApi.getPiPromptFile).not.toHaveBeenCalled();
+    fireEvent.click(
+      screen.getByRole("button", { name: "pi.prompts.templatesTab" }),
+    );
+    await waitFor(() =>
+      expect(promptsApi.listPiPromptTemplates).toHaveBeenCalled(),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "pi.prompts.systemTab" }),
+    );
+    await waitFor(() => expect(promptsApi.getPiPromptFile).toHaveBeenCalled());
   });
 
   it("locks navigation while a system prompt or template editor is saving", async () => {

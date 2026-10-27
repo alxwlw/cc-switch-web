@@ -222,14 +222,17 @@ describe("SessionManagerPage", () => {
     discovery.mockRestore();
   });
 
-  it("web: не зовёт get_pi_session_discovery для Pi", async () => {
+  it("web: зовёт get_pi_session_discovery для Pi (WEB-17)", async () => {
     setWeb(true);
-    const discovery = vi.spyOn(piApi, "getSessionDiscovery");
+    const discovery = vi.spyOn(piApi, "getSessionDiscovery").mockResolvedValue({
+      status: "requires_project_context",
+      configuredPath: ".pi/web-sessions",
+    });
 
     renderPage("pi");
-    await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(discovery).not.toHaveBeenCalled();
+    expect(await screen.findByText(".pi/web-sessions")).toBeInTheDocument();
+    expect(discovery).toHaveBeenCalledTimes(1);
     discovery.mockRestore();
   });
 

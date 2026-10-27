@@ -1,6 +1,5 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { piApi, type PiFamilyAppId } from "@/lib/api/pi";
-import { isWeb } from "@/lib/api/adapter";
 
 export const piKeys = {
   all: ["pi"] as const,
@@ -34,7 +33,6 @@ export function usePiCurrentState(enabled = true, app: PiFamilyAppId = "pi") {
   return useQuery({
     queryKey: [app, "currentState"],
     queryFn: () => piApi.getCurrentState(app),
-    // WEB-00: get_${app}_current_state не поддержан — снимет WEB-17
-    enabled: enabled && !isWeb,
+    enabled,
   });
 }

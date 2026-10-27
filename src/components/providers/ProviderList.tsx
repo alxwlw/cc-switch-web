@@ -350,7 +350,7 @@ export function ProviderList({
         t,
         providers: filteredProviders,
         openTerminal: (provider) => onOpenTerminal?.(provider),
-        // WEB-00: open_provider_terminal не поддержан — снимет WEB-17
+        // WEB-00: open_provider_terminal: desktop-only (терминал на сервере не открыть)
         terminalUnavailableReason: isWeb ? t("web.unavailable") : undefined,
       });
     }
