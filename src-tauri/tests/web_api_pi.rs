@@ -290,3 +290,44 @@ async fn usage_script_is_saved_on_provider_and_app_is_checked() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{resp}");
 }
+
+#[tokio::test]
+#[serial]
+async fn pi_current_state_reports_native_providers_and_default() {
+    let (router, _state, pi) = fresh();
+    fs::write(
+        pi.join("models.json"),
+        r#"{"providers":{"managed":{"name":"Managed","baseUrl":"https://api.example.com/v1","api":"openai-completions","models":[{"id":"model-a"}]},"second":{"baseUrl":"https://b.example.com/v1","api":"openai-completions","models":[{"id":"model-b"}]}}}"#,
+    )
+    .unwrap();
+    fs::write(
+        pi.join("settings.json"),
+        r#"{"defaultProvider":"second","defaultModel":"model-b"}"#,
+    )
+    .unwrap();
+
+    let state = data(&router, "GET", "/api/pi/current-state", None).await;
+    assert_eq!(
+        state["enabledProviderIds"],
+        json!(["managed", "second"]),
+        "{state}"
+    );
+    assert_eq!(state["defaultProviderId"], json!("second"), "{state}");
+}
+
+#[tokio::test]
+#[serial]
+async fn non_conflict_service_error_maps_to_500() {
+    let (router, _state, pi) = fresh();
+    let (status, resp) = web_call(
+        &router,
+        "PUT",
+        "/api/pi/prompt-templates/BAD%20SLUG",
+        Some(json!({ "originalSlug": null, "expectedRevision": "missing", "content": "x" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{resp}");
+    assert_eq!(resp["ok"], json!(false), "{resp}");
+    assert!(resp["error"].is_string(), "{resp}");
+    assert!(!pi.join("prompts").join("BAD SLUG.md").exists());
+}
