@@ -224,3 +224,62 @@ fn bootstrap_completes_a_half_written_client_file_from_live_state() {
         "intent cleared: {state}"
     );
 }
+
+fn backup_dbs(home: &std::path::Path) -> Vec<std::path::PathBuf> {
+    std::fs::read_dir(home.join(".cc-switch").join("backups"))
+        .map(|rd| {
+            rd.filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|x| x == "db"))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn periodic_backup_worker_creates_a_backup_on_startup() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let home = ensure_test_home();
+    let boot = run_headless_bootstrap().expect("bootstrap on empty HOME");
+    let _ = std::fs::remove_dir_all(home.join(".cc-switch").join("backups"));
+    assert!(backup_dbs(home).is_empty());
+
+    let handle = cc_switch_lib::bootstrap::spawn_periodic_backup_worker(boot.state.db.clone());
+    let mut found = false;
+    for _ in 0..100 {
+        if !backup_dbs(home).is_empty() {
+            found = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    handle.abort();
+    assert!(
+        found,
+        "worker must write a backup .db into <config>/backups"
+    );
+}
+
+#[tokio::test]
+async fn periodic_backup_worker_is_silent_when_interval_is_zero() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let home = ensure_test_home();
+    let boot = run_headless_bootstrap().expect("bootstrap on empty HOME");
+    let _ = std::fs::remove_dir_all(home.join(".cc-switch").join("backups"));
+    cc_switch_lib::update_settings(cc_switch_lib::AppSettings {
+        backup_interval_hours: Some(0),
+        ..Default::default()
+    })
+    .expect("disable auto backup");
+
+    let handle = cc_switch_lib::bootstrap::spawn_periodic_backup_worker(boot.state.db.clone());
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    handle.abort();
+    assert!(
+        backup_dbs(home).is_empty(),
+        "interval 0 must not create backups"
+    );
+    let _ = cc_switch_lib::update_settings(cc_switch_lib::AppSettings::default());
+}
