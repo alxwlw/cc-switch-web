@@ -53,6 +53,10 @@ Scope: `src-tauri/src/commands/import_export.rs:19-26` (restore-lock → `pub(cr
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-27**: PR #19 merged `976ea1b9` → main; live на `cc-switch-web.service`.
+  - Server и `dist-web` пересобраны из main. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p18-20261027-153133/`. Миграций нет.
+  - Проверено: `/api/health`, `/api/backups`, `/api/backup-locations` → 200; `POST /api/backups/..%2Fx.db/restore` → 400; воркер создал стартовый backup `db_backup_20261027_153133.db`; отдаваемый `index.html` совпадает со сборкой.
+  - DX-68 Done (комментарий со ссылками file:line). Замечено вне фазы: location `liveFirstWrite` указывает в `~/.cc-switch/backups/live-first-write`, а не в `CC_SWITCH_CONFIG_DIR` (`~/.cc-switch-web`) — так было и до фазы 18.
 - **Статус до merge (2026-10-27)**: ветка `web-parity/web-10-db-backups` (worktree `.worktrees/web-10`), PR #19 (https://github.com/alxwlw/cc-switch-web/pull/19) открыт; DX-68 In Review (комментарий со ссылкой). Ветка также несёт закрытие фазы 17 в плане (`6180462f`).
   - Финальные гейты на `5f6c73c1`: fmt/clippy (lib + example) чисто; `cargo test --no-fail-fast` 4403 passed / 1 failed (baseline omp_search_paths); `cargo build --release --example server` ок; `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок; `test:unit` 3782 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice).
   - Т1, Т2, Т3 одобрены с r0, без SHOULD-FIX. NIT Т1 DP-021 (doc lock-а) и NIT Т2 DP-021/DP-011 (doc возвращаемого значения restore, имя конкурентного теста) закрыты в Т2/Т3. Приняты как есть: DP-018 (лог-ветки `round()` воркера без теста), DP-050 (500 мс негативное ожидание в `tests/bootstrap.rs` zero-interval: детерминированное ожидание требует production-hook).
