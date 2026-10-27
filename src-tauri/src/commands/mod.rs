@@ -19,7 +19,7 @@ mod mcp;
 pub(crate) mod misc;
 mod model_fetch;
 mod omo;
-mod omp;
+pub(crate) mod omp;
 mod openclaw;
 mod pi;
 mod plugin;
