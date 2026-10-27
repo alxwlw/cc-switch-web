@@ -171,13 +171,12 @@ export function ProviderList({
   // 累加式应用要等 live 里有哪些供应商读回来（成功或失败）才知道卡片该进哪个分区；
   // 在那之前按加载中画骨架，不然卡片先全落进「可添加」，读回来再整体搬到「已添加」。
   // 一张卡都没有时不用等，直接出空状态
-  // WEB-00: в web opencode/pi-запросы выключены и вечно pending — скелетон не рисуем — снимет WEB-14
+  // WEB-00: в web opencode-запрос выключен и вечно pending — скелетон не рисуем — снимет WEB-14
   const isLiveMembershipPending =
     (appId === "hermes" && isHermesLiveIdsPending) ||
     (appId === "openclaw" && isOpenclawLiveIdsPending) ||
-    (!isWeb &&
-      ((appId === "opencode" && isOpencodeLiveIdsPending) ||
-        (isPiFamilyApp(appId) && isPiCurrentStatePending)));
+    (!isWeb && appId === "opencode" && isOpencodeLiveIdsPending) ||
+    (isPiFamilyApp(appId) && isPiCurrentStatePending);
 
   const isInConfig = useCallback(
     (provider: Provider): boolean => {
