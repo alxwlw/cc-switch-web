@@ -801,6 +801,40 @@ fn record_init_error(paths: &BootstrapPaths, err: &BootstrapError) {
     });
 }
 
+/// Periodic maintenance interval (also the auto-backup check cadence).
+const PERIODIC_MAINTENANCE_INTERVAL_SECS: u64 = 24 * 60 * 60;
+
+/// Shared periodic-backup worker (desktop `lib.rs` and headless server): one
+/// `periodic_backup_if_needed` round at start, then one every 24 h (the first
+/// interval tick is skipped, the startup round covers it). The blocking call
+/// goes through `spawn_blocking`; failures are only logged.
+pub async fn run_periodic_backup_worker(db: Arc<Database>) {
+    async fn round(db: &Arc<Database>, what: &str) {
+        let db = Arc::clone(db);
+        match tokio::task::spawn_blocking(move || db.periodic_backup_if_needed()).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => log::warn!("Periodic backup failed ({what}): {e}"),
+            Err(e) => log::warn!("Periodic backup task aborted ({what}): {e}"),
+        }
+    }
+
+    round(&db, "startup").await;
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(
+        PERIODIC_MAINTENANCE_INTERVAL_SECS,
+    ));
+    interval.tick().await; // first tick is immediate; startup round already ran
+    loop {
+        interval.tick().await;
+        round(&db, "timer").await;
+    }
+}
+
+/// Headless entry for [`run_periodic_backup_worker`]. Needs a running tokio
+/// runtime; the returned handle lets the caller abort it.
+pub fn spawn_periodic_backup_worker(db: Arc<Database>) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(run_periodic_backup_worker(db))
+}
+
 /// Headless counterpart of the desktop session-usage worker (`lib.rs` setup):
 /// one startup round (cost backfill + scan), then a scan every ten minutes.
 /// Needs a running tokio runtime; the returned handle lets the caller abort it.

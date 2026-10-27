@@ -13,7 +13,7 @@ mod env;
 mod failover;
 mod global_proxy;
 mod hermes;
-mod import_export;
+pub(crate) mod import_export;
 mod kimi_oauth;
 mod mcp;
 pub(crate) mod misc;

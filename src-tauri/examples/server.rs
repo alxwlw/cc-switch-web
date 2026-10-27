@@ -85,6 +85,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let state = Arc::new(boot.state);
             // Same background session-usage scan as the desktop app.
             cc_switch_lib::bootstrap::spawn_session_usage_worker(state.db.clone());
+            // Same periodic DB backup (startup check + daily) as the desktop app.
+            cc_switch_lib::bootstrap::spawn_periodic_backup_worker(state.db.clone());
             web_api::router(state)
         }
         Err(e) => {

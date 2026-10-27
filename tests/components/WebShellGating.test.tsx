@@ -316,12 +316,16 @@ describe("SettingsPage · WEB-00", () => {
     expect(screen.queryByText("rectifier-block")).toBeNull();
   });
 
-  it("web: data shows only the log block and its button opens the server log viewer", async () => {
+  it("web: data shows backups and the log block; location, import/export and cloud sync stay hidden", async () => {
     setWeb(true);
     renderPage("data");
     expect(screen.getByText("log-config-panel")).toBeInTheDocument();
+    expect(screen.getByText("backup-list-section")).toBeInTheDocument();
+    expect(
+      screen.getByText("settings.advanced.backup.title"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("settings.data.location")).toBeNull();
     expect(screen.queryByText("import-export-section")).toBeNull();
-    expect(screen.queryByText("backup-list-section")).toBeNull();
     expect(screen.queryByText("webdav-section")).toBeNull();
     expect(screen.queryByText("server-log-viewer")).toBeNull();
     await userEvent.click(
@@ -335,6 +339,9 @@ describe("SettingsPage · WEB-00", () => {
   it("desktop: data shows import/export and the log button reveals the file", async () => {
     renderPage("data");
     expect(screen.getByText("import-export-section")).toBeInTheDocument();
+    expect(screen.getByText("backup-list-section")).toBeInTheDocument();
+    expect(screen.getByText("webdav-section")).toBeInTheDocument();
+    expect(screen.getByText("settings.data.location")).toBeInTheDocument();
     await userEvent.click(
       screen.getByRole("button", {
         name: "settings.advanced.logConfig.openLog",

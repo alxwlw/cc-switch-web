@@ -47,3 +47,4 @@ Scope: `src-tauri/src/services/proxy.rs` (emit/tray без AppHandle), `src-taur
 ## Notes for next phase
 
 - (заполнить по итогам)
+- Риск из фазы 18 (WEB-10): restore DB-backup-а (`POST /api/backups/:filename/restore`, `restore_db_backup_file`) меняет DB под работающим proxy/takeover. Поведение должно совпадать с desktop — проверить тестом или явной заметкой при реализации lifecycle proxy.

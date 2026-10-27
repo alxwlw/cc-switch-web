@@ -970,26 +970,10 @@ pub fn run() {
                     state.inner().clone(),
                 );
 
-                // Periodic backup check (on startup)
-                if let Err(e) = state.db.periodic_backup_if_needed() {
-                    log::warn!("Periodic backup failed on startup: {e}");
-                }
-
-                // Periodic maintenance timer: run once per day while the app is running
-                let db_for_timer = state.db.clone();
-                tauri::async_runtime::spawn(async move {
-                    const PERIODIC_MAINTENANCE_INTERVAL_SECS: u64 = 24 * 60 * 60;
-                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(
-                        PERIODIC_MAINTENANCE_INTERVAL_SECS,
-                    ));
-                    interval.tick().await; // skip immediate first tick (already checked above)
-                    loop {
-                        interval.tick().await;
-                        if let Err(e) = db_for_timer.periodic_backup_if_needed() {
-                            log::warn!("Periodic maintenance timer failed: {e}");
-                        }
-                    }
-                });
+                // Periodic backup: startup check, then once per day (shared with headless)
+                tauri::async_runtime::spawn(crate::bootstrap::run_periodic_backup_worker(
+                    state.db.clone(),
+                ));
 
                 // Session log usage sync: 启动时同步一次，之后每 10 分钟兜底一次（防 CLI 清理旧会话
                 // 文件前漏导入）；用量页打开时由前端按所选间隔加扫
