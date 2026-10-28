@@ -32,8 +32,8 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 16 — WEB-15 / DX-73: OpenClaw config, workspace и memory](2026-10-25-web-parity-m5/phase-16.md) — PR #17, merged `543a90de` → main 2026-10-27, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-73 Done.
 - [x] [Phase 17 — WEB-17 / DX-75: Pi / Oh My Pi state, sessions и prompts](2026-10-25-web-parity-m5/phase-17.md) — PR #18, merged `ede8b84a` → main 2026-10-27, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-75 Done.
 - [x] [Phase 18 — WEB-10 / DX-68: DB backups и restore](2026-10-25-web-parity-m5/phase-18.md) — PR #19, merged `976ea1b9` → main 2026-10-27, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-68 Done.
-- [ ] [Phase 19 — WEB-09 / DX-67: import/export конфигурации и sync live](2026-10-25-web-parity-m5/phase-19.md) — PR #20 открыт (ветка `web-parity/web-09-import-export`), DX-67 In Review.
-- [ ] [Phase 20 — WEB-27 / DX-85: deep-link config import через paste/upload](2026-10-25-web-parity-m5/phase-20.md)
+- [x] [Phase 19 — WEB-09 / DX-67: import/export конфигурации и sync live](2026-10-25-web-parity-m5/phase-19.md) — PR #20, merged `159fc34f` → main 2026-10-27, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-67 Done.
+- [ ] [Phase 20 — WEB-27 / DX-85: deep-link config import через paste/upload](2026-10-25-web-parity-m5/phase-20.md) — в работе (ветка `web-parity/web-27-deeplink-paste`).
 - [ ] [Phase 21 — WEB-13 / DX-71: Sessions images, Markdown export и streaming](2026-10-25-web-parity-m5/phase-21.md)
 - [ ] [Phase 22 — WEB-25 / DX-83: install/update/uninstall CLI на Apps page](2026-10-25-web-parity-m5/phase-22.md)
 - [ ] [Phase 23 — WEB-05 / DX-63: Skills discovery, install/update, репозитории и backups](2026-10-25-web-parity-m5/phase-23.md)
