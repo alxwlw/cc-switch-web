@@ -380,6 +380,11 @@ pub fn router(state: SharedState) -> Router {
             post(config_import).layer(DefaultBodyLimit::max(CONFIG_IMPORT_BODY_LIMIT)),
         )
         .route("/api/providers/sync-live", post(providers_sync_live))
+        // Deep-link paste/upload import (WEB-27)
+        .route("/api/deeplink/parse", post(deeplink_parse))
+        .route("/api/deeplink/merge", post(deeplink_merge))
+        .route("/api/deeplink/icon", post(deeplink_icon))
+        .route("/api/deeplink/import", post(deeplink_import))
         .with_state(state)
 }
 
@@ -2864,4 +2869,72 @@ async fn providers_sync_live(State(state): State<SharedState>) -> ApiResult {
     backup_result(
         crate::commands::import_export::sync_current_providers_live_core(state.db.clone()).await,
     )
+}
+
+// ---------- deep link paste/upload (WEB-27) ----------
+
+/// Pulls a required string field out of a JSON body; a missing/non-string one is a 400.
+fn body_str(body: &Value, field: &str) -> Result<String, ApiResult> {
+    body.get(field)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| bad_request(format!("{field} is required")))
+}
+
+/// Pulls and deserializes the `request` field of a deep link body; missing or malformed is a 400.
+fn body_deeplink_request(
+    body: &Value,
+) -> Result<crate::deeplink::DeepLinkImportRequest, ApiResult> {
+    let raw = body
+        .get("request")
+        .ok_or_else(|| bad_request("request is required"))?;
+    serde_json::from_value(raw.clone()).map_err(|e| bad_request(format!("invalid request: {e}")))
+}
+
+async fn deeplink_parse(Json(body): Json<Value>) -> ApiResult {
+    let url = match body_str(&body, "url") {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
+    match crate::commands::parse_deeplink(url) {
+        Ok(req) => ok(req),
+        Err(e) => fail(e),
+    }
+}
+
+async fn deeplink_merge(Json(body): Json<Value>) -> ApiResult {
+    let request = match body_deeplink_request(&body) {
+        Ok(r) => r,
+        Err(r) => return r,
+    };
+    match crate::commands::merge_deeplink_config(request) {
+        Ok(req) => ok(req),
+        Err(e) => fail(e),
+    }
+}
+
+/// Server-side fetch of the link's `iconUrl`; `icon_fetch` enforces https, public
+/// IPs only, pinned DNS, redirect re-checks, size and time caps. Any failure is `null`.
+async fn deeplink_icon(Json(body): Json<Value>) -> ApiResult {
+    let url = match body_str(&body, "url") {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
+    ok(crate::commands::fetch_deeplink_icon(url).await)
+}
+
+async fn deeplink_import(State(state): State<SharedState>, Json(body): Json<Value>) -> ApiResult {
+    let request = match body_deeplink_request(&body) {
+        Ok(r) => r,
+        Err(r) => return r,
+    };
+    match tokio::task::spawn_blocking(move || {
+        crate::commands::import_deeplink_unified(&state, request)
+    })
+    .await
+    {
+        Ok(Ok(v)) => ok(v),
+        Ok(Err(e)) => fail(e),
+        Err(e) => fail(format!("deeplink import task failed: {e}")),
+    }
 }
