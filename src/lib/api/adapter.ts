@@ -751,17 +751,6 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
           wslShellByTool: a.wslShellByTool ?? null,
         },
       };
-    case "run_tool_lifecycle_action":
-      return {
-        method: "POST",
-        url: "/api/tools/lifecycle",
-        body: {
-          tools: a.tools,
-          action: a.action,
-          wslShellByTool: a.wslShellByTool ?? null,
-          uninstallPlan: a.uninstallPlan ?? null,
-        },
-      };
     case "prepare_tool_uninstall":
       return {
         method: "POST",
@@ -956,6 +945,81 @@ async function streamSessionMessages(args: Args): Promise<void> {
   deliver(tail);
 }
 
+const TOOL_POLL_INTERVAL_MS = 2000;
+const TOOL_POLL_CAP_MS = 20 * 60 * 1000;
+
+/**
+ * `run_tool_lifecycle_action`: an install can outlast what a browser keeps one request
+ * open for, so the server runs it as a job. Start with `POST /api/tools/lifecycle`, then
+ * poll `GET /api/tools/lifecycle/:jobId` every 2 s. Command errors surface verbatim
+ * (`TOOL_ACTION_*` included); network errors while polling are retried (a sleeping phone,
+ * a background tab); a 404 means the server lost the job.
+ */
+async function runToolLifecycleAction(args: Args): Promise<void> {
+  const startUrl = "/api/tools/lifecycle";
+  let res: Response;
+  try {
+    res = await fetch(startUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tools: args.tools,
+        action: args.action,
+        wslShellByTool: args.wslShellByTool ?? null,
+        uninstallPlan: args.uninstallPlan ?? null,
+      }),
+    });
+  } catch (e) {
+    throw new Error(`Web API недоступно (POST ${startUrl}): ${String(e)}`);
+  }
+  let started: any = null;
+  try {
+    started = await res.json();
+  } catch {
+    throw new Error(`Web API вернул не-JSON (${res.status} ${startUrl})`);
+  }
+  if (!started || started.ok !== true || !started.data?.jobId) {
+    throw new Error(
+      started?.error ?? "Web API ошибка (run_tool_lifecycle_action)",
+    );
+  }
+  const statusUrl = `${startUrl}/${encodeURIComponent(started.data.jobId)}`;
+  const deadline = Date.now() + TOOL_POLL_CAP_MS;
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, TOOL_POLL_INTERVAL_MS));
+    if (Date.now() >= deadline) {
+      throw new Error(
+        "The operation is taking too long; it may still be running on the server. Re-check installations later.",
+      );
+    }
+    let poll: Response;
+    try {
+      poll = await fetch(statusUrl, { method: "GET" });
+    } catch {
+      continue;
+    }
+    if (poll.status === 404) {
+      throw new Error(
+        "The server lost track of this operation (it may have restarted). Re-check installations.",
+      );
+    }
+    if (!poll.ok) continue;
+    let payload: any;
+    try {
+      payload = await poll.json();
+    } catch {
+      continue;
+    }
+    const state = payload?.data?.state;
+    if (state === "done") return;
+    if (state === "failed") {
+      throw new Error(
+        payload.data.error ?? "Web API ошибка (run_tool_lifecycle_action)",
+      );
+    }
+  }
+}
+
 /** Drop-in replacement for Tauri's `invoke` used by every `src/lib/api/*` module. */
 export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
   // Silent local noops: desktop-only fire-and-forget calls that must not
@@ -978,6 +1042,9 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
   }
   if (cmd === "stream_session_messages") {
     return (await streamSessionMessages(args)) as T;
+  }
+  if (cmd === "run_tool_lifecycle_action") {
+    return (await runToolLifecycleAction(args)) as T;
   }
   if (cmd === "export_session_markdown") {
     downloadText(args.defaultName, args.content, "text/markdown;charset=utf-8");

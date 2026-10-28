@@ -2117,7 +2117,7 @@ async fn tool_lifecycle(Json(body): Json<ToolLifecycleReq>) -> ApiResult {
         let mut jobs = tool_jobs();
         jobs.retain(|_, j| {
             j.finished_at
-                .map_or(true, |t| t.elapsed() < TOOL_JOB_RETENTION)
+                .is_none_or(|t| t.elapsed() < TOOL_JOB_RETENTION)
         });
         jobs.insert(
             job_id.clone(),
