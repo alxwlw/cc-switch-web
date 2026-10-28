@@ -29,7 +29,13 @@ Scope: `src-tauri/src/commands/misc.rs:~395-440` (spawn с дедлайном), 
 - [ ] Тесты: `tests/lib/toolsApi.test.ts`; `useToolManagement` — install проходит через adapter, timeout-ошибка показывает текст.
 - [ ] Снять WEB-00-гейты с install/update/uninstall (таблица фазы 6).
 
-### Task 4: гейты, PR, Plane
+### Task 4: lifecycle через start + poll
+Добавлена 2026-10-29 по решению владельца. Один HTTP-запрос на всю операцию (до 15 мин) обрывает браузер: по отчётам Safari на iOS режет запрос без ответа примерно через 60 с, у Firefox `network.http.response.timeout` равен 300 с. Сервер при этом доводит операцию до конца, а UI показывает «Web API недоступно».
+- [ ] Backend: `POST /api/tools/lifecycle` запускает операцию в фоне (`tokio::spawn`) и сразу отвечает `{jobId}`. `GET /api/tools/lifecycle/{jobId}` → `{state: "running" | "done" | "failed", error?}`; неизвестный id → 404. Реестр задач в памяти; завершённые старше часа удаляются при создании новой.
+- [ ] Adapter: `run_tool_lifecycle_action` — special-case до `mapCommand`. Старт, затем опрос каждые 2 с. Сетевой сбой при опросе не прерывает ожидание (iPhone засыпает, вкладка уходит в фон). `failed` → `Error(error)` дословно, `done` → resolve, 404 → понятная ошибка, общий предел ожидания больше 15 мин.
+- [ ] Тесты: `web_api_tools.rs` и `tests/lib/toolsApi.test.ts` переводятся на старт + опрос.
+
+### Task 5: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server`; на agentbox — update одного реального CLI из web.
 - [ ] Ветка `web-parity/web-25-cli-lifecycle`, PR; DX-83 → In Review + ссылка. Закрыть чекбоксы, Notes.
 
