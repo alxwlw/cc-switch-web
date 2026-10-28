@@ -6,6 +6,7 @@ import { DeepLinkImportDialog } from "@/components/DeepLinkImportDialog";
 import { DeepLinkPasteEntry } from "@/components/deeplink/DeepLinkPasteEntry";
 import { deeplinkApi } from "@/lib/api/deeplink";
 import { DEEPLINK_FILE_LIMIT_BYTES, extractDeepLink } from "@/lib/deeplinkOpen";
+import { toast } from "@/lib/toast";
 import { setWeb } from "../helpers/web";
 
 vi.mock("@/components/ui/dialog", () => ({
@@ -113,6 +114,26 @@ describe("DeepLinkPasteEntry (web)", () => {
     );
     expect(await screen.findByText("Merged Provider")).toBeInTheDocument();
     expect(merge).toHaveBeenCalledWith(withConfig);
+  });
+
+  it("falls back to the unmerged request and toasts when the merge fails", async () => {
+    const withConfig = { ...request, config: "e30=" };
+    vi.spyOn(deeplinkApi, "parseDeeplink").mockResolvedValue(withConfig);
+    vi.spyOn(deeplinkApi, "mergeDeeplinkConfig").mockRejectedValue(
+      new Error("config is not valid base64"),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const toastError = vi.spyOn(toast, "error");
+    mount();
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("textbox"), LINK);
+    await user.click(
+      screen.getByRole("button", { name: "deeplink.paste.open" }),
+    );
+    expect(await screen.findByText("Pasted Provider")).toBeInTheDocument();
+    expect(toastError).toHaveBeenCalledWith("deeplink.configMergeError", {
+      description: "config is not valid base64",
+    });
   });
 
   it("shows the parser error inline and opens no dialog", async () => {
