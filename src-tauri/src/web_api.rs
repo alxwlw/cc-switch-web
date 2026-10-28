@@ -190,6 +190,8 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/sessions", get(list_sessions).delete(delete_sessions))
         .route("/api/sessions/one", delete(delete_session))
         .route("/api/sessions/messages", get(session_messages))
+        .route("/api/sessions/stream", get(session_stream))
+        .route("/api/sessions/image", post(session_image))
         .route("/api/sessions/block", post(session_block))
         // usage
         .route("/api/usage/summary", get(usage_summary))
@@ -1429,6 +1431,89 @@ async fn session_messages(Query(q): Query<SessionMessagesQuery>) -> ApiResult {
         Ok(Ok(messages)) => ok(messages),
         Ok(Err(e)) => fail(e.to_string()),
         Err(e) => fail(format!("load transcript failed: {e}")),
+    }
+}
+
+/// NDJSON line (`\n`-terminated) for one transcript chunk.
+fn chunk_line(
+    chunk: &session_manager::model::TranscriptChunk,
+) -> Result<axum::body::Bytes, std::io::Error> {
+    let mut line = serde_json::to_vec(chunk).map_err(std::io::Error::other)?;
+    line.push(b'\n');
+    Ok(axum::body::Bytes::from(line))
+}
+
+/// `stream_session_messages` over HTTP: one serialized `TranscriptChunk` per line.
+/// A load failure is a single `error` line (desktop sends an Error chunk, then ends).
+async fn session_stream(Query(q): Query<SessionMessagesQuery>) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let provider_id = q.provider_id;
+    let source_path = q.source_path;
+    let loaded = tokio::task::spawn_blocking(move || {
+        session_manager::load_transcript(&provider_id, &source_path)
+    })
+    .await;
+    let chunks: Box<dyn Iterator<Item = session_manager::model::TranscriptChunk> + Send> =
+        match loaded {
+            Ok(Ok(loaded)) => Box::new(session_manager::transcript_chunks(&loaded)),
+            Ok(Err(message)) => Box::new(std::iter::once(
+                session_manager::model::TranscriptChunk::Error { message },
+            )),
+            Err(e) => Box::new(std::iter::once(
+                session_manager::model::TranscriptChunk::Error {
+                    message: format!("load transcript failed: {e}"),
+                },
+            )),
+        };
+    let stream = futures::stream::iter(chunks.map(|chunk| chunk_line(&chunk)));
+    (
+        [(header::CONTENT_TYPE, "application/x-ndjson")],
+        axum::body::Body::from_stream(stream),
+    )
+        .into_response()
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionImageReq {
+    provider_id: String,
+    source_path: String,
+    image: session_manager::model::ImageRef,
+}
+
+/// `get_session_image` over HTTP: raw bytes, typed by the image's media type.
+async fn session_image(Json(body): Json<SessionImageReq>) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let SessionImageReq {
+        provider_id,
+        source_path,
+        image,
+    } = body;
+    let media_type = image.media_type.clone();
+    let loaded = tokio::task::spawn_blocking(move || {
+        let source = session_manager::content::validate_source(&provider_id, &source_path)?;
+        session_manager::content::load_image(&source, &image)
+    })
+    .await;
+    match loaded {
+        Ok(Ok(bytes)) => {
+            // The type comes from session data: only `image/*` is passed through.
+            let content_type = if media_type.starts_with("image/") {
+                media_type
+            } else {
+                "application/octet-stream".to_string()
+            };
+            (
+                [
+                    (header::CONTENT_TYPE, content_type),
+                    (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_string()),
+                ],
+                bytes,
+            )
+                .into_response()
+        }
+        Ok(Err(e)) => fail(e).into_response(),
+        Err(e) => fail(format!("load image failed: {e}")).into_response(),
     }
 }
 
