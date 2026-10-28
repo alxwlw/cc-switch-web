@@ -100,6 +100,30 @@ describe("DeepLinkPasteEntry (web)", () => {
     expect(await screen.findByText("Pasted Provider")).toBeInTheDocument();
   });
 
+  it("starts with the activation switch from the link and closes after a successful import", async () => {
+    vi.spyOn(deeplinkApi, "parseDeeplink").mockResolvedValue({
+      ...request,
+      enabled: true,
+    });
+    const importLink = vi
+      .spyOn(deeplinkApi, "importFromDeeplink")
+      .mockResolvedValue({ type: "provider", id: "p1" });
+    mount();
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("textbox"), LINK);
+    await user.click(
+      screen.getByRole("button", { name: "deeplink.paste.open" }),
+    );
+    const activate = await screen.findByRole("switch");
+    expect(activate).toBeChecked();
+    expect(isOpen()).toBe("true");
+    await user.click(screen.getByRole("button", { name: "deeplink.import" }));
+    await waitFor(() => expect(isOpen()).toBe("false"));
+    expect(importLink).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Pasted Provider", enabled: true }),
+    );
+  });
+
   it("merges the config of a pasted link before showing it", async () => {
     const withConfig = { ...request, config: "e30=" };
     vi.spyOn(deeplinkApi, "parseDeeplink").mockResolvedValue(withConfig);
