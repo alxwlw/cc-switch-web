@@ -171,6 +171,23 @@ describe("adapter · session media (WEB-13)", () => {
       ).rejects.toThrow(/offline/);
       expect(onmessage).not.toHaveBeenCalled();
     });
+
+    it("a 500 with a valid JSON error line is not streamed (status checked, not just the body)", async () => {
+      const onmessage = vi.fn();
+      fetchSpy.mockResolvedValueOnce({
+        ...streamOf([enc.encode('{"ok":false,"error":"x"}\n')]),
+        ok: false,
+        status: 500,
+      });
+      await expect(
+        invoke("stream_session_messages", {
+          providerId: "p",
+          sourcePath: "s",
+          onChunk: { onmessage },
+        }),
+      ).rejects.toThrow(/500/);
+      expect(onmessage).not.toHaveBeenCalled();
+    });
   });
 
   describe("export_session_markdown", () => {
