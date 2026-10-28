@@ -38,6 +38,7 @@ fn fake_claude(version: &str) -> PathBuf {
     let dir = ensure_test_home().join(".local/bin");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("claude");
+    let _ = std::fs::remove_file(&path);
     std::fs::write(
         &path,
         format!("#!/bin/sh\necho \"{version} (Claude Code)\"\n"),
@@ -225,4 +226,114 @@ async fn uninstall_preview_offers_a_plan_for_the_fake_claude() {
         ours["plan"].is_object() != ours["unavailable_reason"].is_string(),
         "{ours}"
     );
+}
+
+fn uninstall_body(plan: Value) -> Value {
+    json!({"tools": ["claude"], "action": "uninstall", "uninstallPlan": plan})
+}
+
+fn plan_for(tool: &str, path: &str, command: &str) -> Value {
+    json!({
+        "tool": tool, "path": path, "real_path": path, "command": command,
+        "native": false, "wsl_distro": null,
+    })
+}
+
+#[tokio::test]
+#[serial]
+async fn uninstall_plan_for_another_tool_is_refused() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let router = web_router();
+
+    let (status, body) = web_call(
+        &router,
+        "POST",
+        LIFECYCLE,
+        Some(uninstall_body(plan_for("codex", "/x", "true"))),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(
+        body["error"],
+        json!("The uninstall plan does not match the selected tool.")
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn uninstall_plan_for_a_missing_installation_is_refused() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let router = web_router();
+    let missing = ensure_test_home().join("no-such-dir/claude");
+
+    let (status, body) = web_call(
+        &router,
+        "POST",
+        LIFECYCLE,
+        Some(uninstall_body(plan_for(
+            "claude",
+            &missing.to_string_lossy(),
+            "true",
+        ))),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("Installation changed since the uninstall preview"),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn tampered_uninstall_command_is_rederived_and_never_executed() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    // Shaped like the native installer (ELF behind a symlink into share/claude/versions)
+    // so a plan is offered. The ELF is a copy of /bin/true, only probed with --version.
+    let home = ensure_test_home();
+    let versions = home.join(".local/share/claude/versions");
+    std::fs::create_dir_all(&versions).unwrap();
+    let real = versions.join("7.8.9");
+    let _ = std::fs::remove_file(&real);
+    std::fs::copy("/bin/true", &real).unwrap();
+    let stub = home.join(".local/bin/claude");
+    std::fs::create_dir_all(stub.parent().unwrap()).unwrap();
+    let _ = std::fs::remove_file(&stub);
+    std::os::unix::fs::symlink(&real, &stub).unwrap();
+    let fake = stub;
+    let marker = home.join("tampered-ran");
+    let _ = std::fs::remove_file(&marker);
+    let router = web_router();
+
+    let (_, preview) = web_call(&router, "POST", PREVIEW, Some(json!({"tool": "claude"}))).await;
+    let mut plan = preview["data"]
+        .as_array()
+        .and_then(|c| {
+            c.iter()
+                .find(|c| c["path"] == json!(fake.to_string_lossy()))
+        })
+        .and_then(|c| c.get("plan").cloned())
+        .filter(Value::is_object)
+        .unwrap_or_else(|| panic!("no plan offered for the fake claude: {preview}"));
+    plan["command"] = json!(format!("touch '{}'", marker.display()));
+
+    let (status, body) = web_call(&router, "POST", LIFECYCLE, Some(uninstall_body(plan))).await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("Installation changed since the uninstall preview"),
+        "{body}"
+    );
+    assert!(!marker.exists(), "the client-supplied command ran");
 }
