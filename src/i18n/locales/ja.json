@@ -3488,6 +3488,15 @@
     "updatesIncomplete": "更新は見つかりませんでしたが、{{count}} 個のリポジトリを読み込めませんでした"
   },
   "deeplink": {
+    "paste": {
+      "title": "ccswitch:// リンクからインポート",
+      "placeholder": "ccswitch://… リンクを貼り付け",
+      "open": "開く",
+      "upload": "ファイルを選択",
+      "noLink": "ccswitch:// リンクが見つかりません。",
+      "fileTooLarge": "ファイルが大きすぎます（上限 {{limit}} KiB）。",
+      "fileReadFailed": "ファイルを読み込めませんでした。"
+    },
     "confirmImport": "プロバイダーのインポートを確認",
     "confirmImportDescription": "次の設定をディープリンクから CC Switch へインポートします",
     "importPrompt": "プロンプトをインポート",

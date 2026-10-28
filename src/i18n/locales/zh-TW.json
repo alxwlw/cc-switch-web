@@ -3489,6 +3489,15 @@
     "updatesIncomplete": "沒有發現更新，但有 {{count}} 個倉庫沒有讀到"
   },
   "deeplink": {
+    "paste": {
+      "title": "從 ccswitch:// 連結匯入",
+      "placeholder": "貼上 ccswitch://… 連結",
+      "open": "開啟",
+      "upload": "選擇檔案",
+      "noLink": "找不到 ccswitch:// 連結。",
+      "fileTooLarge": "檔案過大，不是有效的深層連結檔案（上限 {{limit}} KiB）。",
+      "fileReadFailed": "無法讀取該檔案。"
+    },
     "confirmImport": "確認匯入供應商設定",
     "confirmImportDescription": "以下設定將匯入至 CC Switch",
     "importPrompt": "匯入提示詞",

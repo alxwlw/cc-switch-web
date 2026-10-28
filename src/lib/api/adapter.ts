@@ -596,6 +596,33 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "sync_current_providers_live":
       return { method: "POST", url: "/api/providers/sync-live" };
 
+    // ---------- Deep-link import via paste/upload (WEB-27) ----------
+    // OS registration of ccswitch:// and the pending queue stay desktop-only (peek/ack are silent no-ops below).
+    case "parse_deeplink":
+      return {
+        method: "POST",
+        url: "/api/deeplink/parse",
+        body: { url: a.url },
+      };
+    case "merge_deeplink_config":
+      return {
+        method: "POST",
+        url: "/api/deeplink/merge",
+        body: { request: a.request },
+      };
+    case "fetch_deeplink_icon":
+      return {
+        method: "POST",
+        url: "/api/deeplink/icon",
+        body: { url: a.url },
+      };
+    case "import_from_deeplink_unified":
+      return {
+        method: "POST",
+        url: "/api/deeplink/import",
+        body: { request: a.request },
+      };
+
     // ---------- OpenClaw config, workspace & daily memory (WEB-15) ----------
     // `open_workspace_directory` (file manager on the server) stays desktop-only: unmapped.
     case "import_openclaw_providers_from_live":

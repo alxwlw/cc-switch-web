@@ -3481,6 +3481,15 @@
     "updatesIncomplete": "Güncelleme bulunamadı ancak {{count}} depoları okunamadı"
   },
   "deeplink": {
+    "paste": {
+      "title": "ccswitch:// bağlantısından içe aktar",
+      "placeholder": "ccswitch://… bağlantısını yapıştırın",
+      "open": "Aç",
+      "upload": "Dosya seç",
+      "noLink": "ccswitch:// bağlantısı bulunamadı.",
+      "fileTooLarge": "Dosya çok büyük (sınır {{limit}} KiB).",
+      "fileReadFailed": "Dosya okunamadı."
+    },
     "confirmImport": "İçe Aktarma Sağlayıcısını Onayla",
     "confirmImportDescription": "Aşağıdaki yapılandırma derin bağlantıdan CC Switch uygulamasını aktarılacak",
     "importPrompt": "İçe Aktarma İstemi",

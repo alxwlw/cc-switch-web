@@ -32,6 +32,7 @@ import { useSettingsQuery } from "@/lib/query";
 import { resolveSettingsSection, type SettingsSection } from "@/lib/navigation";
 import { AppPageHeader } from "@/components/shell/AppPageHeader";
 import { DirectoryInput } from "@/components/settings/DirectorySettings";
+import { DeepLinkPasteEntry } from "@/components/deeplink/DeepLinkPasteEntry";
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
 import { BackupListSection } from "@/components/settings/BackupListSection";
 import { WebdavSyncSection } from "@/components/settings/WebdavSyncSection";
@@ -481,6 +482,11 @@ export function SettingsPage({
                   onExport={exportConfig}
                   onClear={clearSelection}
                 />
+                {isWeb && (
+                  <div className="mt-4">
+                    <DeepLinkPasteEntry />
+                  </div>
+                )}
               </div>
             </SettingsBlock>
             <SettingsBlock
