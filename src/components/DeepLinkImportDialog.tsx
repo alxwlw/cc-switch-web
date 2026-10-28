@@ -6,6 +6,7 @@ import {
   deeplinkApi,
 } from "@/lib/api/deeplink";
 import { providersApi } from "@/lib/api";
+import { OPEN_DEEPLINK_EVENT } from "@/lib/deeplinkOpen";
 import { parseDeepLinkConfigPreview } from "@/utils/deepLinkConfigPreview";
 import {
   Dialog,
@@ -227,6 +228,39 @@ export function DeepLinkImportDialog() {
     return () => {
       disposed = true;
       unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  // Web: paste/upload entries hand over an already parsed request (no pending queue involved).
+  useEffect(() => {
+    let disposed = false;
+    const onOpen = (event: Event) => {
+      const incoming = (event as CustomEvent<DeepLinkImportRequest>).detail;
+      if (!incoming) return;
+      void (async () => {
+        let next = incoming;
+        if (incoming.config) {
+          try {
+            next = await deeplinkApi.mergeDeeplinkConfig(incoming);
+          } catch (error) {
+            console.error("Failed to merge config:", error);
+            toast.error(tRef.current("deeplink.configMergeError"), {
+              description:
+                error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        if (disposed) return;
+        setActivateAfterImport(initialActivation(next));
+        shownRequestRef.current = next;
+        setRequest(next);
+        setIsOpen(true);
+      })();
+    };
+    window.addEventListener(OPEN_DEEPLINK_EVENT, onOpen);
+    return () => {
+      disposed = true;
+      window.removeEventListener(OPEN_DEEPLINK_EVENT, onOpen);
     };
   }, []);
 
