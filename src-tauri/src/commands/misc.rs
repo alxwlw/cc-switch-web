@@ -374,11 +374,33 @@ pub async fn run_tool_lifecycle_action(
     // 排队结束后再探测安装目标，与执行一起持锁，避免读到另一升级的中间状态。
     TOOL_LIFECYCLE
         .run(requested, move |tools| {
-            let command_line =
-                build_tool_lifecycle_command(tools, action, wsl_shell_by_tool.as_ref())?;
+            let command_line = match tool_lifecycle_command_override() {
+                Some(script) => script,
+                None => build_tool_lifecycle_command(tools, action, wsl_shell_by_tool.as_ref())?,
+            };
             run_tool_lifecycle_silently(&command_line, label)
         })
         .await
+}
+
+/// Process-global script override for the install/update branch; only the test hook sets it.
+static TOOL_LIFECYCLE_COMMAND_OVERRIDE: std::sync::Mutex<Option<String>> =
+    std::sync::Mutex::new(None);
+
+fn tool_lifecycle_command_override() -> Option<String> {
+    TOOL_LIFECYCLE_COMMAND_OVERRIDE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
+/// Test seam: while `Some`, install/update run this script instead of the generated
+/// installer command. Production never sets it and no HTTP route reaches it.
+#[cfg_attr(not(feature = "test-hooks"), doc(hidden))]
+pub fn tool_lifecycle_command_test_hook(script: Option<String>) {
+    *TOOL_LIFECYCLE_COMMAND_OVERRIDE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = script;
 }
 
 /// 单次安装/更新/卸载脚本的总时限。超时后杀掉整个进程树并返回稳定错误码

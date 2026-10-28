@@ -232,6 +232,10 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/settings", get(get_settings).put(save_settings))
         .route("/api/paths", get(paths))
         .route("/api/env/tools", post(tool_versions))
+        .route("/api/tools/lifecycle", post(tool_lifecycle))
+        .route("/api/tools/uninstall-preview", post(tool_uninstall_preview))
+        .route("/api/tools/probe", post(tool_probe))
+        .route("/api/tools/installations", post(tool_installations))
         .route("/api/env/conflicts", get(env_conflicts))
         .route("/api/env/conflicts/cleanup", post(env_cleanup))
         .route("/api/env/restore", post(env_restore))
@@ -2064,6 +2068,66 @@ async fn tool_versions(Json(body): Json<ToolVersionsReq>) -> ApiResult {
     match crate::commands::misc::get_tool_versions(body.tools, body.wsl_shell_by_tool).await {
         Ok(versions) => ok(versions),
         Err(e) => fail(e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolLifecycleReq {
+    tools: Vec<String>,
+    action: String,
+    wsl_shell_by_tool:
+        Option<std::collections::HashMap<String, crate::commands::misc::WslShellPreferenceInput>>,
+    uninstall_plan: Option<crate::commands::misc::ToolUninstallPlan>,
+}
+
+/// Install / update / uninstall CLIs on the server host. Errors (including the stable
+/// `TOOL_ACTION_IN_PROGRESS` / `TOOL_ACTION_TIMEOUT` codes) reach the client verbatim.
+async fn tool_lifecycle(Json(body): Json<ToolLifecycleReq>) -> ApiResult {
+    match crate::commands::misc::run_tool_lifecycle_action(
+        body.tools,
+        body.action,
+        body.wsl_shell_by_tool,
+        body.uninstall_plan,
+    )
+    .await
+    {
+        Ok(()) => ok(Value::Null),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolUninstallPreviewReq {
+    tool: String,
+    wsl_shell_by_tool:
+        Option<std::collections::HashMap<String, crate::commands::misc::WslShellPreferenceInput>>,
+}
+
+async fn tool_uninstall_preview(Json(body): Json<ToolUninstallPreviewReq>) -> ApiResult {
+    match crate::commands::misc::prepare_tool_uninstall(body.tool, body.wsl_shell_by_tool).await {
+        Ok(candidates) => ok(candidates),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct ToolsReq {
+    tools: Vec<String>,
+}
+
+async fn tool_probe(Json(body): Json<ToolsReq>) -> ApiResult {
+    match crate::commands::misc::probe_tool_installations(body.tools).await {
+        Ok(reports) => ok(reports),
+        Err(e) => fail(e),
+    }
+}
+
+async fn tool_installations(Json(body): Json<ToolsReq>) -> ApiResult {
+    match crate::commands::misc::list_tool_installations(body.tools).await {
+        Ok(reports) => ok(reports),
+        Err(e) => fail(e),
     }
 }
 
