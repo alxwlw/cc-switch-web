@@ -5069,7 +5069,6 @@
     "accountLogin": "Web 模式下無法使用帳號登入（OAuth）",
     "needsRouting": "此供應商需要路由代理，Web 模式下無法使用",
     "liveUnknownTitle": "供應商（Web 模式下無法讀取實際設定狀態）",
-    "sessionImage": "Web 模式下無法顯示圖片",
     "sessionResumeCopied": "已複製恢復指令。請在伺服器主機上的專案目錄下，貼到終端機執行",
     "hostNotice": "檔案、CLI 工具和代理位於伺服器主機上，而不是執行此瀏覽器的電腦上。",
     "hostNoticeDismiss": "關閉",

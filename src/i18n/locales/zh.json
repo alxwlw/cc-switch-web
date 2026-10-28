@@ -5068,7 +5068,6 @@
     "accountLogin": "Web 模式下无法使用账号登录（OAuth）",
     "needsRouting": "该供应商需要路由代理，Web 模式下不可用",
     "liveUnknownTitle": "供应商（Web 模式下无法读取实际配置状态）",
-    "sessionImage": "Web 模式下无法显示图片",
     "sessionResumeCopied": "已复制恢复命令。请在服务器主机上的项目目录下，粘贴到终端运行",
     "hostNotice": "文件、CLI 工具和代理位于服务器主机上，而不是运行此浏览器的电脑上。",
     "hostNoticeDismiss": "关闭",

@@ -141,3 +141,39 @@ pub async fn web_call(
     let bytes = resp.into_body().collect().await.unwrap().to_bytes();
     (status, serde_json::from_slice(&bytes).expect("json body"))
 }
+
+/// Like [`web_call`], but returns the raw response (status, headers, body bytes) for
+/// non-JSON routes (NDJSON stream, image bytes). `web_call` is unchanged.
+#[allow(dead_code)]
+pub async fn web_call_raw(
+    router: &axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<serde_json::Value>,
+) -> (
+    axum::http::StatusCode,
+    axum::http::HeaderMap,
+    axum::body::Bytes,
+) {
+    use axum::body::Body;
+    use axum::http::{header, Request};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let mut req = Request::builder().method(method).uri(uri);
+    let body = match body {
+        Some(v) => {
+            req = req.header(header::CONTENT_TYPE, "application/json");
+            Body::from(v.to_string())
+        }
+        None => Body::empty(),
+    };
+    let resp = router
+        .clone()
+        .oneshot(req.body(body).unwrap())
+        .await
+        .expect("router is infallible");
+    let (parts, body) = resp.into_parts();
+    let bytes = body.collect().await.unwrap().to_bytes();
+    (parts.status, parts.headers, bytes)
+}

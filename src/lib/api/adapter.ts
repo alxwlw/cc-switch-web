@@ -9,6 +9,8 @@
  * hanging or crashing the console.
  */
 
+import { downloadText } from "@/lib/download";
+
 export const isWeb =
   typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window);
 
@@ -20,6 +22,8 @@ interface Endpoint {
   body?: unknown;
   /** When set, resolve with `data[pick]` instead of the whole payload. */
   pick?: string;
+  /** `arrayBuffer`: success is a raw body (no `{ok,data}` envelope); errors stay JSON. */
+  responseType?: "json" | "arrayBuffer";
 }
 
 const enc = encodeURIComponent;
@@ -283,6 +287,17 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return {
         method: "GET",
         url: `/api/sessions/messages${query({ providerId: a.providerId, sourcePath: a.sourcePath })}`,
+      };
+    case "get_session_image":
+      return {
+        method: "POST",
+        url: "/api/sessions/image",
+        body: {
+          providerId: a.providerId,
+          sourcePath: a.sourcePath,
+          image: a.image,
+        },
+        responseType: "arrayBuffer",
       };
     case "get_session_block_content":
       return {
@@ -870,6 +885,48 @@ function openExternalInBrowser(url: unknown): boolean {
   return true;
 }
 
+/**
+ * `stream_session_messages` over `GET /api/sessions/stream` (NDJSON, one
+ * TranscriptChunk per line). Failing before the first chunk throws so the
+ * caller falls back to `get_session_messages`; an error chunk is delivered to
+ * `onChunk` and then thrown, as the desktop command does.
+ */
+async function streamSessionMessages(args: Args): Promise<void> {
+  const url = `/api/sessions/stream${query({ providerId: args.providerId, sourcePath: args.sourcePath })}`;
+  let res: Response;
+  try {
+    res = await fetch(url, { method: "GET" });
+  } catch (e) {
+    throw new Error(`Web API недоступно (GET ${url}): ${String(e)}`);
+  }
+  if (!res.ok || !res.body) {
+    throw new Error(`Web API ошибка (stream_session_messages): ${res.status}`);
+  }
+  const deliver = (line: string) => {
+    if (!line.trim()) return;
+    const chunk = JSON.parse(line);
+    args.onChunk?.onmessage?.(chunk);
+    if (chunk?.type === "error") throw new Error(String(chunk.message));
+  };
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let tail = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    tail += decoder.decode(value, { stream: true });
+    let nl = tail.indexOf("\n");
+    while (nl >= 0) {
+      const line = tail.slice(0, nl);
+      tail = tail.slice(nl + 1);
+      deliver(line);
+      nl = tail.indexOf("\n");
+    }
+  }
+  tail += decoder.decode();
+  deliver(tail);
+}
+
 /** Drop-in replacement for Tauri's `invoke` used by every `src/lib/api/*` module. */
 export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
   // Silent local noops: desktop-only fire-and-forget calls that must not
@@ -890,6 +947,13 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
   if (cmd === "open_external") {
     return openExternalInBrowser(args.url) as T;
   }
+  if (cmd === "stream_session_messages") {
+    return (await streamSessionMessages(args)) as T;
+  }
+  if (cmd === "export_session_markdown") {
+    downloadText(args.defaultName, args.content, "text/markdown;charset=utf-8");
+    return args.defaultName as T;
+  }
   const mapped = mapCommand(cmd, args);
   if (!mapped) throw new WebUnsupportedError(cmd);
   const init: RequestInit = {
@@ -906,6 +970,9 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
     throw new Error(
       `Web API недоступно (${mapped.method} ${mapped.url}): ${String(e)}`,
     );
+  }
+  if (mapped.responseType === "arrayBuffer" && res.ok) {
+    return (await res.arrayBuffer()) as T;
   }
   let payload: any = null;
   try {

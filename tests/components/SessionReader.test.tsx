@@ -494,18 +494,20 @@ describe("SessionReader", () => {
     expect(content).toContain("cargo build 一直报 tokio_util 找不到");
   });
 
-  it("web: 导出 Markdown 文件在工具栏和菜单里都是禁用的，不调用 export_session_markdown", async () => {
+  it("web: 导出 Markdown 文件在工具栏和菜单里都可用，调用 export_session_markdown", async () => {
     setWeb(true);
     const exportMarkdown = vi
       .spyOn(sessionsApi, "exportMarkdown")
-      .mockResolvedValue("/tmp/x.md");
+      .mockResolvedValue("claude 会话.md");
     renderReader("claude", fixtures.claude);
 
     const iconButton = screen.getByRole("button", {
       name: "导出为 Markdown 文件",
     });
-    expect(iconButton).toBeDisabled();
+    expect(iconButton).toBeEnabled();
     fireEvent.click(iconButton);
+    await waitFor(() => expect(exportMarkdown).toHaveBeenCalledTimes(1));
+    expect(exportMarkdown.mock.calls[0][0]).toBe("claude 会话.md");
 
     await userEvent.click(
       screen.getByRole("button", { name: "claude 会话 的更多操作" }),
@@ -513,28 +515,22 @@ describe("SessionReader", () => {
     const menuItem = await screen.findByRole("menuitem", {
       name: "导出为 Markdown 文件",
     });
-    expect(menuItem).toHaveAttribute("aria-disabled", "true");
-    // 同一个菜单里的「复制整段为 Markdown」不受影响
-    expect(
-      screen.getByRole("menuitem", { name: "复制整段为 Markdown" }),
-    ).not.toHaveAttribute("aria-disabled", "true");
-    expect(exportMarkdown).not.toHaveBeenCalled();
+    expect(menuItem).not.toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(menuItem);
+    await waitFor(() => expect(exportMarkdown).toHaveBeenCalledTimes(2));
   });
 
-  it("web: 图片显示占位说明，不请求 get_session_image", async () => {
+  it("web: 图片照常请求 get_session_image 并显示为可放大的 <img>", async () => {
     setWeb(true);
     const getImage = vi.mocked(sessionsApi.getImage);
 
     renderReader("claude", fixtures.claude);
 
-    const placeholder = await screen.findByRole("img", {
-      name: /图 1 · web\.sessionImage/,
-    });
-    expect(placeholder).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /放大查看/ }),
-    ).not.toBeInTheDocument();
-    expect(getImage).not.toHaveBeenCalled();
+      await screen.findByRole("button", { name: /放大查看/ }),
+    ).toBeInTheDocument();
+    expect(getImage).toHaveBeenCalled();
+    expect(screen.queryByText("web.sessionImage")).not.toBeInTheDocument();
   });
 
   it("全部 / 对话 / 改动 三选一", () => {

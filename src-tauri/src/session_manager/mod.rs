@@ -158,6 +158,33 @@ pub fn load_transcript(provider_id: &str, source_path: &str) -> Result<LoadedTra
     })
 }
 
+/// 把已加载的会话切成流式包：`Header` → 若干 `Messages` → `Done`。
+/// 持有 `Arc`，返回的迭代器可以脱离调用方的借用（桌面 Channel 与 web 的 NDJSON 流共用）。
+pub fn transcript_chunks(
+    loaded: &LoadedTranscript,
+) -> impl Iterator<Item = model::TranscriptChunk> + Send + 'static {
+    use model::TranscriptChunk;
+    let transcript = Arc::clone(&loaded.transcript);
+    let ranges = cache::chunk_ranges(&transcript.message_bytes);
+    let header = TranscriptChunk::Header {
+        total: transcript.messages.len(),
+        turns: transcript.turns.clone(),
+        cached: loaded.cached,
+        parse_ms: loaded.parse_ms,
+    };
+    let body_transcript = Arc::clone(&transcript);
+    let messages = ranges
+        .into_iter()
+        .map(move |(start, end)| TranscriptChunk::Messages {
+            start,
+            messages: body_transcript.messages[start..end].to_vec(),
+        });
+    let done = std::iter::once_with(move || TranscriptChunk::Done {
+        payload_bytes: transcript.approx_bytes as u64,
+    });
+    std::iter::once(header).chain(messages).chain(done)
+}
+
 /// 删除成功后同时移除该会话的解析缓存（§5.2）
 pub fn delete_session(
     provider_id: &str,

@@ -34,6 +34,10 @@ Scope: `src-tauri/src/web_api.rs` (4 роута), `src-tauri/tests/web_api_deepl
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-28**: PR #21 merged `0676764a` → main; live на `cc-switch-web.service`.
+  - Server и `dist-web` пересобраны из main. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p20-20261028-225844/`. Миграций нет.
+  - Проверено: `/api/health` → 200; `POST /api/deeplink/parse` с мусором → `ok:false` с текстом парсера; `parse {}` → 400; валидная provider-ссылка → request; `POST /api/deeplink/icon` с `http://127.0.0.1/x.png` → `null`. Реальный импорт на живом хосте не делался. WARN/ERROR в journal нет, отдаваемый `index.html` совпадает со сборкой.
+  - DX-85 Done (комментарий со ссылками file:line). Ветка `web-parity/web-27-deeplink-paste` удалена локально и на origin.
 - **Статус до merge (2026-10-28)**: ветка `web-parity/web-27-deeplink-paste` (worktree `.worktrees/web-27`), PR #21 (https://github.com/alxwlw/cc-switch-web/pull/21) открыт; DX-85 In Review (комментарий со ссылкой). Ветка также несёт закрытие фазы 19 в плане (`69004512`).
   - Финальные гейты на `33fa90dd`: fmt/clippy (lib + example) чисто; `(umask 022; cargo test --no-fail-fast)` 4423 passed / 1 failed (baseline omp_search_paths); `cargo build --release --example server` ок; `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок; `test:unit` 3811 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice).
   - Т1 одобрена с r0; NIT DP-018 (prompt/skill-ветки и ошибка merge не покрыты route-тестом — функция общая с desktop, ветки покрывает `deeplink_import`) и DP-011 (loopback-тест иконки не различает отказ по схеме и `resolve_public`) приняты как есть. Т2 одобрена с r1: SHOULD-FIX DP-018 — в пути через событие не были закреплены начальное значение активации и `shownRequestRef` (без него диалог не закрывался после web-импорта); добавлен тест, NIT про дубль merge-then-show закрыт общим `presentRequest`.
