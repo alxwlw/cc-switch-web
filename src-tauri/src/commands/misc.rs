@@ -6496,15 +6496,32 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn lifecycle_stdin_is_dev_null() {
-        let started = std::time::Instant::now();
-        let err = run_tool_lifecycle_silently_with_timeout(
-            "read -r x",
+        // The harness' own stdin may already be /dev/null, which would hide an
+        // `inherit()` regression. Point fd 0 at a pipe for the duration of the
+        // call (restored afterwards), then have the script check that its fd 0
+        // is the same inode as /dev/null (bash `-ef`: Linux and macOS).
+        // SAFETY: plain fd juggling on fd 0, which the test harness never reads.
+        let (saved, read_end) = unsafe {
+            let mut fds = [0 as libc::c_int; 2];
+            assert_eq!(libc::pipe(fds.as_mut_ptr()), 0);
+            let saved = libc::dup(0);
+            assert!(saved >= 0);
+            assert!(libc::dup2(fds[0], 0) >= 0);
+            libc::close(fds[1]);
+            (saved, fds[0])
+        };
+        let result = run_tool_lifecycle_silently_with_timeout(
+            "[[ /dev/stdin -ef /dev/null ]] || { echo stdin-not-null >&2; exit 7; }",
             "tool_install",
             std::time::Duration::from_secs(10),
-        )
-        .unwrap_err();
-        assert!(!err.starts_with("TOOL_ACTION_TIMEOUT"), "{err}");
-        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        );
+        // SAFETY: restores the descriptors saved above.
+        unsafe {
+            libc::dup2(saved, 0);
+            libc::close(saved);
+            libc::close(read_end);
+        }
+        result.unwrap();
     }
 
     #[cfg(unix)]
