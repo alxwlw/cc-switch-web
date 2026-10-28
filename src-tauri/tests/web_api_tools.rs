@@ -62,9 +62,46 @@ async fn wait_for(path: &Path) {
     panic!("{} never appeared", path.display());
 }
 
+/// Starts a lifecycle job and returns its id; the start itself never reports a command error.
+async fn start_job(router: &axum::Router, body: Value) -> String {
+    let (status, resp) = web_call(router, "POST", LIFECYCLE, Some(body)).await;
+    assert_eq!(status, StatusCode::OK, "{resp}");
+    assert_eq!(resp["ok"], json!(true), "{resp}");
+    resp["data"]["jobId"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no jobId: {resp}"))
+        .to_string()
+}
+
+/// Polls a job until it leaves `running` (bounded) and returns `(state, error)`.
+async fn poll_terminal(router: &axum::Router, job_id: &str) -> (String, Value) {
+    for _ in 0..600 {
+        let (status, resp) = web_call(router, "GET", &format!("{LIFECYCLE}/{job_id}"), None).await;
+        assert_eq!(status, StatusCode::OK, "{resp}");
+        let state = resp["data"]["state"].as_str().expect("state").to_string();
+        if state != "running" {
+            return (state, resp["data"]["error"].clone());
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    panic!("job {job_id} never finished");
+}
+
+/// Start + poll to a terminal state.
+async fn run_job(router: &axum::Router, body: Value) -> (String, Value) {
+    let id = start_job(router, body).await;
+    poll_terminal(router, &id).await
+}
+
+async fn expect_failed(router: &axum::Router, body: Value, error: &str) {
+    let (state, err) = run_job(router, body).await;
+    assert_eq!(state, "failed");
+    assert_eq!(err, json!(error));
+}
+
 #[tokio::test]
 #[serial]
-async fn install_runs_the_overridden_script_and_returns_null() {
+async fn install_runs_the_overridden_script_and_the_job_ends_done() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     reset_test_fs();
     let ran = ensure_test_home().join("lifecycle-ran");
@@ -72,26 +109,22 @@ async fn install_runs_the_overridden_script_and_returns_null() {
     let _reset = set_script(&format!("echo ok && touch '{}'", ran.display()));
     let router = web_router();
 
-    let (status, body) = web_call(&router, "POST", LIFECYCLE, Some(install_body("claude"))).await;
+    let (state, error) = run_job(&router, install_body("claude")).await;
 
-    assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body, json!({"ok": true, "data": null}));
+    assert_eq!(state, "done");
+    assert_eq!(error, Value::Null);
     assert!(ran.exists(), "the overridden script did not run");
 }
 
 #[tokio::test]
 #[serial]
-async fn failing_script_is_a_500_carrying_its_stderr() {
+async fn failing_script_fails_the_job_with_its_stderr() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     reset_test_fs();
     let _reset = set_script("echo boom >&2; exit 2");
     let router = web_router();
 
-    let (status, body) = web_call(&router, "POST", LIFECYCLE, Some(install_body("claude"))).await;
-
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
-    assert_eq!(body["ok"], json!(false));
-    assert_eq!(body["error"], json!("boom"));
+    expect_failed(&router, install_body("claude"), "boom").await;
 }
 
 #[tokio::test]
@@ -112,22 +145,33 @@ async fn second_install_of_the_same_tool_gets_tool_action_in_progress() {
     ));
     let router = web_router();
 
-    let first = {
-        let router = router.clone();
-        tokio::spawn(async move {
-            web_call(&router, "POST", LIFECYCLE, Some(install_body("claude"))).await
-        })
-    };
+    let first = start_job(&router, install_body("claude")).await;
     wait_for(&marker).await;
 
-    let (status, body) = web_call(&router, "POST", LIFECYCLE, Some(install_body("claude"))).await;
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
-    assert_eq!(body["error"], json!("TOOL_ACTION_IN_PROGRESS"));
+    // The second start is accepted; the refusal reaches the client through its poll.
+    expect_failed(&router, install_body("claude"), "TOOL_ACTION_IN_PROGRESS").await;
 
     std::fs::write(&release, "").unwrap();
-    let (status, body) = first.await.unwrap();
-    assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body, json!({"ok": true, "data": null}));
+    let (state, error) = poll_terminal(&router, &first).await;
+    assert_eq!(state, "done");
+    assert_eq!(error, Value::Null);
+}
+
+#[tokio::test]
+#[serial]
+async fn unknown_job_id_is_a_404() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let router = web_router();
+
+    let (status, body) = web_call(&router, "GET", &format!("{LIFECYCLE}/no-such-job"), None).await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(body["ok"], json!(false));
+    assert!(
+        body["error"].as_str().unwrap().contains("no-such-job"),
+        "{body}"
+    );
 }
 
 #[tokio::test]
@@ -137,19 +181,12 @@ async fn uninstall_without_a_plan_is_refused() {
     reset_test_fs();
     let router = web_router();
 
-    let (status, body) = web_call(
+    expect_failed(
         &router,
-        "POST",
-        LIFECYCLE,
-        Some(json!({"tools": ["claude"], "action": "uninstall"})),
+        json!({"tools": ["claude"], "action": "uninstall"}),
+        "Preview the uninstall plan before confirming.",
     )
     .await;
-
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
-    assert_eq!(
-        body["error"],
-        json!("Preview the uninstall plan before confirming.")
-    );
 }
 
 #[tokio::test]
@@ -159,9 +196,7 @@ async fn unknown_tools_are_refused_by_lifecycle_and_probe() {
     reset_test_fs();
     let router = web_router();
 
-    let (status, body) = web_call(&router, "POST", LIFECYCLE, Some(install_body("nope"))).await;
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
-    assert_eq!(body["error"], json!("No supported tools selected"));
+    expect_failed(&router, install_body("nope"), "No supported tools selected").await;
 
     for uri in [PROBE, INSTALLATIONS] {
         let (status, body) = web_call(&router, "POST", uri, Some(json!({"tools": ["nope"]}))).await;
@@ -246,19 +281,12 @@ async fn uninstall_plan_for_another_tool_is_refused() {
     reset_test_fs();
     let router = web_router();
 
-    let (status, body) = web_call(
+    expect_failed(
         &router,
-        "POST",
-        LIFECYCLE,
-        Some(uninstall_body(plan_for("codex", "/x", "true"))),
+        uninstall_body(plan_for("codex", "/x", "true")),
+        "The uninstall plan does not match the selected tool.",
     )
     .await;
-
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
-    assert_eq!(
-        body["error"],
-        json!("The uninstall plan does not match the selected tool.")
-    );
 }
 
 #[tokio::test]
@@ -269,25 +297,19 @@ async fn uninstall_plan_for_a_missing_installation_is_refused() {
     let router = web_router();
     let missing = ensure_test_home().join("no-such-dir/claude");
 
-    let (status, body) = web_call(
+    let (state, error) = run_job(
         &router,
-        "POST",
-        LIFECYCLE,
-        Some(uninstall_body(plan_for(
-            "claude",
-            &missing.to_string_lossy(),
-            "true",
-        ))),
+        uninstall_body(plan_for("claude", &missing.to_string_lossy(), "true")),
     )
     .await;
 
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(state, "failed");
     assert!(
-        body["error"]
+        error
             .as_str()
             .unwrap()
             .starts_with("Installation changed since the uninstall preview"),
-        "{body}"
+        "{error}"
     );
 }
 
@@ -325,15 +347,15 @@ async fn tampered_uninstall_command_is_rederived_and_never_executed() {
         .unwrap_or_else(|| panic!("no plan offered for the fake claude: {preview}"));
     plan["command"] = json!(format!("touch '{}'", marker.display()));
 
-    let (status, body) = web_call(&router, "POST", LIFECYCLE, Some(uninstall_body(plan))).await;
+    let (state, error) = run_job(&router, uninstall_body(plan)).await;
 
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(state, "failed");
     assert!(
-        body["error"]
+        error
             .as_str()
             .unwrap()
             .starts_with("Installation changed since the uninstall preview"),
-        "{body}"
+        "{error}"
     );
     assert!(!marker.exists(), "the client-supplied command ran");
 }

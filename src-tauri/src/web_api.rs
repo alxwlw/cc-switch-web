@@ -233,6 +233,7 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/paths", get(paths))
         .route("/api/env/tools", post(tool_versions))
         .route("/api/tools/lifecycle", post(tool_lifecycle))
+        .route("/api/tools/lifecycle/:job_id", get(tool_lifecycle_status))
         .route("/api/tools/uninstall-preview", post(tool_uninstall_preview))
         .route("/api/tools/probe", post(tool_probe))
         .route("/api/tools/installations", post(tool_installations))
@@ -2081,19 +2082,83 @@ struct ToolLifecycleReq {
     uninstall_plan: Option<crate::commands::misc::ToolUninstallPlan>,
 }
 
-/// Install / update / uninstall CLIs on the server host. Errors (including the stable
-/// `TOOL_ACTION_IN_PROGRESS` / `TOOL_ACTION_TIMEOUT` codes) reach the client verbatim.
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+enum ToolJobState {
+    Running,
+    Done,
+    Failed,
+}
+
+struct ToolJob {
+    state: ToolJobState,
+    error: Option<String>,
+    finished_at: Option<std::time::Instant>,
+}
+
+/// Lifecycle jobs by id. The std mutex is never held across an `.await`.
+static TOOL_JOBS: once_cell::sync::Lazy<
+    std::sync::Mutex<std::collections::HashMap<String, ToolJob>>,
+> = once_cell::sync::Lazy::new(Default::default);
+
+const TOOL_JOB_RETENTION: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+fn tool_jobs() -> std::sync::MutexGuard<'static, std::collections::HashMap<String, ToolJob>> {
+    TOOL_JOBS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Install / update / uninstall CLIs on the server host as a background job: the install
+/// can outlast what a browser keeps one request open for. Answers `{jobId}`; every command
+/// error (including the stable `TOOL_ACTION_IN_PROGRESS` / `TOOL_ACTION_TIMEOUT` codes)
+/// reaches the client verbatim through `GET /api/tools/lifecycle/:job_id`.
 async fn tool_lifecycle(Json(body): Json<ToolLifecycleReq>) -> ApiResult {
-    match crate::commands::misc::run_tool_lifecycle_action(
-        body.tools,
-        body.action,
-        body.wsl_shell_by_tool,
-        body.uninstall_plan,
-    )
-    .await
+    let job_id = uuid::Uuid::new_v4().to_string();
     {
-        Ok(()) => ok(Value::Null),
-        Err(e) => fail(e),
+        let mut jobs = tool_jobs();
+        jobs.retain(|_, j| {
+            j.finished_at
+                .map_or(true, |t| t.elapsed() < TOOL_JOB_RETENTION)
+        });
+        jobs.insert(
+            job_id.clone(),
+            ToolJob {
+                state: ToolJobState::Running,
+                error: None,
+                finished_at: None,
+            },
+        );
+    }
+    let id = job_id.clone();
+    tokio::spawn(async move {
+        let result = crate::commands::misc::run_tool_lifecycle_action(
+            body.tools,
+            body.action,
+            body.wsl_shell_by_tool,
+            body.uninstall_plan,
+        )
+        .await;
+        if let Some(job) = tool_jobs().get_mut(&id) {
+            match result {
+                Ok(()) => job.state = ToolJobState::Done,
+                Err(e) => {
+                    job.state = ToolJobState::Failed;
+                    job.error = Some(e);
+                }
+            }
+            job.finished_at = Some(std::time::Instant::now());
+        }
+    });
+    ok(json!({ "jobId": job_id }))
+}
+
+async fn tool_lifecycle_status(Path(job_id): Path<String>) -> ApiResult {
+    let jobs = tool_jobs();
+    match jobs.get(&job_id) {
+        Some(job) => ok(json!({ "state": job.state, "error": job.error })),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "ok": false, "error": format!("unknown tool job: {job_id}") })),
+        ),
     }
 }
 
