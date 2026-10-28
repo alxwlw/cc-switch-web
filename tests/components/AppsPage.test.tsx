@@ -690,7 +690,8 @@ describe("AppsPage concurrent CLI upgrades", () => {
     mocks.desktopStatusCalls = 0;
     await renderApps();
     expect(mocks.desktopStatusCalls).toBe(0);
-    expect(mocks.listToolInstallations).not.toHaveBeenCalled();
+    // WEB-25: установки грузятся на mount и в web (сервер зондирует свои CLI)
+    await waitFor(() => expect(mocks.listToolInstallations).toHaveBeenCalled());
     // статус неизвестен: плоский список без групп, Desktop не объявлен «не установленным»
     expect(
       screen.queryByRole("region", { name: "appsPage.sectionNotInstalled" }),
@@ -704,21 +705,20 @@ describe("AppsPage concurrent CLI upgrades", () => {
   });
 
   it.each([true, false])(
-    "lifecycle actions are disabled only in web (web=%s) while versions and update check keep working",
+    "lifecycle actions are enabled in both modes (web=%s) and versions and update check keep working",
     async (web) => {
       setWeb(web);
       missing.add("hermes");
       const user = userEvent.setup();
       await renderApps();
 
-      // версии (get_tool_versions) видны в обоих режимах
       expect(card("Claude Code").getByText("1.0.0")).toBeInTheDocument();
 
-      expect(updateButton("Claude Code")).toHaveProperty("disabled", web);
+      expect(updateButton("Claude Code")).toBeEnabled();
       expect(
         card("Hermes").getByRole("button", { name: "settings.toolInstall" }),
-      ).toHaveProperty("disabled", web);
-      expect(updateAllButton()).toHaveProperty("disabled", web);
+      ).toBeEnabled();
+      expect(updateAllButton()).toBeEnabled();
 
       await user.click(rowMenu("Claude Code"));
       expect(
@@ -726,8 +726,8 @@ describe("AppsPage concurrent CLI upgrades", () => {
           await screen.findByRole("menuitem", {
             name: "settings.toolUninstall",
           })
-        ).getAttribute("aria-disabled") === "true",
-      ).toBe(web);
+        ).getAttribute("aria-disabled"),
+      ).not.toBe("true");
       await user.keyboard("{Escape}");
 
       await user.click(
@@ -736,19 +736,22 @@ describe("AppsPage concurrent CLI upgrades", () => {
       expect(
         (
           await screen.findByRole("menuitem", { name: "settings.toolDiagnose" })
-        ).getAttribute("aria-disabled") === "true",
-      ).toBe(web);
+        ).getAttribute("aria-disabled"),
+      ).not.toBe("true");
       await user.keyboard("{Escape}");
 
-      if (web) {
-        await user.click(updateButton("Claude Code"));
-        await user.click(updateAllButton());
-        expect(mocks.runToolLifecycleAction).not.toHaveBeenCalled();
-        expect(mocks.probeToolInstallations).not.toHaveBeenCalled();
-        expect(mocks.prepareToolUninstall).not.toHaveBeenCalled();
-      }
+      // установки грузятся на mount в обоих режимах
+      expect(mocks.listToolInstallations).toHaveBeenCalled();
 
-      // проверка версий (get_tool_versions) работает и в web
+      await user.click(updateButton("Claude Code"));
+      await waitFor(() =>
+        expect(mocks.runToolLifecycleAction).toHaveBeenCalledWith(
+          ["claude"],
+          "update",
+          {},
+        ),
+      );
+
       const before = mocks.getToolVersions.mock.calls.length;
       await user.click(
         screen.getByRole("button", { name: /appsPage\.checkUpdates/ }),
@@ -758,6 +761,64 @@ describe("AppsPage concurrent CLI upgrades", () => {
       );
     },
   );
+
+  it.each([true, false])(
+    "shows the server-side install note only in web (web=%s)",
+    async (web) => {
+      setWeb(web);
+      await renderApps();
+      const note = screen.queryByTestId("apps-web-server-note");
+      if (web) {
+        expect(note).toHaveTextContent("appsPage.webServerNote");
+        expect(note).not.toHaveTextContent("appsPage.webLifecycleSlow");
+      } else {
+        expect(note).toBeNull();
+      }
+    },
+  );
+
+  it("web: the note adds the 15-minute hint while a lifecycle action runs", async () => {
+    setWeb(true);
+    const running = deferred<void>();
+    mocks.runToolLifecycleAction.mockImplementationOnce(() => running.promise);
+    await renderApps();
+    fireEvent.click(updateButton("Claude Code"));
+    await waitFor(() =>
+      expect(screen.getByTestId("apps-web-server-note")).toHaveTextContent(
+        "appsPage.webLifecycleSlow",
+      ),
+    );
+    await act(async () => running.resolve());
+    await waitFor(() =>
+      expect(screen.getByTestId("apps-web-server-note")).not.toHaveTextContent(
+        "appsPage.webLifecycleSlow",
+      ),
+    );
+  });
+
+  it("shows the localized timeout text instead of the raw TOOL_ACTION_TIMEOUT code", async () => {
+    mocks.runToolLifecycleAction.mockRejectedValueOnce(
+      new Error("TOOL_ACTION_TIMEOUT: tool_update exceeded 900 s"),
+    );
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await renderApps();
+      fireEvent.click(updateButton("Claude Code"));
+      await waitFor(() =>
+        expect(mocks.error).toHaveBeenCalledWith(
+          "settings.toolActionFailed",
+          expect.objectContaining({
+            description: "settings.toolActionTimeout",
+          }),
+        ),
+      );
+      expect(JSON.stringify(mocks.error.mock.calls)).not.toContain(
+        "TOOL_ACTION_TIMEOUT",
+      );
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
 
   it("puts Claude Desktop under not installed when it is not on this machine", async () => {
     mocks.desktopStatus = {

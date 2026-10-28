@@ -1018,6 +1018,7 @@
     "toolActionFailed": "安裝/更新指令執行失敗",
     "toolActionInProgress": "應用程式操作仍在進行中",
     "toolActionInProgressDetail": "{{tool}} 已有安裝、升級或解除安裝作業正在背景處理，請等待完成，無需重複操作。",
+    "toolActionTimeout": "{{tool}} 未在 15 分鐘內完成，程序已停止",
     "toolNotRunnable": "已安裝但無法執行（未偵測到版本）",
     "toolActionVersionUnchangedTitle": "版本未變更",
     "toolActionVersionUnchanged": "仍為 {{version}}（最新版本：{{latest}}）。上游更新程式可能回報成功，但實際上並未套用更新。",
@@ -4208,6 +4209,8 @@
     "back": "返回"
   },
   "appsPage": {
+    "webServerNote": "命令列工具安裝在 cc-switch-web 伺服器上，而不是這台電腦上。",
+    "webLifecycleSlow": "安裝和更新最多可能需要 15 分鐘。",
     "showInSidebar": "在側欄顯示 {{name}}",
     "lastChecked": "上次檢查 {{time}}",
     "neverChecked": "還沒檢查過更新",

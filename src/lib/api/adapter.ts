@@ -751,6 +751,35 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
           wslShellByTool: a.wslShellByTool ?? null,
         },
       };
+    case "run_tool_lifecycle_action":
+      return {
+        method: "POST",
+        url: "/api/tools/lifecycle",
+        body: {
+          tools: a.tools,
+          action: a.action,
+          wslShellByTool: a.wslShellByTool ?? null,
+          uninstallPlan: a.uninstallPlan ?? null,
+        },
+      };
+    case "prepare_tool_uninstall":
+      return {
+        method: "POST",
+        url: "/api/tools/uninstall-preview",
+        body: { tool: a.tool, wslShellByTool: a.wslShellByTool ?? null },
+      };
+    case "probe_tool_installations":
+      return {
+        method: "POST",
+        url: "/api/tools/probe",
+        body: { tools: a.tools },
+      };
+    case "list_tool_installations":
+      return {
+        method: "POST",
+        url: "/api/tools/installations",
+        body: { tools: a.tools },
+      };
     case "check_env_conflicts":
       return {
         method: "GET",

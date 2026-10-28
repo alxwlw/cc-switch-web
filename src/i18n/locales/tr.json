@@ -1017,6 +1017,7 @@
     "toolActionFailed": "Yükleme/güncelleme komutu başarısız oldu",
     "toolActionInProgress": "Kurulum veya güncelleme halen devam ediyor",
     "toolActionInProgressDetail": "{{tool}} için bir kurulum veya güncelleme zaten arka planda gerçekleştiriliyor. Lütfen bitmesini bekleyin; tekrar başlatmaya gerek yoktur.",
+    "toolActionTimeout": "{{tool}} 15 dakika içinde tamamlanmadı; işlem durduruldu",
     "toolNotRunnable": "Yüklendi ancak çalıştırılamıyor (sürüm algılanmadı)",
     "toolActionVersionUnchangedTitle": "Sürüm değişmedi",
     "toolActionVersionUnchanged": "Hala {{version}}'de (en son: {{latest}}). Güncelleyici, güncellemeyi uygulamadan başarı bildirmiş olabilir.",
@@ -4200,6 +4201,8 @@
     "back": "Geri"
   },
   "appsPage": {
+    "webServerNote": "CLI araçları bu bilgisayara değil, cc-switch-web sunucusuna kurulur.",
+    "webLifecycleSlow": "Kurulum ve güncelleme 15 dakikaya kadar sürebilir.",
     "showInSidebar": "Kenar çubuğunda {{name}}'yi göster",
     "lastChecked": "Son kontrol: {{time}}",
     "neverChecked": "Güncellemeler henüz kontrol edilmedi",
