@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { settingsApi } from "@/lib/api";
 import { isWeb } from "@/lib/api/adapter";
+import { downloadText } from "@/lib/download";
 import { syncCurrentProvidersLiveSafe } from "@/utils/postChangeSync";
 
 export type ImportStatus =
@@ -25,20 +26,6 @@ function pickSqlFile(): Promise<File | null> {
     input.addEventListener("cancel", () => resolve(null));
     input.click();
   });
-}
-
-/** Web build: hand the dump to the browser as a file download. */
-function downloadText(filename: string, content: string) {
-  const url = URL.createObjectURL(
-    new Blob([content], { type: "application/sql;charset=utf-8" }),
-  );
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
 }
 
 export interface UseImportExportOptions {
@@ -228,7 +215,7 @@ export function useImportExport(
       try {
         const { filename, content } =
           await settingsApi.exportConfigForDownload();
-        downloadText(filename, content);
+        downloadText(filename, content, "application/sql;charset=utf-8");
         toast.success(
           t("settings.configDownloaded", {
             defaultValue: "Config downloaded:",
