@@ -6950,7 +6950,20 @@ mod tests {
 
     /// Codex Stack 请求的转发改写：身份头、模型名、托管 web_search。
     /// 在本机一个空闲端口上起假上游 `app`，返回它的地址。
+    ///
+    /// Only `POST` reaches `app`: peers on the dev host probe every fresh loopback listener with
+    /// `GET /`, and the scripted fakes popped a scripted response for it ("upstream script
+    /// exhausted", `bookkeeping::*` in about one full run in five). The forwarder only POSTs.
     async fn serve_upstream(app: axum::Router) -> String {
+        let app = app.layer(axum::middleware::from_fn(
+            |request: axum::extract::Request, next: axum::middleware::Next| async move {
+                if request.method() == http::Method::POST {
+                    next.run(request).await
+                } else {
+                    axum::response::IntoResponse::into_response(StatusCode::METHOD_NOT_ALLOWED)
+                }
+            },
+        ));
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
             .await
             .expect("bind upstream");
@@ -6959,6 +6972,28 @@ mod tests {
             axum::serve(listener, app).await.expect("serve upstream");
         });
         format!("http://{addr}")
+    }
+
+    /// A probe on the fake upstream's port must not reach the scripted handler.
+    #[tokio::test]
+    async fn serve_upstream_hands_only_posts_to_the_app() {
+        let hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = hits.clone();
+        let base = serve_upstream(axum::Router::new().fallback(move || {
+            let counter = counter.clone();
+            async move {
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                "ok"
+            }
+        }))
+        .await;
+        let client = reqwest::Client::new();
+        let probe = client.get(&base).send().await.expect("probe");
+        assert_eq!(probe.status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 0);
+        let post = client.post(&base).send().await.expect("post");
+        assert_eq!(post.status(), StatusCode::OK);
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     mod codex_stack {
