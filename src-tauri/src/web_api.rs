@@ -253,6 +253,14 @@ pub fn router(state: SharedState) -> Router {
             "/api/:app/pricing-model-source",
             get(get_pricing_model_source).put(set_pricing_model_source),
         )
+        // global outbound proxy (WEB-23)
+        .route(
+            "/api/global-proxy",
+            get(get_global_proxy).put(set_global_proxy),
+        )
+        .route("/api/global-proxy/test", post(test_global_proxy))
+        .route("/api/global-proxy/status", get(global_proxy_status))
+        .route("/api/global-proxy/scan", post(scan_global_proxy))
         // settings & environment
         .route("/api/settings", get(get_settings).put(save_settings))
         .route("/api/paths", get(paths))
@@ -2259,6 +2267,65 @@ async fn model_pricing(State(state): State<SharedState>) -> ApiResult {
         Ok(Err(e)) => fail(e.to_string()),
         Err(e) => fail(format!("pricing query failed: {e}")),
     }
+}
+
+// ---------- global outbound proxy (WEB-23) ----------
+
+async fn get_global_proxy(State(state): State<SharedState>) -> ApiResult {
+    match state.db.get_global_proxy_url() {
+        Ok(url) => ok(url),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct GlobalProxyBody {
+    url: String,
+}
+
+async fn set_global_proxy(
+    State(state): State<SharedState>,
+    Json(body): Json<GlobalProxyBody>,
+) -> ApiResult {
+    let url_opt = if body.url.trim().is_empty() {
+        None
+    } else {
+        Some(body.url.as_str())
+    };
+    if let Err(e) = crate::proxy::http_client::validate_proxy(url_opt) {
+        return bad_request(e);
+    }
+    match crate::commands::global_proxy::apply_global_proxy_url(&state.db, &body.url) {
+        Ok(()) => ok(true),
+        Err(e) => fail(e),
+    }
+}
+
+async fn test_global_proxy(Json(body): Json<GlobalProxyBody>) -> ApiResult {
+    match crate::commands::test_proxy_url(body.url).await {
+        Ok(result) => ok(result),
+        Err(e) => bad_request(e),
+    }
+}
+
+/// The URL is masked (no credentials), unlike the raw value `GET /api/global-proxy` returns.
+async fn global_proxy_status() -> ApiResult {
+    let mut status = crate::commands::get_upstream_proxy_status();
+    status.proxy_url = status
+        .proxy_url
+        .map(|u| crate::proxy::http_client::mask_url(&u));
+    ok(status)
+}
+
+async fn scan_global_proxy() -> ApiResult {
+    ok(crate::commands::scan_local_proxies().await)
+}
+
+/// Test seam: replace the public targets `POST /api/global-proxy/test` probes through the
+/// proxy, so a test needs no internet. Production never sets it and no HTTP route reaches it.
+#[cfg_attr(not(feature = "test-hooks"), doc(hidden))]
+pub fn global_proxy_test_targets_test_hook(targets: Option<Vec<String>>) {
+    crate::commands::global_proxy::set_test_targets_override(targets);
 }
 
 // ---------- settings & environment ----------
