@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import KimiAccountQuotaFooter from "@/components/KimiAccountQuotaFooter";
 import { kimiOAuthApi } from "@/lib/api/kimiOAuth";
@@ -22,8 +22,11 @@ const account = {
   primary: false,
 };
 
-function renderFooter(name: string, inline = false) {
-  const client = createTestQueryClient();
+function renderFooter(
+  name: string,
+  inline = false,
+  client = createTestQueryClient(),
+) {
   const invalidate = vi.spyOn(client, "invalidateQueries");
   render(
     <QueryClientProvider client={client}>
@@ -102,12 +105,17 @@ describe("KimiAccountQuotaFooter", () => {
     vi.mocked(kimiOAuthApi.quota).mockRejectedValue(
       new Error("kimi upstream said 503"),
     );
-    renderFooter(account.name, true);
-    // useKimiAccountQuota retries once (about 1 s) before the query counts as failed
-    expect(
-      await screen.findByText(/kimi upstream said 503/, undefined, {
-        timeout: 4000,
+    // useKimiAccountQuota keeps retry: 1; retryDelay 0 on this test's client
+    // skips the ~1 s backoff before the query counts as failed
+    renderFooter(
+      account.name,
+      true,
+      new QueryClient({
+        defaultOptions: { queries: { retry: false, retryDelay: 0 } },
       }),
+    );
+    expect(
+      await screen.findByText(/kimi upstream said 503/),
     ).toBeInTheDocument();
   });
 
