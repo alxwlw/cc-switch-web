@@ -12,6 +12,7 @@ import type { ModeAppId } from "@/config/appConfig";
 import { isProxyAppId, isStackAppId } from "@/config/appConfig";
 import { settingsApi } from "@/lib/api";
 import { isWeb } from "@/lib/api/adapter";
+import { WebProxyCaption } from "@/components/providers/mode/WebProxyCaption";
 import { providersApi } from "@/lib/api/providers";
 import { proxyApi } from "@/lib/api/proxy";
 import { useSettingsQuery } from "@/lib/query";
@@ -123,11 +124,7 @@ export function SwitchModePanel({
   const { data: modeView } = useAppMode(app);
   const active: AppMode =
     modeView && modes.includes(modeView.mode) ? modeView.mode : "direct";
-  // WEB-00: get_app_mode не поддержан (режим всегда direct) — прямой указатель берём из
-  // get_current_provider, иначе ни одна карточка не получит «используется» — снимет WEB-01
-  const directId = isWeb
-    ? currentProviderId || null
-    : (modeView?.directProviderId ?? null);
+  const directId = modeView?.directProviderId ?? null;
   const routeId = modeView?.routeProviderId ?? null;
 
   // 离开页面再回来、或生效的模式变了，一律落在生效的那格（「查看中」不持久化）
@@ -249,8 +246,6 @@ export function SwitchModePanel({
     queue: queueIds,
     stackMembers,
     serviceRunning,
-    // WEB-00: роутинга в web нет — провайдер, которому он нужен, не переключается — снимет WEB-01
-    routingUnavailableReason: isWeb ? t("web.needsRouting") : undefined,
     routingReason: (provider: Provider) =>
       getRoutingReason(app, provider, t) ?? "",
     actions: {
@@ -547,9 +542,7 @@ export function SwitchModePanel({
 
   return (
     <>
-      {/* WEB-00: режимы route/stack, бейдж режима, вкладки — proxy-UI, в web скрыт целиком — снимет WEB-01 */}
       {statusSlot &&
-        !isWeb &&
         createPortal(
           <HoverTip content={`${status.lead} ${status.value}`}>
             <span
@@ -588,39 +581,38 @@ export function SwitchModePanel({
           </HoverTip>,
           statusSlot,
         )}
-      {!isWeb && (
-        <ModeTabs
-          modes={modes}
-          active={active}
-          view={view}
-          onView={setView}
-          failover={
-            hasFailover && view === "route" && active === "route"
-              ? {
-                  enabled: failoverOn,
-                  disabled: setFailover.isPending,
-                  onChange: handleFailoverChange,
-                }
-              : undefined
-          }
-          onOpenRouteSettings={
-            hasFailover && view === "route" && active === "route"
-              ? () => setRouteSettingsOpen(true)
-              : undefined
-          }
-          onOpenStackSettings={
-            app === "codex" && view === "stack" && active === "stack"
-              ? () => setStackSettingsOpen(true)
-              : undefined
-          }
-          searchSlotRef={setSearchSlot}
-        />
-      )}
+      <ModeTabs
+        modes={modes}
+        active={active}
+        view={view}
+        onView={setView}
+        failover={
+          !isWeb && hasFailover && view === "route" && active === "route"
+            ? {
+                enabled: failoverOn,
+                disabled: setFailover.isPending,
+                onChange: handleFailoverChange,
+              }
+            : undefined
+        }
+        onOpenRouteSettings={
+          !isWeb && hasFailover && view === "route" && active === "route"
+            ? () => setRouteSettingsOpen(true)
+            : undefined
+        }
+        onOpenStackSettings={
+          app === "codex" && view === "stack" && active === "stack"
+            ? () => setStackSettingsOpen(true)
+            : undefined
+        }
+        searchSlotRef={setSearchSlot}
+      />
       <div
         ref={scrollRef}
         id="main-content"
         className="min-h-0 flex-1 overflow-y-auto scroll-stable overflow-x-hidden px-6 pb-12 pt-3"
       >
+        {isWeb && <WebProxyCaption className="mb-3" />}
         {notices.length > 0 && (
           <div role="status" className="mb-3 flex flex-col gap-2">
             {notices}
@@ -634,50 +626,47 @@ export function SwitchModePanel({
           isLoading={isLoading}
           onSwitch={(provider) => void onSwitch(provider)}
           switchMode={switchMode}
-          // WEB-00: без ModeTabs слота под поиск нет — список рисует поиск сам
-          searchSlot={isWeb ? undefined : searchSlot}
+          searchSlot={searchSlot}
         />
       </div>
 
-      {!isWeb && (
-        <ModeDialog
-          app={app}
-          state={dialog}
-          active={active}
-          providers={providerList}
-          directId={directId}
-          eligibleIds={eligibleIds}
-          defaultPick={routeId ?? directId}
-          stackMembers={(stack?.members ?? []).map((member) => ({
-            id: member.providerId,
-            name: nameOf(member.providerId),
-            models: member.memberModels,
-          }))}
-          stackSubagent={
-            app === "codex" && settings
-              ? {
-                  models: stack?.subagentModels ?? [],
-                  value: stackSubagentValue(settings),
-                }
-              : undefined
-          }
-          onClose={() => setDialog(null)}
-          onEnter={enterMode}
-          onExit={(useProviderId) =>
-            modeActions.exitToDirect({
-              directProviderId: directId,
-              useProviderId,
-              providerName: nameOf(useProviderId ?? directId),
-            })
-          }
-          onSwitchDirect={(providerId) => {
-            const provider = providers[providerId];
-            if (provider)
-              void onSwitch(provider, { acknowledgedRouting: true });
-          }}
-        />
-      )}
+      <ModeDialog
+        app={app}
+        state={dialog}
+        active={active}
+        providers={providerList}
+        directId={directId}
+        eligibleIds={eligibleIds}
+        defaultPick={routeId ?? directId}
+        stackMembers={(stack?.members ?? []).map((member) => ({
+          id: member.providerId,
+          name: nameOf(member.providerId),
+          models: member.memberModels,
+        }))}
+        stackSubagent={
+          app === "codex" && settings
+            ? {
+                models: stack?.subagentModels ?? [],
+                value: stackSubagentValue(settings),
+              }
+            : undefined
+        }
+        onClose={() => setDialog(null)}
+        onEnter={enterMode}
+        onExit={(useProviderId) =>
+          modeActions.exitToDirect({
+            directProviderId: directId,
+            useProviderId,
+            providerName: nameOf(useProviderId ?? directId),
+          })
+        }
+        onSwitchDirect={(providerId) => {
+          const provider = providers[providerId];
+          if (provider) void onSwitch(provider, { acknowledgedRouting: true });
+        }}
+      />
 
+      {/* WEB-00 → phase 28: the route settings sheet is the failover queue editor */}
       {!isWeb && isProxyAppId(app) && (
         <RouteSettingsSheet
           app={app}
@@ -687,7 +676,7 @@ export function SwitchModePanel({
         />
       )}
 
-      {!isWeb && app === "codex" && (
+      {app === "codex" && (
         <StackSettingsSheet
           open={stackSettingsOpen}
           onOpenChange={setStackSettingsOpen}

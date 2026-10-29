@@ -48,6 +48,7 @@ import {
   useTrayNavigation,
 } from "@/hooks/useTrayNavigation";
 import { useTauriEvent } from "@/hooks/useTauriEvent";
+import { useProxyOfficialWarning } from "@/hooks/useProxyOfficialWarning";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
 import {
   extractErrorMessage,
@@ -267,8 +268,6 @@ function App() {
     StartupAttachFailure[]
   >([]);
   useEffect(() => {
-    // WEB-00: take_startup_attach_failures не поддержан (mount-вызов) — снимет WEB-01
-    if (isWeb) return;
     proxyApi
       .takeStartupAttachFailures()
       .then((failures) => {
@@ -531,18 +530,7 @@ function App() {
     },
   );
 
-  useTauriEvent<{ appType: string; providerName: string }>(
-    "proxy-official-warning",
-    (payload) => {
-      toast.warning(
-        t("notifications.proxyOfficialWarning", {
-          name: payload.providerName,
-          defaultValue: `当前供应商 ${payload.providerName} 是官方供应商，建议切换到第三方供应商后再使用代理接管`,
-        }),
-        { duration: 8000 },
-      );
-    },
-  );
+  useProxyOfficialWarning();
 
   useEffect(() => {
     // settingsData 未加载时跳过，避免用 fallback false 覆盖 Rust 侧已设好的装饰状态

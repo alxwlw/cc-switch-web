@@ -141,11 +141,6 @@ export interface SwitchModeInput {
   /** 需要路由的原因（悬停「需要路由」时的说明） */
   routingReason: (provider: Provider) => string;
   serviceRunning: boolean;
-  /**
-   * WEB-00: в web роутинга нет — провайдеру, которому он нужен, не переключиться. Текст причины
-   * (передаёт только web-ветка), кнопка остаётся и показывает его — снимет WEB-01
-   */
-  routingUnavailableReason?: string;
   actions: {
     switchDirect: (provider: Provider) => void;
     needsRouteDialog: (provider: Provider) => void;
@@ -285,9 +280,6 @@ function buildSwitchSectionsByView(input: SwitchModeInput): ProviderSection[] {
                       providerNeedsRouting(app, p)
                         ? actions.needsRouteDialog(p)
                         : actions.switchDirect(p),
-                    disabledReason: providerNeedsRouting(app, p)
-                      ? input.routingUnavailableReason
-                      : undefined,
                   },
                 ],
               },

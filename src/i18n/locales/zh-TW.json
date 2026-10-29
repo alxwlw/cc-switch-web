@@ -5075,7 +5075,8 @@
     "update": {
       "unsupported": "Web 模式下無法檢查更新：伺服器由維運人員負責升級"
     },
-    "needsRouting": "此供應商需要路由代理，Web 模式下無法使用",
+    "proxyCaption": "代理運行在伺服器上，並重新設定伺服器上的 CLI；不會影響你本機上的 CLI。",
+    "proxyListenWarning": "監聽 {{address}} 會讓整個網路（包括 tailnet）無需驗證即可存取該代理。建議使用 127.0.0.1。",
     "liveUnknownTitle": "供應商（Web 模式下無法讀取實際設定狀態）",
     "sessionResumeCopied": "已複製恢復指令。請在伺服器主機上的專案目錄下，貼到終端機執行",
     "hostNotice": "檔案、CLI 工具和代理位於伺服器主機上，而不是執行此瀏覽器的電腦上。",

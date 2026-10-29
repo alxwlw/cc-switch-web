@@ -500,7 +500,7 @@ describe("App integration with MSW", () => {
 
   describe.each([
     ["desktop", false, 1],
-    ["web", true, 0],
+    ["web", true, 1],
   ])("startup attach failures on mount (%s)", (_label, web, expectedCalls) => {
     it(`requests take_startup_attach_failures ${expectedCalls} time(s)`, async () => {
       setWeb(web);

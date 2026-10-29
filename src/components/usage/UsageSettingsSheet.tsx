@@ -10,7 +10,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { isWeb } from "@/lib/api/adapter";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -255,42 +254,39 @@ export function UsageSettingsSheet({
               </SettingsRow>
 
               {/* 只读状态 + 去别处修改：整行就是入口（「已开启 ›」），不再单放一个按钮 */}
-              {/* WEB-00: статус логирования (get_global_proxy_config) неизвестен, а секция «routing», куда ведёт ссылка, в web содержит только rectifier (WEB-24) — строка скрыта в web — снимет WEB-01 */}
-              {!isWeb && (
-                <div className="relative">
-                  {onOpenRoutingSettings && (
-                    <button
-                      type="button"
-                      aria-label={t("usage.sources.editLogging")}
-                      className="absolute inset-0 transition-colors hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                      onClick={() => {
-                        onOpenChange(false);
-                        onOpenRoutingSettings();
-                      }}
-                    />
-                  )}
-                  <div className="pointer-events-none relative px-4 py-3.5">
-                    <RowHeader
-                      title={t("routingSettings.logging")}
-                      help={{
-                        title: t("usage.sources.loggingHelpTitle"),
-                        body: t("usage.sources.loggingHelp"),
-                      }}
-                      trailing={
-                        <span className="flex items-center gap-0.5">
-                          {open ? <LoggingStatus /> : null}
-                          {onOpenRoutingSettings && (
-                            <ChevronRight
-                              aria-hidden="true"
-                              className="h-4 w-4 text-fg-3"
-                            />
-                          )}
-                        </span>
-                      }
-                    />
-                  </div>
+              <div className="relative">
+                {onOpenRoutingSettings && (
+                  <button
+                    type="button"
+                    aria-label={t("usage.sources.editLogging")}
+                    className="absolute inset-0 transition-colors hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    onClick={() => {
+                      onOpenChange(false);
+                      onOpenRoutingSettings();
+                    }}
+                  />
+                )}
+                <div className="pointer-events-none relative px-4 py-3.5">
+                  <RowHeader
+                    title={t("routingSettings.logging")}
+                    help={{
+                      title: t("usage.sources.loggingHelpTitle"),
+                      body: t("usage.sources.loggingHelp"),
+                    }}
+                    trailing={
+                      <span className="flex items-center gap-0.5">
+                        {open ? <LoggingStatus /> : null}
+                        {onOpenRoutingSettings && (
+                          <ChevronRight
+                            aria-hidden="true"
+                            className="h-4 w-4 text-fg-3"
+                          />
+                        )}
+                      </span>
+                    }
+                  />
                 </div>
-              )}
+              </div>
 
               <SettingsRow
                 title={t("usage.rebuildCodex.title")}

@@ -416,28 +416,23 @@ describe("SwitchModePanel — web", () => {
     return onSwitch;
   }
 
-  it("renders no mode tabs and marks the current provider as in use", () => {
+  it("shows the mode tabs and the server caption (WEB-01)", async () => {
     setWeb(true);
-    const onSwitch = renderPanel({ a: provider("a"), b: provider("b") }, "b");
+    renderPanel({ a: provider("a"), b: provider("b") }, "b");
 
     expect(
-      screen.queryByRole("group", { name: "mode.tabsLabel" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByTestId("status-b")).toHaveTextContent(
-      "providerCard.status.inUse",
+      await screen.findByRole("group", { name: "mode.tabsLabel" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("web-proxy-caption")).toHaveTextContent(
+      "web.proxyCaption",
     );
-    expect(screen.queryByTestId("switch-b")).not.toBeInTheDocument();
-    screen.getByTestId("switch-a").click();
-    expect(onSwitch).toHaveBeenCalledTimes(1);
-    expect(onSwitch.mock.calls[0][0].id).toBe("a");
   });
 
-  it("blocks a provider that needs routing with the web reason", () => {
+  it("does not block a provider that needs routing (WEB-01)", async () => {
     setWeb(true);
-    renderPanel(
+    const onSwitch = renderPanel(
       {
         a: provider("a"),
-        b: provider("b"),
         needsRoute: provider("needsRoute", {
           meta: { apiFormat: "openai_chat" },
         }),
@@ -445,10 +440,10 @@ describe("SwitchModePanel — web", () => {
       "a",
     );
 
-    const button = screen.getByTestId("switch-needsRoute");
-    expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("data-reason", "web.needsRouting");
-    expect(screen.getByTestId("switch-b")).toBeEnabled();
+    const button = await screen.findByTestId("switch-needsRoute");
+    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute("data-reason", "");
+    expect(onSwitch).not.toHaveBeenCalled();
   });
 
   it("still shows the mode tabs on desktop", async () => {
@@ -456,5 +451,6 @@ describe("SwitchModePanel — web", () => {
     expect(
       await screen.findByRole("group", { name: "mode.tabsLabel" }),
     ).toBeInTheDocument();
+    expect(screen.queryByTestId("web-proxy-caption")).toBeNull();
   });
 });

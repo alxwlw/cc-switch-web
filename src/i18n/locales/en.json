@@ -5074,7 +5074,8 @@
     "update": {
       "unsupported": "Updates are unavailable in web mode: the server operator updates the app"
     },
-    "needsRouting": "This provider needs the routing proxy, which is unavailable in web mode",
+    "proxyCaption": "The proxy runs on the server and reconfigures the CLIs on the server; it does not touch CLIs on your machine.",
+    "proxyListenWarning": "Listening on {{address}} makes the proxy reachable from the whole network (including the tailnet) without authentication. Prefer 127.0.0.1.",
     "liveUnknownTitle": "Providers (live config state is unknown in web mode)",
     "sessionResumeCopied": "Resume command copied. Run it in a terminal on the server host, in the project folder.",
     "hostNotice": "Files, CLI tools and the proxy live on the server host, not on the computer running this browser.",
