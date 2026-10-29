@@ -61,12 +61,6 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 // Каждый кейс: хук и команда, которую он обязан звать на desktop и не звать в web.
 const CASES: Array<[string, string, () => unknown]> = [
-  ["useFailoverQueue", "get_failover_queue", () => useFailoverQueue("claude")],
-  [
-    "useProviderHealth",
-    "get_provider_health",
-    () => useProviderHealth("p1", "claude"),
-  ],
   [
     "useUsageQuery",
     "queryProviderUsage",
@@ -81,26 +75,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "useDesktopConfigMessages",
     "get_claude_desktop_status",
     () => useDesktopConfigMessages(true),
-  ],
-  [
-    "useCircuitBreakerConfig",
-    "get_circuit_breaker_config",
-    () => useCircuitBreakerConfig(),
-  ],
-  [
-    "useCircuitBreakerStats",
-    "get_circuit_breaker_stats",
-    () => useCircuitBreakerStats("p1", "claude"),
-  ],
-  [
-    "useAvailableProvidersForFailover",
-    "get_available_providers_for_failover",
-    () => useAvailableProvidersForFailover("claude"),
-  ],
-  [
-    "useAutoFailoverEnabled",
-    "get_auto_failover_enabled",
-    () => useAutoFailoverEnabled("claude"),
   ],
   [
     "useProviderLimits",
@@ -248,8 +222,38 @@ describe("WEB-00: фоновые query молчат в web", () => {
       "get_proxy_config_for_app",
       () => useAppProxyConfig("claude"),
     ],
+    [
+      "useFailoverQueue",
+      "get_failover_queue",
+      () => useFailoverQueue("claude"),
+    ],
+    [
+      "useProviderHealth",
+      "get_provider_health",
+      () => useProviderHealth("p1", "claude"),
+    ],
+    [
+      "useCircuitBreakerConfig",
+      "get_circuit_breaker_config",
+      () => useCircuitBreakerConfig(),
+    ],
+    [
+      "useCircuitBreakerStats",
+      "get_circuit_breaker_stats",
+      () => useCircuitBreakerStats("p1", "claude"),
+    ],
+    [
+      "useAvailableProvidersForFailover",
+      "get_available_providers_for_failover",
+      () => useAvailableProvidersForFailover("claude"),
+    ],
+    [
+      "useAutoFailoverEnabled",
+      "get_auto_failover_enabled",
+      () => useAutoFailoverEnabled("claude"),
+    ],
   ] as Array<[string, string, () => unknown]>)(
-    "%s в web зовёт %s (гейт снят: WEB-15 / WEB-17 / WEB-05 / WEB-02 / WEB-01)",
+    "%s в web зовёт %s (гейт снят: WEB-15 / WEB-17 / WEB-05 / WEB-02 / WEB-01 / фаза 28 failover)",
     async (_name, command, useHook) => {
       setWeb(true);
       const { wrapper } = wrapperFor();

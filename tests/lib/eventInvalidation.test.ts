@@ -52,6 +52,23 @@ describe("subscribeEventInvalidation", () => {
     ]);
   });
 
+  it("provider-switched from a proxy failover invalidates the same keys as a manual switch", async () => {
+    await subscribeEventInvalidation(qc);
+    fire("provider-switched", {
+      appType: "claude",
+      providerId: "p2",
+      source: "failover",
+    });
+    expect(keys()).toEqual([
+      ["autoFailoverEnabled", "claude"],
+      ["failoverQueue", "claude"],
+      ["availableProvidersForFailover", "claude"],
+      ["subscription", "quota", "claude"],
+      ["proxyStatus"],
+      ["proxyTakeoverStatus"],
+    ]);
+  });
+
   it("provider-switched without appType invalidates the app-agnostic prefixes", async () => {
     await subscribeEventInvalidation(qc);
     fire("provider-switched", {});

@@ -122,7 +122,7 @@ beforeEach(() => {
 });
 
 describe("SwitchModePanel — route settings in web (WEB-01)", () => {
-  it("opens the per-app route settings sheet, but shows no failover toggle", async () => {
+  it("opens the per-app route settings sheet and shows the failover toggle (phase 28)", async () => {
     setWeb(true);
     mockMode("route", "map", "direct");
     server.use(
@@ -146,6 +146,7 @@ describe("SwitchModePanel — route settings in web (WEB-01)", () => {
 
     renderPanel("claude", { direct: provider("direct"), map: provider("map") });
 
+    expect(await screen.findByRole("switch")).toBeInTheDocument();
     fireEvent.click(
       await screen.findByRole("button", { name: "mode.routeSettings" }),
     );
@@ -155,7 +156,6 @@ describe("SwitchModePanel — route settings in web (WEB-01)", () => {
         document.querySelector<HTMLInputElement>("#maxRetries-claude")?.value,
       ).toBe("4"),
     );
-    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   });
 });
 
