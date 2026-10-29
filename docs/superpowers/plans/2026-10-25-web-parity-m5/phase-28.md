@@ -51,6 +51,17 @@ Scope: `src-tauri/src/proxy/forwarder.rs` (менеджеры из AppState), `s
 - [ ] Найти механизм лишних запросов к stub B, с доказательством, и устранить причину. Не ретраи и не ослабленные asserts. Бинарник `web_api_failover` — 20/20 зелёных прогонов подряд.
 - [ ] `forwarder::tests::bookkeeping::*_neutral`: воспроизводится ли на `main`/базе фазы, в одиночку и в полном прогоне. Если это регресс фазы или флак — исправить с тем же критерием. Если нет — записать в Notes с доказательством.
 
+### Task 8: rustls CryptoProvider в headless
+Добавлена по итогам живой проверки T5 (release-сборка ветки на `127.0.0.1:18799`, копия БД, временный HOME).
+
+Что видно:
+- `claude -p` через proxy на `https://opencode.ai/zen/go` висит 180 с. Каждый запрос паникует в `tokio-rt-worker` на `rustls-0.23.37/src/crypto/mod.rs:249` («Could not automatically determine the process-level CryptoProvider … make sure exactly one of the 'aws-lc-rs' and 'ring' features is enabled»). Соединение рвётся, `claude` повторяет запрос, health и request-логи не пишутся.
+- Desktop ставит провайдер в `setup` (`lib.rs:524`, `rustls::crypto::ring::default_provider().install_default()`). Headless-сервер не ставит нигде.
+- Баг старый: TLS в raw-пути proxy в headless не работал никогда. В фазе 27 до него не доходило из-за зависания на IPv6, его убрала T6.
+
+- [ ] Ставить ring-провайдер один раз, до любого TLS: один helper в библиотеке вызывают desktop `setup` и headless bootstrap (`bootstrap.rs`, путь `run_headless_bootstrap_with`).
+- [ ] Тест в отдельном integration-бинарнике (свой процесс, никто больше не ставит провайдер): после headless bootstrap `CryptoProvider::get_default()` есть. Проба: без вызова helper — красный.
+
 ### Task 5: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server`; на agentbox — failover между двумя реальными провайдерами при искусственно сломанном ключе первого.
 - [ ] Ветка `web-parity/web-01-failover-oauth`, PR; DX-59 → In Review + ссылка («этап 2 из 2»). Закрыть чекбоксы, Notes.
