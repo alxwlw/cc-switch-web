@@ -339,6 +339,84 @@ pub async fn send_request(
 /// When the proxy URL uses `https://`, the connection to the proxy itself is
 /// TLS-wrapped before sending the CONNECT request.  The enum lets
 /// `send_raw_request` work with either variant generically.
+/// Resolver for [`connect_tcp`]: system resolver, with a test-only override
+/// table that lets tests map a fake host to chosen addresses.
+#[derive(Clone)]
+struct RawResolver(hyper_util::client::legacy::connect::dns::GaiResolver);
+
+type ResolveFuture = std::pin::Pin<
+    Box<
+        dyn std::future::Future<
+                Output = Result<std::vec::IntoIter<std::net::SocketAddr>, std::io::Error>,
+            > + Send,
+    >,
+>;
+
+impl tower::Service<hyper_util::client::legacy::connect::dns::Name> for RawResolver {
+    type Response = std::vec::IntoIter<std::net::SocketAddr>;
+    type Error = std::io::Error;
+    type Future = ResolveFuture;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.0.poll_ready(cx)
+    }
+
+    fn call(&mut self, name: hyper_util::client::legacy::connect::dns::Name) -> Self::Future {
+        #[cfg(test)]
+        if let Some(addrs) = test_resolver_override(name.as_str()) {
+            return Box::pin(async move { Ok(addrs.into_iter()) });
+        }
+        let fut = self.0.call(name);
+        Box::pin(async move { Ok(fut.await?.collect::<Vec<_>>().into_iter()) })
+    }
+}
+
+#[cfg(test)]
+static TEST_RESOLVER: std::sync::Mutex<Vec<(String, Vec<std::net::SocketAddr>)>> =
+    std::sync::Mutex::new(Vec::new());
+
+#[cfg(test)]
+fn test_resolver_override(host: &str) -> Option<Vec<std::net::SocketAddr>> {
+    TEST_RESOLVER
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|(h, _)| h == host)
+        .map(|(_, a)| a.clone())
+}
+
+/// TCP connect with happy eyeballs (IPv6 -> IPv4 after 300 ms) through hyper-util's
+/// `HttpConnector`. Plain `TcpStream::connect` tries addresses sequentially with no
+/// per-address timeout, so an unreachable IPv6 address stalls until the request timeout.
+/// No connect timeout is set: the caller's request timeout bounds the attempt.
+async fn connect_tcp(host: &str, port: u16) -> std::io::Result<tokio::net::TcpStream> {
+    use tower::ServiceExt;
+    let mut http = hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(
+        RawResolver(hyper_util::client::legacy::connect::dns::GaiResolver::new()),
+    );
+    http.enforce_http(false);
+    let uri: http::Uri = format!("http://{}:{port}", host_for_uri(host))
+        .parse()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("{e}")))?;
+    let io = http
+        .oneshot(uri)
+        .await
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    Ok(io.into_inner())
+}
+
+/// `Uri::host()` strips the brackets from IPv6 literals; put them back.
+fn host_for_uri(host: &str) -> String {
+    if host.contains(':') && !host.starts_with('[') {
+        format!("[{host}]")
+    } else {
+        host.to_string()
+    }
+}
+
 enum ProxyStream {
     Tcp(tokio::net::TcpStream),
     Tls(Box<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>),
@@ -422,7 +500,7 @@ async fn send_raw_request(
         connect_via_proxy(proxy, host, port).await?
     } else {
         ProxyStream::Tcp(
-            tokio::net::TcpStream::connect((host, port))
+            connect_tcp(host, port)
                 .await
                 .map_err(|e| ProxyError::ForwardFailed(format!("TCP connect failed: {e}")))?,
         )
@@ -499,7 +577,7 @@ async fn connect_via_proxy(
     };
 
     // Connect to the proxy
-    let tcp = tokio::net::TcpStream::connect((proxy_host, proxy_port))
+    let tcp = connect_tcp(proxy_host, proxy_port)
         .await
         .map_err(|e| ProxyError::ForwardFailed(format!("Proxy TCP connect failed: {e}")))?;
 
@@ -948,5 +1026,46 @@ mod tests {
         assert!(matches!(result, Err(ProxyError::ResponseBodyTooLarge(_))));
 
         assert_server_aborted_early(written, BODY_LEN).await;
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn raw_request_falls_back_to_ipv4_when_ipv6_is_unreachable() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 1024];
+            let _ = sock.read(&mut buf).await;
+            let _ = sock
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\nok")
+                .await;
+        });
+        let host = "happy-eyeballs.test";
+        TEST_RESOLVER.lock().unwrap().push((
+            host.to_string(),
+            vec![
+                // RFC 6666 discard prefix: never answers
+                "[100::1]:0".parse().unwrap(),
+                format!("127.0.0.1:{port}").parse().unwrap(),
+            ],
+        ));
+
+        let mut headers = http::HeaderMap::new();
+        headers.insert(http::header::HOST, http::HeaderValue::from_static("x"));
+        let cases = OriginalHeaderCases {
+            cases: vec![("host".into(), b"Host".to_vec())],
+        };
+        let uri: http::Uri = format!("http://{host}:{port}/").parse().unwrap();
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            send_raw_request(&uri, &http::Method::GET, &headers, &cases, b"", None),
+        )
+        .await;
+        TEST_RESOLVER.lock().unwrap().clear();
+        let resp = result.expect("raw request must not hang on the unreachable IPv6 address");
+        let resp = resp.expect("raw request must reach the IPv4 stub");
+        assert_eq!(resp.status(), http::StatusCode::OK);
     }
 }
