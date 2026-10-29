@@ -16,7 +16,6 @@ import {
   type SkillsShSearchResult,
 } from "@/lib/api/skills";
 import type { AppId } from "@/lib/api/types";
-import { isWeb } from "@/lib/api/adapter";
 import { mergeImportedSkills } from "@/hooks/useSkills.helpers";
 import { readLocalCache, writeLocalCache } from "@/lib/localCache";
 import { runSequentialBulkAction } from "@/lib/utils/sequentialBulkAction";
@@ -87,11 +86,9 @@ const discoverableQuery = {
 };
 
 export function useDiscoverableSkills() {
-  // WEB-00: discover_available_skills не поддержан (читается в момент вызова, не в модуле) — снимет WEB-05
   return useQuery({
     ...discoverableQuery,
     select: selectDiscoveredSkills,
-    enabled: !isWeb,
   });
 }
 
@@ -103,11 +100,9 @@ const selectDiscoveryFailures = (result: SkillDiscoveryResult) =>
  * 发现时没读到的仓库（和 useDiscoverableSkills 共用一次请求）
  */
 export function useDiscoverableSkillsFailures() {
-  // WEB-00: discover_available_skills не поддержан — снимет WEB-05
   return useQuery({
     ...discoverableQuery,
     select: selectDiscoveryFailures,
-    enabled: !isWeb,
   });
 }
 
@@ -276,8 +271,7 @@ export function useScanUnmanagedSkills(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["skills", "unmanaged"],
     queryFn: () => skillsApi.scanUnmanaged(),
-    // WEB-00: scan_unmanaged_skills не поддержан — снимет WEB-05
-    enabled: (options?.enabled ?? false) && !isWeb,
+    enabled: options?.enabled ?? false,
     staleTime: 30 * 1000,
     placeholderData: keepPreviousData,
   });
@@ -322,8 +316,6 @@ export function useSkillRepos() {
   return useQuery({
     queryKey: ["skills", "repos"],
     queryFn: () => skillsApi.getRepos(),
-    // WEB-00: get_skill_repos не поддержан — снимет WEB-05
-    enabled: !isWeb,
   });
 }
 
@@ -363,13 +355,19 @@ export function useRemoveSkillRepo() {
 export function useInstallSkillsFromZip() {
   const queryClient = useQueryClient();
   return useMutation({
+    // desktop passes a host path, web passes the browser-picked File
     mutationFn: ({
       filePath,
+      file,
       currentApp,
     }: {
-      filePath: string;
+      filePath?: string;
+      file?: File;
       currentApp: AppId;
-    }) => skillsApi.installFromZip(filePath, currentApp),
+    }) =>
+      file
+        ? skillsApi.installFromZipUpload(file, currentApp)
+        : skillsApi.installFromZip(filePath ?? "", currentApp),
     onSuccess: (result) => {
       queryClient.setQueryData<InstalledSkill[]>(
         ["skills", "installed"],
@@ -449,8 +447,7 @@ export function useSearchSkillsSh(
   return useQuery({
     queryKey: ["skills", "skillssh", query, limit, offset],
     queryFn: () => skillsApi.searchSkillsSh(query, limit, offset),
-    // WEB-00: search_skills_sh не поддержан — снимет WEB-05
-    enabled: query.length >= 2 && !isWeb,
+    enabled: query.length >= 2,
     staleTime: 5 * 60 * 1000,
     placeholderData: keepPreviousData,
   });
@@ -487,8 +484,7 @@ export function useCcSwitchSkillsDir(enabled = true) {
   return useQuery({
     queryKey: ["skills", "ccSwitchDir"],
     queryFn: () => skillsApi.getCcSwitchSkillsDir(),
-    // WEB-00: get_cc_switch_skills_dir не поддержан — снимет WEB-05
-    enabled: enabled && !isWeb,
+    enabled,
     staleTime: Infinity,
   });
 }

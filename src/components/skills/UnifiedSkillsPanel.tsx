@@ -24,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { HoverTip } from "@/components/ui/hover-tip";
-import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { isWeb } from "@/lib/api/adapter";
 import { isViewAvailable } from "@/lib/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -129,10 +128,7 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
   const appIds = useVisibleAppIds(SKILLS_APP_IDS);
   const { targets, setTargets, installTo } = useSkillInstallTargets(appIds);
 
-  // WEB-00: discover (discover_available_skills, search_skills_sh, skill repos) не работает в web —
-  // сегмент скрыт, прямой заход в skillsDiscovery открывает installed — снимет WEB-05
   const discoverAvailable = isViewAvailable("skillsDiscovery");
-  const webOff = isWeb;
   const [view, setView] = useState<SkillsView>(
     discoverAvailable ? initialView : "installed",
   );
@@ -708,15 +704,18 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
     );
   };
 
-  const handleInstallFromZip = async () => {
+  // web: the ZIP comes from a hidden <input type="file">, not a native dialog
+  const zipInputRef = useRef<HTMLInputElement>(null);
+
+  const handleInstallFromZip = async (file?: File) => {
     if (!beginWrite()) return;
     try {
-      const filePath = await skillsApi.openZipFileDialog();
-      if (!filePath) return;
+      const filePath = file ? null : await skillsApi.openZipFileDialog();
+      if (!file && !filePath) return;
       let skipped: ZipSkippedSkill[] = [];
       const { installed, failures } = await installTo(async (firstApp) => {
         const result = await installFromZipMutation.mutateAsync({
-          filePath,
+          ...(file ? { file } : { filePath: filePath ?? undefined }),
           currentApp: firstApp,
         });
         skipped = result.skipped;
@@ -949,6 +948,21 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
       }
       actions={
         <>
+          {isWeb && (
+            <input
+              ref={zipInputRef}
+              type="file"
+              accept=".zip,.skill"
+              className="hidden"
+              data-testid="skills-zip-input"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                // reset so choosing the same file again still fires onChange
+                event.target.value = "";
+                if (file) void handleInstallFromZip(file);
+              }}
+            />
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -969,26 +983,19 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
                   {t("skillsPage.addMenu.discover")}
                 </DropdownMenuItem>
               )}
-              {/* WEB-00: ZIP (open_zip_file_dialog) и import-from-apps (scan/import на хосте) — снимет WEB-05 */}
-              <WebUnavailableTip active={webOff}>
-                <DropdownMenuItem
-                  disabled={webOff}
-                  onSelect={() => void handleInstallFromZip()}
-                >
-                  {t("skillsPage.addMenu.zip")}
-                </DropdownMenuItem>
-              </WebUnavailableTip>
-              <WebUnavailableTip active={webOff}>
-                <DropdownMenuItem
-                  disabled={webOff}
-                  onSelect={() => void handleOpenImport()}
-                >
-                  <span className="flex-1">
-                    {t("skillsPage.addMenu.import")}
-                  </span>
-                  {nUnmanaged > 0 && <NeutralBadge>{nUnmanaged}</NeutralBadge>}
-                </DropdownMenuItem>
-              </WebUnavailableTip>
+              <DropdownMenuItem
+                onSelect={() =>
+                  isWeb
+                    ? zipInputRef.current?.click()
+                    : void handleInstallFromZip()
+                }
+              >
+                {t("skillsPage.addMenu.zip")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void handleOpenImport()}>
+                <span className="flex-1">{t("skillsPage.addMenu.import")}</span>
+                {nUnmanaged > 0 && <NeutralBadge>{nUnmanaged}</NeutralBadge>}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
@@ -1006,31 +1013,24 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
               </DropdownMenuTrigger>
             </HoverTip>
             <DropdownMenuContent align="end" className="min-w-[200px]">
-              {/* WEB-00: check_skill_updates, backups (get/restore/delete_skill_backup), skill repos не замаплены — снимет WEB-05 */}
-              <WebUnavailableTip active={webOff}>
-                <DropdownMenuItem
-                  disabled={webOff || controlsDisabled || nInstalled === 0}
-                  onSelect={() => void handleCheckUpdates()}
-                >
-                  {t("skills.checkUpdates")}
-                </DropdownMenuItem>
-              </WebUnavailableTip>
-              <WebUnavailableTip active={webOff}>
-                <DropdownMenuItem
-                  disabled={webOff || controlsDisabled}
-                  onSelect={() => void handleOpenRestoreFromBackup()}
-                >
-                  {t("skillsPage.moreMenu.restore")}
-                </DropdownMenuItem>
-              </WebUnavailableTip>
-              <WebUnavailableTip active={webOff}>
-                <DropdownMenuItem
-                  disabled={webOff || controlsDisabled}
-                  onSelect={() => setRepoManagerOpen(true)}
-                >
-                  {t("skillsPage.moreMenu.repos")}
-                </DropdownMenuItem>
-              </WebUnavailableTip>
+              <DropdownMenuItem
+                disabled={controlsDisabled || nInstalled === 0}
+                onSelect={() => void handleCheckUpdates()}
+              >
+                {t("skills.checkUpdates")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={controlsDisabled}
+                onSelect={() => void handleOpenRestoreFromBackup()}
+              >
+                {t("skillsPage.moreMenu.restore")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={controlsDisabled}
+                onSelect={() => setRepoManagerOpen(true)}
+              >
+                {t("skillsPage.moreMenu.repos")}
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setStorageOpen(true)}>
                 {t("skills.storageSheet.open")}
               </DropdownMenuItem>
@@ -1136,19 +1136,17 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
                 {t("skillsPage.goDiscover")}
               </Button>
             )}
-            <WebUnavailableTip active={webOff}>
-              <Button
-                type="button"
-                variant="neutral"
-                size="regular"
-                disabled={webOff || controlsDisabled}
-                onClick={() => void handleOpenImport()}
-              >
-                {nUnmanaged
-                  ? t("skillsPage.importCount", { count: nUnmanaged })
-                  : t("skillsPage.addMenu.import")}
-              </Button>
-            </WebUnavailableTip>
+            <Button
+              type="button"
+              variant="neutral"
+              size="regular"
+              disabled={controlsDisabled}
+              onClick={() => void handleOpenImport()}
+            >
+              {nUnmanaged
+                ? t("skillsPage.importCount", { count: nUnmanaged })
+                : t("skillsPage.addMenu.import")}
+            </Button>
           </div>
         </div>
       );
@@ -1380,7 +1378,6 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
                       >
                         {t("mcpPage.clearSearch")}
                       </Button>
-                      {/* WEB-00: discover скрыт в web — «искать в Discover» вело бы в тупик — снимет WEB-05 */}
                       {discoverAvailable && (
                         <Button
                           type="button"
@@ -1576,25 +1573,23 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
                       {t("skillsPage.updateAllCount", { count: nUpdates })}
                     </Button>
                   ) : (
-                    <WebUnavailableTip active={webOff}>
-                      <Button
-                        type="button"
-                        variant="quiet"
-                        size="regular"
-                        className="shrink-0"
-                        disabled={webOff || controlsDisabled}
-                        onClick={() => void handleCheckUpdates()}
-                      >
-                        {isCheckingUpdates ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-4 w-4" strokeWidth={2} />
-                        )}
-                        {isCheckingUpdates
-                          ? t("skills.checkingUpdates")
-                          : t("skills.checkUpdates")}
-                      </Button>
-                    </WebUnavailableTip>
+                    <Button
+                      type="button"
+                      variant="quiet"
+                      size="regular"
+                      className="shrink-0"
+                      disabled={controlsDisabled}
+                      onClick={() => void handleCheckUpdates()}
+                    >
+                      {isCheckingUpdates ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" strokeWidth={2} />
+                      )}
+                      {isCheckingUpdates
+                        ? t("skills.checkingUpdates")
+                        : t("skills.checkUpdates")}
+                    </Button>
                   )}
                 </HoverTip>
               </div>

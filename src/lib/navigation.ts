@@ -61,9 +61,8 @@ export function resolveSettingsSection(
 }
 
 // WEB-00: экраны целиком из desktop-only команд скрыты в web: центр авторизации (OAuth, auth_*) —
-// снимет WEB-02; skillsDiscovery (discover/skills.sh/репозитории) — WEB-05
-// (workspace/openclawConfig открыты WEB-15, hermesMemory — WEB-16).
-const WEB_HIDDEN_VIEWS: View[] = ["auth", "skillsDiscovery"];
+// снимет WEB-02 (skillsDiscovery открыт WEB-05, workspace/openclawConfig — WEB-15, hermesMemory — WEB-16).
+const WEB_HIDDEN_VIEWS: View[] = ["auth"];
 
 export function isViewAvailable(view: View): boolean {
   return !(isWeb && WEB_HIDDEN_VIEWS.includes(view));
@@ -131,7 +130,7 @@ export function readStoredView(): View {
   try {
     const stored =
       parseView(localStorage.getItem(VIEW_STORAGE_KEY)) ?? "providers";
-    // WEB-00: сохранённый скрытый в web view не восстанавливается — снимет WEB-02 (auth), WEB-05 (skillsDiscovery)
+    // WEB-00: сохранённый скрытый в web view не восстанавливается — снимет WEB-02 (auth)
     return isViewAvailable(stored) ? stored : "providers";
   } catch {
     return "providers";

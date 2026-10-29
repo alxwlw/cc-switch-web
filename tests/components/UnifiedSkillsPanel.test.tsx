@@ -965,7 +965,7 @@ describe("UnifiedSkillsPanel", () => {
   });
 });
 
-describe("UnifiedSkillsPanel web gating", () => {
+describe("UnifiedSkillsPanel in web (WEB-05)", () => {
   beforeEach(() => {
     m.discoverMounts = 0;
     m.installed = [makeSkill()];
@@ -988,32 +988,26 @@ describe("UnifiedSkillsPanel web gating", () => {
     el.hasAttribute("disabled") || el.getAttribute("aria-disabled") === "true";
 
   it.each([true, false])(
-    "discover segment is hidden only in web (web=%s) and a direct discover entry opens installed",
+    "discover segment and page are available (web=%s)",
     (web) => {
       setWeb(web);
       renderPanel({ initialView: "discover" });
-      expect(screen.queryByText("skillsPage.viewDiscover") === null).toBe(web);
-      // installed-список остаётся рабочим и активным (jsdom не считает класс hidden скрытием)
-      const installedPane = screen
-        .getByTestId("skills-matrix")
-        .closest(".hidden");
-      expect(installedPane === null).toBe(web);
-      // страница discover в web не монтируется вовсе
-      expect(m.discoverMounts > 0).toBe(!web);
+      expect(screen.getByText("skillsPage.viewDiscover")).toBeInTheDocument();
+      expect(m.discoverMounts).toBeGreaterThan(0);
     },
   );
 
   it.each([
-    ["skillsPage.add", "skillsPage.addMenu.discover", "hidden"],
-    ["skillsPage.add", "skillsPage.addMenu.zip", "disabled"],
-    ["skillsPage.add", "skillsPage.addMenu.import", "disabled"],
-    ["skills.moreActions", "skills.checkUpdates", "disabled"],
-    ["skills.moreActions", "skillsPage.moreMenu.restore", "disabled"],
-    ["skills.moreActions", "skillsPage.moreMenu.repos", "disabled"],
-    ["skills.moreActions", "skills.storageSheet.open", "enabled"],
+    ["skillsPage.add", "skillsPage.addMenu.discover"],
+    ["skillsPage.add", "skillsPage.addMenu.zip"],
+    ["skillsPage.add", "skillsPage.addMenu.import"],
+    ["skills.moreActions", "skills.checkUpdates"],
+    ["skills.moreActions", "skillsPage.moreMenu.restore"],
+    ["skills.moreActions", "skillsPage.moreMenu.repos"],
+    ["skills.moreActions", "skills.storageSheet.open"],
   ] as const)(
-    "web: %s menu item %s is %s, desktop keeps it enabled",
-    async (trigger, item, webState) => {
+    "%s menu item %s is enabled in web and on desktop",
+    async (trigger, item) => {
       for (const web of [true, false]) {
         setWeb(web);
         const { unmount } = renderPanel();
@@ -1022,27 +1016,15 @@ describe("UnifiedSkillsPanel web gating", () => {
           // у пункта импорта справа бейдж с числом — имя начинается с ключа
           name: (name) => name.startsWith(item),
         });
-        if (web && webState === "hidden") {
-          expect(found).toBeNull();
-        } else {
-          expect(found).not.toBeNull();
-          expect(isDisabled(found!)).toBe(web && webState === "disabled");
-        }
+        expect(found).not.toBeNull();
+        expect(isDisabled(found!)).toBe(false);
         unmount();
       }
     },
   );
 
-  it("web: toolbar check-updates button is disabled and does not refetch", async () => {
+  it("toolbar check-updates button is enabled in web", () => {
     setWeb(true);
-    renderPanel();
-    const button = screen.getByRole("button", { name: "skills.checkUpdates" });
-    expect(button).toBeDisabled();
-    await userEvent.click(button);
-    expect(m.checkUpdates).not.toHaveBeenCalled();
-  });
-
-  it("desktop: toolbar check-updates button is enabled", () => {
     renderPanel();
     expect(
       screen.getByRole("button", { name: "skills.checkUpdates" }),
@@ -1050,20 +1032,20 @@ describe("UnifiedSkillsPanel web gating", () => {
   });
 
   it.each([true, false])(
-    "empty state: discover shortcut is hidden and import is disabled only in web (web=%s)",
+    "empty state offers discover and import (web=%s)",
     (web) => {
       setWeb(web);
       m.installed = [];
       renderPanel();
-      expect(screen.queryByText("skillsPage.goDiscover") === null).toBe(web);
+      expect(screen.getByText("skillsPage.goDiscover")).toBeInTheDocument();
       expect(
         screen.getByRole("button", { name: "skillsPage.importCount" }),
-      ).toHaveProperty("disabled", web);
+      ).toBeEnabled();
     },
   );
 
   it.each([true, false])(
-    "no-match state offers search-in-discover only outside web (web=%s)",
+    "no-match state offers search-in-discover (web=%s)",
     async (web) => {
       setWeb(web);
       renderPanel();
@@ -1074,13 +1056,50 @@ describe("UnifiedSkillsPanel web gating", () => {
         "zzz",
       );
       expect(
-        screen.getByRole("button", { name: "mcpPage.clearSearch" }),
+        screen.getByRole("button", { name: "skillsPage.searchInDiscover" }),
       ).toBeInTheDocument();
-      expect(
-        screen.queryByRole("button", {
-          name: "skillsPage.searchInDiscover",
-        }) === null,
-      ).toBe(web);
     },
   );
+
+  it("web: the ZIP item opens a hidden .zip/.skill file input, not the native dialog", async () => {
+    setWeb(true);
+    const dialog = vi.spyOn(skillsApi, "openZipFileDialog");
+    renderPanel();
+    const input = screen.getByTestId("skills-zip-input") as HTMLInputElement;
+    expect(input).toHaveAttribute("type", "file");
+    expect(input).toHaveAttribute("accept", ".zip,.skill");
+    const click = vi.spyOn(input, "click");
+    await openMenu("skillsPage.add", "skillsPage.addMenu.zip");
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(dialog).not.toHaveBeenCalled();
+    dialog.mockRestore();
+  });
+
+  it("web: choosing a file uploads that File for the current app", async () => {
+    setWeb(true);
+    m.installFromZip.mockResolvedValueOnce({
+      installed: [makeSkill({ id: "local:zipped", name: "Zipped" })],
+      skipped: [],
+    });
+    renderPanel();
+    const file = new File(["PK"], "team.zip", { type: "application/zip" });
+    await userEvent.upload(screen.getByTestId("skills-zip-input"), file);
+
+    await waitFor(() => expect(m.installFromZip).toHaveBeenCalledTimes(1));
+    const arg = m.installFromZip.mock.calls[0][0];
+    expect(arg.file).toBe(file);
+    expect(arg.filePath).toBeUndefined();
+    expect(arg.currentApp).toBe("claude");
+    await waitFor(() =>
+      expect(m.toastSuccess).toHaveBeenCalledWith(
+        "skillsPage.toast.installed",
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("desktop: no file input is rendered", () => {
+    renderPanel();
+    expect(screen.queryByTestId("skills-zip-input")).toBeNull();
+  });
 });

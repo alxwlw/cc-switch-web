@@ -211,18 +211,15 @@ describe("navigation helpers · WEB-00", () => {
     expect(readStoredView()).toBe("providers");
   });
 
-  it("web: the skills discovery view is unavailable and not restored", () => {
-    localStorage.setItem(VIEW_STORAGE_KEY, "skillsDiscovery");
-    setWeb(true);
-    expect(isViewAvailable("skillsDiscovery")).toBe(false);
-    expect(readStoredView()).toBe("providers");
-  });
-
-  it("desktop: the skills discovery view is restored", () => {
-    localStorage.setItem(VIEW_STORAGE_KEY, "skillsDiscovery");
-    expect(isViewAvailable("skillsDiscovery")).toBe(true);
-    expect(readStoredView()).toBe("skillsDiscovery");
-  });
+  it.each([true, false])(
+    "the skills discovery view is available and restored (web=%s)",
+    (web) => {
+      localStorage.setItem(VIEW_STORAGE_KEY, "skillsDiscovery");
+      setWeb(web);
+      expect(isViewAvailable("skillsDiscovery")).toBe(true);
+      expect(readStoredView()).toBe("skillsDiscovery");
+    },
+  );
 
   it("desktop: a stored auth view is restored", () => {
     localStorage.setItem(VIEW_STORAGE_KEY, "auth");
