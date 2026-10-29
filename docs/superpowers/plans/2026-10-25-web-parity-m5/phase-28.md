@@ -45,6 +45,12 @@ Scope: `src-tauri/src/proxy/forwarder.rs` (менеджеры из AppState), `s
 - [ ] TCP для raw-пути (`:425`) и для `connect_via_proxy` (`:502`) — через `hyper_util::client::legacy::connect::HttpConnector` (`enforce_http(false)`, happy eyeballs 300 мс по умолчанию; `tower::ServiceExt::oneshot`, новых зависимостей нет), один общий helper.
 - [ ] Тест без внешней сети: resolver-seam отдаёт `[недостижимый IPv6, 127.0.0.1:<порт stub>]` → raw-запрос доходит до stub за ограниченное время (секунды, не timeout запроса).
 
+### Task 7: флак `web_api_failover` и bookkeeping-тесты forwarder
+Добавлена по итогам ревью T6. Ревьюер прогнал `a_failing_provider_switches_the_route_and_emits_through_the_proxy` по 10 раз: на базе `dd8fed87` и на голове T6 одинаково падает 6/10 (`b_seen 2 != 1`). Соседний `with_auto_failover_off_a_failing_provider_is_an_error_and_nothing_switches` падает с `b_seen 2 != 0`: stub B получает запросы, которых этот тест не порождает. Гипотеза ревьюера, не доказана: proxy или failover-задача соседнего теста живёт дальше в том же процессе (общий только mutex). Ещё в полном прогоне под нагрузкой упали три `forwarder::tests::bookkeeping::*_neutral`; на базе не проверялись.
+
+- [ ] Найти механизм лишних запросов к stub B, с доказательством, и устранить причину. Не ретраи и не ослабленные asserts. Бинарник `web_api_failover` — 20/20 зелёных прогонов подряд.
+- [ ] `forwarder::tests::bookkeeping::*_neutral`: воспроизводится ли на `main`/базе фазы, в одиночку и в полном прогоне. Если это регресс фазы или флак — исправить с тем же критерием. Если нет — записать в Notes с доказательством.
+
 ### Task 5: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server`; на agentbox — failover между двумя реальными провайдерами при искусственно сломанном ключе первого.
 - [ ] Ветка `web-parity/web-01-failover-oauth`, PR; DX-59 → In Review + ссылка («этап 2 из 2»). Закрыть чекбоксы, Notes.
