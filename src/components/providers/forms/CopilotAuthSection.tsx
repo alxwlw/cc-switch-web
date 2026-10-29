@@ -1,6 +1,4 @@
 import React from "react";
-import { isWeb } from "@/lib/api/adapter";
-import { WebAccountLoginNotice } from "@/components/ui/web-unavailable";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -176,10 +174,6 @@ export const CopilotAuthSection: React.FC<CopilotAuthSectionProps> = ({
       </Button>
     </div>
   );
-
-  // WEB-00: auth_* не поддержаны — выбор/вход аккаунта в форме недоступен — снимет WEB-02
-  if (isWeb && mode === "select")
-    return <WebAccountLoginNotice className={className} />;
 
   if (mode === "select") {
     const accountSelect = isStatusSuccess && onAccountSelect && (

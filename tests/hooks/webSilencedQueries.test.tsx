@@ -85,7 +85,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     () => useSubscriptionQuota("claude", true, true, 1),
   ],
   ["useKimiOAuth", "kimi_oauth_status", () => useKimiOAuth()],
-  ["useManagedAuth", "auth_get_status", () => useManagedAuth("xai_oauth")],
   [
     "useDesktopConfigMessages",
     "get_claude_desktop_status",
@@ -254,8 +253,9 @@ describe("WEB-00: фоновые query молчат в web", () => {
       "get_cc_switch_skills_dir",
       () => useCcSwitchSkillsDir(),
     ],
+    ["useManagedAuth", "auth_get_status", () => useManagedAuth("xai_oauth")],
   ] as Array<[string, string, () => unknown]>)(
-    "%s в web зовёт %s (гейт снят: WEB-15 / WEB-17 / WEB-05)",
+    "%s в web зовёт %s (гейт снят: WEB-15 / WEB-17 / WEB-05 / WEB-02)",
     async (_name, command, useHook) => {
       setWeb(true);
       const { wrapper } = wrapperFor();
@@ -277,7 +277,7 @@ describe("WEB-00: фоновые query молчат в web", () => {
     expect(calledCommands()).toContain("list_profiles");
   });
 
-  it("useSidebarStatus в web: режим direct, без alert и точки auth, запросов mode/auth нет", async () => {
+  it("useSidebarStatus в web: режим direct, без alert, запросов mode нет, статус auth запрашивается (WEB-02)", async () => {
     setWeb(true);
     const { wrapper } = wrapperFor();
     const { result } = renderHook(() => useSidebarStatus(), { wrapper });
@@ -288,11 +288,10 @@ describe("WEB-00: фоновые query молчат в web", () => {
       mode: "direct",
       alert: false,
     });
-    expect(result.current.authNeedsAttention).toBe(false);
     const commands = calledCommands();
     expect(commands).not.toContain("get_proxy_status");
     expect(commands).not.toContain("get_app_mode");
-    expect(commands).not.toContain("auth_get_status");
+    expect(commands).toContain("auth_get_status");
   });
 
   it("useSidebarStatus на desktop зовёт get_app_mode и auth_get_status", async () => {

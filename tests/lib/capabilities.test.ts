@@ -9,26 +9,29 @@ describe("fetchCapabilities", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ mode: "web", version: "1.2.3" }),
+        json: async () => ({
+          mode: "web",
+          version: "1.2.3",
+          platform: "macos",
+        }),
       }),
     );
     await expect(fetchCapabilities()).resolves.toEqual({
       mode: "web",
       version: "1.2.3",
       runtime_boundaries: "",
+      platform: "macos",
     });
   });
 
   it("rejects on a non-2xx response", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue({
-          ok: false,
-          status: 500,
-          json: async () => ({ version: "1" }),
-        }),
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ version: "1" }),
+      }),
     );
     await expect(fetchCapabilities()).rejects.toThrow("HTTP 500");
   });

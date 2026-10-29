@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import { authApi } from "@/lib/api";
 import userEvent from "@testing-library/user-event";
 import { FormProvider, useForm } from "react-hook-form";
 import "@testing-library/jest-dom";
@@ -292,15 +293,19 @@ describe("shared form controls — web", () => {
     }
   });
 
-  it("replaces the account picker with a notice instead of an endless spinner", () => {
+  it("Codex select mode loads accounts in web instead of showing a notice (WEB-02)", async () => {
     setWeb(true);
+    const getStatus = vi
+      .spyOn(authApi, "authGetStatus")
+      .mockReturnValue(new Promise(() => {}));
     render(
       <QueryClientProvider client={createTestQueryClient()}>
         <CodexOAuthSection mode="select" onAccountSelect={vi.fn()} />
       </QueryClientProvider>,
     );
-    expect(screen.getByRole("status")).toHaveTextContent("web.accountLogin");
-    expect(screen.queryByText("codexOauth.statusLoading")).toBeNull();
+    expect(screen.queryByText("web.accountLogin")).toBeNull();
+    await waitFor(() => expect(getStatus).toHaveBeenCalledWith("codex_oauth"));
+    getStatus.mockRestore();
   });
 });
 
@@ -347,35 +352,35 @@ describe("account sections in provider forms — web", () => {
       "xAI",
       <XaiOAuthSection mode="select" onAccountSelect={vi.fn()} key="x" />,
     ],
-  ])("%s select mode shows the notice", (_label, element) => {
+  ])("%s select mode has no web notice (WEB-02)", (_label, element) => {
     setWeb(true);
     render(
       <QueryClientProvider client={createTestQueryClient()}>
         {element}
       </QueryClientProvider>,
     );
-    expect(screen.getByRole("status")).toHaveTextContent("web.accountLogin");
+    expect(screen.queryByText("web.accountLogin")).toBeNull();
   });
 });
 
 describe("app views — web", () => {
   beforeEach(() => localStorage.clear());
 
-  it("serves the openclaw sub-views (WEB-15) and hermesMemory (WEB-16); auth stays hidden", () => {
+  it("serves the openclaw sub-views (WEB-15), hermesMemory (WEB-16) and auth (WEB-02)", () => {
     setWeb(true);
     for (const view of [
       "workspace",
       "openclawConfig",
       "hermesMemory",
       "providers",
+      "auth",
     ] as const) {
       expect(isViewAvailable(view)).toBe(true);
     }
-    expect(isViewAvailable("auth")).toBe(false);
     localStorage.setItem("cc-switch-last-view", "openclawConfig");
     expect(readStoredView()).toBe("openclawConfig");
     localStorage.setItem("cc-switch-last-view", "auth");
-    expect(readStoredView()).toBe("providers");
+    expect(readStoredView()).toBe("auth");
   });
 
   it("keeps them on desktop", () => {

@@ -4968,7 +4968,8 @@
       "switchTo": "Switch agy to this account",
       "removeNote": "agy stays signed in: if agy is using this account, it keeps working after removal.",
       "switched": "Switched. New agy sessions will use this account.",
-      "switchedWhileRunning": "Switched. agy is running: open agy sessions keep using the previous account and may write it back. Quit agy and open it again."
+      "switchedWhileRunning": "Switched. agy is running: open agy sessions keep using the previous account and may write it back. Quit agy and open it again.",
+      "webLoginUnavailable": "Antigravity sign-in runs a loopback callback on the server, so sign in from the desktop app there. Switching and removing accounts work here."
     }
   },
   "kimi": {

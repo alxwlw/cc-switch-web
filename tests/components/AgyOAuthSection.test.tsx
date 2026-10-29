@@ -165,14 +165,13 @@ describe("AgyAccountSelect status query (WEB-00)", () => {
     spy.mockRestore();
   });
 
-  it("web: не запрашивает статус agy_oauth", async () => {
+  it("web: запрашивает статус agy_oauth (WEB-02)", async () => {
     setWeb(true);
     const spy = vi
       .spyOn(authApi, "authGetStatus")
       .mockResolvedValue({ accounts: [] } as never);
     renderSelect();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(spy).not.toHaveBeenCalled();
+    await waitFor(() => expect(spy).toHaveBeenCalledWith("agy_oauth"));
     spy.mockRestore();
   });
 });

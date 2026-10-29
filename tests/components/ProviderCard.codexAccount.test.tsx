@@ -123,12 +123,13 @@ function renderCard(
 }
 
 describe("ProviderCard Codex Official account identity", () => {
-  it("web: не запрашивает auth_get_status для привязанного аккаунта", async () => {
+  it("web: запрашивает auth_get_status для привязанного аккаунта (WEB-02)", async () => {
     setWeb(true);
-    const getStatus = vi.spyOn(authApi, "authGetStatus");
+    const getStatus = vi
+      .spyOn(authApi, "authGetStatus")
+      .mockResolvedValue(authStatus("me@example.com"));
     renderCard(managedProvider("OpenAI Official"), { isCurrent: true });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(getStatus).not.toHaveBeenCalled();
+    await waitFor(() => expect(getStatus).toHaveBeenCalledWith("codex_oauth"));
     getStatus.mockRestore();
   });
 

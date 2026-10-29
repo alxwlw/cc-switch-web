@@ -48,8 +48,6 @@ export function useSidebarStatus() {
       queryKey: ["managed-auth-status", provider],
       queryFn: () => authApi.authGetStatus(provider),
       staleTime: 60_000,
-      // WEB-00: auth_get_status не поддержан; точка в sidebar не горит — снимет WEB-02
-      enabled: !isWeb,
     })),
   });
 

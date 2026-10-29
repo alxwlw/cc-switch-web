@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useManagedAuth } from "@/components/providers/forms/hooks/useManagedAuth";
 import { CODEX_OAUTH_DUPLICATE_ACCOUNT_ERROR } from "@/lib/api/auth";
+import { setWeb } from "../helpers/web";
 
 const apiMocks = vi.hoisted(() => ({
   authGetStatus: vi.fn(),
@@ -543,5 +544,88 @@ describe("useManagedAuth", () => {
     await waitFor(() =>
       expect(toastMocks.success).toHaveBeenCalledWith("账号已移除"),
     );
+  });
+});
+
+describe("useManagedAuth in web (WEB-02)", () => {
+  beforeEach(() => {
+    setWeb(true);
+    apiMocks.authGetStatus.mockReset().mockResolvedValue({
+      provider: "codex_oauth",
+      authenticated: false,
+      default_account_id: null,
+      accounts: [],
+    });
+    apiMocks.authStartLogin.mockReset().mockResolvedValue({
+      provider: "codex_oauth",
+      device_code: "dev-web",
+      user_code: "ABCD-1234",
+      verification_uri: "https://auth.openai.com/codex/device",
+      expires_in: 900,
+      interval: 5,
+    });
+    apiMocks.authPollForAccount.mockReset().mockResolvedValue(null);
+    apiMocks.authCancelLogin.mockReset().mockResolvedValue(true);
+  });
+
+  it("queries the status (the WEB-00 gate is gone)", async () => {
+    const { result, unmount } = renderHook(
+      () => useManagedAuth("codex_oauth"),
+      { wrapper: createWrapper() },
+    );
+    await waitFor(() => expect(result.current.isStatusSuccess).toBe(true));
+    expect(apiMocks.authGetStatus).toHaveBeenCalledWith("codex_oauth");
+    unmount();
+  });
+
+  it("start sends device_code even when the caller asked for browser", async () => {
+    const { result, unmount } = renderHook(
+      () => useManagedAuth("codex_oauth", undefined, "browser"),
+      { wrapper: createWrapper() },
+    );
+    await waitFor(() => expect(result.current.isStatusSuccess).toBe(true));
+    act(() => result.current.startAuth());
+    await waitFor(() => expect(apiMocks.authStartLogin).toHaveBeenCalled());
+    expect(apiMocks.authStartLogin).toHaveBeenCalledWith(
+      "codex_oauth",
+      undefined,
+      undefined,
+      "device_code",
+    );
+    unmount();
+  });
+
+  it("polls the device code until an account arrives, then returns to idle", async () => {
+    const { settingsApi } = await import("@/lib/api");
+    vi.mocked(settingsApi.openExternal).mockClear();
+    apiMocks.authPollForAccount
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "acct-web" });
+    const { result, unmount } = renderHook(
+      () => useManagedAuth("codex_oauth"),
+      { wrapper: createWrapper() },
+    );
+    await waitFor(() => expect(result.current.isStatusSuccess).toBe(true));
+    vi.useFakeTimers();
+    try {
+      await act(async () => result.current.startAuth());
+      expect(result.current.deviceCode?.user_code).toBe("ABCD-1234");
+      expect(settingsApi.openExternal).toHaveBeenCalledWith(
+        "https://auth.openai.com/codex/device",
+      );
+      expect(apiMocks.authPollForAccount).toHaveBeenCalledTimes(1);
+      expect(apiMocks.authPollForAccount).toHaveBeenLastCalledWith(
+        "codex_oauth",
+        "dev-web",
+        undefined,
+      );
+      await act(() => vi.advanceTimersByTimeAsync(8000));
+      expect(apiMocks.authPollForAccount).toHaveBeenCalledTimes(2);
+      expect(result.current.pollingState).toBe("idle");
+      expect(result.current.deviceCode).toBeNull();
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
   });
 });

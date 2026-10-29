@@ -1,6 +1,4 @@
 import React from "react";
-import { isWeb } from "@/lib/api/adapter";
-import { WebAccountLoginNotice } from "@/components/ui/web-unavailable";
 import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
@@ -139,10 +137,6 @@ export const XaiOAuthSection: React.FC<XaiOAuthSectionProps> = ({
       onCancel={() => setRemoveTarget(null)}
     />
   );
-
-  // WEB-00: auth_* не поддержаны — выбор/вход аккаунта в форме недоступен — снимет WEB-02
-  if (isWeb && resolvedMode === "select")
-    return <WebAccountLoginNotice className={className} />;
 
   if (resolvedMode === "manage") {
     const rows: GroupAccountRow[] = accounts.map((account) => {

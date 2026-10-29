@@ -80,6 +80,11 @@ interface ManagedAccountsGroupProps {
   loginLabel: string;
   /** 「添加账号」和空状态的登录按钮（Copilot 先打开部署类型选择） */
   onAdd: () => void;
+  /**
+   * Sign-in is impossible here (Antigravity in web: the loopback callback runs on
+   * the server): no add / sign-in buttons, this line is shown instead.
+   */
+  loginUnavailableText?: string;
   /** Copilot 选部署类型的那块；有它时不显示空状态那行 */
   chooser?: React.ReactNode;
   loginOptions?: React.ReactNode;
@@ -122,6 +127,7 @@ export function ManagedAccountsGroup({
   emptyText,
   loginLabel,
   onAdd,
+  loginUnavailableText,
   chooser,
   loginOptions,
   defaultLabel,
@@ -211,6 +217,7 @@ export function ManagedAccountsGroup({
   };
 
   const ready = status === "ready";
+  const loginBlocked = loginUnavailableText !== undefined;
   const showEmpty = ready && accounts.length === 0 && !busy && !chooser;
 
   return (
@@ -239,7 +246,7 @@ export function ManagedAccountsGroup({
             {help}
           </HelpTip>
         </div>
-        {ready && accounts.length > 0 && (
+        {ready && accounts.length > 0 && !loginBlocked && (
           <Button
             type="button"
             id={`auth-add-${slug}`}
@@ -325,7 +332,7 @@ export function ManagedAccountsGroup({
             account={account}
             defaultLabel={defaultLabel}
             setDefaultLabel={setDefaultLabel}
-            canReauth={canReauth}
+            canReauth={canReauth && !loginBlocked}
             busy={busy}
             pendingId={pendingId}
             settingDefault={settingDefault}
@@ -341,23 +348,34 @@ export function ManagedAccountsGroup({
           <span className="min-w-0 flex-1 text-caption text-fg-2">
             {emptyText}
           </span>
-          <Button
-            type="button"
-            id={`auth-login-${slug}`}
-            variant="neutral"
-            size="compact"
-            className="gap-1.5 pe-3 ps-2.5"
-            onClick={add}
-          >
-            <span
-              aria-hidden="true"
-              className="flex h-3.5 w-3.5 items-center justify-center"
+          {!loginBlocked && (
+            <Button
+              type="button"
+              id={`auth-login-${slug}`}
+              variant="neutral"
+              size="compact"
+              className="gap-1.5 pe-3 ps-2.5"
+              onClick={add}
             >
-              <ProviderIcon icon={iconName} name={name} size={14} />
-            </span>
-            {loginLabel}
-          </Button>
+              <span
+                aria-hidden="true"
+                className="flex h-3.5 w-3.5 items-center justify-center"
+              >
+                <ProviderIcon icon={iconName} name={name} size={14} />
+              </span>
+              {loginLabel}
+            </Button>
+          )}
         </div>
+      )}
+
+      {ready && loginBlocked && (
+        <p
+          role="note"
+          className="m-0 border-t border-border py-3 pe-3 ps-4 text-caption text-fg-2"
+        >
+          {loginUnavailableText}
+        </p>
       )}
 
       {chooser}

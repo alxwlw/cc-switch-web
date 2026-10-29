@@ -5,7 +5,9 @@ import { CodexOAuthSection } from "@/components/providers/forms/CodexOAuthSectio
 import { XaiOAuthSection } from "@/components/providers/forms/XaiOAuthSection";
 import { AgyOAuthSection } from "@/components/providers/forms/AgyOAuthSection";
 import { KimiAccountLogin } from "@/components/providers/KimiAccountLogin";
-import { isMac } from "@/lib/platform";
+import { WebAccountLoginNotice } from "@/components/ui/web-unavailable";
+import { isWeb } from "@/lib/api/adapter";
+import { useAgyAccountsAvailable } from "@/hooks/useServerCapabilities";
 import type { AuthCenterTarget } from "@/lib/api";
 
 interface AuthCenterPanelProps {
@@ -19,7 +21,7 @@ interface AuthCenterPanelProps {
 
 /**
  * 授权中心：GitHub Copilot、ChatGPT、xAI、Kimi Code，一组一张卡片；
- * macOS 上另有 Antigravity 一组（切 agy 的官方登录，目前只实现了 macOS 钥匙串）。
+ * macOS（web 里看服务器的系统）上另有 Antigravity 一组（切 agy 的官方登录，目前只实现了 macOS 钥匙串）。
  * 侧栏的「授权中心」页和供应商表单里「管理账号」打开的全屏页共用。
  */
 export function AuthCenterPanel({
@@ -32,7 +34,7 @@ export function AuthCenterPanel({
   const xaiOauthSectionRef = useRef<HTMLDivElement | null>(null);
   const agyOauthSectionRef = useRef<HTMLDivElement | null>(null);
   const kimiOauthSectionRef = useRef<HTMLDivElement | null>(null);
-  const showAgy = isMac();
+  const showAgy = useAgyAccountsAvailable();
 
   useEffect(() => {
     if (!authScrollTarget) return;
@@ -79,7 +81,12 @@ export function AuthCenterPanel({
         <XaiOAuthSection mode="manage" helpSide="bottom" />
       </div>
       <div ref={kimiOauthSectionRef} className="scroll-mt-4">
-        <KimiAccountLogin helpSide={showAgy ? "bottom" : "top"} />
+        {/* Kimi stays desktop-only until WEB-02 stage 2 (phase 26) */}
+        {isWeb ? (
+          <WebAccountLoginNotice />
+        ) : (
+          <KimiAccountLogin helpSide={showAgy ? "bottom" : "top"} />
+        )}
       </div>
       {showAgy && (
         <div ref={agyOauthSectionRef} className="scroll-mt-4">
