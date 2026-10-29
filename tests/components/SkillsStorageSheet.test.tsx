@@ -252,8 +252,12 @@ describe("SkillsStorageSheet", () => {
     expect(m.openDir).not.toHaveBeenCalled();
     expect(m.toastSuccess).toHaveBeenCalledWith(
       "skills.storageSheet.pathCopied",
-      expect.anything(),
+      { closeButton: true },
     );
+    // the button reads "copy", not "open"
+    expect(
+      screen.getByRole("button", { name: "skills.storageSheet.copyPathAria" }),
+    ).toHaveTextContent("skills.storageSheet.copyPath");
   });
 
   it("web: a clipboard failure is reported as an error toast", async () => {
@@ -266,7 +270,11 @@ describe("SkillsStorageSheet", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "skills.storageSheet.copyPathAria" }),
     );
-    await waitFor(() => expect(m.toastError).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(m.toastError).toHaveBeenCalledWith("common.error", {
+        description: "denied",
+      }),
+    );
     expect(m.toastSuccess).not.toHaveBeenCalled();
   });
 
