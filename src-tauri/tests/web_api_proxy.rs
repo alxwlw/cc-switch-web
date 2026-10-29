@@ -96,8 +96,9 @@ async fn status_of(router: &axum::Router, method: &str, uri: &str, body: Option<
     web_call(router, method, uri, body).await.0.as_u16()
 }
 
-/// One-shot stub upstream: answers every request with a minimal Anthropic message and
-/// records the raw request head + body.
+/// Stub upstream: answers a proxied `POST /v1/messages` with a minimal Anthropic message and
+/// records its raw head + body. Anything else (a local port prober's `GET /`) gets a 405 and
+/// is not recorded.
 async fn stub_upstream() -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
@@ -111,6 +112,15 @@ async fn stub_upstream() -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
             let log = log.clone();
             tokio::spawn(async move {
                 let request = read_request(&mut socket).await;
+                if !request.starts_with("POST /v1/messages ") {
+                    let _ = socket
+                        .write_all(
+                            b"HTTP/1.1 405 X\r\ncontent-length: 0\r\nconnection: close\r\n\r\n",
+                        )
+                        .await;
+                    let _ = socket.shutdown().await;
+                    return;
+                }
                 log.lock().unwrap().push(request);
                 let body = json!({
                     "id": "msg_stub", "type": "message", "role": "assistant",
@@ -369,6 +379,20 @@ async fn stack_member_add_and_remove_and_a_failure_is_an_object() {
 async fn a_request_through_the_proxy_reaches_the_upstream_with_the_plain_key() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     let (upstream, seen) = stub_upstream().await;
+    // a stray probe reaches the stub before the proxied request: it must not be recorded
+    let mut probe = tokio::net::TcpStream::connect(upstream.trim_start_matches("http://"))
+        .await
+        .unwrap();
+    probe
+        .write_all(b"GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut probe_response = String::new();
+    probe.read_to_string(&mut probe_response).await.unwrap();
+    assert!(
+        probe_response.starts_with("HTTP/1.1 405"),
+        "{probe_response}"
+    );
     let f = fixture(&upstream).await;
     ok_data(
         &f.router,

@@ -909,6 +909,44 @@ mod tests {
         assert!(matches!(result, Err(ProxyError::ResponseBodyTooLarge(_))));
     }
 
+    /// Marks the requests a stub below must serve. A local port prober sends `GET /` to fresh
+    /// loopback listeners, which a single `accept` would take for the real request.
+    const STUB_TARGET: (&str, &str) = ("x-stub-target", "1");
+
+    /// Accepts until a connection whose request head satisfies `want`; others are closed.
+    /// Returns the socket and the head read so far.
+    async fn accept_matching(
+        listener: &tokio::net::TcpListener,
+        want: impl Fn(&str) -> bool,
+    ) -> (tokio::net::TcpStream, String) {
+        use tokio::io::AsyncReadExt;
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                std::future::pending::<()>().await;
+                unreachable!()
+            };
+            let mut data = Vec::new();
+            let mut buf = [0u8; 4096];
+            while !data.windows(4).any(|w| w == b"\r\n\r\n") {
+                match socket.read(&mut buf).await {
+                    Ok(n) if n > 0 => data.extend_from_slice(&buf[..n]),
+                    _ => break,
+                }
+            }
+            let head = String::from_utf8_lossy(&data).to_string();
+            if want(&head) {
+                return (socket, head);
+            }
+        }
+    }
+
+    fn is_target_get(head: &str) -> bool {
+        head.starts_with("GET ")
+            && head
+                .to_ascii_lowercase()
+                .contains(&format!("{}: {}", STUB_TARGET.0, STUB_TARGET.1))
+    }
+
     /// 启动一个最小 HTTP/1.1 服务器：响应 `Content-Length: body_len` 的全零 body，
     /// 分块写出并统计实际写成功的字节数（客户端断开后写入失败即停）。
     async fn spawn_fixed_body_server(
@@ -916,7 +954,7 @@ mod tests {
     ) -> (u16, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::io::AsyncWriteExt;
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -924,24 +962,7 @@ mod tests {
         let written_report = written.clone();
 
         tokio::spawn(async move {
-            let Ok((mut socket, _)) = listener.accept().await else {
-                return;
-            };
-            // 读完请求头（内容不重要）
-            let mut buf = [0u8; 4096];
-            let mut filled = 0;
-            loop {
-                if buf[..filled].windows(4).any(|w| w == b"\r\n\r\n") {
-                    break;
-                }
-                let Ok(n) = socket.read(&mut buf[filled..]).await else {
-                    return;
-                };
-                if n == 0 {
-                    return;
-                }
-                filled += n;
-            }
+            let (mut socket, _) = accept_matching(&listener, is_target_get).await;
             let header = format!(
                 "HTTP/1.1 200 OK\r\ncontent-type: application/octet-stream\r\ncontent-length: {body_len}\r\nconnection: close\r\n\r\n"
             );
@@ -978,6 +999,35 @@ mod tests {
         );
     }
 
+    /// A prober's `GET /` before the real request must not take the stub's place.
+    #[tokio::test]
+    async fn stub_servers_skip_a_stray_probe_before_the_real_request() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (port, _) = spawn_fixed_body_server(8).await;
+        let mut probe = tokio::net::TcpStream::connect(("127.0.0.1", port))
+            .await
+            .unwrap();
+        probe
+            .write_all(b"GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+            .await
+            .unwrap();
+        let mut answer = Vec::new();
+        probe.read_to_end(&mut answer).await.unwrap();
+        assert!(answer.is_empty(), "the probe got an answer");
+
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            reqwest::Client::new()
+                .get(format!("http://127.0.0.1:{port}/"))
+                .header(STUB_TARGET.0, STUB_TARGET.1)
+                .send(),
+        )
+        .await
+        .expect("the real request reaches the stub")
+        .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
+    }
+
     #[tokio::test]
     async fn bytes_with_limit_aborts_hyper_response_before_full_body_arrives() {
         const BODY_LEN: usize = 16 * 1024 * 1024;
@@ -995,6 +1045,7 @@ mod tests {
         });
         let request = http::Request::builder()
             .uri(format!("http://127.0.0.1:{port}/"))
+            .header(STUB_TARGET.0, STUB_TARGET.1)
             .body(http_body_util::Empty::<Bytes>::new())
             .unwrap();
         let response = sender.send_request(request).await.unwrap();
@@ -1015,6 +1066,7 @@ mod tests {
 
         let response = reqwest::Client::new()
             .get(format!("http://127.0.0.1:{port}/"))
+            .header(STUB_TARGET.0, STUB_TARGET.1)
             .send()
             .await
             .unwrap();
@@ -1031,13 +1083,11 @@ mod tests {
     #[tokio::test]
     #[serial_test::serial]
     async fn raw_request_falls_back_to_ipv4_when_ipv6_is_unreachable() {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::io::AsyncWriteExt;
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         tokio::spawn(async move {
-            let (mut sock, _) = listener.accept().await.unwrap();
-            let mut buf = [0u8; 1024];
-            let _ = sock.read(&mut buf).await;
+            let (mut sock, _) = accept_matching(&listener, is_target_get).await;
             let _ = sock
                 .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\nok")
                 .await;
@@ -1054,6 +1104,7 @@ mod tests {
 
         let mut headers = http::HeaderMap::new();
         headers.insert(http::header::HOST, http::HeaderValue::from_static("x"));
+        headers.insert(STUB_TARGET.0, http::HeaderValue::from_static(STUB_TARGET.1));
         let cases = OriginalHeaderCases {
             cases: vec![("host".into(), b"Host".to_vec())],
         };
@@ -1072,15 +1123,14 @@ mod tests {
     #[tokio::test]
     #[serial_test::serial]
     async fn connect_via_proxy_falls_back_to_ipv4_when_ipv6_is_unreachable() {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::io::AsyncWriteExt;
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let proxy = tokio::spawn(async move {
-            let (mut sock, _) = listener.accept().await.unwrap();
-            let mut buf = [0u8; 1024];
-            let n = sock.read(&mut buf).await.unwrap();
+            let (mut sock, head) =
+                accept_matching(&listener, |head| head.starts_with("CONNECT ")).await;
             let _ = sock.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await;
-            String::from_utf8_lossy(&buf[..n]).to_string()
+            head
         });
         let host = "proxy-happy-eyeballs.test";
         TEST_RESOLVER.lock().unwrap().push((

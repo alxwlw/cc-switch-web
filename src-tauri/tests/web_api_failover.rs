@@ -87,9 +87,9 @@ async fn status_of(router: &axum::Router, method: &str, uri: &str, body: Option<
 }
 
 /// Stub upstream answering every request with `status`; counts only the proxied
-/// `POST /v1/messages` calls. Other peers probe fresh loopback ports on a dev machine
-/// (`GET /` from a Go client, once per listener and per host name), and counting every
-/// accepted connection made `b_seen` 2..3 instead of 1 in about half of the runs.
+/// `POST /v1/messages` calls. A local port prober on a dev machine scans periodically
+/// (every ~16-18 s) and sends `GET /` to some of the live loopback listeners, per host
+/// name; counting every accepted connection made `b_seen` 2..3 instead of 1 in many runs.
 async fn stub_upstream(status: u16) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
