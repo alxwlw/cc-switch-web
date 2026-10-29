@@ -390,7 +390,7 @@ async fn unmanaged_skill_in_an_app_dir_can_be_imported() {
 
 #[tokio::test]
 #[serial]
-async fn migrate_storage_moves_the_skills_and_dir_follows() {
+async fn migrate_storage_moves_the_skills_and_dir_stays_the_cc_switch_dir() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     reset_test_fs();
     let home = ensure_test_home();
@@ -416,6 +416,9 @@ async fn migrate_storage_moves_the_skills_and_dir_follows() {
     assert_eq!(moved["errors"], json!([]), "{moved}");
     assert!(agents.join("skills/alpha/SKILL.md").exists());
     assert!(!ssot().join("alpha").exists(), "old copy left behind");
+    // like the desktop helper, /dir is always the CC Switch dir, not the storage location
+    let dir = call(&router, "GET", "/api/skills/dir", None).await;
+    assert_eq!(dir, json!(ssot().to_string_lossy()));
 
     let back = call(
         &router,
@@ -427,6 +430,8 @@ async fn migrate_storage_moves_the_skills_and_dir_follows() {
     assert_eq!(back["migratedCount"], json!(1), "{back}");
     assert!(ssot().join("alpha/SKILL.md").exists());
     assert!(!agents.join("skills/alpha").exists());
+    let dir = call(&router, "GET", "/api/skills/dir", None).await;
+    assert_eq!(dir, json!(ssot().to_string_lossy()));
     let _ = std::fs::remove_dir_all(&agents);
 }
 
@@ -543,4 +548,204 @@ async fn search_upstream_failure_is_ok_false() {
     assert_eq!(resp["ok"], json!(false));
     assert!(resp["error"].as_str().unwrap().contains("500"), "{resp}");
     server.abort();
+}
+
+// ---- ZIP upload (`POST /api/skills/install-zip`) ----
+
+use std::io::Write;
+
+/// A zip with `(path, content)` entries.
+fn zip_bytes(entries: &[(&str, &str)]) -> Vec<u8> {
+    let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let opts = zip::write::SimpleFileOptions::default();
+    for (path, content) in entries {
+        w.start_file(*path, opts).unwrap();
+        w.write_all(content.as_bytes()).unwrap();
+    }
+    w.finish().unwrap().into_inner()
+}
+
+fn skill_md(name: &str) -> String {
+    format!("---\nname: {name}\ndescription: {name} description\n---\n{name} body\n")
+}
+
+/// Raw-body POST (octet-stream); `web_call` is JSON-only.
+async fn upload(router: &axum::Router, query: &str, body: Vec<u8>) -> (StatusCode, Value) {
+    use axum::body::Body;
+    use axum::http::{header, Request};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri(format!("/api/skills/install-zip?{query}"))
+        .header(header::CONTENT_TYPE, "application/octet-stream")
+        .body(Body::from(body))
+        .unwrap();
+    let resp = router.clone().oneshot(req).await.unwrap();
+    let status = resp.status();
+    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    let json = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    (status, json)
+}
+
+#[tokio::test]
+#[serial]
+async fn install_zip_installs_the_skill() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let router = web_router();
+    let zip = zip_bytes(&[("pack/SKILL.md", &skill_md("Packed"))]);
+
+    let (status, resp) = upload(&router, "currentApp=claude&filename=pack.zip", zip).await;
+    assert_eq!(status, StatusCode::OK, "{resp}");
+    assert_eq!(resp["ok"], json!(true), "{resp}");
+    let installed = resp["data"]["installed"].as_array().unwrap();
+    assert_eq!(installed.len(), 1, "{resp}");
+    assert_eq!(installed[0]["directory"], json!("pack"));
+    assert_eq!(installed_ids(&router).await.len(), 1);
+    assert!(ssot().join("pack/SKILL.md").exists());
+}
+
+#[tokio::test]
+#[serial]
+async fn install_zip_names_a_root_skill_after_the_uploaded_file() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let router = web_router();
+    // no `name:` in the frontmatter: the install name comes from the file stem
+    let zip = zip_bytes(&[("SKILL.md", "---\ndescription: nameless\n---\nbody\n")]);
+
+    let (status, resp) = upload(&router, "currentApp=claude&filename=my-uploaded.skill", zip).await;
+    assert_eq!(status, StatusCode::OK, "{resp}");
+    assert_eq!(
+        resp["data"]["installed"][0]["directory"],
+        json!("my-uploaded"),
+        "{resp}"
+    );
+    assert!(ssot().join("my-uploaded/SKILL.md").exists());
+}
+
+#[tokio::test]
+#[serial]
+async fn install_zip_rejects_non_zip_bytes() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let router = web_router();
+
+    let (status, resp) = upload(
+        &router,
+        "currentApp=claude&filename=a.zip",
+        b"not a zip".to_vec(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{resp}");
+    assert_eq!(resp["ok"], json!(false));
+    assert!(
+        resp["error"]
+            .as_str()
+            .unwrap()
+            .contains("Failed to read ZIP file"),
+        "{resp}"
+    );
+    assert!(installed_ids(&router).await.is_empty());
+}
+
+#[tokio::test]
+#[serial]
+async fn install_zip_rejects_other_extensions_and_missing_names() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let router = web_router();
+    let zip = zip_bytes(&[("pack/SKILL.md", &skill_md("Packed"))]);
+
+    for query in [
+        "currentApp=claude&filename=a.txt",
+        "currentApp=claude&filename=",
+        "currentApp=claude&filename=..",
+        "currentApp=nope&filename=a.zip",
+    ] {
+        let (status, resp) = upload(&router, query, zip.clone()).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{query}: {resp}");
+        assert_eq!(resp["ok"], json!(false), "{query}");
+    }
+    assert!(installed_ids(&router).await.is_empty());
+}
+
+#[tokio::test]
+#[serial]
+async fn install_zip_skips_path_traversal_entries() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let home = ensure_test_home();
+    let router = web_router();
+    let zip = zip_bytes(&[
+        ("../evil/SKILL.md", &skill_md("Evil")),
+        ("good/SKILL.md", &skill_md("Good")),
+    ]);
+
+    // a directory-bearing filename cannot escape the upload temp dir either
+    let trap = std::env::temp_dir().join("skills-zip-trap.zip");
+    let _ = std::fs::remove_file(&trap);
+    let (status, resp) = upload(
+        &router,
+        "currentApp=claude&filename=..%2Fskills-zip-trap.zip",
+        zip,
+    )
+    .await;
+    let escaped = trap.exists();
+    let _ = std::fs::remove_file(&trap);
+    assert!(!escaped, "upload written outside its temp dir");
+    assert_eq!(status, StatusCode::OK, "{resp}");
+    let dirs: Vec<&str> = resp["data"]["installed"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["directory"].as_str().unwrap())
+        .collect();
+    assert_eq!(dirs, ["good"], "{resp}");
+    assert!(ssot().join("good/SKILL.md").exists());
+    assert!(!ssot().join("evil").exists());
+    assert!(!ssot().parent().unwrap().join("evil").exists());
+    assert!(!home.join("evil").exists());
+}
+
+#[tokio::test]
+#[serial]
+async fn install_zip_over_the_body_limit_is_413() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let router = web_router();
+
+    let big = vec![0u8; 50 * 1024 * 1024 + 1];
+    let (status, _) = upload(&router, "currentApp=claude&filename=big.zip", big).await;
+    assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+#[serial]
+async fn install_zip_entry_count_bomb_is_refused() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let router = web_router();
+    // MAX_ARCHIVE_ENTRIES (30_000) + 1 empty entries; the 512 MiB byte budget is covered
+    // by the unit tests in services/skill.rs
+    let mut w = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let opts = zip::write::SimpleFileOptions::default();
+    for i in 0..30_001 {
+        w.start_file(format!("e{i}.txt"), opts).unwrap();
+    }
+    let zip = w.finish().unwrap().into_inner();
+
+    let (status, resp) = upload(&router, "currentApp=claude&filename=bomb.zip", zip).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{resp}");
+    assert_eq!(resp["ok"], json!(false));
+    assert!(
+        resp["error"]
+            .as_str()
+            .unwrap()
+            .contains("ARCHIVE_TOO_MANY_ENTRIES"),
+        "{resp}"
+    );
+    assert!(installed_ids(&router).await.is_empty());
 }

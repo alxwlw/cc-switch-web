@@ -203,6 +203,10 @@ pub fn router(state: SharedState) -> Router {
         // ids are "owner/name:directory": the id travels in the body, not the path
         .route("/api/skills/update", post(update_skill))
         .route("/api/skills/migrate-storage", post(migrate_skill_storage))
+        .route(
+            "/api/skills/install-zip",
+            post(install_skills_zip).layer(DefaultBodyLimit::max(SKILL_ZIP_BODY_LIMIT)),
+        )
         .route("/api/skills/dir", get(skills_dir))
         .route("/api/skills/search", get(search_skills_sh))
         .route("/api/skills/repos", get(skill_repos).post(add_skill_repo))
@@ -1441,6 +1445,55 @@ async fn install_skill(
     {
         Ok(installed) => ok(installed),
         Err(e) => fail(e.to_string()),
+    }
+}
+
+/// Upload cap for `/api/skills/install-zip` (raw body).
+const SKILL_ZIP_BODY_LIMIT: usize = 50 * 1024 * 1024;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InstallZipQuery {
+    current_app: String,
+    filename: String,
+}
+
+/// `.zip` / `.skill` upload as a raw body. The bytes are written under the uploaded
+/// file's own name inside a fresh temp dir: `install_from_zip` names a root-level skill
+/// after the zip stem. The temp dir is removed on every outcome.
+async fn install_skills_zip(
+    State(state): State<SharedState>,
+    Query(q): Query<InstallZipQuery>,
+    body: axum::body::Bytes,
+) -> ApiResult {
+    let app_type = app_type!(&q.current_app);
+    // only the last path component: "../../x.zip" cannot escape the temp dir
+    let name = match std::path::Path::new(&q.filename)
+        .file_name()
+        .and_then(|n| n.to_str())
+    {
+        Some(n) if !n.is_empty() => n.to_string(),
+        _ => return bad_request("filename is required"),
+    };
+    let ext = std::path::Path::new(&name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase());
+    if !matches!(ext.as_deref(), Some("zip") | Some("skill")) {
+        return bad_request("only .zip and .skill files can be installed");
+    }
+    let db = state.db.clone();
+    let result = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+        let dir = tempfile::TempDir::new()?;
+        let path = dir.path().join(&name);
+        std::fs::write(&path, &body)?;
+        SkillService::install_from_zip(&db, &path, &app_type)
+    })
+    .await;
+    match result {
+        Ok(Ok(r)) => ok(r),
+        Ok(Err(e)) => fail(e.to_string()),
+        Err(e) => fail(format!("zip install task failed: {e}")),
     }
 }
 
