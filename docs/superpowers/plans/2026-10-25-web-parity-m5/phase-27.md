@@ -19,26 +19,26 @@ Scope: `src-tauri/src/services/proxy.rs` (emit/tray без AppHandle), `src-taur
 - Тесты: `src-tauri/tests/proxy_commands.rs` (только pricing source), unit-тесты в controller.rs (~:2665), golden-тесты `tests/golden/`; HTTP-тестов takeover/recovery нет.
 
 ### Task 1: proxy без AppHandle
-- [ ] `ProxyService`: `emit` → `state.events` (bus фазы 8) — `proxy-official-warning` с тем же payload; `notify_tray` остаётся no-op без handle. `set_app_handle` остаётся только для tray/failover/OAuth до фазы 28.
-- [ ] tray-refresh в `set_proxy_route`/`set_proxy_stack_member` оставить в desktop-обёртках; логику вызвать через общую функцию, которую зовёт и web-хендлер.
+- [x] `ProxyService`: `emit` → `state.events` (bus фазы 8) — `proxy-official-warning` с тем же payload; `notify_tray` остаётся no-op без handle. `set_app_handle` остаётся только для tray/failover/OAuth до фазы 28.
+- [x] tray-refresh в `set_proxy_route`/`set_proxy_stack_member` оставить в desktop-обёртках; логику вызвать через общую функцию, которую зовёт и web-хендлер.
 
 ### Task 2: startup и shutdown в headless
-- [ ] `bootstrap.rs`: после `recover_on_startup` и init клиента — `mode::controller::startup(&state).await`; сбои attach попадают в `take_startup_attach_failures`, как на desktop. Удалить из Notes фазы 7 пометку «controller::startup → WEB-01», если она там есть.
-- [ ] Найти handle-free ядро `cleanup_before_exit` (снятие takeover + восстановление live-бэкапов) — `pub fn shutdown_cleanup(state: &AppState)`; desktop-`cleanup_before_exit` вызывает его. server.rs: `axum::serve(...).with_graceful_shutdown(ctrl_c | SIGTERM)` → `shutdown_cleanup`. Фазы 35 и 37 используют это ядро.
+- [x] `bootstrap.rs`: после `recover_on_startup` и init клиента — `mode::controller::startup(&state).await`; сбои attach попадают в `take_startup_attach_failures`, как на desktop. Удалить из Notes фазы 7 пометку «controller::startup → WEB-01», если она там есть.
+- [x] Найти handle-free ядро `cleanup_before_exit` (снятие takeover + восстановление live-бэкапов) — `pub fn shutdown_cleanup(state: &AppState)`; desktop-`cleanup_before_exit` вызывает его. server.rs: `axum::serve(...).with_graceful_shutdown(ctrl_c | SIGTERM)` → `shutdown_cleanup`. Фазы 35 и 37 используют это ядро.
 
 ### Task 3: backend — роуты + тесты
-- [ ] Роуты для 20 команд из фактов и двух Codex-daemon команд (`POST /api/proxy/codex/restart-daemon`, `POST /api/proxy/codex/ack-stale-clients`): `POST /api/proxy/start|stop|stop-with-restore`, `GET /api/proxy/status`, `GET /api/proxy/takeover`, `PUT /api/proxy/takeover/:app` (`{enabled, stack, route?}`), `PUT /api/proxy/route/:app` (`{providerId}`), `GET /api/proxy/mode/:app`, `POST /api/proxy/startup-attach-failures/take`, `POST /api/proxy/exit-apps` (`{stack}`), `GET /api/proxy/direct/:app`, `GET /api/proxy/stack/:app`, `PUT /api/proxy/stack/:app/:providerId` (`{enabled}`), `POST /api/proxy/codex/adopt-stack-catalog`, `GET/PUT /api/proxy/config`, `GET/PUT /api/proxy/client-host`, `GET/PUT /api/proxy/config/:app`. Ошибки `StackWriteError` — сериализованные, как desktop отдаёт фронту.
-- [ ] `src-tauri/tests/web_api_proxy.rs` (temp HOME, порт proxy = 0/свободный): start → status `running`; takeover Claude → `settings.json` указывает на proxy URL, takeover status `claude: true`; stop при активном takeover → отказ; takeover off → live-файл снова указывает на direct-провайдера (совпадает с файлом пользователя, если direct-провайдер — тот же); route switch меняет провайдера маршрута; stack member add/remove; запрос через proxy к заглушке upstream с plain-ключом доходит; startup после «падения» (оставленный `live-state.json` с takeover) повторно attach-ит и поднимает proxy; `shutdown_cleanup` снимает takeover и возвращает исходные live-файлы.
+- [x] Роуты для 20 команд из фактов и двух Codex-daemon команд (`POST /api/proxy/codex/restart-daemon`, `POST /api/proxy/codex/ack-stale-clients`): `POST /api/proxy/start|stop|stop-with-restore`, `GET /api/proxy/status`, `GET /api/proxy/takeover`, `PUT /api/proxy/takeover/:app` (`{enabled, stack, route?}`), `PUT /api/proxy/route/:app` (`{providerId}`), `GET /api/proxy/mode/:app`, `POST /api/proxy/startup-attach-failures/take`, `POST /api/proxy/exit-apps` (`{stack}`), `GET /api/proxy/direct/:app`, `GET /api/proxy/stack/:app`, `PUT /api/proxy/stack/:app/:providerId` (`{enabled}`), `POST /api/proxy/codex/adopt-stack-catalog`, `GET/PUT /api/proxy/config`, `GET/PUT /api/proxy/client-host`, `GET/PUT /api/proxy/config/:app`. Ошибки `StackWriteError` — сериализованные, как desktop отдаёт фронту.
+- [x] `src-tauri/tests/web_api_proxy.rs` (temp HOME, порт proxy = 0/свободный): start → status `running`; takeover Claude → `settings.json` указывает на proxy URL, takeover status `claude: true`; stop при активном takeover → отказ; takeover off → live-файл снова указывает на direct-провайдера (совпадает с файлом пользователя, если direct-провайдер — тот же); route switch меняет провайдера маршрута; stack member add/remove; запрос через proxy к заглушке upstream с plain-ключом доходит; startup после «падения» (оставленный `live-state.json` с takeover) повторно attach-ит и поднимает proxy; `shutdown_cleanup` снимает takeover и возвращает исходные live-файлы.
 
 ### Task 4: frontend
-- [ ] case в `mapCommand` для команд фазы.
-- [ ] `RoutingSection`/`SwitchModePanel` в web: подпись «proxy работает на сервере и перенастраивает CLI на сервере; CLI на вашей машине он не затрагивает».
-- [ ] Тесты: `tests/lib/proxyApi.test.ts`; `useProxyStatus` в web опрашивает через adapter; SSE `proxy-official-warning` показывает toast.
-- [ ] Снять WEB-00-гейты с proxy/routing (таблица фазы 6); failover-controls остаются под гейтом до фазы 28.
+- [x] case в `mapCommand` для команд фазы.
+- [x] `RoutingSection`/`SwitchModePanel` в web: подпись «proxy работает на сервере и перенастраивает CLI на сервере; CLI на вашей машине он не затрагивает».
+- [x] Тесты: `tests/lib/proxyApi.test.ts`; `useProxyStatus` в web опрашивает через adapter; SSE `proxy-official-warning` показывает toast.
+- [x] Снять WEB-00-гейты с proxy/routing (таблица фазы 6); failover-controls остаются под гейтом до фазы 28.
 
 ### Task 5: гейты, PR, Plane
-- [ ] Полный набор гейтов + `cargo build --release --example server`; на agentbox: takeover Claude Code на сервере → `claude` CLI на сервере ходит через proxy; `systemctl --user restart cc-switch-web` → режим восстановлен.
-- [ ] Ветка `web-parity/web-01-proxy-core`, PR; DX-59 остаётся In Progress, комментарий со ссылкой на PR и «этап 1 из 2». Закрыть чекбоксы, Notes (ядро shutdown — для фаз 35/37; restore из фазы 18 при активном takeover).
+- [x] Полный набор гейтов + `cargo build --release --example server`; на agentbox: takeover Claude Code на сервере → `claude` CLI на сервере ходит через proxy; `systemctl --user restart cc-switch-web` → режим восстановлен.
+- [x] Ветка `web-parity/web-01-proxy-core`, PR; DX-59 остаётся In Progress, комментарий со ссылкой на PR и «этап 1 из 2». Закрыть чекбоксы, Notes (ядро shutdown — для фаз 35/37; restore из фазы 18 при активном takeover).
 
 Риски для ревью:
 - `kill -9` сервера при активном takeover: live-файлы CLI остаются направленными на мёртвый proxy до следующего старта; `recover_on_startup` + `controller::startup` обязаны это исправить (тест с журналом, оставленным «посреди» операции).
@@ -46,5 +46,49 @@ Scope: `src-tauri/src/services/proxy.rs` (emit/tray без AppHandle), `src-taur
 
 ## Notes for next phase
 
-- (заполнить по итогам)
-- Риск из фазы 18 (WEB-10): restore DB-backup-а (`POST /api/backups/:filename/restore`, `restore_db_backup_file`) меняет DB под работающим proxy/takeover. Поведение должно совпадать с desktop — проверить тестом или явной заметкой при реализации lifecycle proxy.
+- **Статус до merge (2026-10-29)**: ветка `web-parity/web-01-proxy-core` (worktree `.worktrees/web-01-proxy`), PR #28 (https://github.com/alxwlw/cc-switch-web/pull/28) открыт; DX-59 остаётся In Progress (комментарий со ссылкой, «этап 1 из 2»). Ветка также несёт закрытие фазы 26 в плане (`cf9c374e`).
+  - Финальные гейты на `ae6ffaa5`:
+    - fmt и `clippy --lib --examples -D warnings` — чисто;
+    - `(umask 022; cargo test --no-fail-fast)` — 49 бинарников ok, 4502 passed / 1 failed (baseline omp_search_paths);
+    - `cargo build --release --example server` — ок;
+    - `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` — ок;
+    - `test:unit` — 3925 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice).
+  - Ревью: Т2 одобрена с r0, 2 NIT (решения ниже). Т3 — r0 changes_requested: DP-018 (роут restart-daemon не вызывался), DP-011 (`stack` в `exit-apps` не закреплён); fix round 1 одобрен, заодно adopt перенесён (NIT DP-027). Т4 — r0 changes_requested: DP-018 (вызов `useProxyOfficialWarning` в App не закреплён), DP-026 (per-app настройки proxy недоступны в web); fix round 1 одобрен. Решения — в journal p27.
+- **Отличия от плана**:
+  - Task 1 пропущена: шина и handle-free controller уже были на main (`ProxyService::with_events`, `store.rs:43`; тест `proxy.rs:668`).
+  - Ядро `cleanup_before_exit` — это `controller::detach_all`. Он не восстанавливает бэкапы live-файлов, а пишет клиенту конфиг direct-провайдера, сохраняя режим и маршрут. Формулировки Task 2/3 о «байт-в-байт» неточны: файл совпадает с исходным, только если direct-провайдер — тот же, а ключи proxy в `env` controller может переставить в конец (как в desktop, тест `assert_back_to_user_settings`).
+  - Тесты startup после «падения» и `shutdown_cleanup` — в `controller.rs` `mode_tests` (`:3135`, `:3173`), потому что failpoint есть только под `cfg(test)`. HTTP-тесты — `tests/web_api_proxy.rs` (11).
+  - Adopt-роут — `POST /api/proxy/codex/adopt-stack-catalog`, а не `/stack/codex/adopt`: статический путь перекрывал бы `PUT /stack/:app/:providerId` для провайдера с id `adopt`.
+  - `AutoFailoverConfigPanel` и `RouteSettingsSheet` в web открыты: они редактируют только per-app config (retries, таймауты, пороги breaker) через роуты этой фазы. Под гейтом до фазы 28 остались переключатель failover в `ModeTabs` (`SwitchModePanel.tsx:584`), запросы `lib/query/failover.ts`, очередь и health badge.
+- **Backend**:
+  - `bootstrap::run_headless_startup` (`bootstrap.rs:754`) — общий для desktop и server;
+  - `bootstrap::shutdown_cleanup` (`:767`) — ядро для фаз 35 (restart) и 37 (update);
+  - сигналы и лимиты (cleanup 8 с, drain 5 с) — `examples/server.rs:31-65`;
+  - `*_inner` — `commands/proxy.rs:46-411`;
+  - роуты — `web_api.rs:460-503`, хендлеры — `:3847-4028`.
+- **Frontend**:
+  - case — `adapter.ts:1044-1106`; объектная `payload.error` бросается как есть (`:1363`);
+  - подпись и предупреждение — `WebProxyCaption.tsx`, ключи `proxyCaption`/`proxyListenWarning` (en `:5077-5078`);
+  - хук toast — `hooks/useProxyOfficialWarning.ts`.
+- **Известные ограничения (решения T2)**:
+  - Пока идёт очистка (до 8 с), сервер ещё принимает запросы. Вызов set-mode в этом окне может снова подключить клиента после `detach_all`. Окно узкое, сценарий с одним владельцем; в живой проверке не воспроизводилось.
+  - У шагов scrub и snippets в `run_headless_startup` нет отдельного теста: они общие с desktop и не менялись.
+- **Риск из фазы 18 (WEB-10)**: restore DB-backup-а под работающим proxy/takeover. Desktop `restore_db_backup` (`commands/import_export.rs:225`) и web `POST /api/backups/:filename/restore` вызывают один `restore_db_backup_file` (`:199`). Ни один из них proxy и takeover не трогает, так что поведение совпадает по построению. Отдельного теста нет.
+- **Живая проверка** (release-сборка ветки, `127.0.0.1:18799`, копия БД, временный `HOME`):
+  - Takeover через API и из UI переписывает `settings.json` временного HOME на `127.0.0.1:15721`, пользовательские ключи остаются. `claude -p` на сервере проходит через proxy.
+  - SIGTERM снимает takeover. При открытом SSE очистка проходит сразу, drain упирается в 5 с, выход через 5.2 с.
+  - Перезапуск и `kill -9` + старт восстанавливают `route` и поднимают proxy.
+  - UI: Start/Stop, `stop-with-restore`, per-app `maxRetries`, предупреждение `0.0.0.0`.
+  - SSE-toast `proxy-official-warning` вживую не вызывался: UI не даёт выбрать маршрут на официальную подписку. Покрыт unit-тестом.
+- **Найдено, для фазы 28 — proxy висит на upstream за Cloudflare на agentbox**:
+  - getaddrinfo отдаёт для `openrouter.ai`/`opencode.ai` сначала IPv6. TCP по IPv6 до Cloudflare с этого хоста не устанавливается (`SYN-SENT`; `curl -6` — таймаут, `-4` — 0.03 с).
+  - Hyper-клиент proxy (`proxy/hyper_client.rs:59`, `HttpConnector::new()` из hyper-rustls, happy eyeballs 300 мс по умолчанию в hyper-util 0.1.20) за 40 с так и не открыл IPv4-соединение. `ss` показывал только один v6 `SYN-SENT`.
+  - curl с теми же запросами отвечает за 0.5–1.5 с. Python urllib висит так же, но он перебирает адреса по очереди.
+  - Причина, по которой fallback hyper-util не сработал, не найдена. Кандидаты: явный `connect_timeout`, `set_happy_eyeballs_timeout`, предпочтение IPv4 в резолвере.
+  - Путь пересылки общий с desktop, фаза 27 его не меняла. End-to-end проверен через локальный IPv4 upstream (stub в scratchpad, провайдер `stub-ipv4-p27` только в копии БД).
+  - На живом сервисе takeover до исправления включать не стоит: `claude` на сервере повиснет.
+- **Post-merge**:
+  - Пересобрать server и `dist-web` (Rust менялся). Перед install — `cp cc-switch-web cc-switch-web.prev`, бэкап БД при остановленном unit. Миграций нет.
+  - Smoke без takeover: `GET /api/proxy/status` → `running:false`; `GET /api/proxy/takeover` → все `false`; `GET /api/proxy/mode/claude` → `direct`.
+  - `systemctl --user restart cc-switch-web` при активном takeover из плана на живом сервисе не делали. На ветке то же проверено SIGTERM и рестартом release-сборки. На живом сервисе — после разбора IPv6.
+  - DX-59 остаётся In Progress (этап 1 из 2).
