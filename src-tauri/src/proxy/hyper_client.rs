@@ -334,11 +334,6 @@ pub async fn send_request(
     Ok(ProxyResponse::Hyper(resp))
 }
 
-/// TCP or TLS stream returned by `connect_via_proxy`.
-///
-/// When the proxy URL uses `https://`, the connection to the proxy itself is
-/// TLS-wrapped before sending the CONNECT request.  The enum lets
-/// `send_raw_request` work with either variant generically.
 /// Resolver for [`connect_tcp`]: system resolver, with a test-only override
 /// table that lets tests map a fake host to chosen addresses.
 #[derive(Clone)]
@@ -417,6 +412,11 @@ fn host_for_uri(host: &str) -> String {
     }
 }
 
+/// TCP or TLS stream returned by `connect_via_proxy`.
+///
+/// When the proxy URL uses `https://`, the connection to the proxy itself is
+/// TLS-wrapped before sending the CONNECT request.  The enum lets
+/// `send_raw_request` work with either variant generically.
 enum ProxyStream {
     Tcp(tokio::net::TcpStream),
     Tls(Box<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>),
@@ -1067,5 +1067,41 @@ mod tests {
         let resp = result.expect("raw request must not hang on the unreachable IPv6 address");
         let resp = resp.expect("raw request must reach the IPv4 stub");
         assert_eq!(resp.status(), http::StatusCode::OK);
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn connect_via_proxy_falls_back_to_ipv4_when_ipv6_is_unreachable() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let proxy = tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 1024];
+            let n = sock.read(&mut buf).await.unwrap();
+            let _ = sock.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await;
+            String::from_utf8_lossy(&buf[..n]).to_string()
+        });
+        let host = "proxy-happy-eyeballs.test";
+        TEST_RESOLVER.lock().unwrap().push((
+            host.to_string(),
+            vec![
+                "[100::1]:0".parse().unwrap(),
+                format!("127.0.0.1:{port}").parse().unwrap(),
+            ],
+        ));
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            connect_via_proxy(&format!("http://{host}:{port}"), "example.com", 443),
+        )
+        .await;
+        TEST_RESOLVER.lock().unwrap().clear();
+        result
+            .expect("proxy connect must not hang on the unreachable IPv6 address")
+            .expect("CONNECT must reach the IPv4 stub proxy");
+        assert!(proxy
+            .await
+            .unwrap()
+            .starts_with("CONNECT example.com:443 HTTP/1.1"));
     }
 }
