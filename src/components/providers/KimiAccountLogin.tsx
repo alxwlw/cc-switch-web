@@ -180,20 +180,18 @@ export function KimiAccountLogin({ helpSide }: KimiAccountLoginProps) {
             ? t("kimi.oauth.dismissAccount")
             : t("kimi.oauth.removeAccount")
         }
-        message={[
+        message={
           t(
             confirmRemove?.primary
               ? "kimi.oauth.dismissConfirm"
               : "kimi.oauth.removeConfirm",
             { name: confirmRemove?.nickname ?? confirmRemove?.name },
-          ),
+          ) +
           // 服务器上的 ~/.kimi-code 和那里的 Kimi Code CLI 共用，删除会让 CLI 一起登出
-          isWeb && !confirmRemove?.primary
-            ? t("kimi.oauth.removeConfirmWeb")
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" ")}
+          (isWeb && !confirmRemove?.primary
+            ? ` ${t("kimi.oauth.removeConfirmWeb")}`
+            : "")
+        }
         pending={auth.remove.isPending}
         confirmText={
           confirmRemove?.primary

@@ -371,6 +371,27 @@ describe("Kimi official account login", () => {
     );
   });
 
+  it("web: dismissing Kimi's own login does not claim the server CLI is signed out", async () => {
+    setWeb(true);
+    const primary = {
+      ...account,
+      id: "kimi-code",
+      name: "Kimi Official · main",
+      nickname: "main",
+      primary: true,
+    };
+    await setup({
+      accounts: [primary],
+      currentAccountId: primary.id,
+      primaryHidden: false,
+    });
+    await openMenu("main");
+    fireEvent.click(menuItem("kimi.oauth.dismissAccount"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("kimi.oauth.dismissConfirm");
+    expect(dialog).not.toHaveTextContent("kimi.oauth.removeConfirmWeb");
+  });
+
   it("only hides Kimi's own login from the list, even while it is in use", async () => {
     const primary = {
       ...account,
