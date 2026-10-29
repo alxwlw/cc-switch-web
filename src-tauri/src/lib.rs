@@ -681,6 +681,7 @@ pub fn run() {
 
             // 设置 AppHandle 用于代理故障转移时的 UI 更新
             app_state.proxy_service.set_app_handle(app.handle().clone());
+            app_state.proxy_service.bind_app_state(app_state.clone());
 
             // 事件总线 -> 前端：同步桥接到 AppHandle::emit，事件名与 payload 与此前直接
             // emit 完全一致；usage_events 的写日志路径也经总线推送 `usage-log-recorded`。

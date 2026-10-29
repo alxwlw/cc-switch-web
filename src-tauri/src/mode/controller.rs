@@ -8789,4 +8789,100 @@ model_provider = "c"
         assert!(state.db.get_provider_by_id("c", "codex").unwrap().is_none());
         assert_eq!(codex_text(), before);
     }
+
+    fn drain_switch_events(
+        rx: &mut tokio::sync::broadcast::Receiver<crate::events::Event>,
+    ) -> Vec<Value> {
+        let mut out = Vec::new();
+        while let Ok(event) = rx.try_recv() {
+            if event.name == "provider-switched" {
+                out.push(event.payload);
+            }
+        }
+        out
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn failover_switch_without_an_app_handle_records_the_route_and_emits_on_the_bus() {
+        let _home = Home::new();
+        seed_settings(USER_SETTINGS);
+        let state = state_with(
+            AppType::Claude,
+            &[
+                claude("a", "https://a.example", json!({})),
+                claude("b", "https://b.example", json!({})),
+            ],
+            "a",
+        )
+        .await;
+        enter(&state, &AppType::Claude, false).await.expect("enter");
+        let mut rx = state.events.subscribe();
+
+        let switched = crate::proxy::failover_switch::FailoverSwitchManager::new()
+            .try_switch(&state, None, "claude", "b", "B")
+            .await
+            .expect("try_switch");
+
+        assert!(switched);
+        assert_eq!(mode(&AppType::Claude).proxy_route.as_deref(), Some("b"));
+        assert_eq!(
+            drain_switch_events(&mut rx),
+            vec![json!({ "appType": "claude", "providerId": "b", "source": "failover" })]
+        );
+        exit(&state, &AppType::Claude).await.expect("exit");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn failover_switch_in_stack_mode_neither_moves_the_route_nor_emits() {
+        let _home = Home::new();
+        seed_settings(USER_SETTINGS);
+        let state = state_with(AppType::Claude, &stack_rows(), "a").await;
+        enter(&state, &AppType::Claude, true).await.expect("enter");
+        let mut rx = state.events.subscribe();
+
+        let switched = crate::proxy::failover_switch::FailoverSwitchManager::new()
+            .try_switch(&state, None, "claude", "kimi", "Kimi")
+            .await
+            .expect("try_switch");
+
+        assert!(!switched);
+        assert_eq!(in_use(&state, &AppType::Claude).as_deref(), Some("a"));
+        assert!(drain_switch_events(&mut rx).is_empty());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn resetting_a_breaker_switches_back_to_the_higher_priority_provider_via_the_bus() {
+        let _home = Home::new();
+        seed_settings(USER_SETTINGS);
+        let mut a = claude("a", "https://a.example", json!({}));
+        a.sort_index = Some(0);
+        let mut b = claude("b", "https://b.example", json!({}));
+        b.sort_index = Some(1);
+        let state = state_with(AppType::Claude, &[a, b], "a").await;
+        enter(&state, &AppType::Claude, false).await.expect("enter");
+        state.db.add_to_failover_queue("claude", "a").unwrap();
+        state.db.add_to_failover_queue("claude", "b").unwrap();
+        let mut config = state.db.get_proxy_config_for_app("claude").await.unwrap();
+        config.auto_failover_enabled = true;
+        state.db.update_proxy_config_for_app(config).await.unwrap();
+        // Failover had moved the route to b; a's breaker was open.
+        assert!(record_failover_route(&state, &AppType::Claude, "b")
+            .await
+            .unwrap());
+        let mut rx = state.events.subscribe();
+
+        crate::commands::reset_circuit_breaker_inner(&state, "a".into(), "claude".into())
+            .await
+            .expect("reset");
+
+        assert_eq!(mode(&AppType::Claude).proxy_route.as_deref(), Some("a"));
+        assert_eq!(
+            drain_switch_events(&mut rx),
+            vec![json!({ "appType": "claude", "providerId": "a", "source": "failover" })]
+        );
+        exit(&state, &AppType::Claude).await.expect("exit");
+    }
 }

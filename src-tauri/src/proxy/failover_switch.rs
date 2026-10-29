@@ -6,9 +6,9 @@
 //! - 前端事件发射
 
 use crate::error::AppError;
+use crate::store::AppState;
 use std::collections::HashSet;
 use std::sync::Arc;
-use tauri::Manager;
 use tokio::sync::RwLock;
 
 /// 故障转移切换管理器
@@ -37,6 +37,7 @@ impl FailoverSwitchManager {
     /// - `Err(e)` - 切换过程中发生错误
     pub async fn try_switch(
         &self,
+        state: &AppState,
         app_handle: Option<&tauri::AppHandle>,
         app_type: &str,
         provider_id: &str,
@@ -56,7 +57,7 @@ impl FailoverSwitchManager {
 
         // 执行切换（确保最后清理 pending 标记）
         let result = self
-            .do_switch(app_handle, app_type, provider_id, provider_name)
+            .do_switch(state, app_handle, app_type, provider_id, provider_name)
             .await;
 
         // 清理 pending 标记
@@ -70,6 +71,7 @@ impl FailoverSwitchManager {
 
     async fn do_switch(
         &self,
+        state: &AppState,
         app_handle: Option<&tauri::AppHandle>,
         app_type: &str,
         provider_id: &str,
@@ -86,35 +88,29 @@ impl FailoverSwitchManager {
 
         log::info!("[FO-001] 切换: {app_type} → {provider_name}");
 
-        let mut switched = false;
-
-        if let Some(app) = app_handle {
-            if let Some(app_state) = app.try_state::<crate::store::AppState>() {
-                // 只换代理的路由，不写客户端文件。
-                switched = crate::mode::controller::record_failover_route(
-                    app_state.inner(),
-                    &app_enum,
-                    provider_id,
-                )
+        // 只换代理的路由，不写客户端文件。
+        let switched =
+            crate::mode::controller::record_failover_route(state, &app_enum, provider_id)
                 .await
                 .map_err(AppError::Message)?;
+        if !switched {
+            return Ok(false);
+        }
 
-                if !switched {
-                    return Ok(false);
-                }
+        // 托盘只在桌面端（有 AppHandle）刷新：Linux 重建原生菜单，其它平台通知托盘面板
+        if let Some(app) = app_handle {
+            crate::tray::refresh_tray_menu(app);
+        }
 
-                // Linux 重建原生菜单，其它平台通知托盘面板（不挂原生菜单）
-                crate::tray::refresh_tray_menu(app);
-            }
-
-            // 发射事件到前端
-            let event_data = serde_json::json!({
+        // 事件走总线：桌面端由 bridge_to_tauri 转给前端，web 端走 SSE
+        state.events.emit(
+            "provider-switched",
+            serde_json::json!({
                 "appType": app_type,
                 "providerId": provider_id,
                 "source": "failover"  // 标识来源是故障转移
-            });
-            crate::events::emit_via_app(app, "provider-switched", event_data);
-        }
+            }),
+        );
 
         Ok(switched)
     }

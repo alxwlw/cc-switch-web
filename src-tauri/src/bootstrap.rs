@@ -844,6 +844,7 @@ pub fn run_headless_bootstrap_with(
     }
 
     let state = AppState::new(db);
+    state.proxy_service.bind_app_state(state.clone());
     crate::usage_events::init(state.events.clone());
     run_post_db_bootstrap(&state, codex_history, &mut report);
     Ok(Bootstrapped { state, report })

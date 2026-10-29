@@ -23,6 +23,9 @@ pub struct ProxyService {
     app_handle: Arc<RwLock<Option<tauri::AppHandle>>>,
     /// OAuth 管理器（AppState::new 注入；裸构造为 None）
     auth: Option<crate::proxy::server::OAuthManagers>,
+    /// 应用状态（生产构造点显式绑定；故障转移经它写路由、发事件）。AppState 与本服务互相
+    /// 持有，生产里同进程同寿命；不放进 AppState::new，免得每个测试状态都泄漏。
+    app_state: Arc<std::sync::OnceLock<crate::store::AppState>>,
     switch_locks: SwitchLockManager,
     events: crate::events::EventHub,
 }
@@ -65,6 +68,7 @@ impl ProxyService {
             server: Arc::new(RwLock::new(None)),
             app_handle: Arc::new(RwLock::new(None)),
             auth: None,
+            app_state: Arc::new(std::sync::OnceLock::new()),
             switch_locks: SwitchLockManager::new(),
             events: crate::events::EventHub::new(),
         }
@@ -80,6 +84,21 @@ impl ProxyService {
     pub fn with_auth(mut self, auth: crate::proxy::server::OAuthManagers) -> Self {
         self.auth = Some(auth);
         self
+    }
+
+    /// 绑定应用状态，让转发器的故障转移能写路由、发事件（桌面与 headless 的生产构造点调用）。
+    /// 只生效一次；重复绑定被忽略。
+    pub fn bind_app_state(&self, state: crate::store::AppState) {
+        let _ = self.app_state.set(state);
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn app_state_bound_in_server_for_test(&self) -> bool {
+        self.server
+            .read()
+            .await
+            .as_ref()
+            .is_some_and(|server| server.has_app_state())
     }
 
     #[cfg(test)]
@@ -159,7 +178,9 @@ impl ProxyService {
         // 4. 创建并启动服务器
         let app_handle = self.app_handle.read().await.clone();
         let server = ProxyServer::new(config.clone(), self.db.clone(), app_handle)
-            .with_auth(self.auth.clone());
+            .with_auth(self.auth.clone())
+            .with_app_state(self.app_state.get().cloned());
+        self.reset_health_for_new_breakers().await;
         let info = server
             .start()
             .await
@@ -177,6 +198,14 @@ impl ProxyService {
 
         log::info!("代理服务器已启动: {}:{}", info.address, info.port);
         Ok(info)
+    }
+
+    /// 熔断器只在内存里，新服务的熔断器都是关闭的；库里留着的 provider_health 属于上一个
+    /// 服务，会让健康徽标在重启后仍显示不健康。新服务一起，健康状态一并清零。
+    async fn reset_health_for_new_breakers(&self) {
+        if let Err(e) = self.db.clear_all_provider_health().await {
+            log::warn!("清除供应商健康状态失败: {e}");
+        }
     }
 
     async fn persist_ephemeral_listen_port_if_needed(
@@ -592,7 +621,9 @@ impl ProxyService {
     async fn start_with(&self, config: &ProxyConfig) -> Result<ProxyServer, String> {
         let app_handle = self.app_handle.read().await.clone();
         let server = ProxyServer::new(config.clone(), self.db.clone(), app_handle)
-            .with_auth(self.auth.clone());
+            .with_auth(self.auth.clone())
+            .with_app_state(self.app_state.get().cloned());
+        self.reset_health_for_new_breakers().await;
         let info = server.start().await.map_err(|e| e.to_string())?;
         if let Err(e) = self
             .persist_ephemeral_listen_port_if_needed(config, info.port)

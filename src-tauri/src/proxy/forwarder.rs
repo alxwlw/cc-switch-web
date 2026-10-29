@@ -351,6 +351,8 @@ pub struct RequestForwarder {
     app_handle: Option<tauri::AppHandle>,
     /// OAuth 管理器（桌面与 headless 同源）
     auth: Option<OAuthManagers>,
+    /// 应用状态：故障转移切换的路由记录与事件总线（未绑定则不切换）
+    app_state: Option<crate::store::AppState>,
     /// 请求开始时的"当前供应商 ID"（用于判断是否需要同步 UI/托盘）
     current_provider_id_at_start: String,
     /// 代理会话 ID（用于 Gemini Native shadow replay）
@@ -459,6 +461,7 @@ impl RequestForwarder {
         failover_manager: Arc<FailoverSwitchManager>,
         app_handle: Option<tauri::AppHandle>,
         auth: Option<OAuthManagers>,
+        app_state: Option<crate::store::AppState>,
         current_provider_id_at_start: String,
         session_id: String,
         session_client_provided: bool,
@@ -481,6 +484,7 @@ impl RequestForwarder {
             failover_manager,
             app_handle,
             auth,
+            app_state,
             current_provider_id_at_start,
             session_id,
             session_client_provided,
@@ -656,14 +660,16 @@ impl RequestForwarder {
             if self.current_provider_id_at_start.as_str() != provider.id.as_str() {
                 status.failover_count += 1;
 
-                let fm = self.failover_manager.clone();
-                let ah = self.app_handle.clone();
-                let pid = provider.id.clone();
-                let pname = provider.name.clone();
-                let at = app_type_str.to_string();
-                tokio::spawn(async move {
-                    let _ = fm.try_switch(ah.as_ref(), &at, &pid, &pname).await;
-                });
+                if let Some(state) = self.app_state.clone() {
+                    let fm = self.failover_manager.clone();
+                    let ah = self.app_handle.clone();
+                    let pid = provider.id.clone();
+                    let pname = provider.name.clone();
+                    let at = app_type_str.to_string();
+                    tokio::spawn(async move {
+                        let _ = fm.try_switch(&state, ah.as_ref(), &at, &pid, &pname).await;
+                    });
+                }
             }
             refresh_success_rate(&mut status);
         }
@@ -4748,6 +4754,7 @@ mod tests {
             codex_chat_history: Arc::new(CodexChatHistoryStore::default()),
             failover_manager: Arc::new(FailoverSwitchManager::new()),
             app_handle: None,
+            app_state: None,
             auth: None,
             current_provider_id_at_start: String::new(),
             session_id: String::new(),

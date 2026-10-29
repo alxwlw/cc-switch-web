@@ -325,4 +325,116 @@ mod tests {
         state.proxy_service.stop().await.unwrap();
         upstream.abort();
     }
+
+    /// A fresh server has fresh (closed) breakers, so health rows left by the previous
+    /// server must not survive: on the first start and on the config-restart path.
+    #[tokio::test]
+    #[serial]
+    async fn starting_a_server_clears_stale_provider_health() {
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let db = Arc::new(Database::memory().unwrap());
+        db.update_proxy_config(crate::proxy::types::ProxyConfig {
+            listen_port: 0,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        db.save_provider(
+            "claude",
+            &crate::provider::Provider::with_id(
+                "p1".into(),
+                "P1".into(),
+                serde_json::json!({}),
+                None,
+            ),
+        )
+        .unwrap();
+        let state = AppState::new(db.clone());
+        let unhealthy = || async {
+            db.update_provider_health("p1", "claude", false, Some("boom".into()))
+                .await
+                .unwrap();
+            // threshold 5: four more failures flip is_healthy
+            for _ in 0..4 {
+                db.update_provider_health("p1", "claude", false, Some("boom".into()))
+                    .await
+                    .unwrap();
+            }
+            assert!(
+                !db.get_provider_health("p1", "claude")
+                    .await
+                    .unwrap()
+                    .is_healthy
+            );
+        };
+
+        unhealthy().await;
+        state.proxy_service.start().await.unwrap();
+        assert!(
+            db.get_provider_health("p1", "claude")
+                .await
+                .unwrap()
+                .is_healthy
+        );
+
+        unhealthy().await;
+        let mut config = db.get_proxy_config().await.unwrap();
+        config.listen_port = 0; // differs from the persisted ephemeral port -> restart
+        assert!(state.proxy_service.update_config(&config).await.unwrap());
+        assert!(
+            db.get_provider_health("p1", "claude")
+                .await
+                .unwrap()
+                .is_healthy
+        );
+
+        state.proxy_service.stop().await.unwrap();
+    }
+
+    /// The bound AppState reaches the forwarder's ProxyState on both construction paths
+    /// (first start, config restart); unbound services start without one.
+    #[tokio::test]
+    #[serial]
+    async fn bound_app_state_reaches_the_proxy_server_on_start_and_restart() {
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let db = Arc::new(Database::memory().unwrap());
+        db.update_proxy_config(crate::proxy::types::ProxyConfig {
+            listen_port: 0,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        let state = AppState::new(db.clone());
+
+        state.proxy_service.start().await.unwrap();
+        assert!(
+            !state
+                .proxy_service
+                .app_state_bound_in_server_for_test()
+                .await
+        );
+        state.proxy_service.stop().await.unwrap();
+
+        state.proxy_service.bind_app_state(state.clone());
+        state.proxy_service.start().await.unwrap();
+        assert!(
+            state
+                .proxy_service
+                .app_state_bound_in_server_for_test()
+                .await
+        );
+
+        let mut config = db.get_proxy_config().await.unwrap();
+        config.listen_port = 0;
+        assert!(state.proxy_service.update_config(&config).await.unwrap());
+        assert!(
+            state
+                .proxy_service
+                .app_state_bound_in_server_for_test()
+                .await
+        );
+        state.proxy_service.stop().await.unwrap();
+    }
 }

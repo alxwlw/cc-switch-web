@@ -51,6 +51,8 @@ pub struct ProxyState {
     pub app_handle: Option<tauri::AppHandle>,
     /// OAuth 管理器（与 AppState 共享同一批 Arc）；None 仅出现在裸构造的测试中
     pub auth: Option<OAuthManagers>,
+    /// 应用状态（`ProxyService::bind_app_state` 绑定；故障转移经它写路由并发事件，None 则不切换）
+    pub app_state: Option<crate::store::AppState>,
     /// 故障转移切换管理器
     pub failover_manager: Arc<FailoverSwitchManager>,
 }
@@ -88,6 +90,17 @@ impl ProxyServer {
         self
     }
 
+    /// 注入应用状态（生产路径经 `ProxyService::bind_app_state`）。
+    pub fn with_app_state(mut self, app_state: Option<crate::store::AppState>) -> Self {
+        self.state.app_state = app_state;
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_app_state(&self) -> bool {
+        self.state.app_state.is_some()
+    }
+
     pub fn new(
         config: ProxyConfig,
         db: Arc<Database>,
@@ -109,6 +122,7 @@ impl ProxyServer {
             codex_chat_history: Arc::new(CodexChatHistoryStore::default()),
             app_handle,
             auth: None,
+            app_state: None,
             failover_manager,
         };
 
