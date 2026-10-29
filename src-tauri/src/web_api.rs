@@ -270,6 +270,19 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/tools/uninstall-preview", post(tool_uninstall_preview))
         .route("/api/tools/probe", post(tool_probe))
         .route("/api/tools/installations", post(tool_installations))
+        // managed OAuth accounts (WEB-02): Copilot / Codex / xAI / Antigravity
+        .route("/api/auth/agy/running", get(auth_agy_running))
+        .route("/api/auth/:provider/login", post(auth_login))
+        .route("/api/auth/:provider/poll", post(auth_poll))
+        .route("/api/auth/:provider/cancel", post(auth_cancel))
+        .route("/api/auth/:provider/accounts", get(auth_accounts))
+        .route("/api/auth/:provider/status", get(auth_status))
+        .route(
+            "/api/auth/:provider/accounts/:account_id",
+            delete(auth_remove_account),
+        )
+        .route("/api/auth/:provider/default", put(auth_set_default))
+        .route("/api/auth/:provider/logout", post(auth_logout))
         .route("/api/env/conflicts", get(env_conflicts))
         .route("/api/env/conflicts/cleanup", post(env_cleanup))
         .route("/api/env/restore", post(env_restore))
@@ -508,6 +521,7 @@ async fn capabilities() -> Json<Value> {
         "mode": "web",
         "auth": "none (tailscale-only; TRUSTED_TAILNET=1 required for non-loopback bind)",
         "version": env!("CARGO_PKG_VERSION"),
+        "platform": std::env::consts::OS,
         "mvp_apps": ["claude", "codex", "gemini", "opencode"],
         "runtime_boundaries": "manages files on the server host only; no tray, no native file pickers, no auto-update, no file dialogs, no terminal launch",
     }))
@@ -2266,6 +2280,161 @@ async fn model_pricing(State(state): State<SharedState>) -> ApiResult {
         Ok(Ok(list)) => ok(list),
         Ok(Err(e)) => fail(e.to_string()),
         Err(e) => fail(format!("pricing query failed: {e}")),
+    }
+}
+
+// ---------- managed OAuth accounts (WEB-02) ----------
+
+/// Unknown provider -> 400 before any manager is touched.
+macro_rules! auth_provider {
+    ($p:expr) => {
+        if let Err(e) = crate::commands::ensure_auth_provider($p) {
+            return bad_request(e);
+        }
+    };
+}
+
+fn unit_result(r: Result<(), String>) -> ApiResult {
+    match r {
+        Ok(()) => ok(Value::Null),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthLoginBody {
+    github_domain: Option<String>,
+    target_account_id: Option<String>,
+    login_method: Option<String>,
+}
+
+async fn auth_login(
+    State(state): State<SharedState>,
+    Path(provider): Path<String>,
+    Json(body): Json<AuthLoginBody>,
+) -> ApiResult {
+    auth_provider!(&provider);
+    if body.login_method.as_deref() == Some("browser") {
+        return bad_request("browser login is unavailable in web mode: use device code");
+    }
+    if provider == crate::commands::AUTH_PROVIDER_AGY_OAUTH {
+        return bad_request(
+            "Antigravity sign-in runs a loopback callback on the server and is unavailable in web mode: sign in from the desktop app",
+        );
+    }
+    match crate::commands::start_login_inner(
+        &state,
+        &provider,
+        body.github_domain.as_deref(),
+        body.target_account_id.as_deref(),
+        body.login_method.as_deref(),
+    )
+    .await
+    {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthPollBody {
+    device_code: String,
+    github_domain: Option<String>,
+}
+
+async fn auth_poll(
+    State(state): State<SharedState>,
+    Path(provider): Path<String>,
+    Json(body): Json<AuthPollBody>,
+) -> ApiResult {
+    auth_provider!(&provider);
+    match crate::commands::poll_for_account_inner(
+        &state,
+        &provider,
+        &body.device_code,
+        body.github_domain.as_deref(),
+    )
+    .await
+    {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthCancelBody {
+    device_code: String,
+}
+
+async fn auth_cancel(
+    State(state): State<SharedState>,
+    Path(provider): Path<String>,
+    Json(body): Json<AuthCancelBody>,
+) -> ApiResult {
+    auth_provider!(&provider);
+    match crate::commands::cancel_login_inner(&state, &provider, &body.device_code).await {
+        Ok(r) => ok(r),
+        // the only inner error is "provider has no cancellable flow"
+        Err(e) => bad_request(e),
+    }
+}
+
+async fn auth_accounts(
+    State(state): State<SharedState>,
+    Path(provider): Path<String>,
+) -> ApiResult {
+    auth_provider!(&provider);
+    match crate::commands::list_accounts_inner(&state, &provider).await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn auth_status(State(state): State<SharedState>, Path(provider): Path<String>) -> ApiResult {
+    auth_provider!(&provider);
+    match crate::commands::get_status_inner(&state, &provider).await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn auth_remove_account(
+    State(state): State<SharedState>,
+    Path((provider, account_id)): Path<(String, String)>,
+) -> ApiResult {
+    auth_provider!(&provider);
+    unit_result(crate::commands::remove_account_inner(&state, &provider, &account_id).await)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthDefaultBody {
+    account_id: String,
+}
+
+async fn auth_set_default(
+    State(state): State<SharedState>,
+    Path(provider): Path<String>,
+    Json(body): Json<AuthDefaultBody>,
+) -> ApiResult {
+    auth_provider!(&provider);
+    unit_result(
+        crate::commands::set_default_account_inner(&state, &provider, &body.account_id).await,
+    )
+}
+
+async fn auth_logout(State(state): State<SharedState>, Path(provider): Path<String>) -> ApiResult {
+    auth_provider!(&provider);
+    unit_result(crate::commands::logout_inner(&state, &provider).await)
+}
+
+async fn auth_agy_running() -> ApiResult {
+    match crate::commands::agy_account_is_running().await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
     }
 }
 

@@ -1,10 +1,6 @@
 use tauri::State;
 
 use crate::app_config::AppType;
-use crate::commands::agy_account::AgyAccountState;
-use crate::commands::codex_oauth::CodexOAuthState;
-use crate::commands::copilot::CopilotAuthState;
-use crate::commands::xai_oauth::XaiOAuthState;
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthError;
 use crate::proxy::providers::copilot_auth::{
     CopilotAuthError, GitHubAccount, GitHubDeviceCodeResponse,
@@ -16,7 +12,7 @@ use crate::store::AppState;
 const AUTH_PROVIDER_GITHUB_COPILOT: &str = "github_copilot";
 const AUTH_PROVIDER_CODEX_OAUTH: &str = "codex_oauth";
 const AUTH_PROVIDER_XAI_OAUTH: &str = "xai_oauth";
-const AUTH_PROVIDER_AGY_OAUTH: &str = "agy_oauth";
+pub(crate) const AUTH_PROVIDER_AGY_OAUTH: &str = "agy_oauth";
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ManagedAuthAccount {
@@ -52,7 +48,7 @@ pub struct ManagedAuthDeviceCodeResponse {
     pub interval: u64,
 }
 
-fn ensure_auth_provider(auth_provider: &str) -> Result<&'static str, String> {
+pub(crate) fn ensure_auth_provider(auth_provider: &str) -> Result<&'static str, String> {
     match auth_provider {
         AUTH_PROVIDER_GITHUB_COPILOT => Ok(AUTH_PROVIDER_GITHUB_COPILOT),
         AUTH_PROVIDER_CODEX_OAUTH => Ok(AUTH_PROVIDER_CODEX_OAUTH),
@@ -132,13 +128,27 @@ pub async fn auth_start_login(
     github_domain: Option<String>,
     target_account_id: Option<String>,
     login_method: Option<String>,
-    copilot_state: State<'_, CopilotAuthState>,
-    codex_state: State<'_, CodexOAuthState>,
-    xai_state: State<'_, XaiOAuthState>,
-    agy_state: State<'_, AgyAccountState>,
+    state: State<'_, AppState>,
 ) -> Result<ManagedAuthDeviceCodeResponse, String> {
-    let auth_provider = ensure_auth_provider(&auth_provider)?;
-    let browser_login = match login_method.as_deref().unwrap_or("device_code") {
+    start_login_inner(
+        state.inner(),
+        &auth_provider,
+        github_domain.as_deref(),
+        target_account_id.as_deref(),
+        login_method.as_deref(),
+    )
+    .await
+}
+
+pub(crate) async fn start_login_inner(
+    state: &AppState,
+    auth_provider: &str,
+    github_domain: Option<&str>,
+    target_account_id: Option<&str>,
+    login_method: Option<&str>,
+) -> Result<ManagedAuthDeviceCodeResponse, String> {
+    let auth_provider = ensure_auth_provider(auth_provider)?;
+    let browser_login = match login_method.unwrap_or("device_code") {
         "device_code" => false,
         "browser" if auth_provider == AUTH_PROVIDER_CODEX_OAUTH => true,
         _ => return Err("Unsupported login method for this auth provider".into()),
@@ -148,23 +158,19 @@ pub async fn auth_start_login(
             if target_account_id.is_some() {
                 return Err("Targeted re-authentication is only supported for Codex OAuth".into());
             }
-            let auth_manager = copilot_state.0.read().await;
+            let auth_manager = state.copilot_auth.read().await;
             let response = auth_manager
-                .start_device_flow(github_domain.as_deref())
+                .start_device_flow(github_domain)
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(map_device_code_response(auth_provider, response))
         }
         AUTH_PROVIDER_CODEX_OAUTH => {
-            let auth_manager = &codex_state.0;
+            let auth_manager = &state.codex_oauth_manager;
             let response = if browser_login {
-                auth_manager
-                    .start_browser_flow(target_account_id.as_deref())
-                    .await
+                auth_manager.start_browser_flow(target_account_id).await
             } else {
-                auth_manager
-                    .start_device_flow(target_account_id.as_deref())
-                    .await
+                auth_manager.start_device_flow(target_account_id).await
             }
             .map_err(|e| e.to_string())?;
             Ok(map_device_code_response(auth_provider, response))
@@ -173,7 +179,7 @@ pub async fn auth_start_login(
             if target_account_id.is_some() {
                 return Err("Targeted re-authentication is only supported for Codex OAuth".into());
             }
-            let auth_manager = xai_state.0.read().await;
+            let auth_manager = state.xai_oauth.read().await;
             let response = auth_manager
                 .start_device_flow()
                 .await
@@ -185,7 +191,11 @@ pub async fn auth_start_login(
             if target_account_id.is_some() {
                 return Err("Targeted re-authentication is only supported for Codex OAuth".into());
             }
-            let start = agy_state.0.start_login().await.map_err(|e| e.to_string())?;
+            let start = state
+                .agy_account
+                .start_login()
+                .await
+                .map_err(|e| e.to_string())?;
             Ok(ManagedAuthDeviceCodeResponse {
                 provider: auth_provider.to_string(),
                 device_code: start.flow_id,
@@ -205,18 +215,29 @@ pub async fn auth_poll_for_account(
     auth_provider: String,
     device_code: String,
     github_domain: Option<String>,
-    app_state: State<'_, AppState>,
-    copilot_state: State<'_, CopilotAuthState>,
-    codex_state: State<'_, CodexOAuthState>,
-    xai_state: State<'_, XaiOAuthState>,
-    agy_state: State<'_, AgyAccountState>,
+    state: State<'_, AppState>,
 ) -> Result<Option<ManagedAuthAccount>, String> {
-    let auth_provider = ensure_auth_provider(&auth_provider)?;
+    poll_for_account_inner(
+        state.inner(),
+        &auth_provider,
+        &device_code,
+        github_domain.as_deref(),
+    )
+    .await
+}
+
+pub(crate) async fn poll_for_account_inner(
+    state: &AppState,
+    auth_provider: &str,
+    device_code: &str,
+    github_domain: Option<&str>,
+) -> Result<Option<ManagedAuthAccount>, String> {
+    let auth_provider = ensure_auth_provider(auth_provider)?;
     match auth_provider {
         AUTH_PROVIDER_GITHUB_COPILOT => {
-            let auth_manager = copilot_state.0.write().await;
+            let auth_manager = state.copilot_auth.write().await;
             match auth_manager
-                .poll_for_token(&device_code, github_domain.as_deref())
+                .poll_for_token(device_code, github_domain)
                 .await
             {
                 Ok(account) => {
@@ -230,10 +251,10 @@ pub async fn auth_poll_for_account(
             }
         }
         AUTH_PROVIDER_CODEX_OAUTH => {
-            let auth_manager = &codex_state.0;
+            let auth_manager = &state.codex_oauth_manager;
             match auth_manager
-                .poll_for_token(&device_code, || async {
-                    app_state
+                .poll_for_token(device_code, || async {
+                    state
                         .proxy_service
                         .lock_switch_for_app(AppType::Codex.as_str())
                         .await
@@ -251,8 +272,8 @@ pub async fn auth_poll_for_account(
             }
         }
         AUTH_PROVIDER_XAI_OAUTH => {
-            let auth_manager = xai_state.0.write().await;
-            match auth_manager.poll_for_token(&device_code).await {
+            let auth_manager = state.xai_oauth.write().await;
+            match auth_manager.poll_for_token(device_code).await {
                 Ok(account) => {
                     let default_account_id = auth_manager.get_status().await.default_account_id;
                     Ok(account
@@ -263,16 +284,16 @@ pub async fn auth_poll_for_account(
             }
         }
         AUTH_PROVIDER_AGY_OAUTH => {
-            let Some(account) = agy_state
-                .0
-                .poll_login(&device_code)
+            let Some(account) = state
+                .agy_account
+                .poll_login(device_code)
                 .await
                 .map_err(|e| e.to_string())?
             else {
                 return Ok(None);
             };
-            let current = agy_state
-                .0
+            let current = state
+                .agy_account
                 .status()
                 .await
                 .ok()
@@ -287,13 +308,23 @@ pub async fn auth_poll_for_account(
 pub async fn auth_cancel_login(
     auth_provider: String,
     device_code: String,
-    codex_state: State<'_, CodexOAuthState>,
-    agy_state: State<'_, AgyAccountState>,
+    state: State<'_, AppState>,
 ) -> Result<bool, String> {
-    let auth_provider = ensure_auth_provider(&auth_provider)?;
+    cancel_login_inner(state.inner(), &auth_provider, &device_code).await
+}
+
+pub(crate) async fn cancel_login_inner(
+    state: &AppState,
+    auth_provider: &str,
+    device_code: &str,
+) -> Result<bool, String> {
+    let auth_provider = ensure_auth_provider(auth_provider)?;
     match auth_provider {
-        AUTH_PROVIDER_CODEX_OAUTH => Ok(codex_state.0.cancel_device_flow(&device_code).await),
-        AUTH_PROVIDER_AGY_OAUTH => Ok(agy_state.0.cancel_login(&device_code).await),
+        AUTH_PROVIDER_CODEX_OAUTH => Ok(state
+            .codex_oauth_manager
+            .cancel_device_flow(device_code)
+            .await),
+        AUTH_PROVIDER_AGY_OAUTH => Ok(state.agy_account.cancel_login(device_code).await),
         _ => Err("Login cancellation is only supported for Codex OAuth".to_string()),
     }
 }
@@ -301,15 +332,19 @@ pub async fn auth_cancel_login(
 #[tauri::command(rename_all = "camelCase")]
 pub async fn auth_list_accounts(
     auth_provider: String,
-    copilot_state: State<'_, CopilotAuthState>,
-    codex_state: State<'_, CodexOAuthState>,
-    xai_state: State<'_, XaiOAuthState>,
-    agy_state: State<'_, AgyAccountState>,
+    state: State<'_, AppState>,
 ) -> Result<Vec<ManagedAuthAccount>, String> {
-    let auth_provider = ensure_auth_provider(&auth_provider)?;
+    list_accounts_inner(state.inner(), &auth_provider).await
+}
+
+pub(crate) async fn list_accounts_inner(
+    state: &AppState,
+    auth_provider: &str,
+) -> Result<Vec<ManagedAuthAccount>, String> {
+    let auth_provider = ensure_auth_provider(auth_provider)?;
     match auth_provider {
         AUTH_PROVIDER_GITHUB_COPILOT => {
-            let auth_manager = copilot_state.0.read().await;
+            let auth_manager = state.copilot_auth.read().await;
             let status = auth_manager.get_status().await;
             let default_account_id = status.default_account_id.clone();
             Ok(status
@@ -319,7 +354,7 @@ pub async fn auth_list_accounts(
                 .collect())
         }
         AUTH_PROVIDER_CODEX_OAUTH => {
-            let auth_manager = &codex_state.0;
+            let auth_manager = &state.codex_oauth_manager;
             let status = auth_manager.get_status().await;
             let default_account_id = status.default_account_id.clone();
             Ok(status
@@ -329,7 +364,7 @@ pub async fn auth_list_accounts(
                 .collect())
         }
         AUTH_PROVIDER_XAI_OAUTH => {
-            let auth_manager = xai_state.0.read().await;
+            let auth_manager = state.xai_oauth.read().await;
             let status = auth_manager.get_status().await;
             let default_account_id = status.default_account_id.clone();
             Ok(status
@@ -339,7 +374,11 @@ pub async fn auth_list_accounts(
                 .collect())
         }
         AUTH_PROVIDER_AGY_OAUTH => {
-            let status = agy_state.0.status().await.map_err(|e| e.to_string())?;
+            let status = state
+                .agy_account
+                .status()
+                .await
+                .map_err(|e| e.to_string())?;
             let current = status.current_account_id;
             Ok(status
                 .accounts
@@ -354,15 +393,19 @@ pub async fn auth_list_accounts(
 #[tauri::command(rename_all = "camelCase")]
 pub async fn auth_get_status(
     auth_provider: String,
-    copilot_state: State<'_, CopilotAuthState>,
-    codex_state: State<'_, CodexOAuthState>,
-    xai_state: State<'_, XaiOAuthState>,
-    agy_state: State<'_, AgyAccountState>,
+    state: State<'_, AppState>,
 ) -> Result<ManagedAuthStatus, String> {
-    let auth_provider = ensure_auth_provider(&auth_provider)?;
+    get_status_inner(state.inner(), &auth_provider).await
+}
+
+pub(crate) async fn get_status_inner(
+    state: &AppState,
+    auth_provider: &str,
+) -> Result<ManagedAuthStatus, String> {
+    let auth_provider = ensure_auth_provider(auth_provider)?;
     match auth_provider {
         AUTH_PROVIDER_GITHUB_COPILOT => {
-            let auth_manager = copilot_state.0.read().await;
+            let auth_manager = state.copilot_auth.read().await;
             let status = auth_manager.get_status().await;
             let default_account_id = status.default_account_id.clone();
             Ok(ManagedAuthStatus {
@@ -380,7 +423,7 @@ pub async fn auth_get_status(
             })
         }
         AUTH_PROVIDER_CODEX_OAUTH => {
-            let auth_manager = &codex_state.0;
+            let auth_manager = &state.codex_oauth_manager;
             let status = auth_manager.get_status().await;
             let default_account_id = status.default_account_id.clone();
             Ok(ManagedAuthStatus {
@@ -398,7 +441,7 @@ pub async fn auth_get_status(
             })
         }
         AUTH_PROVIDER_XAI_OAUTH => {
-            let auth_manager = xai_state.0.read().await;
+            let auth_manager = state.xai_oauth.read().await;
             let status = auth_manager.get_status().await;
             let default_account_id = status.default_account_id.clone();
             Ok(ManagedAuthStatus {
@@ -415,7 +458,11 @@ pub async fn auth_get_status(
         }
         // 「默认账号」在这里是 agy 当前登录的那个号
         AUTH_PROVIDER_AGY_OAUTH => {
-            let status = agy_state.0.status().await.map_err(|e| e.to_string())?;
+            let status = state
+                .agy_account
+                .status()
+                .await
+                .map_err(|e| e.to_string())?;
             let current = status.current_account_id;
             Ok(ManagedAuthStatus {
                 provider: auth_provider.to_string(),
@@ -437,34 +484,39 @@ pub async fn auth_get_status(
 pub async fn auth_remove_account(
     auth_provider: String,
     account_id: String,
-    app_state: State<'_, AppState>,
-    copilot_state: State<'_, CopilotAuthState>,
-    xai_state: State<'_, XaiOAuthState>,
-    agy_state: State<'_, AgyAccountState>,
+    state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let auth_provider = ensure_auth_provider(&auth_provider)?;
+    remove_account_inner(state.inner(), &auth_provider, &account_id).await
+}
+
+pub(crate) async fn remove_account_inner(
+    state: &AppState,
+    auth_provider: &str,
+    account_id: &str,
+) -> Result<(), String> {
+    let auth_provider = ensure_auth_provider(auth_provider)?;
     match auth_provider {
         AUTH_PROVIDER_GITHUB_COPILOT => {
-            let auth_manager = copilot_state.0.write().await;
+            let auth_manager = state.copilot_auth.write().await;
             auth_manager
-                .remove_account(&account_id)
+                .remove_account(account_id)
                 .await
                 .map_err(|e| e.to_string())
         }
         AUTH_PROVIDER_CODEX_OAUTH => {
-            remove_codex_oauth_account_with_switch_lock(app_state.inner(), &account_id).await
+            remove_codex_oauth_account_with_switch_lock(state, account_id).await
         }
         AUTH_PROVIDER_XAI_OAUTH => {
-            let auth_manager = xai_state.0.write().await;
+            let auth_manager = state.xai_oauth.write().await;
             auth_manager
-                .remove_account(&account_id)
+                .remove_account(account_id)
                 .await
                 .map_err(|e| e.to_string())
         }
         // 只删 CC Switch 里的副本，不替 agy 登出
-        AUTH_PROVIDER_AGY_OAUTH => agy_state
-            .0
-            .remove(&account_id)
+        AUTH_PROVIDER_AGY_OAUTH => state
+            .agy_account
+            .remove(account_id)
             .await
             .map_err(|e| e.to_string()),
         _ => unreachable!(),
@@ -500,38 +552,43 @@ pub(crate) async fn remove_codex_oauth_account_with_switch_lock(
 pub async fn auth_set_default_account(
     auth_provider: String,
     account_id: String,
-    copilot_state: State<'_, CopilotAuthState>,
-    codex_state: State<'_, CodexOAuthState>,
-    xai_state: State<'_, XaiOAuthState>,
-    agy_state: State<'_, AgyAccountState>,
+    state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let auth_provider = ensure_auth_provider(&auth_provider)?;
+    set_default_account_inner(state.inner(), &auth_provider, &account_id).await
+}
+
+pub(crate) async fn set_default_account_inner(
+    state: &AppState,
+    auth_provider: &str,
+    account_id: &str,
+) -> Result<(), String> {
+    let auth_provider = ensure_auth_provider(auth_provider)?;
     match auth_provider {
         AUTH_PROVIDER_GITHUB_COPILOT => {
-            let auth_manager = copilot_state.0.write().await;
+            let auth_manager = state.copilot_auth.write().await;
             auth_manager
-                .set_default_account(&account_id)
+                .set_default_account(account_id)
                 .await
                 .map_err(|e| e.to_string())
         }
         AUTH_PROVIDER_CODEX_OAUTH => {
-            let auth_manager = &codex_state.0;
+            let auth_manager = &state.codex_oauth_manager;
             auth_manager
-                .set_default_account(&account_id)
+                .set_default_account(account_id)
                 .await
                 .map_err(|e| e.to_string())
         }
         AUTH_PROVIDER_XAI_OAUTH => {
-            let auth_manager = xai_state.0.write().await;
+            let auth_manager = state.xai_oauth.write().await;
             auth_manager
-                .set_default_account(&account_id)
+                .set_default_account(account_id)
                 .await
                 .map_err(|e| e.to_string())
         }
         // 切 agy 的全局登录（写钥匙串）
-        AUTH_PROVIDER_AGY_OAUTH => agy_state
-            .0
-            .switch_to(&account_id)
+        AUTH_PROVIDER_AGY_OAUTH => state
+            .agy_account
+            .switch_to(account_id)
             .await
             .map_err(|e| e.to_string()),
         _ => unreachable!(),
@@ -539,26 +596,24 @@ pub async fn auth_set_default_account(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn auth_logout(
-    auth_provider: String,
-    app_state: State<'_, AppState>,
-    copilot_state: State<'_, CopilotAuthState>,
-    xai_state: State<'_, XaiOAuthState>,
-    agy_state: State<'_, AgyAccountState>,
-) -> Result<(), String> {
-    let auth_provider = ensure_auth_provider(&auth_provider)?;
+pub async fn auth_logout(auth_provider: String, state: State<'_, AppState>) -> Result<(), String> {
+    logout_inner(state.inner(), &auth_provider).await
+}
+
+pub(crate) async fn logout_inner(state: &AppState, auth_provider: &str) -> Result<(), String> {
+    let auth_provider = ensure_auth_provider(auth_provider)?;
     match auth_provider {
         AUTH_PROVIDER_GITHUB_COPILOT => {
-            let auth_manager = copilot_state.0.write().await;
+            let auth_manager = state.copilot_auth.write().await;
             auth_manager.clear_auth().await.map_err(|e| e.to_string())
         }
-        AUTH_PROVIDER_CODEX_OAUTH => logout_codex_oauth_with_switch_lock(app_state.inner()).await,
+        AUTH_PROVIDER_CODEX_OAUTH => logout_codex_oauth_with_switch_lock(state).await,
         AUTH_PROVIDER_XAI_OAUTH => {
-            let auth_manager = xai_state.0.write().await;
+            let auth_manager = state.xai_oauth.write().await;
             auth_manager.clear_auth().await.map_err(|e| e.to_string())
         }
-        AUTH_PROVIDER_AGY_OAUTH => agy_state
-            .0
+        AUTH_PROVIDER_AGY_OAUTH => state
+            .agy_account
             .remove_all()
             .await
             .map(|_| ())
