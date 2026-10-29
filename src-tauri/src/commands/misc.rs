@@ -374,20 +374,74 @@ pub async fn run_tool_lifecycle_action(
     // 排队结束后再探测安装目标，与执行一起持锁，避免读到另一升级的中间状态。
     TOOL_LIFECYCLE
         .run(requested, move |tools| {
-            let command_line =
-                build_tool_lifecycle_command(tools, action, wsl_shell_by_tool.as_ref())?;
+            let command_line = match tool_lifecycle_command_override() {
+                Some(script) => script,
+                None => build_tool_lifecycle_command(tools, action, wsl_shell_by_tool.as_ref())?,
+            };
             run_tool_lifecycle_silently(&command_line, label)
         })
         .await
+}
+
+/// Process-global script override for the install/update branch; only the test hook sets it.
+static TOOL_LIFECYCLE_COMMAND_OVERRIDE: std::sync::Mutex<Option<String>> =
+    std::sync::Mutex::new(None);
+
+fn tool_lifecycle_command_override() -> Option<String> {
+    TOOL_LIFECYCLE_COMMAND_OVERRIDE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
+/// Test seam: while `Some`, install/update run this script instead of the generated
+/// installer command. Production never sets it and no HTTP route reaches it.
+#[cfg_attr(not(feature = "test-hooks"), doc(hidden))]
+pub fn tool_lifecycle_command_test_hook(script: Option<String>) {
+    *TOOL_LIFECYCLE_COMMAND_OVERRIDE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = script;
+}
+
+/// 单次安装/更新/卸载脚本的总时限。超时后杀掉整个进程树并返回稳定错误码
+/// `TOOL_ACTION_TIMEOUT`，避免卡住的安装器永久占用生命周期锁。
+const TOOL_LIFECYCLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
+/// 等待生命周期子进程：复用 `wait_child_output` 的截止时间与整树击杀；
+/// 超时映射为 `TOOL_ACTION_TIMEOUT: <label> exceeded <N> s`（不带输出尾部：
+/// 超时后不 join 管道读线程，见 `wait_child_output`）。
+fn wait_lifecycle_child(
+    child: std::process::Child,
+    label: &str,
+    timeout: std::time::Duration,
+) -> Result<(), String> {
+    let deadline = CommandDeadline::from_timeout(Some(timeout));
+    let timeout_message = deadline.map(|d| d.timeout_error());
+    match wait_child_output(child, deadline) {
+        Ok(output) => finish_lifecycle_output(&output),
+        Err(error) if Some(&error) == timeout_message.as_ref() => Err(format!(
+            "TOOL_ACTION_TIMEOUT: {label} exceeded {} s",
+            timeout.as_secs()
+        )),
+        Err(error) => Err(error),
+    }
 }
 
 /// 静默执行工具安装/更新脚本：直接捕获子进程输出并阻塞到命令真正结束，
 /// 不再弹出可见终端窗口（与 `launch_terminal_running` 的"开窗即返回"形成对比，
 /// 后者仍保留给 provider 切换等需要交互式终端的场景）。
 /// 失败时回传 stderr/stdout 末尾若干行，供前端 toast 提示。
+fn run_tool_lifecycle_silently(command_line: &str, label: &str) -> Result<(), String> {
+    run_tool_lifecycle_silently_with_timeout(command_line, label, TOOL_LIFECYCLE_TIMEOUT)
+}
+
 #[cfg(not(target_os = "windows"))]
-fn run_tool_lifecycle_silently(command_line: &str, _label: &str) -> Result<(), String> {
-    use std::process::Command;
+fn run_tool_lifecycle_silently_with_timeout(
+    command_line: &str,
+    label: &str,
+    timeout: std::time::Duration,
+) -> Result<(), String> {
+    use std::process::{Command, Stdio};
     // command_line 是 bash 风格脚本（含 `set -e` 与多行命令）；强制用 bash 执行，
     // 避免用户默认 shell 为 fish/zsh 时 `set -e` 等语义不一致。
     let mut cmd = Command::new("bash");
@@ -399,14 +453,24 @@ fn run_tool_lifecycle_silently(command_line: &str, _label: &str) -> Result<(), S
         let inherited = std::env::var("PATH").unwrap_or_default();
         cmd.env("PATH", merge_path_segments(&login_path, &inherited));
     }
-    let output = cmd.output().map_err(|e| format!("启动安装进程失败: {e}"))?;
-    finish_lifecycle_output(&output)
+    // spawn 默认继承 stdin（output() 不会）：显式 /dev/null，等待输入的安装器立即失败而非挂到超时。
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    isolate_child_process_group(&mut cmd);
+    let child = cmd.spawn().map_err(|e| format!("启动安装进程失败: {e}"))?;
+    wait_lifecycle_child(child, label, timeout)
 }
 
 /// Windows 静默执行：command_line 是 .bat 内容（chcp 65001 + @echo off + call/wsl 行，CRLF 分隔），
 /// 写临时 .bat 后用 `cmd /C` 执行，`CREATE_NO_WINDOW` 抑制 console 窗口。
 #[cfg(target_os = "windows")]
-fn run_tool_lifecycle_silently(command_line: &str, label: &str) -> Result<(), String> {
+fn run_tool_lifecycle_silently_with_timeout(
+    command_line: &str,
+    label: &str,
+    timeout: std::time::Duration,
+) -> Result<(), String> {
+    use std::process::Stdio;
     // 每次调用使用独立目录，避免同进程并发升级时覆盖或删除另一工具的脚本。
     let script_dir = tempfile::Builder::new()
         .prefix("cc_switch_lifecycle_")
@@ -415,9 +479,14 @@ fn run_tool_lifecycle_silently(command_line: &str, label: &str) -> Result<(), St
     let bat_file = script_dir.path().join(format!("{label}.bat"));
     std::fs::write(&bat_file, command_line).map_err(|e| format!("写入批处理文件失败: {e}"))?;
 
-    let output = windows_lifecycle_command(&bat_file, &effective_path_string()).output();
-
-    finish_lifecycle_output(&output.map_err(|e| format!("启动安装进程失败: {e}"))?)
+    let child = windows_lifecycle_command(&bat_file, &effective_path_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("启动安装进程失败: {e}"))?;
+    // script_dir 活到等待结束；超时后 taskkill /T 杀整树再清理。
+    wait_lifecycle_child(child, label, timeout)
 }
 
 #[cfg(target_os = "windows")]
@@ -6399,6 +6468,94 @@ mod tests {
             .unwrap_err()
             .contains("tool lifecycle task join error"));
         coordinator.run(vec!["claude"], |_| Ok(())).await.unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lifecycle_timeout_returns_stable_code_quickly() {
+        let started = std::time::Instant::now();
+        let err = run_tool_lifecycle_silently_with_timeout(
+            "sleep 5",
+            "tool_install",
+            std::time::Duration::from_secs(1),
+        )
+        .unwrap_err();
+        assert_eq!(err, "TOOL_ACTION_TIMEOUT: tool_install exceeded 1 s");
+        assert!(started.elapsed() < std::time::Duration::from_secs(3));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lifecycle_timeout_kills_the_whole_process_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let pid_file = dir.path().join("pid");
+        let script = format!("sleep 30 &\necho $! > '{}'\nwait", pid_file.display());
+        let err = run_tool_lifecycle_silently_with_timeout(
+            &script,
+            "tool_update",
+            std::time::Duration::from_secs(1),
+        )
+        .unwrap_err();
+        assert!(err.starts_with("TOOL_ACTION_TIMEOUT"), "{err}");
+        let pid: libc::pid_t = std::fs::read_to_string(&pid_file)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        // 进程组被 SIGKILL 后，孙进程会被 init 回收；给内核一点时间。
+        let mut gone = false;
+        for _ in 0..50 {
+            // SAFETY: signal 0 only probes for existence.
+            if unsafe { libc::kill(pid, 0) } != 0 {
+                gone = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        assert!(gone, "background child {pid} survived the timeout");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lifecycle_stdin_is_dev_null() {
+        // The harness' own stdin may already be /dev/null, which would hide an
+        // `inherit()` regression. Point fd 0 at a pipe for the duration of the
+        // call (restored afterwards), then have the script check that its fd 0
+        // is the same inode as /dev/null (bash `-ef`: Linux and macOS).
+        // SAFETY: plain fd juggling on fd 0, which the test harness never reads.
+        let (saved, read_end) = unsafe {
+            let mut fds = [0 as libc::c_int; 2];
+            assert_eq!(libc::pipe(fds.as_mut_ptr()), 0);
+            let saved = libc::dup(0);
+            assert!(saved >= 0);
+            assert!(libc::dup2(fds[0], 0) >= 0);
+            libc::close(fds[1]);
+            (saved, fds[0])
+        };
+        let result = run_tool_lifecycle_silently_with_timeout(
+            "[[ /dev/stdin -ef /dev/null ]] || { echo stdin-not-null >&2; exit 7; }",
+            "tool_install",
+            std::time::Duration::from_secs(10),
+        );
+        // SAFETY: restores the descriptors saved above.
+        unsafe {
+            libc::dup2(saved, 0);
+            libc::close(saved);
+            libc::close(read_end);
+        }
+        result.unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lifecycle_failure_still_reports_output_tail() {
+        let err = run_tool_lifecycle_silently_with_timeout(
+            "echo err-tail >&2; exit 3",
+            "tool_install",
+            std::time::Duration::from_secs(10),
+        )
+        .unwrap_err();
+        assert!(err.contains("err-tail"), "{err}");
     }
 
     #[cfg(target_os = "windows")]

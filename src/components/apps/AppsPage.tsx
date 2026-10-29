@@ -52,7 +52,6 @@ import { useSettings } from "@/hooks/useSettings";
 import { isUpdateAvailable } from "@/lib/version";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { Switch } from "@/components/ui/switch";
 import { HelpTip } from "@/components/ui/help-tip";
 import { HoverTip } from "@/components/ui/hover-tip";
@@ -394,32 +393,27 @@ export function AppsPage() {
             <span className="whitespace-nowrap text-caption text-fg-3">
               {lastChecked}
             </span>
-            {/* WEB-00: update/install/uninstall (run_tool_lifecycle_action, probe/prepare) не замаплены; версии (get_tool_versions) и проверка обновлений работают — снимет WEB-25 */}
             {(updatableCount > 0 || tools.batchAction) && (
-              <WebUnavailableTip active={isWeb}>
-                <Button
-                  variant="neutral"
-                  size="regular"
-                  disabled={
-                    isWeb || tools.isLoadingTools || Boolean(tools.batchAction)
-                  }
-                  aria-busy={Boolean(tools.batchAction)}
-                  onClick={() =>
-                    void tools.handleRunToolAction(
-                      tools.updatableToolNames,
-                      "update",
-                      { fromBatchEntry: true },
-                    )
-                  }
-                >
-                  {tools.batchAction === "update" ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <ArrowUpCircle className="h-3.5 w-3.5" />
-                  )}
-                  {t("settings.updateAllTools", { count: updatableCount })}
-                </Button>
-              </WebUnavailableTip>
+              <Button
+                variant="neutral"
+                size="regular"
+                disabled={tools.isLoadingTools || Boolean(tools.batchAction)}
+                aria-busy={Boolean(tools.batchAction)}
+                onClick={() =>
+                  void tools.handleRunToolAction(
+                    tools.updatableToolNames,
+                    "update",
+                    { fromBatchEntry: true },
+                  )
+                }
+              >
+                {tools.batchAction === "update" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ArrowUpCircle className="h-3.5 w-3.5" />
+                )}
+                {t("settings.updateAllTools", { count: updatableCount })}
+              </Button>
             )}
             <Button
               variant="neutral"
@@ -463,19 +457,16 @@ export function AppsPage() {
                 </DropdownMenuTrigger>
               </HoverTip>
               <DropdownMenuContent align="end">
-                <WebUnavailableTip active={isWeb}>
-                  <DropdownMenuItem
-                    disabled={
-                      isWeb ||
-                      tools.isLoadingTools ||
-                      tools.isAnyBusy ||
-                      tools.isDiagnosingAll
-                    }
-                    onSelect={() => void tools.handleDiagnoseAll()}
-                  >
-                    {t("settings.toolDiagnose")}
-                  </DropdownMenuItem>
-                </WebUnavailableTip>
+                <DropdownMenuItem
+                  disabled={
+                    tools.isLoadingTools ||
+                    tools.isAnyBusy ||
+                    tools.isDiagnosingAll
+                  }
+                  onSelect={() => void tools.handleDiagnoseAll()}
+                >
+                  {t("settings.toolDiagnose")}
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => setShowCommands(true)}>
                   {t("appsPage.manualCommands")}
                 </DropdownMenuItem>
@@ -496,6 +487,16 @@ export function AppsPage() {
         className="min-h-0 flex-1 overflow-y-auto scroll-stable"
       >
         <div ref={tableRef} className="px-6 pb-10 pt-4">
+          {isWeb && (
+            <p
+              className="mb-3 text-caption text-fg-2"
+              data-testid="apps-web-server-note"
+            >
+              {t("appsPage.webServerNote")}
+              {(tools.batchAction || tools.busyTools.size > 0) &&
+                ` ${t("appsPage.webLifecycleSlow")}`}
+            </p>
+          )}
           <div
             className={cn(
               APP_ROW_GRID,
@@ -791,26 +792,24 @@ function ToolRow({
   );
 
   const actionButton = action ? (
-    <WebUnavailableTip active={isWeb}>
-      <Button
-        variant="neutral"
-        size="compact"
-        onClick={() => void tools.handleRunToolAction([tool], action)}
-        disabled={isWeb || isVersionLoading || isBusy}
-        aria-busy={isBusy}
-      >
-        {isBusy && busyAction !== "uninstall" ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : action === "install" ? (
-          <Download className="h-3.5 w-3.5" />
-        ) : (
-          <ArrowUpCircle className="h-3.5 w-3.5" />
-        )}
-        {action === "install"
-          ? t("settings.toolInstall")
-          : t("settings.toolUpdate")}
-      </Button>
-    </WebUnavailableTip>
+    <Button
+      variant="neutral"
+      size="compact"
+      onClick={() => void tools.handleRunToolAction([tool], action)}
+      disabled={isVersionLoading || isBusy}
+      aria-busy={isBusy}
+    >
+      {isBusy && busyAction !== "uninstall" ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : action === "install" ? (
+        <Download className="h-3.5 w-3.5" />
+      ) : (
+        <ArrowUpCircle className="h-3.5 w-3.5" />
+      )}
+      {action === "install"
+        ? t("settings.toolInstall")
+        : t("settings.toolUpdate")}
+    </Button>
   ) : null;
 
   const installHint = t(`appsPage.installHint.${tool}`, { defaultValue: "" });
@@ -968,16 +967,13 @@ function ToolRow({
               </DropdownMenuTrigger>
             </HoverTip>
             <DropdownMenuContent align="end" className="min-w-[160px]">
-              <WebUnavailableTip active={isWeb}>
-                <DropdownMenuItem
-                  disabled={isWeb}
-                  onSelect={onUninstall}
-                  className="text-danger-text focus:text-danger-text"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {t("settings.toolUninstall")}
-                </DropdownMenuItem>
-              </WebUnavailableTip>
+              <DropdownMenuItem
+                onSelect={onUninstall}
+                className="text-danger-text focus:text-danger-text"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {t("settings.toolUninstall")}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )

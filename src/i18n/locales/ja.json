@@ -1017,6 +1017,7 @@
     "toolActionFailed": "インストール/更新コマンドの実行に失敗しました",
     "toolActionInProgress": "アプリの操作が実行中です",
     "toolActionInProgressDetail": "{{tool}} のインストール、更新、またはアンインストールがバックグラウンドで実行中です。完了するまでお待ちください。",
+    "toolActionTimeout": "{{tool}} は 15 分以内に完了せず、プロセスを停止しました",
     "toolNotRunnable": "インストール済みですが実行できません（バージョン未検出）",
     "toolActionVersionUnchangedTitle": "バージョンは変わりませんでした",
     "toolActionVersionUnchanged": "現在も {{version}}（最新: {{latest}}）です。アップデーターが成功を報告しても実際には更新されていない可能性があります。",
@@ -4207,6 +4208,8 @@
     "back": "戻る"
   },
   "appsPage": {
+    "webServerNote": "CLI ツールはこのコンピューターではなく cc-switch-web サーバーにインストールされます。",
+    "webLifecycleSlow": "インストールと更新には最大 15 分かかることがあります。",
     "showInSidebar": "{{name}} をサイドバーに表示",
     "lastChecked": "最終確認 {{time}}",
     "neverChecked": "まだ更新を確認していません",

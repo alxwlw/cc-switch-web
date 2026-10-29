@@ -38,6 +38,10 @@ Scope: `src-tauri/src/web_api.rs` (2 роута), `src-tauri/tests/web_api_sessi
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-29**: PR #22 merged `3b2c53c9` → main; live на `cc-switch-web.service`.
+  - Server и `dist-web` пересобраны из main. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p21-20261029-000103/`. Миграций нет.
+  - Проверено: `/api/health` → 200; `GET /api/sessions/stream` с `sourcePath=/etc/passwd` → 200 `application/x-ndjson`, одна строка `error` «outside provider roots»; `POST /api/sessions/image {}` → 422; поток по реальной сессии claude — первая строка `header`, последняя `done`, 161 из 161 сообщений. WARN/ERROR в journal нет, отдаваемый `index.html` совпадает со сборкой.
+  - DX-71 Done (комментарий со ссылками file:line). Ветка `web-parity/web-13-sessions-media` удалена локально и на origin.
 - **Статус до merge (2026-10-28)**: ветка `web-parity/web-13-sessions-media` (worktree `.worktrees/web-13`), PR #22 (https://github.com/alxwlw/cc-switch-web/pull/22) открыт; DX-71 In Review (комментарий со ссылкой). Ветка также несёт закрытие фазы 20 в плане (`9543df8c`).
   - Финальные гейты на `93aae9fc`: fmt/clippy (lib + example) чисто; `(umask 022; cargo test --no-fail-fast)` 4431 passed / 1 failed (baseline omp_search_paths); `cargo build --release --example server` ок; `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок; `test:unit` 3821 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice).
   - Т1 одобрена с r0; NIT DP-011 (тест обрыва соединения проверяет только живучесть роутера, ленивую сериализацию не закрепляет) и DP-022 (новый тест-файл добавляет 17 `await_holding_lock` под `clippy --all-targets` через `test_mutex`; CI гоняет clippy без `--all-targets`, `ci.yml:174`) приняты как есть. Т2 одобрена с r1: SHOULD-FIX DP-011 — проверка `!res.ok` в потоке не была закреплена (тело 500 `"no"` и так валило `JSON.parse`), добавлен тест 500 с валидным JSON-телом; NIT про отсутствие `reader.cancel()` после error-чанка принят (сервер закрывает поток сразу после строки error).
