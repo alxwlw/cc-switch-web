@@ -9,7 +9,7 @@ use crate::store::AppState;
 use std::str::FromStr;
 
 /// 有 `proxy_config` 行的应用：重试、熔断、故障转移这些设置只对它们有意义。
-fn require_proxy_app(app_type: &str) -> Result<crate::app_config::AppType, String> {
+pub(crate) fn require_proxy_app(app_type: &str) -> Result<crate::app_config::AppType, String> {
     let app = crate::app_config::AppType::from_str(app_type)
         .map_err(|error| format!("无效的应用类型: {error}"))?;
     if !app.supports_local_proxy() {
@@ -19,7 +19,7 @@ fn require_proxy_app(app_type: &str) -> Result<crate::app_config::AppType, Strin
 }
 
 /// 有直连 / 路由模式的应用（含 Claude Desktop）：进出路由、换路由、看模式。
-fn require_mode_app(app_type: &str) -> Result<crate::app_config::AppType, String> {
+pub(crate) fn require_mode_app(app_type: &str) -> Result<crate::app_config::AppType, String> {
     let app = crate::app_config::AppType::from_str(app_type)
         .map_err(|error| format!("无效的应用类型: {error}"))?;
     if !app.has_route_mode() {
@@ -39,6 +39,11 @@ pub async fn start_proxy_server(
 /// 停止代理服务器（仅停止服务，不恢复/清理 Live 接管状态）
 #[tauri::command]
 pub async fn stop_proxy_server(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    stop_proxy_server_inner(state.inner()).await
+}
+
+/// Shared by the desktop command and the web route.
+pub(crate) async fn stop_proxy_server_inner(state: &AppState) -> Result<(), String> {
     let takeover = state.proxy_service.get_takeover_status().await?;
     if takeover.claude
         || takeover.codex
@@ -81,17 +86,29 @@ pub async fn set_proxy_takeover_for_app(
     stack: Option<bool>,
     route: Option<String>,
 ) -> Result<(), String> {
-    let app = require_mode_app(&app_type)?;
+    set_proxy_takeover_inner(
+        state.inner(),
+        &app_type,
+        enabled,
+        stack.unwrap_or(false),
+        route.as_deref(),
+    )
+    .await
+}
+
+/// Shared by the desktop command and the web route.
+pub(crate) async fn set_proxy_takeover_inner(
+    state: &AppState,
+    app_type: &str,
+    enabled: bool,
+    stack: bool,
+    route: Option<&str>,
+) -> Result<(), String> {
+    let app = require_mode_app(app_type)?;
     if enabled {
-        crate::mode::controller::enter_with_route(
-            state.inner(),
-            &app,
-            stack.unwrap_or(false),
-            route.as_deref(),
-        )
-        .await
+        crate::mode::controller::enter_with_route(state, &app, stack, route).await
     } else {
-        crate::mode::controller::exit(state.inner(), &app).await
+        crate::mode::controller::exit(state, &app).await
     }
 }
 
@@ -101,8 +118,15 @@ pub fn get_app_mode(
     state: tauri::State<'_, AppState>,
     app_type: String,
 ) -> Result<crate::mode::controller::AppModeView, String> {
-    let app = require_mode_app(&app_type)?;
-    crate::mode::controller::app_mode_view(state.inner(), &app)
+    get_app_mode_inner(state.inner(), &app_type)
+}
+
+pub(crate) fn get_app_mode_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<crate::mode::controller::AppModeView, String> {
+    let app = require_mode_app(app_type)?;
+    crate::mode::controller::app_mode_view(state, &app)
 }
 
 /// 指定路由目标（聚合模式下是默认那家）。直连模式下只记下来，下次进入路由 / 聚合模式时用它；
@@ -114,11 +138,20 @@ pub async fn set_proxy_route(
     app_type: String,
     provider_id: String,
 ) -> Result<crate::mode::controller::RouteSwitchResult, String> {
-    let app = require_mode_app(&app_type)?;
-    let result = crate::mode::controller::set_route(state.inner(), &app, &provider_id).await;
+    let result = set_proxy_route_inner(state.inner(), &app_type, &provider_id).await;
     // 已经在路由 / 聚合模式时换的是正在用的那家，托盘跟着变
     crate::tray::refresh_tray_menu(&app_handle);
     result
+}
+
+/// Shared by the desktop command and the web route (no tray).
+pub(crate) async fn set_proxy_route_inner(
+    state: &AppState,
+    app_type: &str,
+    provider_id: &str,
+) -> Result<crate::mode::controller::RouteSwitchResult, String> {
+    let app = require_mode_app(app_type)?;
+    crate::mode::controller::set_route(state, &app, provider_id).await
 }
 
 /// 启动时没能接上代理、已退回直连的应用（取一次就清空）。
@@ -143,8 +176,15 @@ pub fn get_direct_provider(
     state: tauri::State<'_, AppState>,
     app_type: String,
 ) -> Result<Option<String>, String> {
-    let app = require_mode_app(&app_type)?;
-    crate::mode::controller::direct_provider_id(state.inner(), &app).map_err(|e| e.to_string())
+    get_direct_provider_inner(state.inner(), &app_type)
+}
+
+pub(crate) fn get_direct_provider_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<Option<String>, String> {
+    let app = require_mode_app(app_type)?;
+    crate::mode::controller::direct_provider_id(state, &app).map_err(|e| e.to_string())
 }
 
 /// Stack 模型：名单里的每一家和它发布的模型 id，以及还在用旧模型列表的 Codex 客户端
@@ -153,14 +193,26 @@ pub async fn get_proxy_stack(
     state: tauri::State<'_, AppState>,
     app_type: String,
 ) -> Result<crate::mode::stack::StackView, String> {
-    let app = require_mode_app(&app_type)?;
-    crate::mode::controller::stack_view_with_clients(state.inner(), &app).await
+    get_proxy_stack_inner(state.inner(), &app_type).await
+}
+
+pub(crate) async fn get_proxy_stack_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<crate::mode::stack::StackView, String> {
+    let app = require_mode_app(app_type)?;
+    crate::mode::controller::stack_view_with_clients(state, &app).await
 }
 
 /// 重启 Codex 的托管守护进程（`codex` TUI 连的那个），让它重读模型目录。会中断守护进程里
 /// 正在运行的任务，只在用户确认之后调。
 #[tauri::command]
 pub async fn restart_codex_app_server_daemon(
+) -> Result<crate::services::provider::codex_client_catalog::RestartOutcome, String> {
+    restart_codex_app_server_daemon_inner().await
+}
+
+pub(crate) async fn restart_codex_app_server_daemon_inner(
 ) -> Result<crate::services::provider::codex_client_catalog::RestartOutcome, String> {
     crate::services::provider::codex_direct::off_runtime(
         crate::services::provider::codex_client_catalog::restart_daemon,
@@ -173,6 +225,10 @@ pub async fn restart_codex_app_server_daemon(
 /// 登录，同一份不再提示。
 #[tauri::command]
 pub async fn acknowledge_codex_stale_clients() -> Result<(), String> {
+    acknowledge_codex_stale_clients_inner().await
+}
+
+pub(crate) async fn acknowledge_codex_stale_clients_inner() -> Result<(), String> {
     crate::services::provider::codex_direct::off_runtime(|| {
         crate::services::provider::codex_client_catalog::acknowledge(
             &crate::live::engine::DeviceStore::for_device(),
@@ -192,14 +248,24 @@ pub async fn set_proxy_stack_member(
     provider_id: String,
     enabled: bool,
 ) -> Result<Option<&'static str>, crate::mode::controller::StackWriteError> {
-    let app =
-        require_mode_app(&app_type).map_err(crate::mode::controller::StackWriteError::unchanged)?;
     let result =
-        crate::mode::controller::set_stack_member(state.inner(), &app, &provider_id, enabled).await;
+        set_proxy_stack_member_inner(state.inner(), &app_type, &provider_id, enabled).await;
     // 托盘的聚合子菜单只列名单成员；部分写入也已经改了名单，一律重建。
     // 不重建的话，托盘里还列着刚移出的那家，点一下会把它重新加回并设为默认
     crate::tray::refresh_tray_menu(&app_handle);
     result
+}
+
+/// Shared by the desktop command and the web route (no tray).
+pub(crate) async fn set_proxy_stack_member_inner(
+    state: &AppState,
+    app_type: &str,
+    provider_id: &str,
+    enabled: bool,
+) -> Result<Option<&'static str>, crate::mode::controller::StackWriteError> {
+    let app =
+        require_mode_app(app_type).map_err(crate::mode::controller::StackWriteError::unchanged)?;
+    crate::mode::controller::set_stack_member(state, &app, provider_id, enabled).await
 }
 
 /// Codex 聚合的模型被别的模型目录挡住时，改用 CC Switch 生成的目录（去掉指向别的文件的
@@ -262,9 +328,16 @@ pub async fn update_global_proxy_config(
     state: tauri::State<'_, AppState>,
     config: GlobalProxyConfig,
 ) -> Result<(), String> {
-    let restarted = state.proxy_service.update_global_config(&config).await?;
+    update_global_proxy_config_inner(state.inner(), &config).await
+}
+
+pub(crate) async fn update_global_proxy_config_inner(
+    state: &AppState,
+    config: &GlobalProxyConfig,
+) -> Result<(), String> {
+    let restarted = state.proxy_service.update_global_config(config).await?;
     if restarted {
-        resync_proxy_clients(state.inner()).await?;
+        resync_proxy_clients(state).await?;
     }
     Ok(())
 }
@@ -272,7 +345,11 @@ pub async fn update_global_proxy_config(
 /// 获取客户端地址：写进客户端配置的代理主机，空表示按监听地址推。
 #[tauri::command]
 pub async fn get_proxy_client_host() -> Result<String, String> {
-    Ok(crate::settings::get_proxy_client_host().unwrap_or_default())
+    Ok(get_proxy_client_host_inner())
+}
+
+pub(crate) fn get_proxy_client_host_inner() -> String {
+    crate::settings::get_proxy_client_host().unwrap_or_default()
 }
 
 /// 保存客户端地址，再按新地址重写接上路由的客户端，不用重启服务。存在本机的
@@ -305,9 +382,17 @@ pub async fn get_proxy_config_for_app(
     state: tauri::State<'_, AppState>,
     app_type: String,
 ) -> Result<AppProxyConfig, String> {
-    require_proxy_app(&app_type)?;
-    let db = &state.db;
-    db.get_proxy_config_for_app(&app_type)
+    get_proxy_config_for_app_inner(state.inner(), &app_type).await
+}
+
+pub(crate) async fn get_proxy_config_for_app_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<AppProxyConfig, String> {
+    require_proxy_app(app_type)?;
+    state
+        .db
+        .get_proxy_config_for_app(app_type)
         .await
         .map_err(|e| e.to_string())
 }
@@ -318,6 +403,13 @@ pub async fn get_proxy_config_for_app(
 #[tauri::command]
 pub async fn update_proxy_config_for_app(
     state: tauri::State<'_, AppState>,
+    config: AppProxyConfig,
+) -> Result<(), String> {
+    update_proxy_config_for_app_inner(state.inner(), config).await
+}
+
+pub(crate) async fn update_proxy_config_for_app_inner(
+    state: &AppState,
     config: AppProxyConfig,
 ) -> Result<(), String> {
     let db = &state.db;

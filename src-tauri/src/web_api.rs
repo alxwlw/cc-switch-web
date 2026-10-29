@@ -456,6 +456,53 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/deeplink/merge", post(deeplink_merge))
         .route("/api/deeplink/icon", post(deeplink_icon))
         .route("/api/deeplink/import", post(deeplink_import))
+        // Local proxy lifecycle, routing / Stack, takeover (WEB-01 stage 1)
+        .route("/api/proxy/start", post(proxy_start))
+        .route("/api/proxy/stop", post(proxy_stop))
+        .route(
+            "/api/proxy/stop-with-restore",
+            post(proxy_stop_with_restore),
+        )
+        .route("/api/proxy/status", get(proxy_status))
+        .route("/api/proxy/takeover", get(proxy_takeover_status))
+        .route("/api/proxy/takeover/:app", put(proxy_set_takeover))
+        .route("/api/proxy/route/:app", put(proxy_set_route))
+        .route("/api/proxy/mode/:app", get(proxy_app_mode))
+        .route(
+            "/api/proxy/startup-attach-failures/take",
+            post(proxy_take_attach_failures),
+        )
+        .route("/api/proxy/exit-apps", post(proxy_exit_apps))
+        .route("/api/proxy/direct/:app", get(proxy_direct_provider))
+        .route(
+            "/api/proxy/stack/codex/adopt",
+            post(proxy_adopt_codex_catalog),
+        )
+        .route("/api/proxy/stack/:app", get(proxy_stack))
+        .route(
+            "/api/proxy/stack/:app/:provider_id",
+            put(proxy_set_stack_member),
+        )
+        .route(
+            "/api/proxy/config",
+            get(proxy_global_config).put(proxy_update_global_config),
+        )
+        .route(
+            "/api/proxy/client-host",
+            get(proxy_client_host).put(proxy_set_client_host),
+        )
+        .route(
+            "/api/proxy/config/:app",
+            get(proxy_app_config).put(proxy_update_app_config),
+        )
+        .route(
+            "/api/proxy/codex/restart-daemon",
+            post(proxy_codex_restart_daemon),
+        )
+        .route(
+            "/api/proxy/codex/ack-stale-clients",
+            post(proxy_codex_ack_stale_clients),
+        )
         .with_state(state)
 }
 
@@ -3743,4 +3790,241 @@ async fn deeplink_import(State(state): State<SharedState>, Json(body): Json<Valu
         Ok(Err(e)) => fail(e),
         Err(e) => fail(format!("deeplink import task failed: {e}")),
     }
+}
+
+// ---------- Local proxy: lifecycle, routing / Stack, takeover (WEB-01 stage 1) ----------
+
+fn proxy_result<T: serde::Serialize>(r: Result<T, String>) -> ApiResult {
+    match r {
+        Ok(v) => ok(v),
+        Err(e) => fail(e),
+    }
+}
+
+/// App that has a direct / route mode; anything else is a 400.
+macro_rules! mode_app {
+    ($app:expr) => {
+        match crate::commands::require_mode_app($app) {
+            Ok(t) => t,
+            Err(e) => return bad_request(e),
+        }
+    };
+}
+
+/// App that has a `proxy_config` row; anything else is a 400.
+macro_rules! proxy_app {
+    ($app:expr) => {
+        match crate::commands::require_proxy_app($app) {
+            Ok(t) => t,
+            Err(e) => return bad_request(e),
+        }
+    };
+}
+
+fn body_bool(body: &Value, key: &str) -> Result<bool, ApiResult> {
+    match body.get(key) {
+        Some(Value::Bool(b)) => Ok(*b),
+        _ => Err(bad_request(format!("{key} (boolean) is required"))),
+    }
+}
+
+fn body_opt_bool(body: &Value, key: &str) -> Result<Option<bool>, ApiResult> {
+    match body.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Bool(b)) => Ok(Some(*b)),
+        Some(_) => Err(bad_request(format!("{key} must be a boolean"))),
+    }
+}
+
+fn body_opt_str(body: &Value, key: &str) -> Result<Option<String>, ApiResult> {
+    match body.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s.clone())),
+        Some(_) => Err(bad_request(format!("{key} must be a string"))),
+    }
+}
+
+async fn proxy_start(State(state): State<SharedState>) -> ApiResult {
+    proxy_result(state.proxy_service.start().await)
+}
+
+async fn proxy_stop(State(state): State<SharedState>) -> ApiResult {
+    unit_result(crate::commands::stop_proxy_server_inner(&state).await)
+}
+
+async fn proxy_stop_with_restore(State(state): State<SharedState>) -> ApiResult {
+    unit_result(crate::mode::controller::exit_all(&state).await)
+}
+
+async fn proxy_status(State(state): State<SharedState>) -> ApiResult {
+    proxy_result(state.proxy_service.get_status().await)
+}
+
+async fn proxy_takeover_status(State(state): State<SharedState>) -> ApiResult {
+    proxy_result(state.proxy_service.get_takeover_status().await)
+}
+
+/// Body `{enabled, stack?, route?}`.
+async fn proxy_set_takeover(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    mode_app!(&app);
+    let enabled = match body_bool(&body, "enabled") {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    let stack = match body_opt_bool(&body, "stack") {
+        Ok(v) => v.unwrap_or(false),
+        Err(e) => return e,
+    };
+    let route = match body_opt_str(&body, "route") {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    unit_result(
+        crate::commands::set_proxy_takeover_inner(&state, &app, enabled, stack, route.as_deref())
+            .await,
+    )
+}
+
+/// Body `{providerId}`.
+async fn proxy_set_route(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    mode_app!(&app);
+    let provider_id = match body_str(&body, "providerId") {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    proxy_result(crate::commands::set_proxy_route_inner(&state, &app, &provider_id).await)
+}
+
+async fn proxy_app_mode(State(state): State<SharedState>, Path(app): Path<String>) -> ApiResult {
+    mode_app!(&app);
+    proxy_result(crate::commands::get_app_mode_inner(&state, &app))
+}
+
+async fn proxy_take_attach_failures() -> ApiResult {
+    ok(crate::mode::controller::take_startup_attach_failures())
+}
+
+/// Body `{stack}`.
+async fn proxy_exit_apps(State(state): State<SharedState>, Json(body): Json<Value>) -> ApiResult {
+    let stack = match body_bool(&body, "stack") {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    proxy_result(crate::mode::controller::exit_apps_in_mode(&state, stack).await)
+}
+
+async fn proxy_direct_provider(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+) -> ApiResult {
+    mode_app!(&app);
+    proxy_result(crate::commands::get_direct_provider_inner(&state, &app))
+}
+
+async fn proxy_stack(State(state): State<SharedState>, Path(app): Path<String>) -> ApiResult {
+    mode_app!(&app);
+    proxy_result(crate::commands::get_proxy_stack_inner(&state, &app).await)
+}
+
+/// Body `{enabled}`. A failure answers `{ok:false, error:{partial, message}}` (an object, as
+/// the desktop rejects the invoke): `partial` means the list was written only in part.
+async fn proxy_set_stack_member(
+    State(state): State<SharedState>,
+    Path((app, provider_id)): Path<(String, String)>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    mode_app!(&app);
+    let enabled = match body_bool(&body, "enabled") {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    match crate::commands::set_proxy_stack_member_inner(&state, &app, &provider_id, enabled).await {
+        Ok(v) => ok(v),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "ok": false, "error": e })),
+        ),
+    }
+}
+
+async fn proxy_adopt_codex_catalog(State(state): State<SharedState>) -> ApiResult {
+    proxy_result(crate::mode::controller::adopt_codex_stack_catalog(&state).await)
+}
+
+async fn proxy_global_config(State(state): State<SharedState>) -> ApiResult {
+    proxy_result(
+        state
+            .db
+            .get_global_proxy_config()
+            .await
+            .map_err(|e| e.to_string()),
+    )
+}
+
+async fn proxy_update_global_config(
+    State(state): State<SharedState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    let config = match serde_json::from_value::<crate::proxy::types::GlobalProxyConfig>(body) {
+        Ok(c) => c,
+        Err(e) => return bad_request(format!("invalid global proxy config: {e}")),
+    };
+    unit_result(crate::commands::update_global_proxy_config_inner(&state, &config).await)
+}
+
+async fn proxy_client_host() -> ApiResult {
+    ok(crate::commands::get_proxy_client_host_inner())
+}
+
+/// Body `{host}`.
+async fn proxy_set_client_host(
+    State(state): State<SharedState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    let host = match body_str(&body, "host") {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    unit_result(crate::commands::save_proxy_client_host(&state, &host).await)
+}
+
+async fn proxy_app_config(State(state): State<SharedState>, Path(app): Path<String>) -> ApiResult {
+    proxy_app!(&app);
+    proxy_result(crate::commands::get_proxy_config_for_app_inner(&state, &app).await)
+}
+
+/// Body is the whole `AppProxyConfig`; its `appType` must match the path.
+async fn proxy_update_app_config(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    proxy_app!(&app);
+    let config = match serde_json::from_value::<crate::proxy::types::AppProxyConfig>(body) {
+        Ok(c) => c,
+        Err(e) => return bad_request(format!("invalid app proxy config: {e}")),
+    };
+    if config.app_type != app {
+        return bad_request(format!(
+            "appType {} does not match path app {app}",
+            config.app_type
+        ));
+    }
+    unit_result(crate::commands::update_proxy_config_for_app_inner(&state, config).await)
+}
+
+async fn proxy_codex_restart_daemon() -> ApiResult {
+    proxy_result(crate::commands::restart_codex_app_server_daemon_inner().await)
+}
+
+async fn proxy_codex_ack_stale_clients() -> ApiResult {
+    unit_result(crate::commands::acknowledge_codex_stale_clients_inner().await)
 }
