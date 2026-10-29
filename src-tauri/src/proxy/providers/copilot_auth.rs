@@ -1188,6 +1188,23 @@ impl CopilotAuthManager {
         }
     }
 
+    /// 测试用：预置账号的 Copilot token 与 API 端点缓存，使转发不触发网络交换。
+    #[cfg(test)]
+    pub(crate) async fn test_seed_runtime(&self, account_id: &str, token: &str, endpoint: &str) {
+        assert!(self.accounts.read().await.contains_key(account_id));
+        self.copilot_tokens.write().await.insert(
+            account_id.to_string(),
+            CopilotToken {
+                token: token.to_string(),
+                expires_at: chrono::Utc::now().timestamp() + 3_600,
+            },
+        );
+        self.api_endpoints
+            .write()
+            .await
+            .insert(account_id.to_string(), endpoint.to_string());
+    }
+
     /// 获取默认账号的 API 端点
     pub async fn get_default_api_endpoint(&self) -> String {
         let _ = self.ensure_migration_complete().await;

@@ -21,6 +21,8 @@ pub struct ProxyService {
     server: Arc<RwLock<Option<ProxyServer>>>,
     /// AppHandle，用于传递给 ProxyServer 以支持故障转移时的 UI 更新
     app_handle: Arc<RwLock<Option<tauri::AppHandle>>>,
+    /// OAuth 管理器（AppState::new 注入；裸构造为 None）
+    auth: Option<crate::proxy::server::ProxyAuth>,
     switch_locks: SwitchLockManager,
     events: crate::events::EventHub,
 }
@@ -62,6 +64,7 @@ impl ProxyService {
             db,
             server: Arc::new(RwLock::new(None)),
             app_handle: Arc::new(RwLock::new(None)),
+            auth: None,
             switch_locks: SwitchLockManager::new(),
             events: crate::events::EventHub::new(),
         }
@@ -71,6 +74,17 @@ impl ProxyService {
     pub fn with_events(mut self, events: crate::events::EventHub) -> Self {
         self.events = events;
         self
+    }
+
+    /// 注入与 AppState 共用的 OAuth 管理器。
+    pub fn with_auth(mut self, auth: crate::proxy::server::ProxyAuth) -> Self {
+        self.auth = Some(auth);
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn auth_for_test(&self) -> Option<&crate::proxy::server::ProxyAuth> {
+        self.auth.as_ref()
     }
 
     /// 设置 AppHandle（在应用初始化时调用）
@@ -144,7 +158,8 @@ impl ProxyService {
 
         // 4. 创建并启动服务器
         let app_handle = self.app_handle.read().await.clone();
-        let server = ProxyServer::new(config.clone(), self.db.clone(), app_handle);
+        let server = ProxyServer::new(config.clone(), self.db.clone(), app_handle)
+            .with_auth(self.auth.clone());
         let info = server
             .start()
             .await
@@ -576,7 +591,8 @@ impl ProxyService {
     /// 按 `config` 起一个新服务，动态端口回写进库。
     async fn start_with(&self, config: &ProxyConfig) -> Result<ProxyServer, String> {
         let app_handle = self.app_handle.read().await.clone();
-        let server = ProxyServer::new(config.clone(), self.db.clone(), app_handle);
+        let server = ProxyServer::new(config.clone(), self.db.clone(), app_handle)
+            .with_auth(self.auth.clone());
         let info = server.start().await.map_err(|e| e.to_string())?;
         if let Err(e) = self
             .persist_ephemeral_listen_port_if_needed(config, info.port)

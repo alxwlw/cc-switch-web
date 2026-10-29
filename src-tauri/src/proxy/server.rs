@@ -18,6 +18,9 @@ use super::{
     ProxyError,
 };
 use crate::database::Database;
+use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
+use crate::proxy::providers::copilot_auth::CopilotAuthManager;
+use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use axum::{
     extract::DefaultBodyLimit,
     routing::{any, get, post},
@@ -44,10 +47,21 @@ pub struct ProxyState {
     pub gemini_shadow: Arc<GeminiShadowStore>,
     /// Codex Chat bridge history，用于恢复 previous_response_id 指向的 tool call
     pub codex_chat_history: Arc<CodexChatHistoryStore>,
-    /// AppHandle，用于发射事件和更新托盘菜单
+    /// AppHandle，仅用于故障转移切换的托盘刷新（headless 为 None）
     pub app_handle: Option<tauri::AppHandle>,
+    /// OAuth 管理器（与 AppState 共享同一批 Arc）；None 仅出现在裸构造的测试中
+    pub auth: Option<ProxyAuth>,
     /// 故障转移切换管理器
     pub failover_manager: Arc<FailoverSwitchManager>,
+}
+
+/// 转发器读取 OAuth 凭据所需的管理器，均为 `AppState` 字段的 `Arc` 克隆
+/// （桌面 State 包装与 web 登录/登出路由共享同一实例，登出立即对转发生效）。
+#[derive(Clone)]
+pub struct ProxyAuth {
+    pub copilot: Arc<RwLock<CopilotAuthManager>>,
+    pub codex: Arc<CodexOAuthManager>,
+    pub xai: Arc<RwLock<XaiOAuthManager>>,
 }
 
 /// 代理HTTP服务器
@@ -68,6 +82,12 @@ impl ProxyState {
 }
 
 impl ProxyServer {
+    /// 注入 OAuth 管理器（生产路径经 `ProxyService::with_auth`）。
+    pub fn with_auth(mut self, auth: Option<ProxyAuth>) -> Self {
+        self.state.auth = auth;
+        self
+    }
+
     pub fn new(
         config: ProxyConfig,
         db: Arc<Database>,
@@ -88,6 +108,7 @@ impl ProxyServer {
             gemini_shadow: Arc::new(GeminiShadowStore::default()),
             codex_chat_history: Arc::new(CodexChatHistoryStore::default()),
             app_handle,
+            auth: None,
             failover_manager,
         };
 
