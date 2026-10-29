@@ -35,7 +35,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 19 — WEB-09 / DX-67: import/export конфигурации и sync live](2026-10-25-web-parity-m5/phase-19.md) — PR #20, merged `159fc34f` → main 2026-10-27, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-67 Done.
 - [x] [Phase 20 — WEB-27 / DX-85: deep-link config import через paste/upload](2026-10-25-web-parity-m5/phase-20.md) — PR #21, merged `0676764a` → main 2026-10-28, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-85 Done.
 - [x] [Phase 21 — WEB-13 / DX-71: Sessions images, Markdown export и streaming](2026-10-25-web-parity-m5/phase-21.md) — PR #22, merged `3b2c53c9` → main 2026-10-29, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-71 Done.
-- [ ] [Phase 22 — WEB-25 / DX-83: install/update/uninstall CLI на Apps page](2026-10-25-web-parity-m5/phase-22.md) — PR #23 открыт (ветка `web-parity/web-25-cli-lifecycle`), DX-83 In Review.
+- [x] [Phase 22 — WEB-25 / DX-83: install/update/uninstall CLI на Apps page](2026-10-25-web-parity-m5/phase-22.md) — PR #23, merged `c3c11b44` → main 2026-10-29, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-83 Done.
 - [ ] [Phase 23 — WEB-05 / DX-63: Skills discovery, install/update, репозитории и backups](2026-10-25-web-parity-m5/phase-23.md)
 
 Эпик proxy + OAuth:
