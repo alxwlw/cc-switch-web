@@ -5074,7 +5074,7 @@
     "update": {
       "unsupported": "Web 模式下無法檢查更新：伺服器由維運人員負責升級"
     },
-    "accountLogin": "Web 模式下無法使用帳號登入（OAuth）",
+    "accountLogin": "Kimi Code 登入暫不支援 Web 模式",
     "needsRouting": "此供應商需要路由代理，Web 模式下無法使用",
     "liveUnknownTitle": "供應商（Web 模式下無法讀取實際設定狀態）",
     "sessionResumeCopied": "已複製恢復指令。請在伺服器主機上的專案目錄下，貼到終端機執行",

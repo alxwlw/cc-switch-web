@@ -5073,7 +5073,7 @@
     "update": {
       "unsupported": "Updates are unavailable in web mode: the server operator updates the app"
     },
-    "accountLogin": "Account sign-in (OAuth) is unavailable in web mode",
+    "accountLogin": "Kimi Code sign-in is not available in web mode yet",
     "needsRouting": "This provider needs the routing proxy, which is unavailable in web mode",
     "liveUnknownTitle": "Providers (live config state is unknown in web mode)",
     "sessionResumeCopied": "Resume command copied. Run it in a terminal on the server host, in the project folder.",

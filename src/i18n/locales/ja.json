@@ -5073,7 +5073,7 @@
     "update": {
       "unsupported": "Webモードではアップデートを利用できません。サーバーの更新は運用者が行います"
     },
-    "accountLogin": "Webモードではアカウントログイン（OAuth）を利用できません",
+    "accountLogin": "Kimi Code のログインは Web モードではまだ利用できません",
     "needsRouting": "このプロバイダーにはルーティングプロキシが必要ですが、Webモードでは利用できません",
     "liveUnknownTitle": "プロバイダー（Webモードでは実際の設定状態を読み取れません）",
     "sessionResumeCopied": "再開コマンドをコピーしました。サーバーホスト上のプロジェクトフォルダーで、ターミナルに貼り付けて実行してください",
