@@ -6,6 +6,7 @@ import { CodexOAuthSection } from "@/components/providers/forms/CodexOAuthSectio
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 const mocks = vi.hoisted(() => ({
   useCodexOauth: vi.fn(),
@@ -111,6 +112,15 @@ describe("CodexOAuthSection", () => {
     } else {
       Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
     }
+  });
+
+  it.each([
+    ["desktop", false, true],
+    ["web (device code only, WEB-02)", true, false],
+  ])("login method picker: %s", (_label, web, shown) => {
+    setWeb(web);
+    render(<CodexOAuthSection />);
+    expect(screen.queryByText("codexOauth.loginMethod") !== null).toBe(shown);
   });
 
   it("does not render account quota by default", () => {
