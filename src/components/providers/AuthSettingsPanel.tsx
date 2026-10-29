@@ -20,7 +20,7 @@ export function AuthSettingsPanel({ target, onClose }: AuthSettingsPanelProps) {
       onClose={onClose}
       motionPreset="slide-from-right"
     >
-      {/* WEB-00: ссылки «управлять аккаунтами» из форм — в web вместо бросающей панели notice — снимет WEB-02 */}
+      {/* WEB-00: если auth снова попадёт в WEB_HIDDEN_VIEWS (сейчас список пуст, auth открыт WEB-02, ф.25), ссылки «управлять аккаунтами» показывают notice */}
       {target && !isViewAvailable("auth") ? (
         <p role="status" className="text-body text-fg-2">
           {t("web.unavailable")}

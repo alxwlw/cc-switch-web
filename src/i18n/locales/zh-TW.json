@@ -4969,7 +4969,8 @@
       "switchTo": "將 agy 切換到這個帳號",
       "removeNote": "不會讓 agy 登出：agy 目前登入的帳號刪除後仍然可用。",
       "switched": "已切換，新開的 agy 會使用這個帳號。",
-      "switchedWhileRunning": "已切換。偵測到 agy 正在執行：已開啟的 agy 仍使用原帳號，還可能把原帳號寫回去，請結束後重新開啟。"
+      "switchedWhileRunning": "已切換。偵測到 agy 正在執行：已開啟的 agy 仍使用原帳號，還可能把原帳號寫回去，請結束後重新開啟。",
+      "webLoginUnavailable": "Antigravity 登入透過伺服器上的本機回環回呼完成，請在伺服器的桌面應用程式中登入；這裡可以切換和移除帳號。"
     }
   },
   "kimi": {
@@ -5073,7 +5074,7 @@
     "update": {
       "unsupported": "Web 模式下無法檢查更新：伺服器由維運人員負責升級"
     },
-    "accountLogin": "Web 模式下無法使用帳號登入（OAuth）",
+    "accountLogin": "Kimi Code 登入暫不支援 Web 模式",
     "needsRouting": "此供應商需要路由代理，Web 模式下無法使用",
     "liveUnknownTitle": "供應商（Web 模式下無法讀取實際設定狀態）",
     "sessionResumeCopied": "已複製恢復指令。請在伺服器主機上的專案目錄下，貼到終端機執行",

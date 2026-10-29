@@ -121,6 +121,14 @@ export const AgyOAuthSection: React.FC<AgyOAuthSectionProps> = ({
         defaultValue: "用 Google 登录",
       })}
       onAdd={addAccount}
+      loginUnavailableText={
+        isWeb
+          ? t("authCenter.agy.webLoginUnavailable", {
+              defaultValue:
+                "Antigravity 登录通过服务器上的本地回环回调完成，请在服务器的桌面应用里登录；这里可以切换和移除账号。",
+            })
+          : undefined
+      }
       defaultLabel={t("authCenter.agy.current", {
         defaultValue: "agy 在用",
       })}
@@ -193,8 +201,6 @@ export function AgyAccountSelect({ value, onChange }: AgyAccountSelectProps) {
     queryKey: ["managed-auth-status", "agy_oauth"],
     queryFn: () => authApi.authGetStatus("agy_oauth"),
     staleTime: 30000,
-    // WEB-00: auth_get_status не поддержан — снимет WEB-02
-    enabled: !isWeb,
   });
   const accounts = data?.accounts ?? [];
   // 绑的号在这台电脑上不存在（别的设备同步来的、或已删掉）时也要显示出来，别悄悄改成「跟随」

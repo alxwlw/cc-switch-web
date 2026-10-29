@@ -42,6 +42,10 @@ function appBase(app: string): string {
   return `/api/${enc(app)}`;
 }
 
+function authBase(provider: string): string {
+  return `/api/auth/${enc(provider)}`;
+}
+
 /**
  * Translate one Tauri command + args to an HTTP endpoint.
  * Returns `null` when the command has no web equivalent.
@@ -164,6 +168,49 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return { method: "GET", url: "/api/global-proxy/status" };
     case "scan_local_proxies":
       return { method: "POST", url: "/api/global-proxy/scan" };
+
+    // ---------- managed OAuth accounts (WEB-02, device code only) ----------
+    case "auth_start_login":
+      return {
+        method: "POST",
+        url: `${authBase(a.authProvider)}/login`,
+        body: {
+          githubDomain: a.githubDomain,
+          targetAccountId: a.targetAccountId,
+          loginMethod: a.loginMethod,
+        },
+      };
+    case "auth_poll_for_account":
+      return {
+        method: "POST",
+        url: `${authBase(a.authProvider)}/poll`,
+        body: { deviceCode: a.deviceCode, githubDomain: a.githubDomain },
+      };
+    case "auth_cancel_login":
+      return {
+        method: "POST",
+        url: `${authBase(a.authProvider)}/cancel`,
+        body: { deviceCode: a.deviceCode },
+      };
+    case "auth_list_accounts":
+      return { method: "GET", url: `${authBase(a.authProvider)}/accounts` };
+    case "auth_get_status":
+      return { method: "GET", url: `${authBase(a.authProvider)}/status` };
+    case "auth_remove_account":
+      return {
+        method: "DELETE",
+        url: `${authBase(a.authProvider)}/accounts/${enc(a.accountId)}`,
+      };
+    case "auth_set_default_account":
+      return {
+        method: "PUT",
+        url: `${authBase(a.authProvider)}/default`,
+        body: { accountId: a.accountId },
+      };
+    case "auth_logout":
+      return { method: "POST", url: `${authBase(a.authProvider)}/logout` };
+    case "agy_account_is_running":
+      return { method: "GET", url: "/api/auth/agy/running" };
 
     // ---------- server log (web-only, no Tauri command) ----------
     case "get_server_log_tail":
@@ -992,6 +1039,35 @@ function openExternalInBrowser(url: unknown): boolean {
 }
 
 /**
+ * `copy_text_to_clipboard` in the browser: the async Clipboard API needs a
+ * secure context (HTTPS / localhost); a plain-HTTP tailnet address falls back
+ * to a hidden textarea + `execCommand("copy")`. Failure throws so the UI keeps
+ * the code visible for manual copying.
+ */
+async function copyTextInBrowser(text: unknown): Promise<null> {
+  if (typeof text !== "string") throw new Error("Invalid text");
+  if (window.isSecureContext && navigator.clipboard) {
+    await navigator.clipboard.writeText(text);
+    return null;
+  }
+  const area = document.createElement("textarea");
+  area.value = text;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.opacity = "0";
+  document.body.appendChild(area);
+  try {
+    area.select();
+    if (!document.execCommand("copy")) {
+      throw new Error("Clipboard copy was rejected by the browser");
+    }
+  } finally {
+    document.body.removeChild(area);
+  }
+  return null;
+}
+
+/**
  * `stream_session_messages` over `GET /api/sessions/stream` (NDJSON, one
  * TranscriptChunk per line). Failing before the first chunk throws so the
  * caller falls back to `get_session_messages`; an error chunk is delivered to
@@ -1127,6 +1203,9 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
   // Browser-side commands with no HTTP endpoint.
   if (cmd === "open_external") {
     return openExternalInBrowser(args.url) as T;
+  }
+  if (cmd === "copy_text_to_clipboard") {
+    return (await copyTextInBrowser(args.text)) as T;
   }
   if (cmd === "stream_session_messages") {
     return (await streamSessionMessages(args)) as T;

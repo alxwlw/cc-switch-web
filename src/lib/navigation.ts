@@ -60,9 +60,10 @@ export function resolveSettingsSection(
   return isSettingsSectionAvailable(section) ? section : "general";
 }
 
-// WEB-00: экраны целиком из desktop-only команд скрыты в web: центр авторизации (OAuth, auth_*) —
-// снимет WEB-02 (skillsDiscovery открыт WEB-05, workspace/openclawConfig — WEB-15, hermesMemory — WEB-16).
-const WEB_HIDDEN_VIEWS: View[] = ["auth"];
+// WEB-00: экраны целиком из desktop-only команд скрываются в web через этот список.
+// Сейчас пуст: auth открыт WEB-02 этап 1 (Copilot/Codex/xAI; Kimi — фаза 26),
+// skillsDiscovery — WEB-05, workspace/openclawConfig — WEB-15, hermesMemory — WEB-16.
+const WEB_HIDDEN_VIEWS: View[] = [];
 
 export function isViewAvailable(view: View): boolean {
   return !(isWeb && WEB_HIDDEN_VIEWS.includes(view));
@@ -130,7 +131,7 @@ export function readStoredView(): View {
   try {
     const stored =
       parseView(localStorage.getItem(VIEW_STORAGE_KEY)) ?? "providers";
-    // WEB-00: сохранённый скрытый в web view не восстанавливается — снимет WEB-02 (auth)
+    // WEB-00: сохранённый view из WEB_HIDDEN_VIEWS в web не восстанавливается (список сейчас пуст, auth открыт WEB-02, ф.25)
     return isViewAvailable(stored) ? stored : "providers";
   } catch {
     return "providers";

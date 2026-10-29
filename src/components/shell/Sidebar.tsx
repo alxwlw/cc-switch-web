@@ -297,7 +297,7 @@ function MainDirectory({
     },
   ];
 
-  // WEB-00: nav «auth» скрыт в web (весь экран desktop-only) — снимет WEB-02
+  // WEB-00: гейт скрытых в web nav-пунктов (список WEB_HIDDEN_VIEWS сейчас пуст: auth открыт WEB-02, ф.25)
   const visibleGlobals = globals.filter((g) => isViewAvailable(g.page));
 
   const isGlobalSelected = (page: GlobalPage) =>

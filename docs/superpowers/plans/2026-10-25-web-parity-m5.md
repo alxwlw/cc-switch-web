@@ -39,8 +39,8 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 23 — WEB-05 / DX-63: Skills discovery, install/update, репозитории и backups](2026-10-25-web-parity-m5/phase-23.md) — PR #24, merged `29fa72bd` → main 2026-10-29, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-63 Done.
 
 Эпик proxy + OAuth:
-- [ ] [Phase 24 — WEB-23 / DX-81: global upstream/outbound proxy](2026-10-25-web-parity-m5/phase-24.md) — PR #25 открыт (ветка `web-parity/web-23-global-proxy`), DX-81 In Review.
-- [ ] [Phase 25 — WEB-02 / DX-60 (этап 1): managed OAuth state, device-code flows, accounts](2026-10-25-web-parity-m5/phase-25.md)
+- [x] [Phase 24 — WEB-23 / DX-81: global upstream/outbound proxy](2026-10-25-web-parity-m5/phase-24.md) — PR #25, merged `50ebc31b` → main 2026-10-29, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-81 Done.
+- [ ] [Phase 25 — WEB-02 / DX-60 (этап 1): managed OAuth state, device-code flows, accounts](2026-10-25-web-parity-m5/phase-25.md) — PR #26 открыт (ветка `web-parity/web-02-oauth-device`), DX-60 In Progress (этап 1 из 2).
 - [ ] [Phase 26 — WEB-02 / DX-60 (этап 2): Kimi OAuth и official account cards](2026-10-25-web-parity-m5/phase-26.md)
 - [ ] [Phase 27 — WEB-01 / DX-59 (этап 1): local proxy lifecycle, routing/Stack, takeover](2026-10-25-web-parity-m5/phase-27.md)
 - [ ] [Phase 28 — WEB-01 / DX-59 (этап 2): failover, circuit breaker, health, OAuth data plane](2026-10-25-web-parity-m5/phase-28.md)

@@ -201,11 +201,11 @@ describe("navigation helpers · WEB-00", () => {
     expect(resolveSettingsSection(s)).toBe(s);
   });
 
-  it("web: a stored hidden auth view is not restored", () => {
+  it("web: the auth view is available and a stored one is restored (WEB-02)", () => {
     localStorage.setItem(VIEW_STORAGE_KEY, "auth");
     setWeb(true);
-    expect(isViewAvailable("auth")).toBe(false);
-    expect(readStoredView()).toBe("providers");
+    expect(isViewAvailable("auth")).toBe(true);
+    expect(readStoredView()).toBe("auth");
   });
 
   it.each([true, false])(
@@ -226,10 +226,10 @@ describe("navigation helpers · WEB-00", () => {
 });
 
 describe("Sidebar · WEB-00", () => {
-  it("web: no auth entry in the global list", () => {
+  it("web: the auth entry is in the global list (WEB-02)", () => {
     setWeb(true);
     renderSidebar("usage");
-    expect(screen.queryByRole("button", { name: /nav\.auth/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /nav\.auth/ })).toBeVisible();
     expect(screen.getByRole("button", { name: /nav\.usage/ })).toBeVisible();
   });
 
@@ -470,11 +470,11 @@ describe("SettingsPage · WEB-00", () => {
 });
 
 describe("AuthSettingsPanel · WEB-00", () => {
-  it("web: provider-form account links show a notice, not the auth center", () => {
+  it("web: provider-form account links open the auth center (WEB-02)", () => {
     setWeb(true);
     render(<AuthSettingsPanel target="codex_oauth" onClose={vi.fn()} />);
-    expect(screen.getByRole("status")).toHaveTextContent("web.unavailable");
-    expect(screen.queryByText("auth-center-panel")).toBeNull();
+    expect(screen.getByText("auth-center-panel")).toBeInTheDocument();
+    expect(screen.queryByText("web.unavailable")).toBeNull();
   });
 
   it("desktop: renders the auth center", () => {

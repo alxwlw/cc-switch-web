@@ -24,8 +24,8 @@ export function WebUnavailableTip({
 }
 
 /**
- * WEB-00: вход в аккаунт (OAuth) в формах провайдера недоступен в web (auth_* не поддержаны,
- * статус не загружается) — вместо вечного «загрузка» объясняем причину. Снимет WEB-02.
+ * Вход в аккаунт Kimi (OAuth) недоступен в web до WEB-02 этапа 2 (фаза 26) — единственный
+ * пользователь: Центр авторизации. Copilot/Codex/xAI открыты WEB-02 этапа 1.
  */
 export function WebAccountLoginNotice({ className }: { className?: string }) {
   const { t } = useTranslation();

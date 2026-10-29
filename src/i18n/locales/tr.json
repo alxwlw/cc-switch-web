@@ -4958,7 +4958,8 @@
       "switchTo": "agy'yi bu hesaba geçir",
       "removeNote": "agy'nin oturumu açık kalır: agy bu hesabı kullanıyorsa kaldırdıktan sonra da çalışmaya devam eder.",
       "switched": "Hesap değiştirildi. Yeni agy oturumları bu hesabı kullanacak.",
-      "switchedWhileRunning": "Hesap değiştirildi. agy çalışıyor: açık agy oturumları önceki hesabı kullanmaya devam eder ve hesabı yeniden kaydedebilir. agy'yi kapatıp yeniden açın."
+      "switchedWhileRunning": "Hesap değiştirildi. agy çalışıyor: açık agy oturumları önceki hesabı kullanmaya devam eder ve hesabı yeniden kaydedebilir. agy'yi kapatıp yeniden açın.",
+      "webLoginUnavailable": "Antigravity girişi sunucudaki bir loopback geri çağrısıyla çalışır; sunucudaki masaüstü uygulamasından giriş yapın. Hesap değiştirme ve kaldırma burada çalışır."
     }
   },
   "kimi": {
@@ -5050,7 +5051,7 @@
     "update": {
       "unsupported": "Web modunda güncellemeler kullanılamaz: sunucuyu operatör günceller"
     },
-    "accountLogin": "Web modunda hesap girişi (OAuth) kullanılamaz",
+    "accountLogin": "Kimi Code girişi web modunda henüz kullanılamıyor",
     "needsRouting": "Bu sağlayıcı yönlendirme proxy'sini gerektirir; Web modunda kullanılamaz",
     "liveUnknownTitle": "Sağlayıcılar (Web modunda canlı yapılandırma durumu bilinmiyor)",
     "sessionResumeCopied": "Devam komutu kopyalandı. Sunucu ana makinesinde, proje klasöründe bir terminale yapıştırıp çalıştırın",

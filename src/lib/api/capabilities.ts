@@ -2,6 +2,8 @@ export interface ServerCapabilities {
   mode: string;
   version: string;
   runtime_boundaries: string;
+  /** `std::env::consts::OS` of the server: "linux" | "macos" | "windows". */
+  platform: string;
 }
 
 /**
@@ -19,5 +21,6 @@ export async function fetchCapabilities(): Promise<ServerCapabilities> {
     mode: String(body.mode ?? ""),
     version: body.version,
     runtime_boundaries: String(body.runtime_boundaries ?? ""),
+    platform: String(body.platform ?? ""),
   };
 }

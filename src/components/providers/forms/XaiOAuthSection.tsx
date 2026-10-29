@@ -1,6 +1,4 @@
 import React from "react";
-import { isWeb } from "@/lib/api/adapter";
-import { WebAccountLoginNotice } from "@/components/ui/web-unavailable";
 import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
@@ -92,9 +90,14 @@ export const XaiOAuthSection: React.FC<XaiOAuthSectionProps> = ({
 
   const copyUserCode = async () => {
     if (!deviceCode?.user_code) return;
-    await copyText(deviceCode.user_code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2_000);
+    try {
+      await copyText(deviceCode.user_code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2_000);
+    } catch (e) {
+      // 复制失败（如非安全上下文）：验证码仍显示在界面上，用户可手动复制
+      console.debug("[XaiOAuth] Failed to copy user code:", e);
+    }
   };
 
   // 删账号先确认：确认框里列出在用它的供应商
@@ -139,10 +142,6 @@ export const XaiOAuthSection: React.FC<XaiOAuthSectionProps> = ({
       onCancel={() => setRemoveTarget(null)}
     />
   );
-
-  // WEB-00: auth_* не поддержаны — выбор/вход аккаунта в форме недоступен — снимет WEB-02
-  if (isWeb && resolvedMode === "select")
-    return <WebAccountLoginNotice className={className} />;
 
   if (resolvedMode === "manage") {
     const rows: GroupAccountRow[] = accounts.map((account) => {

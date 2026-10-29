@@ -4968,7 +4968,8 @@
       "switchTo": "Switch agy to this account",
       "removeNote": "agy stays signed in: if agy is using this account, it keeps working after removal.",
       "switched": "Switched. New agy sessions will use this account.",
-      "switchedWhileRunning": "Switched. agy is running: open agy sessions keep using the previous account and may write it back. Quit agy and open it again."
+      "switchedWhileRunning": "Switched. agy is running: open agy sessions keep using the previous account and may write it back. Quit agy and open it again.",
+      "webLoginUnavailable": "Antigravity sign-in runs a loopback callback on the server, so sign in from the desktop app there. Switching and removing accounts work here."
     }
   },
   "kimi": {
@@ -5072,7 +5073,7 @@
     "update": {
       "unsupported": "Updates are unavailable in web mode: the server operator updates the app"
     },
-    "accountLogin": "Account sign-in (OAuth) is unavailable in web mode",
+    "accountLogin": "Kimi Code sign-in is not available in web mode yet",
     "needsRouting": "This provider needs the routing proxy, which is unavailable in web mode",
     "liveUnknownTitle": "Providers (live config state is unknown in web mode)",
     "sessionResumeCopied": "Resume command copied. Run it in a terminal on the server host, in the project folder.",

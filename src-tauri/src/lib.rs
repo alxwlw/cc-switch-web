@@ -861,46 +861,14 @@ pub fn run() {
             let skill_service = SkillService::new();
             app.manage(commands::skill::SkillServiceState(Arc::new(skill_service)));
 
-            // 初始化 CopilotAuthManager
+            // 认证管理器由 AppState 持有，这里只把同一批 Arc 以 State 包装注入给桌面命令
             {
-                use crate::proxy::providers::copilot_auth::CopilotAuthManager;
-                use commands::CopilotAuthState;
-                use tokio::sync::RwLock;
-
-                let app_config_dir = crate::config::get_app_config_dir();
-                let copilot_auth_manager = CopilotAuthManager::new(app_config_dir);
-                app.manage(CopilotAuthState(Arc::new(RwLock::new(
-                    copilot_auth_manager,
-                ))));
-                log::info!("✓ CopilotAuthManager initialized");
-            }
-
-            // 初始化 CodexOAuthManager (ChatGPT Plus/Pro 反代)
-            {
-                use commands::CodexOAuthState;
-
-                let codex_oauth_manager = app.state::<AppState>().codex_oauth_manager.clone();
-                app.manage(CodexOAuthState(codex_oauth_manager));
-                log::info!("✓ CodexOAuthManager initialized");
-            }
-
-            // 初始化 xAI OAuthManager (Grok API 反代)
-            {
-                use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
-                use commands::XaiOAuthState;
-                use tokio::sync::RwLock;
-
-                let app_config_dir = crate::config::get_app_config_dir();
-                let xai_oauth_manager = XaiOAuthManager::new(app_config_dir);
-                app.manage(XaiOAuthState(Arc::new(RwLock::new(xai_oauth_manager))));
-                log::info!("✓ XaiOAuthManager initialized");
-            }
-
-            // Antigravity 官方账号（授权中心加号、切 agy 的全局登录）
-            {
-                use crate::services::agy_account::AgyAccountManager;
-                let manager = AgyAccountManager::new(crate::config::get_app_config_dir());
-                app.manage(commands::AgyAccountState(Arc::new(manager)));
+                let auth_states = app.state::<AppState>().managed_auth_states();
+                app.manage(auth_states.copilot);
+                app.manage(auth_states.codex);
+                app.manage(auth_states.xai);
+                app.manage(auth_states.agy);
+                log::info!("✓ Auth managers (Copilot/Codex/xAI/Antigravity) initialized");
             }
 
             // 初始化全局出站代理 HTTP 客户端（错误已在函数内记录）

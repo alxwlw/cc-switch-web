@@ -1496,9 +1496,8 @@ describe("App integration with MSW", () => {
     ["desktop", false, true],
     ["web", true, false],
   ])("WEB-00 shell gating (%s)", (_label, web, desktopOnlyVisible) => {
-    it(`${desktopOnlyVisible ? "shows" : "hides"} the auth nav item and ${
-      desktopOnlyVisible ? "restores" : "drops"
-    } a stored auth view`, async () => {
+    // WEB-02: the auth view is open in web as well
+    it("shows the auth nav item and restores a stored auth view", async () => {
       setWeb(web);
       localStorage.setItem("cc-switch-last-view", "auth");
       const { default: App } = await import("@/App");
@@ -1509,13 +1508,8 @@ describe("App integration with MSW", () => {
           "button",
           { name: /nav\.auth/, hidden: true },
         );
-      if (desktopOnlyVisible) {
-        await waitFor(() => expect(accountsButton()).not.toBeNull());
-        expect(screen.queryByTestId("provider-list")).toBeNull();
-      } else {
-        expect(await screen.findByTestId("provider-list")).toBeInTheDocument();
-        expect(accountsButton()).toBeNull();
-      }
+      await waitFor(() => expect(accountsButton()).not.toBeNull());
+      expect(screen.queryByTestId("provider-list")).toBeNull();
     });
 
     it(`${desktopOnlyVisible ? "syncs" : "does not touch"} window decorations and resize listeners for Linux app controls`, async () => {

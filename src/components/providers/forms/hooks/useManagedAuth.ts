@@ -23,8 +23,13 @@ type LoginRequest = {
 export function useManagedAuth(
   authProvider: ManagedAuthProvider,
   githubDomain?: string,
-  loginMethod?: CodexLoginMethod,
+  requestedLoginMethod?: CodexLoginMethod,
 ) {
+  // WEB-02: the browser flow is a loopback callback on the server, unreachable
+  // from the user's browser; web always uses the device code.
+  const loginMethod: CodexLoginMethod | undefined = isWeb
+    ? "device_code"
+    : requestedLoginMethod;
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const queryKey = ["managed-auth-status", authProvider];
@@ -57,8 +62,6 @@ export function useManagedAuth(
     // proxy hot path. Periodically refresh local status so an already-open Auth
     // Center stops showing the account as logged in without requiring a reload.
     refetchInterval: authProvider === "xai_oauth" ? 15_000 : false,
-    // WEB-00: auth_get_status не поддержан — снимет WEB-02
-    enabled: !isWeb,
   });
 
   const stopPolling = useCallback(() => {
