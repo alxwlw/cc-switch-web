@@ -142,7 +142,6 @@ const SECTIONS: SettingsSection[] = [
   "data",
   "about",
 ];
-const WEB_HIDDEN: SettingsSection[] = ["network"];
 
 beforeEach(() => {
   platform.linux = false;
@@ -193,11 +192,9 @@ const renderSidebar = (
   );
 
 describe("navigation helpers · WEB-00", () => {
-  it.each(SECTIONS)("web: resolveSettingsSection(%s)", (section) => {
+  it.each(SECTIONS)("web: resolveSettingsSection(%s) is identity", (s) => {
     setWeb(true);
-    expect(resolveSettingsSection(section)).toBe(
-      WEB_HIDDEN.includes(section) ? "general" : section,
-    );
+    expect(resolveSettingsSection(s)).toBe(s);
   });
 
   it.each(SECTIONS)("desktop: resolveSettingsSection(%s) is identity", (s) => {
@@ -252,6 +249,7 @@ describe("Sidebar · WEB-00", () => {
       "settings.sections.general",
       "settings.sections.appConfig",
       "settings.sections.routing",
+      "settings.sections.network",
       "settings.sections.data",
       "settings.sections.about",
     ]);
@@ -271,10 +269,10 @@ describe("Sidebar settings highlight · WEB-00", () => {
       .filter((b) => b.getAttribute("aria-current") === "page")
       .map((b) => b.textContent);
 
-  it("web: a requested hidden section highlights general", () => {
+  it("web: network highlights network", () => {
     setWeb(true);
     renderSidebar("settings", "network");
-    expect(current()).toEqual(["settings.sections.general"]);
+    expect(current()).toEqual(["settings.sections.network"]);
   });
 
   it("desktop: routing highlights routing", () => {
@@ -284,21 +282,11 @@ describe("Sidebar settings highlight · WEB-00", () => {
 });
 
 describe("SettingsPage · WEB-00", () => {
-  it.each(WEB_HIDDEN)(
-    "web: requested hidden section %s lands on general",
-    (s) => {
-      setWeb(true);
-      renderPage(s);
-      expect(
-        screen.getByRole("heading", {
-          level: 1,
-          name: "settings.sections.general",
-        }),
-      ).toBeInTheDocument();
-      expect(screen.getByText("settings.general.appearance")).toBeVisible();
-      expect(screen.queryByText("global-proxy-settings")).toBeNull();
-    },
-  );
+  it("web: network section renders GlobalProxySettings", () => {
+    setWeb(true);
+    renderPage("network");
+    expect(screen.getByText("global-proxy-settings")).toBeInTheDocument();
+  });
 
   it("web: routing shows only the rectifier block", () => {
     setWeb(true);

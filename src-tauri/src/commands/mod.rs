@@ -11,7 +11,7 @@ mod custom_icon;
 mod deeplink;
 mod env;
 mod failover;
-mod global_proxy;
+pub(crate) mod global_proxy;
 mod hermes;
 pub(crate) mod import_export;
 mod kimi_oauth;

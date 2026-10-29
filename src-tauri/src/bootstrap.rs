@@ -742,6 +742,35 @@ pub fn run_headless_bootstrap() -> Result<Bootstrapped, BootstrapError> {
     run_headless_bootstrap_with(CodexHistory::Inline)
 }
 
+/// Initialises the process-wide outbound HTTP client from the saved global
+/// proxy. A saved URL that fails to build is cleared from the database and the
+/// client falls back to a direct connection. `Err` only when that fallback
+/// fails too; every failure is already logged (GP-005..GP-008).
+pub fn init_global_http_client(db: &Database) -> Result<(), String> {
+    let proxy_url = db.get_global_proxy_url().ok().flatten();
+
+    if let Err(e) = crate::proxy::http_client::init(proxy_url.as_deref()) {
+        log::error!("[GlobalProxy] [GP-005] Failed to initialize with saved config: {e}");
+
+        // 清除无效的代理配置
+        if proxy_url.is_some() {
+            log::warn!("[GlobalProxy] [GP-006] Clearing invalid proxy config from database");
+            if let Err(clear_err) = db.set_global_proxy_url(None) {
+                log::error!("[GlobalProxy] [GP-007] Failed to clear invalid config: {clear_err}");
+            }
+        }
+
+        // 使用直连模式重新初始化
+        if let Err(fallback_err) = crate::proxy::http_client::init(None) {
+            log::error!(
+                "[GlobalProxy] [GP-008] Failed to initialize direct connection: {fallback_err}"
+            );
+            return Err(fallback_err);
+        }
+    }
+    Ok(())
+}
+
 /// Full headless startup: paths, legacy config, version precheck, DB open,
 /// log level, legacy migration, `AppState`, post-DB steps. No dialogs, no
 /// Tauri runtime. `codex_history` decides where the (slow) Codex history
@@ -773,6 +802,14 @@ pub fn run_headless_bootstrap_with(
     }
 
     let mut report = BootstrapReport::default();
+    // Non-fatal: a failed init leaves the client uninitialised, never aborts startup.
+    report.push(
+        "global_http_client",
+        match init_global_http_client(&db) {
+            Ok(()) => StepOutcome::Done,
+            Err(e) => StepOutcome::Failed(e),
+        },
+    );
     if let Some(config) = legacy {
         let outcome = migrate_legacy_config(&db, &paths, &config);
         report.legacy_config_migrated = outcome == StepOutcome::Done;

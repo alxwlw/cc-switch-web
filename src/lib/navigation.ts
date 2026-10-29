@@ -44,10 +44,10 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   "about",
 ];
 
-// WEB-00: секции целиком из desktop-only команд скрыты в web (network — WEB-23). routing и data
-// открыты WEB-24, но в web показывают только рабочие блоки (rectifier/optimizer, лог): остальное
+// WEB-00: секции целиком из desktop-only команд скрыты в web. network открыта WEB-23 (список пуст,
+// точка гейта остаётся здесь). routing и data открыты WEB-24, но в web показывают только рабочие блоки (rectifier/optimizer, лог): остальное
 // гейтится в SettingsPage до WEB-01 (routing) и WEB-26/09/10/11 (data). isWeb читается в момент вызова.
-const WEB_HIDDEN_SETTINGS_SECTIONS: SettingsSection[] = ["network"];
+const WEB_HIDDEN_SETTINGS_SECTIONS: SettingsSection[] = [];
 
 export function isSettingsSectionAvailable(section: SettingsSection): boolean {
   return !(isWeb && WEB_HIDDEN_SETTINGS_SECTIONS.includes(section));

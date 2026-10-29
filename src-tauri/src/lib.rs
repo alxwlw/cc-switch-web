@@ -654,11 +654,8 @@ pub fn run() {
                             other => other.to_string(),
                         };
 
-                        if !show_database_init_error_dialog(
-                            app.handle(),
-                            &paths.db_path,
-                            &message,
-                        ) {
+                        if !show_database_init_error_dialog(app.handle(), &paths.db_path, &message)
+                        {
                             log::info!("用户选择退出程序");
                             std::process::exit(1);
                         }
@@ -677,8 +674,7 @@ pub fn run() {
             // 如果有预加载的配置，执行迁移
             if let Some(config) = migration_config {
                 let outcome = bootstrap::migrate_legacy_config(&db, &paths, &config);
-                bootstrap_report.legacy_config_migrated =
-                    outcome == bootstrap::StepOutcome::Done;
+                bootstrap_report.legacy_config_migrated = outcome == bootstrap::StepOutcome::Done;
             }
 
             let app_state = AppState::new(db);
@@ -791,52 +787,53 @@ pub fn run() {
             // 设置里打开「原生托盘菜单」就挂原生菜单（`tray::apply_tray_style` 运行时切换）。
             // Linux（AppIndicator）不派发点击事件，只能出原生菜单，菜单里有一项打开面板。
             let native_menu = tray_panel::uses_native_menu();
-            let mut tray_builder = TrayIconBuilder::with_id(tray::TRAY_ID)
-                .tooltip("CC Switch") // 鼠标悬停提示
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button:
-                            button @ (tauri::tray::MouseButton::Left
-                            | tauri::tray::MouseButton::Right),
-                        button_state: tauri::tray::MouseButtonState::Up,
-                        rect,
-                        ..
-                    } = &event
-                    {
-                        if cfg!(target_os = "windows")
-                            && *button == tauri::tray::MouseButton::Left
+            let mut tray_builder =
+                TrayIconBuilder::with_id(tray::TRAY_ID)
+                    .tooltip("CC Switch") // 鼠标悬停提示
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button:
+                                button @ (tauri::tray::MouseButton::Left
+                                | tauri::tray::MouseButton::Right),
+                            button_state: tauri::tray::MouseButtonState::Up,
+                            rect,
+                            ..
+                        } = &event
                         {
-                            tray_panel::hide_panel(tray.app_handle());
-                            tray::show_main_window(tray.app_handle());
-                        } else if !tray_panel::uses_native_menu() {
-                            tray_panel::toggle(tray.app_handle(), rect);
-                            return;
-                        } else {
-                            // 弹出的菜单里已经有反馈行了：算显示过，下次悬停重建时拿掉。
-                            tray::mark_feedback_seen();
-                        }
-                    }
-                    match &event {
-                        // 鼠标悬停/点击到托盘图标时，后台异步刷新用量缓存，
-                        // 让用户下一次（或快速打开菜单的那一刻）看到较新的数字。
-                        // refresh_all_usage_in_tray 内部有 10 秒防抖。
-                        TrayIconEvent::Enter { .. } | TrayIconEvent::Click { .. } => {
-                            let app = tray.app_handle().clone();
-                            // 悬停时菜单还没打开：问题区该出现 / 消失了就趁这时重建。
-                            if matches!(event, TrayIconEvent::Enter { .. }) {
-                                tray::refresh_tray_if_problems_changed(&app);
+                            if cfg!(target_os = "windows")
+                                && *button == tauri::tray::MouseButton::Left
+                            {
+                                tray_panel::hide_panel(tray.app_handle());
+                                tray::show_main_window(tray.app_handle());
+                            } else if !tray_panel::uses_native_menu() {
+                                tray_panel::toggle(tray.app_handle(), rect);
+                                return;
+                            } else {
+                                // 弹出的菜单里已经有反馈行了：算显示过，下次悬停重建时拿掉。
+                                tray::mark_feedback_seen();
                             }
-                            tauri::async_runtime::spawn(async move {
-                                crate::tray::refresh_all_usage_in_tray(&app).await;
-                            });
                         }
-                        _ => log::debug!("unhandled event {event:?}"),
-                    }
-                })
-                .on_menu_event(|app, event| {
-                    tray::handle_tray_menu_event(app, &event.id.0);
-                })
-                .show_menu_on_left_click(tray::native_menu_on_left_click(native_menu));
+                        match &event {
+                            // 鼠标悬停/点击到托盘图标时，后台异步刷新用量缓存，
+                            // 让用户下一次（或快速打开菜单的那一刻）看到较新的数字。
+                            // refresh_all_usage_in_tray 内部有 10 秒防抖。
+                            TrayIconEvent::Enter { .. } | TrayIconEvent::Click { .. } => {
+                                let app = tray.app_handle().clone();
+                                // 悬停时菜单还没打开：问题区该出现 / 消失了就趁这时重建。
+                                if matches!(event, TrayIconEvent::Enter { .. }) {
+                                    tray::refresh_tray_if_problems_changed(&app);
+                                }
+                                tauri::async_runtime::spawn(async move {
+                                    crate::tray::refresh_all_usage_in_tray(&app).await;
+                                });
+                            }
+                            _ => log::debug!("unhandled event {event:?}"),
+                        }
+                    })
+                    .on_menu_event(|app, event| {
+                        tray::handle_tray_menu_event(app, &event.id.0);
+                    })
+                    .show_menu_on_left_click(tray::native_menu_on_left_click(native_menu));
             if native_menu {
                 let menu = tray::create_tray_menu(app.handle(), &app_state)?;
                 tray_builder = tray_builder.menu(&menu);
@@ -872,7 +869,9 @@ pub fn run() {
 
                 let app_config_dir = crate::config::get_app_config_dir();
                 let copilot_auth_manager = CopilotAuthManager::new(app_config_dir);
-                app.manage(CopilotAuthState(Arc::new(RwLock::new(copilot_auth_manager))));
+                app.manage(CopilotAuthState(Arc::new(RwLock::new(
+                    copilot_auth_manager,
+                ))));
                 log::info!("✓ CopilotAuthManager initialized");
             }
 
@@ -880,8 +879,7 @@ pub fn run() {
             {
                 use commands::CodexOAuthState;
 
-                let codex_oauth_manager =
-                    app.state::<AppState>().codex_oauth_manager.clone();
+                let codex_oauth_manager = app.state::<AppState>().codex_oauth_manager.clone();
                 app.manage(CodexOAuthState(codex_oauth_manager));
                 log::info!("✓ CodexOAuthManager initialized");
             }
@@ -905,36 +903,8 @@ pub fn run() {
                 app.manage(commands::AgyAccountState(Arc::new(manager)));
             }
 
-            // 初始化全局出站代理 HTTP 客户端
-            {
-                let db = &app.state::<AppState>().db;
-                let proxy_url = db.get_global_proxy_url().ok().flatten();
-
-                if let Err(e) = crate::proxy::http_client::init(proxy_url.as_deref()) {
-                    log::error!(
-                        "[GlobalProxy] [GP-005] Failed to initialize with saved config: {e}"
-                    );
-
-                    // 清除无效的代理配置
-                    if proxy_url.is_some() {
-                        log::warn!(
-                            "[GlobalProxy] [GP-006] Clearing invalid proxy config from database"
-                        );
-                        if let Err(clear_err) = db.set_global_proxy_url(None) {
-                            log::error!(
-                                "[GlobalProxy] [GP-007] Failed to clear invalid config: {clear_err}"
-                            );
-                        }
-                    }
-
-                    // 使用直连模式重新初始化
-                    if let Err(fallback_err) = crate::proxy::http_client::init(None) {
-                        log::error!(
-                            "[GlobalProxy] [GP-008] Failed to initialize direct connection: {fallback_err}"
-                        );
-                    }
-                }
-            }
+            // 初始化全局出站代理 HTTP 客户端（错误已在函数内记录）
+            let _ = crate::bootstrap::init_global_http_client(&app.state::<AppState>().db);
 
             // 异常退出恢复 + 代理状态自动恢复
             let app_handle = app.handle().clone();
@@ -987,10 +957,13 @@ pub fn run() {
             {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.with_webview(|webview| {
-                        use webkit2gtk::{WebViewExt, SettingsExt, HardwareAccelerationPolicy};
+                        use webkit2gtk::{HardwareAccelerationPolicy, SettingsExt, WebViewExt};
                         let wk_webview = webview.inner();
                         if let Some(settings) = WebViewExt::settings(&wk_webview) {
-                            SettingsExt::set_hardware_acceleration_policy(&settings, HardwareAccelerationPolicy::Never);
+                            SettingsExt::set_hardware_acceleration_policy(
+                                &settings,
+                                HardwareAccelerationPolicy::Never,
+                            );
                             log::info!("已禁用 WebKitGTK 硬件加速");
                         }
                     });
@@ -1036,7 +1009,6 @@ pub fn run() {
                     }
                 }
             }
-
 
             Ok(())
         })

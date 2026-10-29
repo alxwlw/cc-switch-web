@@ -1062,6 +1062,7 @@
     "globalProxy": {
       "label": "Küresel Vekil",
       "hint": "Tüm istekleri proxy olarak gönderin (API, Beceri indirme vb.). Yerel yönlendirme etkinleştirildiğinde uygulama trafiği de bu proxy üzerinden yönlendirilir. Doğrudan bağlantı için boş bırakın.",
+      "serverSideNote": "Proxy, bu tarayıcıya değil, cc-switch-web sunucusunun giden isteklerine uygulanır. Tarama, sunucunun kendisinde (onun 127.0.0.1 adresinde) proxy arar.",
       "username": "Kullanıcı adı (isteğe bağlı)",
       "password": "Şifre (isteğe bağlı)",
       "test": "Bağlantıyı Test Et",
