@@ -40,6 +40,9 @@ Scope: `src-tauri/src/store.rs` (Kimi-менеджер), `src-tauri/src/lib.rs:1
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-29**: PR #27 merged `acb117d8` → main; live на `cc-switch-web.service` с 14:19; DX-60 Done (этап 2 из 2).
+  - Server и `dist-web` пересобраны из main. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p26-20261029-141917/`, прежний бинарник — `cc-switch-web.prev`. Миграций нет.
+  - Smoke: консоль 200; `GET /api/kimi/oauth/status` → пустой список; `start {"region":"mars"}` → 400; `cancel {"flowId":"x"}` → `data: false`. Реальный вход Kimi на живом сервисе не запускали.
 - **Статус до merge (2026-10-29)**: ветка `web-parity/web-02-kimi-cards` (worktree `.worktrees/web-02-kimi`), PR #27 (https://github.com/alxwlw/cc-switch-web/pull/27) открыт; DX-60 → In Review (комментарий со ссылкой, «этап 2 из 2»). Ветка также несёт закрытие фазы 25 в плане (`61087808`).
   - Финальные гейты на `754aec02`:
     - fmt и `clippy --lib --examples -D warnings` — чисто;
