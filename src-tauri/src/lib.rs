@@ -521,7 +521,7 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
-            let _ = rustls::crypto::ring::default_provider().install_default();
+            bootstrap::install_rustls_provider();
 
             // 预先刷新 Store 覆盖配置，确保后续路径读取正确（日志/数据库等）
             app_store::refresh_app_config_dir_override(app.handle());
