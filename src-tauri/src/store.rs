@@ -42,7 +42,7 @@ impl AppState {
         let events = EventHub::new();
         let proxy_service = ProxyService::new(db.clone())
             .with_events(events.clone())
-            .with_auth(crate::proxy::server::ProxyAuth {
+            .with_auth(crate::proxy::server::OAuthManagers {
                 copilot: copilot_auth.clone(),
                 codex: codex_oauth_manager.clone(),
                 xai: xai_oauth.clone(),
@@ -151,6 +151,7 @@ mod tests {
         assert_eq!(xai.len(), 1);
         assert_eq!(xai[0].login, "grok-user");
     }
+
     #[test]
     #[serial]
     fn proxy_auth_bundle_shares_appstate_arcs() {
@@ -238,19 +239,22 @@ mod tests {
         let info = state.proxy_service.start().await.expect("start proxy");
 
         let client = reqwest::Client::new();
-        let send = || async {
-            client
-                .post(format!("http://127.0.0.1:{}/v1/messages", info.port))
-                .json(&serde_json::json!({
-                    "model": "gpt-4o", "max_tokens": 8,
-                    "messages": [{"role": "user", "content": "hi"}]
-                }))
-                .send()
-                .await
-                .unwrap()
+        let send_to = |port: u16| {
+            let client = client.clone();
+            async move {
+                client
+                    .post(format!("http://127.0.0.1:{port}/v1/messages"))
+                    .json(&serde_json::json!({
+                        "model": "gpt-4o", "max_tokens": 8,
+                        "messages": [{"role": "user", "content": "hi"}]
+                    }))
+                    .send()
+                    .await
+                    .unwrap()
+            }
         };
 
-        let first = send().await;
+        let first = send_to(info.port).await;
         assert!(
             first.status().is_success(),
             "{}",
@@ -268,6 +272,32 @@ mod tests {
             vec![Some("Bearer tid-managed-token".to_string())]
         );
 
+        // Config update restarts the server through start_with; the restarted forwarder
+        // must still carry the managers.
+        let mut config = state.db.get_proxy_config().await.unwrap();
+        config.listen_port = 0; // differs from the persisted ephemeral port -> restart
+        assert!(state.proxy_service.update_config(&config).await.unwrap());
+        let new_port = state.proxy_service.get_status().await.unwrap().port;
+        assert_ne!(new_port, info.port, "server did not restart");
+        let restarted = send_to(new_port).await;
+        assert!(
+            restarted.status().is_success(),
+            "{}",
+            restarted.text().await.unwrap()
+        );
+        let chat_auth: Vec<_> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("/chat/completions"))
+            .map(|(_, auth)| auth.clone())
+            .collect();
+        assert_eq!(
+            chat_auth,
+            vec![Some("Bearer tid-managed-token".to_string()); 2],
+            "restart path lost the managers"
+        );
+
         // Logout through the same manager, then the next request must not leave with the old token.
         state
             .copilot_auth
@@ -277,7 +307,7 @@ mod tests {
             .await
             .unwrap();
         let before = seen.lock().unwrap().len();
-        let second = send().await;
+        let second = send_to(new_port).await;
         assert!(
             !second.status().is_success(),
             "request after logout must fail"

@@ -31,7 +31,7 @@ use crate::proxy::providers::copilot_model_map::{
     CopilotProtocol, CopilotTransport, ResolvedCopilotModel,
 };
 use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
-use crate::proxy::server::ProxyAuth;
+use crate::proxy::server::OAuthManagers;
 use crate::{
     app_config::AppType,
     provider::{CodexCopilotApiFormat, LocalProxyRequestOverrides, Provider},
@@ -350,7 +350,7 @@ pub struct RequestForwarder {
     /// AppHandle，用于发射事件和更新托盘
     app_handle: Option<tauri::AppHandle>,
     /// OAuth 管理器（桌面与 headless 同源）
-    auth: Option<ProxyAuth>,
+    auth: Option<OAuthManagers>,
     /// 请求开始时的"当前供应商 ID"（用于判断是否需要同步 UI/托盘）
     current_provider_id_at_start: String,
     /// 代理会话 ID（用于 Gemini Native shadow replay）
@@ -458,7 +458,7 @@ impl RequestForwarder {
         codex_chat_history: Arc<CodexChatHistoryStore>,
         failover_manager: Arc<FailoverSwitchManager>,
         app_handle: Option<tauri::AppHandle>,
-        auth: Option<ProxyAuth>,
+        auth: Option<OAuthManagers>,
         current_provider_id_at_start: String,
         session_id: String,
         session_client_provided: bool,

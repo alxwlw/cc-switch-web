@@ -50,7 +50,7 @@ pub struct ProxyState {
     /// AppHandle，仅用于故障转移切换的托盘刷新（headless 为 None）
     pub app_handle: Option<tauri::AppHandle>,
     /// OAuth 管理器（与 AppState 共享同一批 Arc）；None 仅出现在裸构造的测试中
-    pub auth: Option<ProxyAuth>,
+    pub auth: Option<OAuthManagers>,
     /// 故障转移切换管理器
     pub failover_manager: Arc<FailoverSwitchManager>,
 }
@@ -58,7 +58,7 @@ pub struct ProxyState {
 /// 转发器读取 OAuth 凭据所需的管理器，均为 `AppState` 字段的 `Arc` 克隆
 /// （桌面 State 包装与 web 登录/登出路由共享同一实例，登出立即对转发生效）。
 #[derive(Clone)]
-pub struct ProxyAuth {
+pub struct OAuthManagers {
     pub copilot: Arc<RwLock<CopilotAuthManager>>,
     pub codex: Arc<CodexOAuthManager>,
     pub xai: Arc<RwLock<XaiOAuthManager>>,
@@ -83,7 +83,7 @@ impl ProxyState {
 
 impl ProxyServer {
     /// 注入 OAuth 管理器（生产路径经 `ProxyService::with_auth`）。
-    pub fn with_auth(mut self, auth: Option<ProxyAuth>) -> Self {
+    pub fn with_auth(mut self, auth: Option<OAuthManagers>) -> Self {
         self.state.auth = auth;
         self
     }

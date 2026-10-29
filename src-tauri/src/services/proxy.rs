@@ -22,7 +22,7 @@ pub struct ProxyService {
     /// AppHandle，用于传递给 ProxyServer 以支持故障转移时的 UI 更新
     app_handle: Arc<RwLock<Option<tauri::AppHandle>>>,
     /// OAuth 管理器（AppState::new 注入；裸构造为 None）
-    auth: Option<crate::proxy::server::ProxyAuth>,
+    auth: Option<crate::proxy::server::OAuthManagers>,
     switch_locks: SwitchLockManager,
     events: crate::events::EventHub,
 }
@@ -77,13 +77,13 @@ impl ProxyService {
     }
 
     /// 注入与 AppState 共用的 OAuth 管理器。
-    pub fn with_auth(mut self, auth: crate::proxy::server::ProxyAuth) -> Self {
+    pub fn with_auth(mut self, auth: crate::proxy::server::OAuthManagers) -> Self {
         self.auth = Some(auth);
         self
     }
 
     #[cfg(test)]
-    pub(crate) fn auth_for_test(&self) -> Option<&crate::proxy::server::ProxyAuth> {
+    pub(crate) fn auth_for_test(&self) -> Option<&crate::proxy::server::OAuthManagers> {
         self.auth.as_ref()
     }
 
