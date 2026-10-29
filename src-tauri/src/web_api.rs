@@ -186,6 +186,27 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/skills/toggle", post(toggle_skill))
         .route("/api/skills/resync", post(resync_skills))
         .route("/api/skills/uninstall", post(uninstall_skill))
+        .route("/api/skills/backups", get(skill_backups))
+        .route("/api/skills/backups/:id", delete(delete_skill_backup))
+        .route(
+            "/api/skills/backups/:id/restore",
+            post(restore_skill_backup),
+        )
+        .route("/api/skills/install", post(install_skill))
+        .route("/api/skills/unmanaged", get(unmanaged_skills))
+        .route(
+            "/api/skills/import-from-apps",
+            post(import_skills_from_apps),
+        )
+        .route("/api/skills/discover", get(discover_skills))
+        .route("/api/skills/updates", get(check_skill_updates))
+        // ids are "owner/name:directory": the id travels in the body, not the path
+        .route("/api/skills/update", post(update_skill))
+        .route("/api/skills/migrate-storage", post(migrate_skill_storage))
+        .route("/api/skills/dir", get(skills_dir))
+        .route("/api/skills/search", get(search_skills_sh))
+        .route("/api/skills/repos", get(skill_repos).post(add_skill_repo))
+        .route("/api/skills/repos/:owner/:name", delete(remove_skill_repo))
         // sessions
         .route("/api/sessions", get(list_sessions).delete(delete_sessions))
         .route("/api/sessions/one", delete(delete_session))
@@ -1370,6 +1391,192 @@ async fn uninstall_skill(
         Ok(result) => ok(result),
         Err(e) => fail(e.to_string()),
     }
+}
+
+async fn skill_backups() -> ApiResult {
+    blocking_api("skill backups", SkillService::list_backups).await
+}
+
+async fn delete_skill_backup(Path(id): Path<String>) -> ApiResult {
+    blocking_api("skill backup delete", move || {
+        SkillService::delete_backup(&id).map(|()| true)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RestoreSkillBackupReq {
+    current_app: String,
+}
+
+async fn restore_skill_backup(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+    Json(body): Json<RestoreSkillBackupReq>,
+) -> ApiResult {
+    let app_type = app_type!(&body.current_app);
+    let db = state.db.clone();
+    blocking_api("skill restore", move || {
+        SkillService::restore_from_backup(&db, &id, &app_type)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InstallSkillReq {
+    skill: crate::services::skill::DiscoverableSkill,
+    current_app: String,
+}
+
+async fn install_skill(
+    State(state): State<SharedState>,
+    Json(body): Json<InstallSkillReq>,
+) -> ApiResult {
+    let app_type = app_type!(&body.current_app);
+    match SkillService::new()
+        .install(&state.db, &body.skill, &app_type)
+        .await
+    {
+        Ok(installed) => ok(installed),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+async fn unmanaged_skills(State(state): State<SharedState>) -> ApiResult {
+    let db = state.db.clone();
+    blocking_api("skill scan", move || SkillService::scan_unmanaged(&db)).await
+}
+
+#[derive(Deserialize)]
+struct ImportSkillsReq {
+    imports: Vec<crate::services::skill::ImportSkillSelection>,
+}
+
+async fn import_skills_from_apps(
+    State(state): State<SharedState>,
+    Json(body): Json<ImportSkillsReq>,
+) -> ApiResult {
+    let db = state.db.clone();
+    blocking_api("skill import", move || {
+        SkillService::import_from_apps(&db, body.imports)
+    })
+    .await
+}
+
+async fn discover_skills(State(state): State<SharedState>) -> ApiResult {
+    let repos = match state.db.get_skill_repos() {
+        Ok(r) => r,
+        Err(e) => return fail(e.to_string()),
+    };
+    match SkillService::new().discover_available_report(repos).await {
+        Ok(report) => ok(report),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+async fn check_skill_updates(State(state): State<SharedState>) -> ApiResult {
+    match SkillService::new().check_updates_report(&state.db).await {
+        Ok(report) => ok(report),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+async fn update_skill(
+    State(state): State<SharedState>,
+    Json(body): Json<UninstallSkillReq>,
+) -> ApiResult {
+    match SkillService::new().update_skill(&state.db, &body.id).await {
+        Ok(skill) => ok(skill),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct MigrateSkillStorageReq {
+    target: crate::services::skill::SkillStorageLocation,
+}
+
+async fn migrate_skill_storage(
+    State(state): State<SharedState>,
+    Json(body): Json<MigrateSkillStorageReq>,
+) -> ApiResult {
+    let db = state.db.clone();
+    blocking_api("skill migration", move || {
+        SkillService::migrate_storage(&db, body.target)
+    })
+    .await
+}
+
+async fn skills_dir() -> ApiResult {
+    ok(crate::commands::cc_switch_skills_dir()
+        .to_string_lossy()
+        .to_string())
+}
+
+#[derive(Deserialize)]
+struct SearchSkillsQuery {
+    query: String,
+    limit: usize,
+    offset: usize,
+}
+
+async fn search_skills_sh(Query(q): Query<SearchSkillsQuery>) -> ApiResult {
+    match SkillService::search_skills_sh(&q.query, q.limit, q.offset).await {
+        Ok(result) => ok(result),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+async fn skill_repos(State(state): State<SharedState>) -> ApiResult {
+    match state.db.get_skill_repos() {
+        Ok(repos) => ok(repos),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct AddSkillRepoReq {
+    repo: crate::services::skill::SkillRepo,
+}
+
+async fn add_skill_repo(
+    State(state): State<SharedState>,
+    Json(body): Json<AddSkillRepoReq>,
+) -> ApiResult {
+    let repo = body.repo;
+    if let Err(e) = SkillService::validate_repo_ref(&repo.owner, &repo.name, &repo.branch) {
+        return bad_request(e.to_string());
+    }
+    match state.db.save_skill_repo(&repo) {
+        Ok(()) => ok(true),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+async fn remove_skill_repo(
+    State(state): State<SharedState>,
+    Path((owner, name)): Path<(String, String)>,
+) -> ApiResult {
+    match state.db.delete_skill_repo(&owner, &name) {
+        Ok(()) => ok(true),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+/// Test seam: serve this directory as the extracted repo root for every skill repo
+/// download (discover/install/updates/update) instead of fetching from GitHub.
+/// Production never sets it and no HTTP route reaches it.
+#[cfg_attr(not(feature = "test-hooks"), doc(hidden))]
+pub fn skill_repo_fixture_test_hook(dir: Option<std::path::PathBuf>) {
+    crate::services::skill::set_repo_fixture_override(dir);
+}
+
+/// Test seam: point skills.sh search at a local server. Same contract as above.
+#[cfg_attr(not(feature = "test-hooks"), doc(hidden))]
+pub fn skills_sh_search_url_test_hook(url: Option<String>) {
+    crate::services::skill::set_skills_sh_url_override(url);
 }
 
 // ---------- sessions ----------
