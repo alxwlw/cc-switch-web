@@ -51,7 +51,8 @@ export async function setGlobalProxyUrl(url: string): Promise<void> {
   try {
     return await invoke("set_global_proxy_url", { url });
   } catch (error) {
-    // Tauri invoke 错误可能是字符串
+    // web 适配器抛出 Error，原样重抛；Tauri invoke 错误可能是字符串
+    if (error instanceof Error) throw error;
     throw new Error(typeof error === "string" ? error : String(error));
   }
 }

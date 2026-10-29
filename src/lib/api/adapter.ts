@@ -145,6 +145,26 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         body: { config: a.config },
       };
 
+    // ---------- global outbound proxy (WEB-23) ----------
+    case "get_global_proxy_url":
+      return { method: "GET", url: "/api/global-proxy" };
+    case "set_global_proxy_url":
+      return {
+        method: "PUT",
+        url: "/api/global-proxy",
+        body: { url: a.url },
+      };
+    case "test_proxy_url":
+      return {
+        method: "POST",
+        url: "/api/global-proxy/test",
+        body: { url: a.url },
+      };
+    case "get_upstream_proxy_status":
+      return { method: "GET", url: "/api/global-proxy/status" };
+    case "scan_local_proxies":
+      return { method: "POST", url: "/api/global-proxy/scan" };
+
     // ---------- server log (web-only, no Tauri command) ----------
     case "get_server_log_tail":
       return {

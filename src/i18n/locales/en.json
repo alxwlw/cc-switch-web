@@ -1062,6 +1062,7 @@
     "globalProxy": {
       "label": "Global Proxy",
       "hint": "Proxy all requests (API, Skills download, etc.). When local routing is enabled, app traffic is also routed through this proxy. Leave empty for direct connection.",
+      "serverSideNote": "The proxy applies to outgoing requests of the cc-switch-web server, not to this browser. Scan looks for proxies on the server itself (its 127.0.0.1).",
       "username": "Username (optional)",
       "password": "Password (optional)",
       "test": "Test Connection",
