@@ -38,6 +38,11 @@ Scope: `src-tauri/src/bootstrap.rs` (шаг init клиента), `src-tauri/src
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-29**: PR #25 merged `50ebc31b` → main; live на `cc-switch-web.service` с 05:02:05.
+  - Server и `dist-web` пересобраны из main. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p24-20261029-050205/`. Миграций нет.
+  - Проверено: бинарник совпадает со сборкой из main; `/api/health` → 200; `GET /api/global-proxy` → 200 (`null`); `/api/global-proxy/status` → 200 (`enabled:false`). WARN/ERROR в journal нет, отдаваемый `index.html` совпадает со сборкой. Реальный proxy на живом хосте не включали.
+  - DX-81 Done (комментарий со ссылками file:line). Ветка `web-parity/web-23-global-proxy` удалена локально и на origin, worktree `.worktrees/web-23` удалён.
+
 - **Статус до merge (2026-10-29)**: ветка `web-parity/web-23-global-proxy` (worktree `.worktrees/web-23`), PR #25 (https://github.com/alxwlw/cc-switch-web/pull/25) открыт; DX-81 In Review (комментарий со ссылкой). Ветка также несёт закрытие фазы 23 в плане (`62b59023`).
   - Финальные гейты на `2a8e9b19`:
     - fmt и `clippy --lib --examples -D warnings` — чисто (`--all-targets` даёт 87 baseline `await_holding_lock` в тестах lib, они есть и на main);
