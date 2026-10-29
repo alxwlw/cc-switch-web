@@ -41,6 +41,11 @@ Scope: `src-tauri/src/web_api.rs` (≈16 роутов), `src-tauri/tests/web_api
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-29**: PR #24 merged `29fa72bd` → main; live на `cc-switch-web.service`.
+  - Server и `dist-web` пересобраны из main. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p23-20261029-033616/`. Миграций нет.
+  - Проверено: `/api/health` → 200; `GET /api/skills/repos` → 4 репозитория; discover → 917 skills без failures; поиск `pdf` на skills.sh отвечает (pdf, docx, canvas-design); `/api/skills/dir` → `~/.cc-switch-web/skills`; загрузка `x.txt` → 400. WARN/ERROR в journal нет, отдаваемый `index.html` совпадает со сборкой. Реальный install на живом хосте не запускали: он пишет в настоящий `~/.claude/skills`.
+  - DX-63 Done (комментарий со ссылками file:line). Ветка `web-parity/web-05-skills` удалена локально; на origin её удаляет скрипт владельца (на 2026-10-29 ещё есть).
+
 - **Статус до merge (2026-10-29)**: ветка `web-parity/web-05-skills` (worktree `.worktrees/web-05`), PR #24 (https://github.com/alxwlw/cc-switch-web/pull/24) открыт; DX-63 In Review (комментарий со ссылкой). Ветка также несёт закрытие фазы 22 в плане (`99f235af`).
   - Финальные гейты на `cfa708dc`:
     - fmt/clippy (lib + example) — чисто;
