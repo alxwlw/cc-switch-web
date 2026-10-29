@@ -283,6 +283,24 @@ pub fn router(state: SharedState) -> Router {
         )
         .route("/api/auth/:provider/default", put(auth_set_default))
         .route("/api/auth/:provider/logout", post(auth_logout))
+        // Kimi Code OAuth (WEB-02 stage 2): same manager and remove path as the desktop commands
+        .route("/api/kimi/oauth/status", get(kimi_status))
+        .route("/api/kimi/oauth/start", post(kimi_start))
+        .route("/api/kimi/oauth/poll", post(kimi_poll))
+        .route("/api/kimi/oauth/cancel", post(kimi_cancel))
+        .route("/api/kimi/oauth/accounts/:account_id", delete(kimi_remove))
+        .route(
+            "/api/kimi/oauth/accounts/:account_id/quota",
+            get(kimi_quota),
+        )
+        .route(
+            "/api/kimi/oauth/accounts/:account_id/models",
+            get(kimi_models),
+        )
+        .route(
+            "/api/kimi/oauth/accounts/:account_id/use",
+            post(kimi_use_account),
+        )
         .route("/api/env/conflicts", get(env_conflicts))
         .route("/api/env/conflicts/cleanup", post(env_cleanup))
         .route("/api/env/restore", post(env_restore))
@@ -2399,6 +2417,84 @@ async fn auth_status(State(state): State<SharedState>, Path(provider): Path<Stri
         Ok(r) => ok(r),
         Err(e) => fail(e),
     }
+}
+
+// ---------- Kimi Code OAuth (WEB-02 stage 2) ----------
+
+fn kimi_result<T: serde::Serialize>(r: Result<T, String>) -> ApiResult {
+    match r {
+        Ok(v) => ok(v),
+        Err(e) => fail(e),
+    }
+}
+
+async fn kimi_status(State(state): State<SharedState>) -> ApiResult {
+    kimi_result(state.kimi_oauth.status().await)
+}
+
+/// Body `{region, accountId?}`; an unknown or missing region is a 400, not axum's 422.
+async fn kimi_start(State(state): State<SharedState>, Json(body): Json<Value>) -> ApiResult {
+    let region = match body.get("region") {
+        Some(v) => {
+            match serde_json::from_value::<crate::services::kimi_oauth::KimiRegion>(v.clone()) {
+                Ok(r) => r,
+                Err(_) => return bad_request(format!("unknown Kimi region: {v}")),
+            }
+        }
+        None => return bad_request("region is required"),
+    };
+    let account_id = match body.get("accountId") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) => Some(s.clone()),
+        Some(_) => return bad_request("accountId must be a string"),
+    };
+    kimi_result(state.kimi_oauth.start(region, account_id).await)
+}
+
+fn kimi_flow_id(body: &Value) -> Result<String, ApiResult> {
+    match body.get("flowId") {
+        Some(Value::String(s)) => Ok(s.clone()),
+        _ => Err(bad_request("flowId is required")),
+    }
+}
+
+async fn kimi_poll(State(state): State<SharedState>, Json(body): Json<Value>) -> ApiResult {
+    match kimi_flow_id(&body) {
+        Ok(id) => kimi_result(state.kimi_oauth.poll(&id).await),
+        Err(e) => e,
+    }
+}
+
+async fn kimi_cancel(State(state): State<SharedState>, Json(body): Json<Value>) -> ApiResult {
+    match kimi_flow_id(&body) {
+        Ok(id) => ok(state.kimi_oauth.cancel(&id).await),
+        Err(e) => e,
+    }
+}
+
+async fn kimi_remove(
+    State(state): State<SharedState>,
+    Path(account_id): Path<String>,
+) -> ApiResult {
+    unit_result(crate::commands::kimi_oauth_remove_inner(&state, &account_id).await)
+}
+
+async fn kimi_quota(State(state): State<SharedState>, Path(account_id): Path<String>) -> ApiResult {
+    kimi_result(state.kimi_oauth.quota(&account_id).await)
+}
+
+async fn kimi_models(
+    State(state): State<SharedState>,
+    Path(account_id): Path<String>,
+) -> ApiResult {
+    kimi_result(state.kimi_oauth.models(&account_id).await)
+}
+
+async fn kimi_use_account(
+    State(state): State<SharedState>,
+    Path(account_id): Path<String>,
+) -> ApiResult {
+    unit_result(state.kimi_oauth.use_account(&account_id).await)
 }
 
 async fn auth_remove_account(
