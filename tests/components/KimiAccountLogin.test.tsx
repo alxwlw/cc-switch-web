@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KimiAccountLogin } from "@/components/providers/KimiAccountLogin";
 import { kimiOAuthApi, type KimiOAuthStatus } from "@/lib/api/kimiOAuth";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 const mocks = vi.hoisted(() => ({ openExternal: vi.fn(), copy: vi.fn() }));
 vi.mock("@/lib/api/kimiOAuth", () => ({
@@ -339,6 +340,9 @@ describe("Kimi official account login", () => {
     expect(screen.getByRole("dialog")).toHaveTextContent(
       "kimi.oauth.removeConfirm",
     );
+    expect(screen.getByRole("dialog")).not.toHaveTextContent(
+      "kimi.oauth.removeConfirmWeb",
+    );
     fireEvent.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "kimi.oauth.removeAccount",
@@ -346,6 +350,25 @@ describe("Kimi official account login", () => {
     );
     await flush();
     expect(kimiOAuthApi.remove).toHaveBeenCalledWith(second.id);
+  });
+
+  it("web: removing a separate account warns that the CLI on the server is signed out too", async () => {
+    setWeb(true);
+    const second = {
+      ...account,
+      id: "kimi-code-ccs-second",
+      name: "Kimi Official · second",
+    };
+    await setup({
+      accounts: [account, second],
+      currentAccountId: account.id,
+      primaryHidden: false,
+    });
+    await openMenu(second.name);
+    fireEvent.click(menuItem("kimi.oauth.removeAccount"));
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "kimi.oauth.removeConfirmWeb",
+    );
   });
 
   it("only hides Kimi's own login from the list, even while it is in use", async () => {

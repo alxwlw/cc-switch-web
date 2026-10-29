@@ -212,6 +212,48 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "agy_account_is_running":
       return { method: "GET", url: "/api/auth/agy/running" };
 
+    // ---------- Kimi Code OAuth (WEB-02 stage 2) ----------
+    case "kimi_oauth_status":
+      return { method: "GET", url: "/api/kimi/oauth/status" };
+    case "kimi_oauth_start":
+      return {
+        method: "POST",
+        url: "/api/kimi/oauth/start",
+        body: { region: a.region, accountId: a.accountId },
+      };
+    case "kimi_oauth_poll":
+      return {
+        method: "POST",
+        url: "/api/kimi/oauth/poll",
+        body: { flowId: a.flowId },
+      };
+    case "kimi_oauth_cancel":
+      return {
+        method: "POST",
+        url: "/api/kimi/oauth/cancel",
+        body: { flowId: a.flowId },
+      };
+    case "kimi_oauth_remove":
+      return {
+        method: "DELETE",
+        url: `/api/kimi/oauth/accounts/${enc(a.accountId)}`,
+      };
+    case "kimi_oauth_quota":
+      return {
+        method: "GET",
+        url: `/api/kimi/oauth/accounts/${enc(a.accountId)}/quota`,
+      };
+    case "kimi_oauth_models":
+      return {
+        method: "GET",
+        url: `/api/kimi/oauth/accounts/${enc(a.accountId)}/models`,
+      };
+    case "kimi_oauth_use_account":
+      return {
+        method: "POST",
+        url: `/api/kimi/oauth/accounts/${enc(a.accountId)}/use`,
+      };
+
     // ---------- server log (web-only, no Tauri command) ----------
     case "get_server_log_tail":
       return {

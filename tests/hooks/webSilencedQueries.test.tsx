@@ -84,7 +84,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "get_subscription_quota",
     () => useSubscriptionQuota("claude", true, true, 1),
   ],
-  ["useKimiOAuth", "kimi_oauth_status", () => useKimiOAuth()],
   [
     "useDesktopConfigMessages",
     "get_claude_desktop_status",
@@ -146,11 +145,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "useAgyAccountQuota",
     "agy_account_quota",
     () => useAgyAccountQuota("a1", { autoQuery: true }),
-  ],
-  [
-    "useKimiAccountQuota",
-    "kimi_oauth_quota",
-    () => useKimiAccountQuota("a1", { autoQuery: true }),
   ],
   [
     "useCopilotQuota",
@@ -304,4 +298,24 @@ describe("WEB-00: фоновые query молчат в web", () => {
     expect(commands).toContain("get_app_mode");
     expect(commands).toContain("auth_get_status");
   });
+
+  it.each([
+    ["useKimiOAuth", "kimi_oauth_status", () => useKimiOAuth()],
+    [
+      "useKimiAccountQuota",
+      "kimi_oauth_quota",
+      () => useKimiAccountQuota("a1", { autoQuery: true }),
+    ],
+  ] as Array<[string, string, () => unknown]>)(
+    "%s: Kimi открыт в web (WEB-02 этап 2), зовёт %s",
+    async (_name, command, useHook) => {
+      setWeb(true);
+      const { wrapper } = wrapperFor();
+      renderHook(useHook, { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(calledCommands()).toContain(command);
+    },
+  );
 });

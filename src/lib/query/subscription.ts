@@ -262,8 +262,7 @@ export function useKimiAccountQuota(
   const query = useQuery({
     queryKey: ["kimi_oauth", "quota", accountId],
     queryFn: () => kimiOAuthApi.quota(accountId),
-    // WEB-00: quota-запросы не поддержаны — снимет WEB-02/04
-    enabled: enabled && !isWeb,
+    enabled,
     refetchInterval,
     refetchIntervalInBackground: Boolean(refetchInterval),
     refetchOnWindowFocus: Boolean(refetchInterval),

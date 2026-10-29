@@ -211,6 +211,46 @@ async fn remove_deletes_credential_provider_row_and_config_node() {
 
 #[tokio::test]
 #[serial]
+async fn removing_the_primary_account_only_hides_it() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    ensure_test_home();
+    let home = KimiHome::new();
+    seed(&home);
+    let router = web_router_with(std::sync::Arc::new(create_test_state().unwrap()));
+    assert_eq!(
+        ok_data(&router, "GET", "/api/kimi/oauth/status", None).await["primaryHidden"],
+        json!(false)
+    );
+
+    // `:` in the id arrives percent-encoded, as the web adapter sends it
+    ok_data(
+        &router,
+        "DELETE",
+        "/api/kimi/oauth/accounts/managed%3Akimi-code",
+        None,
+    )
+    .await;
+
+    let status = ok_data(&router, "GET", "/api/kimi/oauth/status", None).await;
+    assert_eq!(status["primaryHidden"], json!(true));
+    let ids: Vec<&str> = status["accounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["id"].as_str().unwrap())
+        .collect();
+    assert!(!ids.contains(&PRIMARY), "{ids:?}");
+    // Kimi's own login is hidden, not signed out: the credential file stays
+    assert!(home
+        .path()
+        .join("credentials")
+        .join(format!("{}.json", slot(PRIMARY)))
+        .exists());
+}
+
+#[tokio::test]
+#[serial]
 async fn removing_the_current_separate_account_is_refused_and_keeps_it() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     reset_test_fs();

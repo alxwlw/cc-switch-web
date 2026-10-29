@@ -65,15 +65,50 @@ describe("KimiAccountQuotaFooter", () => {
     );
   });
 
-  it("web: не опрашивает kimi_oauth_status и квоту", async () => {
+  it("web: queries status and quota like on desktop (WEB-02 stage 2)", async () => {
     setWeb(true);
-    const invalidate = renderFooter("Kimi Official (kimi-off)");
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(kimiOAuthApi.status).not.toHaveBeenCalled();
-    expect(kimiOAuthApi.quota).not.toHaveBeenCalled();
-    expect(invalidate).not.toHaveBeenCalledWith({
-      queryKey: ["providers", "kimi"],
+    vi.mocked(kimiOAuthApi.quota).mockResolvedValue({
+      tool: "kimi_oauth",
+      credentialStatus: "valid",
+      credentialMessage: null,
+      success: true,
+      tiers: [
+        {
+          name: "five_hour",
+          utilization: 37,
+          resetsAt: null,
+        },
+      ],
+      extraUsage: null,
+      error: null,
+      queriedAt: 0,
     });
+    const invalidate = renderFooter("Kimi Official (kimi-off)", true);
+    await waitFor(() => expect(kimiOAuthApi.status).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(kimiOAuthApi.quota).toHaveBeenCalledWith(account.id),
+    );
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: ["providers", "kimi"],
+      }),
+    );
+    // the test i18n returns keys: a rendered tier line is "quota.tierLeft"
+    expect(await screen.findByText("quota.tierLeft")).toBeInTheDocument();
+  });
+
+  it("web: shows the server's error text when the quota request fails", async () => {
+    setWeb(true);
+    vi.mocked(kimiOAuthApi.quota).mockRejectedValue(
+      new Error("kimi upstream said 503"),
+    );
+    renderFooter(account.name, true);
+    // useKimiAccountQuota retries once (about 1 s) before the query counts as failed
+    expect(
+      await screen.findByText(/kimi upstream said 503/, undefined, {
+        timeout: 4000,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("leaves the list alone when the card already shows the nickname", async () => {

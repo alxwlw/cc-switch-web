@@ -5,8 +5,6 @@ import { CodexOAuthSection } from "@/components/providers/forms/CodexOAuthSectio
 import { XaiOAuthSection } from "@/components/providers/forms/XaiOAuthSection";
 import { AgyOAuthSection } from "@/components/providers/forms/AgyOAuthSection";
 import { KimiAccountLogin } from "@/components/providers/KimiAccountLogin";
-import { WebAccountLoginNotice } from "@/components/ui/web-unavailable";
-import { isWeb } from "@/lib/api/adapter";
 import { useAgyAccountsAvailable } from "@/hooks/useServerCapabilities";
 import type { AuthCenterTarget } from "@/lib/api";
 
@@ -81,12 +79,7 @@ export function AuthCenterPanel({
         <XaiOAuthSection mode="manage" helpSide="bottom" />
       </div>
       <div ref={kimiOauthSectionRef} className="scroll-mt-4">
-        {/* Kimi stays desktop-only until WEB-02 stage 2 (phase 26) */}
-        {isWeb ? (
-          <WebAccountLoginNotice />
-        ) : (
-          <KimiAccountLogin helpSide={showAgy ? "bottom" : "top"} />
-        )}
+        <KimiAccountLogin helpSide={showAgy ? "bottom" : "top"} />
       </div>
       {showAgy && (
         <div ref={agyOauthSectionRef} className="scroll-mt-4">

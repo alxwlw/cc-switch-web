@@ -4991,6 +4991,7 @@
       "cancelled": "登录已取消或被其他登录替代，请重新登录。",
       "success": "Kimi Code 登录成功，已添加官方模型。",
       "removeConfirm": "删除 {{name}}？会从 Kimi Code 里删掉这个账号的供应商和模型，并删除它的本机登录凭据和卡片。其他账号不受影响。",
+      "removeConfirmWeb": "这里的 Kimi Code 凭据与服务器上的 Kimi Code CLI 共用：移除该账号后，服务器上的 CLI 也会退出登录。",
       "dismissConfirm": "把 {{name}} 移出列表？这是 Kimi Code 自己的登录，CC Switch 不会替它退出登录，凭据和模型都会保留；如需退出，请在 Kimi Code 里运行 /logout。之后重新登录会让它回到列表。",
       "primaryHidden": "Kimi Code 自己的登录已移出列表，重新登录同一账号即可找回",
       "removeCurrentHint": "这个账号正在使用，请先切换到其他账号再删除",
@@ -5073,7 +5074,6 @@
     "update": {
       "unsupported": "Web 模式下无法检查更新：服务器由运维人员负责升级"
     },
-    "accountLogin": "Kimi Code 登录暂不支持 Web 模式",
     "needsRouting": "该供应商需要路由代理，Web 模式下不可用",
     "liveUnknownTitle": "供应商（Web 模式下无法读取实际配置状态）",
     "sessionResumeCopied": "已复制恢复命令。请在服务器主机上的项目目录下，粘贴到终端运行",

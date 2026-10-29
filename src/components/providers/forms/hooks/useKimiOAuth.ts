@@ -7,7 +7,6 @@ import {
   type KimiRegion,
 } from "@/lib/api/kimiOAuth";
 import { settingsApi } from "@/lib/api";
-import { isWeb } from "@/lib/api/adapter";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { toast } from "@/lib/toast";
 
@@ -21,8 +20,6 @@ export function useKimiOAuth() {
     queryKey: STATUS_KEY,
     queryFn: kimiOAuthApi.status,
     refetchInterval: 30_000,
-    // WEB-00: kimi_oauth_status не поддержан (опрос 30 с) — снимет WEB-02
-    enabled: !isWeb,
   });
   const [flow, setFlow] = useState<KimiLoginStart | null>(null);
   const [starting, setStarting] = useState(false);
