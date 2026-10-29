@@ -18,9 +18,60 @@
 use std::{env, net::SocketAddr, path::PathBuf, sync::Arc};
 
 use cc_switch_lib::{
-    bootstrap::{run_headless_bootstrap_with, CodexHistory},
+    bootstrap::{
+        run_headless_bootstrap_with, run_headless_startup, shutdown_cleanup, CodexHistory,
+    },
+    store::AppState,
     web_api,
 };
+use std::time::Duration;
+
+/// Same bound as the desktop's system-exit cleanup: stopping the proxy has its
+/// own 5 s timeout, repointing clients is a few file writes.
+const SHUTDOWN_CLEANUP_TIMEOUT: Duration = Duration::from_secs(8);
+/// How long in-flight requests get after cleanup. Long-lived `/api/events` SSE
+/// streams never end by themselves, so without a bound the drain would hold
+/// until systemd's SIGKILL.
+const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Resolves on Ctrl-C or (unix) SIGTERM, which is what `systemctl stop` sends.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        if tokio::signal::ctrl_c().await.is_err() {
+            std::future::pending::<()>().await;
+        }
+    };
+    #[cfg(unix)]
+    let term = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(_) => std::future::pending::<()>().await,
+        }
+    };
+    #[cfg(not(unix))]
+    let term = std::future::pending::<()>();
+    tokio::select! {
+        _ = ctrl_c => log::info!("Ctrl-C received, shutting down"),
+        _ = term => log::info!("SIGTERM received, shutting down"),
+    }
+}
+
+/// Restores the CLI clients and stops the proxy, but never blocks shutdown
+/// longer than [`SHUTDOWN_CLEANUP_TIMEOUT`].
+async fn bounded_shutdown_cleanup(state: Option<&AppState>) {
+    let Some(state) = state else { return };
+    if tokio::time::timeout(SHUTDOWN_CLEANUP_TIMEOUT, shutdown_cleanup(state))
+        .await
+        .is_err()
+    {
+        log::warn!(
+            "Shutdown cleanup did not finish in {} s, exiting anyway",
+            SHUTDOWN_CLEANUP_TIMEOUT.as_secs()
+        );
+    }
+}
 
 fn env_truthy(name: &str) -> bool {
     env::var(name).is_ok_and(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "on"))
@@ -77,6 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }))
     })
     .await?;
+    let mut cleanup_state: Option<Arc<AppState>> = None;
     let api = match bootstrapped {
         Ok(boot) => {
             for (step, err) in boot.report.failures() {
@@ -87,6 +139,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             cc_switch_lib::bootstrap::spawn_session_usage_worker(state.db.clone());
             // Same periodic DB backup (startup check + daily) as the desktop app.
             cc_switch_lib::bootstrap::spawn_periodic_backup_worker(state.db.clone());
+            // Settle direct/proxy modes and re-attach proxied clients (crash
+            // recovery for takeover) before the first request is served.
+            run_headless_startup(&state).await;
+            cleanup_state = Some(state.clone());
             web_api::router(state)
         }
         Err(e) => {
@@ -135,6 +191,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     log::info!("Starting cc-switch-web server on http://{addr} (tailscale-only, no in-app auth)");
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app.into_make_service()).await?;
+    let (drain_tx, drain_rx) = tokio::sync::oneshot::channel::<()>();
+    let serve = axum::serve(listener, app.into_make_service()).with_graceful_shutdown(async move {
+        shutdown_signal().await;
+        // Cleanup runs even if the drain below hangs on a long-lived stream.
+        bounded_shutdown_cleanup(cleanup_state.as_deref()).await;
+        let _ = drain_tx.send(());
+    });
+    tokio::select! {
+        res = serve => res?,
+        _ = async {
+            if drain_rx.await.is_ok() {
+                tokio::time::sleep(SHUTDOWN_DRAIN_TIMEOUT).await;
+            } else {
+                std::future::pending::<()>().await;
+            }
+        } => log::warn!(
+            "Open connections did not drain in {} s, exiting anyway",
+            SHUTDOWN_DRAIN_TIMEOUT.as_secs()
+        ),
+    }
     Ok(())
 }
