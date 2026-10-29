@@ -7,7 +7,7 @@ use crate::provider::Provider;
 use crate::store::AppState;
 use std::str::FromStr;
 
-fn require_failover_app(app_type: &str) -> Result<(), String> {
+pub(crate) fn require_failover_app(app_type: &str) -> Result<(), String> {
     let app = crate::app_config::AppType::from_str(app_type)
         .map_err(|error| format!("无效的应用类型: {error}"))?;
     if !app.supports_local_proxy() {
@@ -74,23 +74,31 @@ pub async fn get_failover_queue(
     state: tauri::State<'_, AppState>,
     app_type: String,
 ) -> Result<Vec<FailoverQueueItem>, String> {
-    require_failover_app(&app_type)?;
+    get_failover_queue_inner(state.inner(), &app_type)
+}
+
+/// 不依赖 tauri::State 的队列读取（web 路由共用）。
+pub(crate) fn get_failover_queue_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<Vec<FailoverQueueItem>, String> {
+    require_failover_app(app_type)?;
     let queue = state
         .db
-        .get_failover_queue(&app_type)
+        .get_failover_queue(app_type)
         .map_err(|e| e.to_string())?;
     if app_type != "codex" {
         return Ok(queue);
     }
     let providers = state
         .db
-        .get_all_providers(&app_type)
+        .get_all_providers(app_type)
         .map_err(|e| e.to_string())?;
     Ok(queue
         .into_iter()
         .filter(|item| {
             providers.get(&item.provider_id).is_some_and(|provider| {
-                crate::proxy::provider_router::provider_supports_failover(&app_type, provider)
+                crate::proxy::provider_router::provider_supports_failover(app_type, provider)
             })
         })
         .collect())
@@ -102,15 +110,23 @@ pub async fn get_available_providers_for_failover(
     state: tauri::State<'_, AppState>,
     app_type: String,
 ) -> Result<Vec<Provider>, String> {
-    require_failover_app(&app_type)?;
+    get_available_providers_for_failover_inner(state.inner(), &app_type)
+}
+
+/// 不依赖 tauri::State 的候选读取（web 路由共用）。
+pub(crate) fn get_available_providers_for_failover_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<Vec<Provider>, String> {
+    require_failover_app(app_type)?;
     let providers = state
         .db
-        .get_available_providers_for_failover(&app_type)
+        .get_available_providers_for_failover(app_type)
         .map_err(|e| e.to_string())?;
     Ok(providers
         .into_iter()
         .filter(|provider| {
-            crate::proxy::provider_router::provider_supports_failover(&app_type, provider)
+            crate::proxy::provider_router::provider_supports_failover(app_type, provider)
         })
         .collect())
 }
@@ -174,10 +190,18 @@ pub async fn get_auto_failover_enabled(
     state: tauri::State<'_, AppState>,
     app_type: String,
 ) -> Result<bool, String> {
-    require_failover_app(&app_type)?;
+    get_auto_failover_enabled_inner(state.inner(), &app_type).await
+}
+
+/// 不依赖 tauri::State 的开关读取（web 路由共用）。
+pub(crate) async fn get_auto_failover_enabled_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<bool, String> {
+    require_failover_app(app_type)?;
     state
         .db
-        .get_proxy_config_for_app(&app_type)
+        .get_proxy_config_for_app(app_type)
         .await
         .map(|config| config.auto_failover_enabled)
         .map_err(|e| e.to_string())
