@@ -86,7 +86,10 @@ async fn status_of(router: &axum::Router, method: &str, uri: &str, body: Option<
     web_call(router, method, uri, body).await.0.as_u16()
 }
 
-/// Stub upstream answering every request with `status`; counts the requests it saw.
+/// Stub upstream answering every request with `status`; counts only the proxied
+/// `POST /v1/messages` calls. Other peers probe fresh loopback ports on a dev machine
+/// (`GET /` from a Go client, once per listener and per host name), and counting every
+/// accepted connection made `b_seen` 2..3 instead of 1 in about half of the runs.
 async fn stub_upstream(status: u16) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
@@ -99,8 +102,12 @@ async fn stub_upstream(status: u16) -> (String, Arc<std::sync::atomic::AtomicUsi
             };
             let counter = counter.clone();
             tokio::spawn(async move {
-                read_request(&mut socket).await;
-                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                if read_request(&mut socket)
+                    .await
+                    .starts_with("POST /v1/messages ")
+                {
+                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }
                 let body = if status == 200 {
                     json!({
                         "id": "msg_stub", "type": "message", "role": "assistant",
@@ -125,7 +132,8 @@ async fn stub_upstream(status: u16) -> (String, Arc<std::sync::atomic::AtomicUsi
     (url, seen)
 }
 
-async fn read_request(socket: &mut tokio::net::TcpStream) {
+/// Reads one request off `socket`; returns its request line (empty if the peer sent nothing).
+async fn read_request(socket: &mut tokio::net::TcpStream) -> String {
     let mut data = Vec::new();
     let mut chunk = [0u8; 4096];
     loop {
@@ -149,6 +157,11 @@ async fn read_request(socket: &mut tokio::net::TcpStream) {
             }
         }
     }
+    String::from_utf8_lossy(&data)
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .to_string()
 }
 
 /// One `/v1/messages` request through the running proxy; returns the raw response.
