@@ -69,7 +69,7 @@ describe("AuthCenterPanel in web (WEB-02)", () => {
   beforeEach(() => setWeb(true));
   afterEach(() => vi.unstubAllGlobals());
 
-  it("linux server: no Antigravity card, Kimi replaced by the web notice", async () => {
+  it("linux server: no Antigravity card, Kimi login rendered", async () => {
     stubCapabilities("linux");
     renderPanel();
     await waitFor(() =>
@@ -78,8 +78,8 @@ describe("AuthCenterPanel in web (WEB-02)", () => {
     expect(screen.getByText("copilot-section")).toBeInTheDocument();
     expect(screen.getByText("codex-section")).toBeInTheDocument();
     expect(screen.getByText("xai-section")).toBeInTheDocument();
-    expect(screen.queryByText("kimi-login")).toBeNull();
-    expect(screen.getByRole("status")).toHaveTextContent("web.accountLogin");
+    expect(screen.getByText("kimi-login")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
     expect(screen.queryByRole("region", { name: "Antigravity" })).toBeNull();
   });
 
@@ -92,7 +92,7 @@ describe("AuthCenterPanel in web (WEB-02)", () => {
     );
     expect(card.querySelector("#auth-login-agy")).toBeNull();
     expect(card.querySelector("#auth-add-agy")).toBeNull();
-    expect(screen.queryByText("kimi-login")).toBeNull();
+    expect(screen.getByText("kimi-login")).toBeInTheDocument();
   });
 
   it("desktop: Kimi login is rendered, no capabilities request", () => {

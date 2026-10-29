@@ -4991,6 +4991,7 @@
       "cancelled": "This sign-in was cancelled or replaced. Please sign in again.",
       "success": "Signed in to Kimi Code and added the official models.",
       "removeConfirm": "Remove {{name}}? Its provider and models are removed from Kimi Code, along with its local credentials and card. Other accounts are not affected.",
+      "removeConfirmWeb": "The server's Kimi Code credentials are shared with Kimi Code CLI on the server: removing this account signs the CLI out too.",
       "dismissConfirm": "Hide {{name}} from the list? This is Kimi Code's own login; CC Switch will not sign it out and keeps its credentials and models. To sign out, run /logout in Kimi Code. Signing in again brings it back to the list.",
       "primaryHidden": "Kimi Code's own login was removed from the list; sign in to the same account to bring it back",
       "removeCurrentHint": "This account is in use. Switch to another account before removing it.",
@@ -5073,7 +5074,6 @@
     "update": {
       "unsupported": "Updates are unavailable in web mode: the server operator updates the app"
     },
-    "accountLogin": "Kimi Code sign-in is not available in web mode yet",
     "needsRouting": "This provider needs the routing proxy, which is unavailable in web mode",
     "liveUnknownTitle": "Providers (live config state is unknown in web mode)",
     "sessionResumeCopied": "Resume command copied. Run it in a terminal on the server host, in the project folder.",

@@ -61,7 +61,7 @@ export function resolveSettingsSection(
 }
 
 // WEB-00: экраны целиком из desktop-only команд скрываются в web через этот список.
-// Сейчас пуст: auth открыт WEB-02 этап 1 (Copilot/Codex/xAI; Kimi — фаза 26),
+// Сейчас пуст: auth открыт WEB-02 (Copilot/Codex/xAI — этап 1, Kimi — этап 2),
 // skillsDiscovery — WEB-05, workspace/openclawConfig — WEB-15, hermesMemory — WEB-16.
 const WEB_HIDDEN_VIEWS: View[] = [];
 

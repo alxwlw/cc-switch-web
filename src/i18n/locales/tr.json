@@ -4982,6 +4982,7 @@
       "removeAccount": "Hesabı kaldır",
       "dismissAccount": "Listeden gizle",
       "removeConfirm": "{{name}} kaldırılsın mı? Bu hesabın sağlayıcısı ve modelleri, yerel kimlik bilgileri ve kartıyla birlikte Kimi Code'dan kaldırılır. Diğer hesaplar etkilenmez.",
+      "removeConfirmWeb": "Buradaki Kimi Code kimlik bilgileri sunucudaki Kimi Code CLI ile paylaşılır: bu hesabı kaldırmak sunucudaki CLI oturumunu da kapatır.",
       "dismissConfirm": "{{name}} listeden gizlensin mi? Bu, Kimi Code'un kendi oturumudur; CC Switch oturumu kapatmaz ve kimlik bilgileriyle modelleri saklar. Oturumu kapatmak için Kimi Code'da /logout komutunu çalıştırın. Yeniden oturum açınca hesap listeye geri gelir.",
       "primaryHidden": "Kimi Code'un kendi oturumu listeden kaldırıldı; yeniden görünmesi için aynı hesapla oturum açın",
       "removeCurrentHint": "Bu hesap kullanımda. Kaldırmadan önce başka bir hesaba geçin.",
@@ -5051,7 +5052,6 @@
     "update": {
       "unsupported": "Web modunda güncellemeler kullanılamaz: sunucuyu operatör günceller"
     },
-    "accountLogin": "Kimi Code girişi web modunda henüz kullanılamıyor",
     "needsRouting": "Bu sağlayıcı yönlendirme proxy'sini gerektirir; Web modunda kullanılamaz",
     "liveUnknownTitle": "Sağlayıcılar (Web modunda canlı yapılandırma durumu bilinmiyor)",
     "sessionResumeCopied": "Devam komutu kopyalandı. Sunucu ana makinesinde, proje klasöründe bir terminale yapıştırıp çalıştırın",

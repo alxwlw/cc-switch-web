@@ -22,16 +22,3 @@ export function WebUnavailableTip({
     </HoverTip>
   );
 }
-
-/**
- * Вход в аккаунт Kimi (OAuth) недоступен в web до WEB-02 этапа 2 (фаза 26) — единственный
- * пользователь: Центр авторизации. Copilot/Codex/xAI открыты WEB-02 этапа 1.
- */
-export function WebAccountLoginNotice({ className }: { className?: string }) {
-  const { t } = useTranslation();
-  return (
-    <p role="status" className={className ?? "text-body text-fg-2"}>
-      {t("web.accountLogin")}
-    </p>
-  );
-}

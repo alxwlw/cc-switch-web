@@ -5,6 +5,7 @@ use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
 use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use crate::services::agy_account::AgyAccountManager;
+use crate::services::kimi_oauth::KimiOAuthManager;
 use crate::services::{ProxyService, UsageCache};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -24,6 +25,8 @@ pub struct AppState {
     pub xai_oauth: Arc<RwLock<XaiOAuthManager>>,
     /// Antigravity 官方账号管理器
     pub agy_account: Arc<AgyAccountManager>,
+    /// Kimi Code OAuth 管理器（桌面命令与 web 路由共享同一实例）
+    pub kimi_oauth: Arc<KimiOAuthManager>,
     /// 后端 -> 前端事件总线（桌面端桥接到 AppHandle，web 端走 SSE）
     pub events: EventHub,
 }
@@ -47,6 +50,7 @@ impl AppState {
             copilot_auth,
             xai_oauth,
             agy_account,
+            kimi_oauth: Arc::new(KimiOAuthManager::default()),
             events,
         }
     }
@@ -103,6 +107,15 @@ mod tests {
         assert!(Arc::ptr_eq(&m.codex.0, &state.codex_oauth_manager));
         assert!(Arc::ptr_eq(&m.xai.0, &state.xai_oauth));
         assert!(Arc::ptr_eq(&m.agy.0, &state.agy_account));
+    }
+
+    #[test]
+    #[serial]
+    fn kimi_oauth_manager_is_shared_across_state_clones() {
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        assert!(Arc::ptr_eq(&state.kimi_oauth, &state.clone().kimi_oauth));
     }
 
     #[tokio::test]

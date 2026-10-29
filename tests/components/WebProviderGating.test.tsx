@@ -303,7 +303,7 @@ describe("shared form controls — web", () => {
         <CodexOAuthSection mode="select" onAccountSelect={vi.fn()} />
       </QueryClientProvider>,
     );
-    expect(screen.queryByText("web.accountLogin")).toBeNull();
+    expect(screen.queryByText("web.unavailable")).toBeNull();
     await waitFor(() => expect(getStatus).toHaveBeenCalledWith("codex_oauth"));
     getStatus.mockRestore();
   });
@@ -359,7 +359,7 @@ describe("account sections in provider forms — web", () => {
         {element}
       </QueryClientProvider>,
     );
-    expect(screen.queryByText("web.accountLogin")).toBeNull();
+    expect(screen.queryByText("web.unavailable")).toBeNull();
   });
 });
 
