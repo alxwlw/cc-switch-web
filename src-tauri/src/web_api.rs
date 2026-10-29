@@ -475,7 +475,7 @@ pub fn router(state: SharedState) -> Router {
         .route("/api/proxy/exit-apps", post(proxy_exit_apps))
         .route("/api/proxy/direct/:app", get(proxy_direct_provider))
         .route(
-            "/api/proxy/stack/codex/adopt",
+            "/api/proxy/codex/adopt-stack-catalog",
             post(proxy_adopt_codex_catalog),
         )
         .route("/api/proxy/stack/:app", get(proxy_stack))

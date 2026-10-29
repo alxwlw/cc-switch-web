@@ -594,9 +594,60 @@ async fn plain_routes_answer_without_a_running_proxy() {
         json!("direct")
     );
     ok_data(r, "POST", "/api/proxy/codex/ack-stale-clients", None).await;
-    // restart-daemon would restart the developer's real Codex daemon, so it is not called:
-    // a GET proves the path is registered (405, not 404)
-    let (status, _, _) =
-        support::web_call_raw(r, "GET", "/api/proxy/codex/restart-daemon", None).await;
-    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+    // under the temp HOME there is no daemon.pid, so nothing is restarted
+    assert_eq!(
+        ok_data(r, "POST", "/api/proxy/codex/restart-daemon", None).await,
+        json!("notRunning")
+    );
+    // no stack catalog under the temp HOME: the adopt route answers with no data
+    assert_eq!(
+        ok_data(r, "POST", "/api/proxy/codex/adopt-stack-catalog", None).await,
+        Value::Null
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn exit_apps_honours_the_stack_flag() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let f = fixture("https://upstream.invalid").await;
+    let r = &f.router;
+    ok_data(
+        r,
+        "PUT",
+        "/api/proxy/takeover/claude",
+        Some(json!({"enabled": true, "stack": false})),
+    )
+    .await;
+
+    // stack=true only leaves stack-mode apps; claude is in route mode and stays
+    assert_eq!(
+        ok_data(
+            r,
+            "POST",
+            "/api/proxy/exit-apps",
+            Some(json!({"stack": true}))
+        )
+        .await,
+        json!([])
+    );
+    assert_eq!(
+        ok_data(r, "GET", "/api/proxy/takeover", None).await["claude"],
+        json!(true)
+    );
+
+    assert_eq!(
+        ok_data(
+            r,
+            "POST",
+            "/api/proxy/exit-apps",
+            Some(json!({"stack": false}))
+        )
+        .await,
+        json!(["claude"])
+    );
+    assert_eq!(
+        ok_data(r, "GET", "/api/proxy/takeover", None).await["claude"],
+        json!(false)
+    );
 }
