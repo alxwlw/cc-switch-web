@@ -441,30 +441,28 @@ export function RoutingSection({ onOpenApp }: RoutingSectionProps) {
         )}
       </SettingsBlock>
 
-      {/* WEB-00 → phase 28: failover commands are not routed in web yet */}
-      {!isWeb && (
-        <SettingsBlock
-          title={t("settings.advanced.failover.title")}
-          help={{
-            title: t("settings.advanced.failover.title"),
-            body: t("routingSettings.failoverHelp"),
-          }}
-        >
-          <div className="space-y-4 rounded-panel border border-border bg-surface p-5">
-            <SegmentedControl
-              size="sm"
-              aria-label={t("settings.advanced.failover.title")}
-              value={failoverApp}
-              onValueChange={setFailoverApp}
-              items={PROXY_APP_IDS.map((app) => ({
-                value: app,
-                label: APP_DISPLAY_NAME[app],
-              }))}
-            />
-            <AutoFailoverConfigPanel key={failoverApp} appType={failoverApp} />
-          </div>
-        </SettingsBlock>
-      )}
+      {/* per-app retries/timeouts/circuit config: works in web (phase 27); the failover queue and toggle stay gated until phase 28 */}
+      <SettingsBlock
+        title={t("settings.advanced.failover.title")}
+        help={{
+          title: t("settings.advanced.failover.title"),
+          body: t("routingSettings.failoverHelp"),
+        }}
+      >
+        <div className="space-y-4 rounded-panel border border-border bg-surface p-5">
+          <SegmentedControl
+            size="sm"
+            aria-label={t("settings.advanced.failover.title")}
+            value={failoverApp}
+            onValueChange={setFailoverApp}
+            items={PROXY_APP_IDS.map((app) => ({
+              value: app,
+              label: APP_DISPLAY_NAME[app],
+            }))}
+          />
+          <AutoFailoverConfigPanel key={failoverApp} appType={failoverApp} />
+        </div>
+      </SettingsBlock>
 
       <RectifierBlock />
 

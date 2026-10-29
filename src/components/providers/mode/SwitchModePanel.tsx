@@ -581,6 +581,7 @@ export function SwitchModePanel({
           </HoverTip>,
           statusSlot,
         )}
+      {/* WEB-00 → phase 28: the failover toggle (set_auto_failover_enabled) is gated in web */}
       <ModeTabs
         modes={modes}
         active={active}
@@ -596,7 +597,7 @@ export function SwitchModePanel({
             : undefined
         }
         onOpenRouteSettings={
-          !isWeb && hasFailover && view === "route" && active === "route"
+          hasFailover && view === "route" && active === "route"
             ? () => setRouteSettingsOpen(true)
             : undefined
         }
@@ -666,8 +667,8 @@ export function SwitchModePanel({
         }}
       />
 
-      {/* WEB-00 → phase 28: the route settings sheet is the failover queue editor */}
-      {!isWeb && isProxyAppId(app) && (
+      {/* per-app retries/timeouts/circuit config (get/update_proxy_config_for_app), works in web; the failover toggle above stays gated until phase 28 */}
+      {isProxyAppId(app) && (
         <RouteSettingsSheet
           app={app}
           open={routeSettingsOpen}

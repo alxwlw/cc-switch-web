@@ -64,14 +64,14 @@ describe("RoutingSection — web (WEB-01)", () => {
     };
   });
 
-  it("shows the server caption, rectifier, and hides the failover block until phase 28", () => {
+  it("shows the server caption, rectifier, and the per-app config panel", () => {
     setWeb(true);
     renderSection();
     expect(screen.getByTestId("web-proxy-caption")).toHaveTextContent(
       "web.proxyCaption",
     );
     expect(screen.getByText("rectifier-panel")).toBeInTheDocument();
-    expect(screen.queryByText("failover-panel")).toBeNull();
+    expect(screen.getByText("failover-panel")).toBeInTheDocument();
   });
 
   it("no listen warning on loopback", () => {
@@ -104,7 +104,7 @@ describe("RoutingSection — web (WEB-01)", () => {
 });
 
 describe("RoutingSection — desktop", () => {
-  it("has no web caption, no listen warning, and keeps the failover block", () => {
+  it("has no web caption, no listen warning, and keeps the per-app config panel", () => {
     config.value = { ...config.value, listenAddress: "0.0.0.0" };
     renderSection();
     expect(screen.queryByTestId("web-proxy-caption")).toBeNull();

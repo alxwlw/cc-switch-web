@@ -28,6 +28,7 @@ const toastErrorMock = vi.fn();
 const skillsPanelMocks = vi.hoisted(() => ({
   initialViews: [] as string[],
 }));
+const officialWarningMock = vi.hoisted(() => vi.fn());
 const windowMocks = vi.hoisted(() => ({
   isLinux: vi.fn(() => false),
   isMaximized: vi.fn(),
@@ -47,6 +48,10 @@ vi.mock("@/lib/platform", async (importOriginal) => ({
 
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => windowMocks,
+}));
+
+vi.mock("@/hooks/useProxyOfficialWarning", () => ({
+  useProxyOfficialWarning: officialWarningMock,
 }));
 
 vi.mock("sonner", () => ({
@@ -249,6 +254,16 @@ describe("App integration with MSW", () => {
     windowMocks.onScaleChanged.mockImplementation(listen);
     localStorage.removeItem("cc-switch-last-view");
     localStorage.removeItem("cc-switch-last-app");
+  });
+
+  it("mounts the proxy-official-warning listener in App", async () => {
+    const { default: App } = await import("@/App");
+    renderApp(App);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("provider-list")).toBeInTheDocument(),
+    );
+    expect(officialWarningMock).toHaveBeenCalled();
   });
 
   it("covers basic provider flows via real hooks", async () => {
