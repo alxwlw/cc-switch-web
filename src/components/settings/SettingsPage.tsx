@@ -93,7 +93,7 @@ export function SettingsPage({
   onOpenApp,
 }: SettingsPageProps) {
   const { t } = useTranslation();
-  // WEB-00: скрытая в web секция (из любого входа) показывается как general — снимет WEB-23
+  // WEB-00: скрытая в web секция (из любого входа) показывается как general; сейчас скрытых нет (network открыта WEB-23), откат сохранён для будущих гейтов
   const section = resolveSettingsSection(requestedSection);
   const {
     settings,
