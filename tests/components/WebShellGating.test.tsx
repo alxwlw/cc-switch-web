@@ -99,7 +99,6 @@ vi.mock("@/lib/api", () => ({
 }));
 vi.mock("@/components/settings/sections/RoutingSection", () => ({
   RoutingSection: () => <div>routing-section</div>,
-  RectifierBlock: () => <div>rectifier-block</div>,
 }));
 vi.mock("@/components/settings/ServerLogViewer", () => ({
   ServerLogViewer: ({ open }: { open: boolean }) =>
@@ -288,17 +287,15 @@ describe("SettingsPage · WEB-00", () => {
     expect(screen.getByText("global-proxy-settings")).toBeInTheDocument();
   });
 
-  it("web: routing shows only the rectifier block", () => {
+  it("web: routing shows the full routing section (WEB-01)", () => {
     setWeb(true);
     renderPage("routing");
-    expect(screen.getByText("rectifier-block")).toBeInTheDocument();
-    expect(screen.queryByText("routing-section")).toBeNull();
+    expect(screen.getByText("routing-section")).toBeInTheDocument();
   });
 
   it("desktop: routing shows the full routing section", () => {
     renderPage("routing");
     expect(screen.getByText("routing-section")).toBeInTheDocument();
-    expect(screen.queryByText("rectifier-block")).toBeNull();
   });
 
   it("web: data shows backups, import/export and the log block; location and cloud sync stay hidden", async () => {

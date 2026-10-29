@@ -11,7 +11,6 @@ import type {
 } from "@/types/proxy";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { getAppLabel } from "@/config/appConfig";
-import { isWeb } from "@/lib/api/adapter";
 
 export const proxyKeys = {
   status: ["proxyStatus"] as const,
@@ -30,8 +29,6 @@ export function useProxyStatusQuery() {
   return useQuery({
     queryKey: proxyKeys.status,
     queryFn: () => proxyApi.getProxyStatus(),
-    // WEB-00: proxy-команды не поддержаны (режим всегда direct) — снимет WEB-01
-    enabled: !isWeb,
     // 仅在服务运行时轮询
     refetchInterval: (query) => (query.state.data?.running ? 2000 : false),
     // 保持之前的数据，避免闪烁
@@ -46,8 +43,6 @@ export function useProxyTakeoverStatus(poll = true) {
   return useQuery({
     queryKey: proxyKeys.takeoverStatus,
     queryFn: () => proxyApi.getProxyTakeoverStatus(),
-    // WEB-00: proxy-команды не поддержаны (режим всегда direct) — снимет WEB-01
-    enabled: !isWeb,
     refetchInterval: poll ? 2000 : false,
     ...(poll
       ? {}
@@ -66,8 +61,7 @@ export function useAppMode(appType: string, enabled = true) {
   return useQuery({
     queryKey: ["providers", appType, "mode"] as const,
     queryFn: () => proxyApi.getAppMode(appType),
-    // WEB-00: proxy-команды не поддержаны (режим всегда direct) — снимет WEB-01
-    enabled: enabled && !isWeb,
+    enabled: enabled,
     placeholderData: (previous: AppModeView | undefined) => previous,
   });
 }
@@ -80,8 +74,7 @@ export function useDirectProviderId(appType: string, enabled: boolean) {
   return useQuery({
     queryKey: ["providers", appType, "direct"] as const,
     queryFn: () => proxyApi.getDirectProvider(appType),
-    // WEB-00: proxy-команды не поддержаны (режим всегда direct) — снимет WEB-01
-    enabled: enabled && !isWeb,
+    enabled: enabled,
   });
 }
 
@@ -92,8 +85,7 @@ export function useProxyStack(appType: string, enabled: boolean) {
   return useQuery({
     queryKey: ["providers", appType, "stack"] as const,
     queryFn: () => proxyApi.getProxyStack(appType),
-    // WEB-00: proxy-команды не поддержаны (режим всегда direct) — снимет WEB-01
-    enabled: enabled && !isWeb,
+    enabled: enabled,
   });
 }
 
@@ -280,8 +272,6 @@ export function useGlobalProxyConfig() {
   return useQuery({
     queryKey: proxyKeys.globalConfig,
     queryFn: () => proxyApi.getGlobalProxyConfig(),
-    // WEB-00: proxy-команды не поддержаны (режим всегда direct) — снимет WEB-01
-    enabled: !isWeb,
   });
 }
 
@@ -315,8 +305,6 @@ export function useProxyClientHost() {
   return useQuery({
     queryKey: proxyKeys.clientHost,
     queryFn: () => proxyApi.getProxyClientHost(),
-    // WEB-00: proxy-команды не поддержаны (режим всегда direct) — снимет WEB-01
-    enabled: !isWeb,
   });
 }
 
@@ -351,8 +339,7 @@ export function useAppProxyConfig(appType: string) {
   return useQuery({
     queryKey: proxyKeys.appConfig(appType),
     queryFn: () => proxyApi.getProxyConfigForApp(appType),
-    // WEB-00: proxy-команды не поддержаны (режим всегда direct) — снимет WEB-01
-    enabled: !!appType && !isWeb,
+    enabled: !!appType,
   });
 }
 

@@ -20,7 +20,7 @@ export function useProviderHealth(
   return useQuery({
     queryKey: ["providerHealth", providerId, appType],
     queryFn: () => failoverApi.getProviderHealth(providerId, appType),
-    // WEB-00: failover-команды не поддержаны — снимет WEB-01
+    // WEB-00: failover-команды не поддержаны — WEB-00 → phase 28
     enabled: enabled && !!providerId && !!appType && !isWeb,
     refetchInterval: 5000, // 每 5 秒刷新一次
     retry: false,
@@ -68,7 +68,7 @@ export function useCircuitBreakerConfig() {
   return useQuery({
     queryKey: ["circuitBreakerConfig"],
     queryFn: () => failoverApi.getCircuitBreakerConfig(),
-    // WEB-00: failover-команды не поддержаны — снимет WEB-01
+    // WEB-00: failover-команды не поддержаны — WEB-00 → phase 28
     enabled: !isWeb,
   });
 }
@@ -94,7 +94,7 @@ export function useCircuitBreakerStats(providerId: string, appType: string) {
   return useQuery({
     queryKey: ["circuitBreakerStats", providerId, appType],
     queryFn: () => failoverApi.getCircuitBreakerStats(providerId, appType),
-    // WEB-00: failover-команды не поддержаны — снимет WEB-01
+    // WEB-00: failover-команды не поддержаны — WEB-00 → phase 28
     enabled: !!providerId && !!appType && !isWeb,
     refetchInterval: 5000, // 每 5 秒刷新一次
   });
@@ -109,7 +109,7 @@ export function useFailoverQueue(appType: string, enabled = true) {
   return useQuery({
     queryKey: ["failoverQueue", appType],
     queryFn: () => failoverApi.getFailoverQueue(appType),
-    // WEB-00: failover-команды не поддержаны — снимет WEB-01
+    // WEB-00: failover-команды не поддержаны — WEB-00 → phase 28
     enabled: enabled && !!appType && !isWeb,
   });
 }
@@ -121,7 +121,7 @@ export function useAvailableProvidersForFailover(appType: string) {
   return useQuery({
     queryKey: ["availableProvidersForFailover", appType],
     queryFn: () => failoverApi.getAvailableProvidersForFailover(appType),
-    // WEB-00: failover-команды не поддержаны — снимет WEB-01
+    // WEB-00: failover-команды не поддержаны — WEB-00 → phase 28
     enabled: !!appType && !isWeb,
   });
 }
@@ -219,7 +219,7 @@ export function useAutoFailoverEnabled(appType: string, enabled = true) {
   return useQuery({
     queryKey: ["autoFailoverEnabled", appType],
     queryFn: () => failoverApi.getAutoFailoverEnabled(appType),
-    // WEB-00: failover-команды не поддержаны — снимет WEB-01
+    // WEB-00: failover-команды не поддержаны — WEB-00 → phase 28
     enabled: enabled && !!appType && !isWeb,
     // 默认值为 false（与后端保持一致）
     placeholderData: false,

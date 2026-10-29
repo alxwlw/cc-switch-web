@@ -5,6 +5,7 @@ import { useQueries } from "@tanstack/react-query";
 import { toast } from "@/lib/toast";
 import { ChevronRight, Loader2 } from "lucide-react";
 import type { AppId } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { proxyApi } from "@/lib/api/proxy";
 import { useProvidersQuery } from "@/lib/query";
 import {
@@ -29,6 +30,7 @@ import { AutoFailoverConfigPanel } from "@/components/proxy/AutoFailoverConfigPa
 import { RectifierConfigPanel } from "@/components/settings/RectifierConfigPanel";
 import { APP_DISPLAY_NAME, AppGlyph } from "@/components/shell/AppGlyph";
 import { MODE_TONE } from "@/components/providers/mode/ModeTabs";
+import { WebProxyCaption } from "@/components/providers/mode/WebProxyCaption";
 import {
   SettingsBlock,
   SettingsCard,
@@ -68,6 +70,12 @@ const isValidClientHost = (host: string): boolean => {
   return /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i.test(
     host,
   );
+};
+
+/** `0.0.0.0` / `::` (any case, with or without brackets): the proxy listens on every interface */
+const isWildcardListen = (address: string): boolean => {
+  const value = address.trim().replace(/^\[|\]$/g, "");
+  return value === "0.0.0.0" || value === "::";
 };
 
 /** 没设客户端地址时写给客户端的主机，和后端 `proxy_origin` 一致 */
@@ -197,6 +205,7 @@ export function RoutingSection({ onOpenApp }: RoutingSectionProps) {
 
   return (
     <>
+      {isWeb && <WebProxyCaption />}
       <SettingsBlock title={t("routingSettings.service")}>
         <SettingsCard>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3.5">
@@ -330,7 +339,17 @@ export function RoutingSection({ onOpenApp }: RoutingSectionProps) {
                 </Button>
               </div>
             }
-          />
+          >
+            {isWeb && isWildcardListen(address) && (
+              <p
+                role="alert"
+                data-testid="web-listen-warning"
+                className="m-0 text-caption text-danger-text"
+              >
+                {t("web.proxyListenWarning", { address: address.trim() })}
+              </p>
+            )}
+          </SettingsRow>
           <SettingsRow
             label={t("routingSettings.clientHost")}
             help={{
@@ -422,6 +441,7 @@ export function RoutingSection({ onOpenApp }: RoutingSectionProps) {
         )}
       </SettingsBlock>
 
+      {/* per-app retries/timeouts/circuit config: works in web (phase 27); the failover queue and toggle stay gated until phase 28 */}
       <SettingsBlock
         title={t("settings.advanced.failover.title")}
         help={{
@@ -463,8 +483,8 @@ export function RoutingSection({ onOpenApp }: RoutingSectionProps) {
   );
 }
 
-/** Rectifier + optimizer panel; the only routing block that works in web (WEB-24). */
-export function RectifierBlock() {
+/** Rectifier + optimizer panel (WEB-24). */
+function RectifierBlock() {
   const { t } = useTranslation();
   return (
     <SettingsBlock

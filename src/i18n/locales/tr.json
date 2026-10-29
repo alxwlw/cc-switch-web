@@ -5052,7 +5052,8 @@
     "update": {
       "unsupported": "Web modunda güncellemeler kullanılamaz: sunucuyu operatör günceller"
     },
-    "needsRouting": "Bu sağlayıcı yönlendirme proxy'sini gerektirir; Web modunda kullanılamaz",
+    "proxyCaption": "Proxy sunucuda çalışır ve sunucudaki CLI'ları yeniden yapılandırır; sizin makinenizdeki CLI'lara dokunmaz.",
+    "proxyListenWarning": "{{address}} üzerinde dinlemek, proxy'yi kimlik doğrulaması olmadan tüm ağdan (tailnet dahil) erişilebilir yapar. 127.0.0.1 tercih edin.",
     "liveUnknownTitle": "Sağlayıcılar (Web modunda canlı yapılandırma durumu bilinmiyor)",
     "sessionResumeCopied": "Devam komutu kopyalandı. Sunucu ana makinesinde, proje klasöründe bir terminale yapıştırıp çalıştırın",
     "hostNotice": "Dosyalar, CLI araçları ve proxy, bu tarayıcıyı çalıştıran bilgisayarda değil, sunucu ana makinesindedir.",

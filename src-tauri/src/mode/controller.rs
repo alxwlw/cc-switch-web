@@ -3128,6 +3128,72 @@ mod mode_tests {
         }
     }
 
+    /// 无头服务的启动：崩溃时写到一半的接管，经 recover_on_startup 补完后，
+    /// run_headless_startup 重新接上并拉起代理（desktop 的同一段）。
+    #[tokio::test]
+    #[serial]
+    async fn headless_startup_after_a_crash_reattaches_and_brings_the_proxy_up() {
+        let _home = Home::new();
+        seed_settings(USER_SETTINGS);
+        let state = state_with(
+            AppType::Claude,
+            &[claude("a", "https://a.example", json!({}))],
+            "a",
+        )
+        .await;
+        failpoint::crash_at(Some("published:0"));
+        let result = enter(&state, &AppType::Claude, false).await;
+        failpoint::crash_at(None);
+        assert!(result.is_err());
+        // The process "died": no proxy survives, the journal and DB flags stay.
+        if state.proxy_service.is_running().await {
+            state.proxy_service.stop().await.unwrap();
+        }
+        assert!(!state.proxy_service.is_running().await);
+
+        crate::mode::operation::recover_on_startup(&state.db);
+        crate::bootstrap::run_headless_startup(&state).await;
+
+        assert!(state.proxy_service.is_running().await);
+        assert!(mode(&AppType::Claude).attached);
+        assert_eq!(
+            settings()["env"]["ANTHROPIC_AUTH_TOKEN"],
+            PROXY_TOKEN_PLACEHOLDER
+        );
+        assert!(state::pending(&DeviceStore::for_device(), "claude")
+            .unwrap()
+            .is_none());
+        assert!(take_startup_attach_failures().is_empty());
+        state.proxy_service.stop().await.unwrap();
+    }
+
+    /// 无头服务的退出：客户端文件逐字节回到用户原文，代理停掉；模式和路由留给下次启动。
+    #[tokio::test]
+    #[serial]
+    async fn shutdown_cleanup_restores_the_live_files_byte_for_byte_and_stops_the_proxy() {
+        let _home = Home::new();
+        // Proxy fields are rewritten at the end of `env`, so the user's own file
+        // keeps them last: the restore is then identical to the byte.
+        const ORIGINAL: &str = "{\n  \"env\": {\n    \"DISABLE_TELEMETRY\": \"1\",\n    \"ANTHROPIC_BASE_URL\": \"https://a.example\",\n    \"ANTHROPIC_AUTH_TOKEN\": \"sk-a\",\n    \"ANTHROPIC_MODEL\": \"claude-sonnet-4-6\"\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash\"\n    ]\n  }\n}\n";
+        seed_settings(ORIGINAL);
+        let state = state_with(
+            AppType::Claude,
+            &[claude("a", "https://a.example", json!({}))],
+            "a",
+        )
+        .await;
+        enter(&state, &AppType::Claude, false).await.expect("enter");
+        assert!(state.proxy_service.is_running().await);
+        assert_ne!(fs::read_to_string(settings_path()).unwrap(), ORIGINAL);
+
+        crate::bootstrap::shutdown_cleanup(&state).await;
+
+        assert_eq!(fs::read_to_string(settings_path()).unwrap(), ORIGINAL);
+        assert!(!state.proxy_service.is_running().await);
+        assert!(mode(&AppType::Claude).is_proxy());
+        assert!(!mode(&AppType::Claude).attached);
+    }
+
     #[tokio::test]
     #[serial]
     async fn startup_moves_legacy_takeover_state_over_to_the_modes() {

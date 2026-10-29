@@ -1109,7 +1109,7 @@ export function ClaudeDesktopProviderForm({
                         })}
                       </SelectItem>
                       {/* WEB-00: «модель-маппинг» идёт через прокси/роутинг и get_claude_desktop_default_routes
-                          (вне mapCommand) — новый выбрать нельзя; у уже сохранённого proxy-провайдера пункт остаётся — снимет WEB-01/19 */}
+                          (вне mapCommand) — новый выбрать нельзя; у уже сохранённого proxy-провайдера пункт остаётся — снимет WEB-19 */}
                       {(!isWeb || effectiveMode === "proxy") && (
                         <SelectItem value="proxy">
                           {t("claudeDesktop.modelModeProxy", {

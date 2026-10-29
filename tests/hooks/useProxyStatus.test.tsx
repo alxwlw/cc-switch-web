@@ -110,13 +110,16 @@ describe("useProxyStatus", () => {
     );
   });
 
-  it("web: queries are off, so there is no initial load to wait for and nothing is requested", async () => {
+  it("web: the initial load is awaited and the status is requested", async () => {
     setWeb(true);
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useProxyStatus(), { wrapper });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(result.current.isInitialStatusPending).toBe(false);
-    expect(invokeMock).not.toHaveBeenCalled();
+    expect(result.current.isInitialStatusPending).toBe(true);
+    await waitFor(() =>
+      expect(result.current.isInitialStatusPending).toBe(false),
+    );
+    expect(invokeMock).toHaveBeenCalledWith("get_proxy_status");
+    expect(invokeMock).toHaveBeenCalledWith("get_proxy_takeover_status");
   });
 
   it("keeps the established proxy query key shapes", () => {

@@ -99,13 +99,12 @@ describe.each([true, false])("UsageSettingsSheet (web=%s)", (web) => {
     expect(m.onRebuild).toHaveBeenCalledTimes(1);
   });
 
-  it("the logging status row and its link to routing settings exist only on desktop", () => {
+  it("the logging status row and its link to routing settings exist in web and on desktop (WEB-01)", () => {
     renderSheet();
-    expect(screen.queryByText("routingSettings.logging") === null).toBe(web);
+    expect(screen.getByText("routingSettings.logging")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "usage.sources.editLogging" }) ===
-        null,
-    ).toBe(web);
+      screen.getByRole("button", { name: "usage.sources.editLogging" }),
+    ).toBeInTheDocument();
   });
 
   it("session sync stays available", () => {

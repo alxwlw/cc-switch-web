@@ -742,6 +742,33 @@ pub fn run_headless_bootstrap() -> Result<Bootstrapped, BootstrapError> {
     run_headless_bootstrap_with(CodexHistory::Inline)
 }
 
+/// Async part of startup that needs the client files and the proxy: the
+/// handle-free core of the desktop block after `AppState` exists (WEB-01).
+///
+/// Order matters: leaked Gemini credentials are scrubbed first, then common
+/// config snippets are auto-extracted from the still-direct live files, and
+/// only then `controller::startup` settles each app's direct/proxy mode and
+/// re-attaches the proxy ones. Attach failures land in
+/// `controller::take_startup_attach_failures`. Tray, launcher cleanup and codex
+/// model checks stay with the desktop.
+pub async fn run_headless_startup(state: &AppState) {
+    if let Err(e) =
+        crate::services::provider::ProviderService::scrub_leaked_gemini_common_config(state).await
+    {
+        log::warn!("清理 Gemini 通用配置泄漏凭据失败: {e}");
+    }
+    crate::initialize_common_config_snippets(state);
+    crate::mode::controller::startup(state).await;
+}
+
+/// Handle-free exit cleanup shared by the desktop `cleanup_before_exit` and the
+/// headless server's shutdown: points every attached client back at its direct
+/// config (mode and route are kept for the next start) and stops the proxy.
+pub async fn shutdown_cleanup(state: &AppState) {
+    crate::mode::controller::detach_all(state).await;
+    log::info!("退出清理完成：客户端已指回直连，代理已停止");
+}
+
 /// Initialises the process-wide outbound HTTP client from the saved global
 /// proxy. A saved URL that fails to build is cleared from the database and the
 /// client falls back to a direct connection. `Err` only when that fallback

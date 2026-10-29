@@ -1040,6 +1040,76 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         body: { scope: a.scope },
       };
 
+    // ---------- local proxy lifecycle, routing / Stack, takeover (WEB-01) ----------
+    case "start_proxy_server":
+      return { method: "POST", url: "/api/proxy/start" };
+    case "stop_proxy_server":
+      return { method: "POST", url: "/api/proxy/stop" };
+    case "stop_proxy_with_restore":
+      return { method: "POST", url: "/api/proxy/stop-with-restore" };
+    case "get_proxy_status":
+      return { method: "GET", url: "/api/proxy/status" };
+    case "get_proxy_takeover_status":
+      return { method: "GET", url: "/api/proxy/takeover" };
+    case "set_proxy_takeover_for_app":
+      return {
+        method: "PUT",
+        url: `/api/proxy/takeover/${enc(a.appType)}`,
+        body: { enabled: a.enabled, stack: a.stack, route: a.route },
+      };
+    case "set_proxy_route":
+      return {
+        method: "PUT",
+        url: `/api/proxy/route/${enc(a.appType)}`,
+        body: { providerId: a.providerId },
+      };
+    case "get_app_mode":
+      return { method: "GET", url: `/api/proxy/mode/${enc(a.appType)}` };
+    case "take_startup_attach_failures":
+      return { method: "POST", url: "/api/proxy/startup-attach-failures/take" };
+    case "exit_proxy_apps_in_mode":
+      return {
+        method: "POST",
+        url: "/api/proxy/exit-apps",
+        body: { stack: a.stack },
+      };
+    case "get_direct_provider":
+      return { method: "GET", url: `/api/proxy/direct/${enc(a.appType)}` };
+    case "get_proxy_stack":
+      return { method: "GET", url: `/api/proxy/stack/${enc(a.appType)}` };
+    case "set_proxy_stack_member":
+      return {
+        method: "PUT",
+        url: `/api/proxy/stack/${enc(a.appType)}/${enc(a.providerId)}`,
+        body: { enabled: a.enabled },
+      };
+    case "adopt_codex_stack_catalog":
+      return { method: "POST", url: "/api/proxy/codex/adopt-stack-catalog" };
+    case "restart_codex_app_server_daemon":
+      return { method: "POST", url: "/api/proxy/codex/restart-daemon" };
+    case "acknowledge_codex_stale_clients":
+      return { method: "POST", url: "/api/proxy/codex/ack-stale-clients" };
+    case "get_global_proxy_config":
+      return { method: "GET", url: "/api/proxy/config" };
+    case "update_global_proxy_config":
+      return { method: "PUT", url: "/api/proxy/config", body: a.config };
+    case "get_proxy_client_host":
+      return { method: "GET", url: "/api/proxy/client-host" };
+    case "set_proxy_client_host":
+      return {
+        method: "PUT",
+        url: "/api/proxy/client-host",
+        body: { host: a.host },
+      };
+    case "get_proxy_config_for_app":
+      return { method: "GET", url: `/api/proxy/config/${enc(a.appType)}` };
+    case "update_proxy_config_for_app":
+      return {
+        method: "PUT",
+        url: `/api/proxy/config/${enc(a.config?.appType)}`,
+        body: a.config,
+      };
+
     default:
       return null;
   }
@@ -1289,6 +1359,10 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
     throw new Error(`Web API вернул не-JSON (${res.status} ${mapped.url})`);
   }
   if (!payload || payload.ok !== true) {
+    // Desktop rejects with the serialized object (StackWriteError {partial, message}); keep it.
+    if (payload?.error && typeof payload.error === "object") {
+      throw payload.error;
+    }
     throw new Error(payload?.error ?? `Web API ошибка (${cmd})`);
   }
   const data = payload.data;

@@ -61,13 +61,6 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 // Каждый кейс: хук и команда, которую он обязан звать на desktop и не звать в web.
 const CASES: Array<[string, string, () => unknown]> = [
-  ["useProxyStatusQuery", "get_proxy_status", () => useProxyStatusQuery()],
-  [
-    "useProxyTakeoverStatus",
-    "get_proxy_takeover_status",
-    () => useProxyTakeoverStatus(),
-  ],
-  ["useAppMode", "get_app_mode", () => useAppMode("claude")],
   ["useFailoverQueue", "get_failover_queue", () => useFailoverQueue("claude")],
   [
     "useProviderHealth",
@@ -88,23 +81,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "useDesktopConfigMessages",
     "get_claude_desktop_status",
     () => useDesktopConfigMessages(true),
-  ],
-  [
-    "useDirectProviderId",
-    "get_direct_provider",
-    () => useDirectProviderId("claude", true),
-  ],
-  ["useProxyStack", "get_proxy_stack", () => useProxyStack("claude", true)],
-  [
-    "useGlobalProxyConfig",
-    "get_global_proxy_config",
-    () => useGlobalProxyConfig(),
-  ],
-  ["useProxyClientHost", "get_proxy_client_host", () => useProxyClientHost()],
-  [
-    "useAppProxyConfig",
-    "get_proxy_config_for_app",
-    () => useAppProxyConfig("claude"),
   ],
   [
     "useCircuitBreakerConfig",
@@ -248,8 +224,32 @@ describe("WEB-00: фоновые query молчат в web", () => {
       () => useCcSwitchSkillsDir(),
     ],
     ["useManagedAuth", "auth_get_status", () => useManagedAuth("xai_oauth")],
+    ["useProxyStatusQuery", "get_proxy_status", () => useProxyStatusQuery()],
+    [
+      "useProxyTakeoverStatus",
+      "get_proxy_takeover_status",
+      () => useProxyTakeoverStatus(),
+    ],
+    ["useAppMode", "get_app_mode", () => useAppMode("claude")],
+    [
+      "useDirectProviderId",
+      "get_direct_provider",
+      () => useDirectProviderId("claude", true),
+    ],
+    ["useProxyStack", "get_proxy_stack", () => useProxyStack("claude", true)],
+    [
+      "useGlobalProxyConfig",
+      "get_global_proxy_config",
+      () => useGlobalProxyConfig(),
+    ],
+    ["useProxyClientHost", "get_proxy_client_host", () => useProxyClientHost()],
+    [
+      "useAppProxyConfig",
+      "get_proxy_config_for_app",
+      () => useAppProxyConfig("claude"),
+    ],
   ] as Array<[string, string, () => unknown]>)(
-    "%s в web зовёт %s (гейт снят: WEB-15 / WEB-17 / WEB-05 / WEB-02)",
+    "%s в web зовёт %s (гейт снят: WEB-15 / WEB-17 / WEB-05 / WEB-02 / WEB-01)",
     async (_name, command, useHook) => {
       setWeb(true);
       const { wrapper } = wrapperFor();
@@ -271,20 +271,16 @@ describe("WEB-00: фоновые query молчат в web", () => {
     expect(calledCommands()).toContain("list_profiles");
   });
 
-  it("useSidebarStatus в web: режим direct, без alert, запросов mode нет, статус auth запрашивается (WEB-02)", async () => {
+  it("useSidebarStatus в web зовёт proxy status, get_app_mode и auth_get_status (WEB-01)", async () => {
     setWeb(true);
     const { wrapper } = wrapperFor();
-    const { result } = renderHook(() => useSidebarStatus(), { wrapper });
+    renderHook(() => useSidebarStatus(), { wrapper });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
-    });
-    expect(result.current.appStatus("claude")).toEqual({
-      mode: "direct",
-      alert: false,
+      await vi.advanceTimersByTimeAsync(0);
     });
     const commands = calledCommands();
-    expect(commands).not.toContain("get_proxy_status");
-    expect(commands).not.toContain("get_app_mode");
+    expect(commands).toContain("get_proxy_status");
+    expect(commands).toContain("get_app_mode");
     expect(commands).toContain("auth_get_status");
   });
 

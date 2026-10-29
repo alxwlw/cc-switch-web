@@ -878,22 +878,9 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let state = app_handle.state::<AppState>();
 
-                // 必须排在 auto-extract 之前：先把历史泄漏进 Gemini 共享片段的凭据
-                // 清干净，否则紧接着的提取会基于被污染的 live 再写一遍。
-                if let Err(e) =
-                    crate::services::provider::ProviderService::scrub_leaked_gemini_common_config(
-                        &state,
-                    )
-                    .await
-                {
-                    log::warn!("清理 Gemini 通用配置泄漏凭据失败: {e}");
-                }
-
-                initialize_common_config_snippets(&state);
-
-                // 定下各应用的直连 / 代理模式（处理旧版遗留的接管状态），再把代理模式的
-                // 应用接上。要排在通用配置片段的自动提取之后：它读的是直连的 live。
-                crate::mode::controller::startup(&state).await;
+                // scrub 泄漏凭据 → 通用配置片段自动提取 → 模式定下并接上代理；
+                // 与 headless 服务共用同一段（顺序见 bootstrap::run_headless_startup）。
+                crate::bootstrap::run_headless_startup(&state).await;
                 // #8268 测试版给 agy 装过包装脚本、改过 shell 启动文件，撤掉带标记的部分。
                 if let Err(e) =
                     crate::services::provider::agy_direct::migrate_legacy_launcher(&state.db)
@@ -1503,8 +1490,7 @@ pub fn run() {
 /// 客户端不能一直指着代理：开机自启默认关闭，CC Switch 一关客户端就连不上了。
 pub async fn cleanup_before_exit(app_handle: &tauri::AppHandle) {
     if let Some(state) = app_handle.try_state::<store::AppState>() {
-        crate::mode::controller::detach_all(state.inner()).await;
-        log::info!("退出清理完成：客户端已指回直连，代理已停止");
+        crate::bootstrap::shutdown_cleanup(state.inner()).await;
     }
 }
 
@@ -1552,7 +1538,7 @@ pub(crate) fn remove_tray_icon_before_exit(app_handle: &tauri::AppHandle) {
     }
 }
 
-fn initialize_common_config_snippets(state: &store::AppState) {
+pub(crate) fn initialize_common_config_snippets(state: &store::AppState) {
     // Auto-extract common config snippets from clean live files when snippet is missing.
     // This must run before proxy mode is re-attached on startup, otherwise we'd read
     // proxy-placeholder configs instead of the user's actual live settings. A client

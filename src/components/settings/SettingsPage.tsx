@@ -40,10 +40,7 @@ import { AboutSection } from "@/components/settings/AboutSection";
 import { GlobalProxySettings } from "@/components/settings/GlobalProxySettings";
 import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
 import { ServerLogViewer } from "@/components/settings/ServerLogViewer";
-import {
-  RectifierBlock,
-  RoutingSection,
-} from "@/components/settings/sections/RoutingSection";
+import { RoutingSection } from "@/components/settings/sections/RoutingSection";
 import { isWeb } from "@/lib/api/adapter";
 import { GeneralSection } from "@/components/settings/sections/GeneralSection";
 import { AppConfigSection } from "@/components/settings/sections/AppConfigSection";
@@ -399,12 +396,7 @@ export function SettingsPage({
           />
         );
       case "routing":
-        // WEB-00: proxy/takeover/failover are desktop-only until WEB-01; rectifier works (WEB-24).
-        return isWeb ? (
-          <RectifierBlock />
-        ) : (
-          <RoutingSection onOpenApp={onOpenApp} />
-        );
+        return <RoutingSection onOpenApp={onOpenApp} />;
       case "network":
         return (
           <SettingsBlock
