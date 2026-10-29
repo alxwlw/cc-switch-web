@@ -46,6 +46,9 @@ Scope: `src-tauri/src/services/proxy.rs` (emit/tray без AppHandle), `src-taur
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-29**: PR #28 merged `63fefd44` → main; live на `cc-switch-web.service` с 17:37; DX-59 In Progress (этап 1 из 2, закрывается фазой 28).
+  - Server и `dist-web` пересобраны из main. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p27-20261029-173716/`, прежний бинарник — `cc-switch-web.prev`. Миграций нет.
+  - Smoke: консоль 200; `GET /api/proxy/status` → `running:false`; `GET /api/proxy/takeover` → все `false`; `GET /api/proxy/mode/claude` → `direct`. Takeover на живом сервисе не включали (IPv6/Cloudflare, см. ниже).
 - **Статус до merge (2026-10-29)**: ветка `web-parity/web-01-proxy-core` (worktree `.worktrees/web-01-proxy`), PR #28 (https://github.com/alxwlw/cc-switch-web/pull/28) открыт; DX-59 остаётся In Progress (комментарий со ссылкой, «этап 1 из 2»). Ветка также несёт закрытие фазы 26 в плане (`cf9c374e`).
   - Финальные гейты на `ae6ffaa5`:
     - fmt и `clippy --lib --examples -D warnings` — чисто;
