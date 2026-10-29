@@ -10,7 +10,6 @@ import {
 } from "@/hooks/useSkills";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { isWeb } from "@/lib/api/adapter";
 import {
   RADIO_CLASS,
@@ -67,9 +66,6 @@ export function SkillsStorageSheet({
   const { data: installedSkills } = useInstalledSkills();
   const { data: ccSwitchDirRaw } = useCcSwitchSkillsDir(open);
   const resyncMutation = useResyncSkillsToApps();
-  // WEB-00: смена места хранения (migrate_skill_storage) и открытие папки на хосте не замаплены;
-  // способ синхронизации (save_settings) и resync работают — снимет WEB-05
-  const webOff = isWeb;
 
   const location: SkillStorageLocation =
     settings?.skillStorageLocation ?? "cc_switch";
@@ -139,6 +135,21 @@ export function SkillsStorageSheet({
   const handleOpenFolder = async () => {
     try {
       await skillsApi.openCcSwitchSkillsDir();
+    } catch (error) {
+      toast.error(t("common.error"), {
+        description: extractErrorMessage(error) || String(error),
+      });
+    }
+  };
+
+  // web: the browser cannot open a folder on the server — show the path, copy it
+  const handleCopyPath = async () => {
+    const path = ccSwitchDirRaw ?? ccSwitchDir;
+    try {
+      await navigator.clipboard.writeText(path);
+      toast.success(t("skills.storageSheet.pathCopied"), {
+        closeButton: true,
+      });
     } catch (error) {
       toast.error(t("common.error"), {
         description: extractErrorMessage(error) || String(error),
@@ -216,7 +227,7 @@ export function SkillsStorageSheet({
                     name="skills-storage-location"
                     className={RADIO_CLASS}
                     checked={pendingLocation === "cc_switch"}
-                    disabled={isMigrating || webOff}
+                    disabled={isMigrating}
                     aria-describedby="skills-storage-cc-path"
                     onChange={() => setPendingLocation("cc_switch")}
                   />
@@ -230,19 +241,26 @@ export function SkillsStorageSheet({
                   >
                     {ccSwitchDir}
                   </code>
-                  <WebUnavailableTip active={webOff}>
-                    <button
-                      type="button"
-                      disabled={webOff}
-                      aria-label={t("skills.storageSheet.openFolderAria", {
-                        path: ccSwitchDir,
-                      })}
-                      onClick={() => void handleOpenFolder()}
-                      className="shrink-0 whitespace-nowrap text-caption font-medium text-fg-1 underline decoration-border-strong underline-offset-[3px] hover:decoration-fg-1 disabled:opacity-60"
-                    >
-                      {t("skills.storageSheet.openFolder")}
-                    </button>
-                  </WebUnavailableTip>
+                  <button
+                    type="button"
+                    aria-label={
+                      isWeb
+                        ? t("skills.storageSheet.copyPathAria", {
+                            path: ccSwitchDirRaw ?? ccSwitchDir,
+                          })
+                        : t("skills.storageSheet.openFolderAria", {
+                            path: ccSwitchDir,
+                          })
+                    }
+                    onClick={() =>
+                      void (isWeb ? handleCopyPath() : handleOpenFolder())
+                    }
+                    className="shrink-0 whitespace-nowrap text-caption font-medium text-fg-1 underline decoration-border-strong underline-offset-[3px] hover:decoration-fg-1 disabled:opacity-60"
+                  >
+                    {isWeb
+                      ? t("skills.storageSheet.copyPath")
+                      : t("skills.storageSheet.openFolder")}
+                  </button>
                 </div>
               </div>
               <div className="flex flex-col gap-0.5">
@@ -252,7 +270,7 @@ export function SkillsStorageSheet({
                     name="skills-storage-location"
                     className={RADIO_CLASS}
                     checked={pendingLocation === "unified"}
-                    disabled={isMigrating || webOff}
+                    disabled={isMigrating}
                     aria-describedby="skills-storage-unified-warn"
                     onChange={() => setPendingLocation("unified")}
                   />
@@ -277,24 +295,20 @@ export function SkillsStorageSheet({
                 >
                   {t("skills.storageSheet.moveHint", { count: installedCount })}
                 </p>
-                <WebUnavailableTip active={webOff}>
-                  <Button
-                    type="button"
-                    variant="neutral"
-                    size="regular"
-                    className="shrink-0"
-                    disabled={isMigrating || locationUnchanged}
-                    aria-describedby="skills-storage-move-hint"
-                    onClick={handleMove}
-                  >
-                    {isMigrating && (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    )}
-                    {isMigrating
-                      ? t("skills.storageSheet.moving")
-                      : t("skills.storageSheet.move")}
-                  </Button>
-                </WebUnavailableTip>
+                <Button
+                  type="button"
+                  variant="neutral"
+                  size="regular"
+                  className="shrink-0"
+                  disabled={isMigrating || locationUnchanged}
+                  aria-describedby="skills-storage-move-hint"
+                  onClick={handleMove}
+                >
+                  {isMigrating && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {isMigrating
+                    ? t("skills.storageSheet.moving")
+                    : t("skills.storageSheet.move")}
+                </Button>
               </div>
             </fieldset>
 

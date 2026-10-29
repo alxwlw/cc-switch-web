@@ -180,7 +180,7 @@ pub async fn migrate_skill_storage(
 }
 
 /// CC Switch 目录下放 Skill 主副本的位置（改过配置目录就是改后的）
-fn cc_switch_skills_dir() -> std::path::PathBuf {
+pub(crate) fn cc_switch_skills_dir() -> std::path::PathBuf {
     crate::config::get_app_config_dir().join("skills")
 }
 

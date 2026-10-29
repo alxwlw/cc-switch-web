@@ -45,6 +45,10 @@ Scope: `src-tauri/src/commands/misc.rs:~395-440` (spawn с дедлайном), 
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-29**: PR #23 merged `c3c11b44` → main; live на `cc-switch-web.service`.
+  - Server и `dist-web` пересобраны из main. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p22-20261029-021143/`. Миграций нет.
+  - Проверено: `/api/health` → 200; `POST /api/tools/probe {"tools":["claude"]}` находит `~/.local/bin/claude` 2.1.312; lifecycle для неизвестного tool → `jobId`, опрос → `failed: No supported tools selected`; неизвестный job → 404; `installations` для opencode и pi отвечает. WARN/ERROR в journal нет, отдаваемый `index.html` совпадает со сборкой. Реальный update на живом хосте не запускали (opencode, см. ниже).
+  - DX-83 Done (комментарий со ссылками file:line). Ветка `web-parity/web-25-cli-lifecycle` удалена локально и на origin.
 - **Статус до merge (2026-10-29)**: ветка `web-parity/web-25-cli-lifecycle` (worktree `.worktrees/web-25`), PR #23 (https://github.com/alxwlw/cc-switch-web/pull/23) открыт; DX-83 In Review (комментарий со ссылкой). Ветка также несёт закрытие фазы 21 в плане (`3e0c42d2`).
   - Финальные гейты на `5ce021ab`:
     - fmt/clippy (lib + example) — чисто;

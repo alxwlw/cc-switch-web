@@ -571,6 +571,38 @@ fn parse_agents_lock() -> HashMap<String, LockRepoInfo> {
     parsed
 }
 
+// ========== integration-test seams ==========
+
+/// Process-global local repo used instead of a GitHub archive; only the test hook sets it.
+static REPO_FIXTURE_OVERRIDE: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+/// Process-global skills.sh base URL; only the test hook sets it.
+static SKILLS_SH_URL_OVERRIDE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+fn repo_fixture_override() -> Option<PathBuf> {
+    REPO_FIXTURE_OVERRIDE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
+/// Test seam: while `Some`, every repo download copies this directory as the extracted
+/// repo root instead of fetching from GitHub. Production never sets it and no HTTP
+/// route reaches it.
+pub fn set_repo_fixture_override(dir: Option<PathBuf>) {
+    *REPO_FIXTURE_OVERRIDE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = dir;
+}
+
+/// Test seam: while `Some`, skills.sh search queries this URL instead of
+/// `https://skills.sh/api/search`.
+pub fn set_skills_sh_url_override(url: Option<String>) {
+    *SKILLS_SH_URL_OVERRIDE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = url;
+}
+
 // ========== SkillService ==========
 
 pub struct SkillService {
@@ -3697,6 +3729,11 @@ impl SkillService {
             return Ok((temp_dir, repo.branch.clone()));
         }
 
+        if let Some(fixture) = repo_fixture_override() {
+            Self::copy_dir_recursive(&fixture, temp_path)?;
+            return Ok((temp_dir, repo.branch.clone()));
+        }
+
         let branch = Self::try_repo_branches(repo, temp_path, |url| async move {
             self.download_and_extract(&url, temp_path).await
         })
@@ -4650,8 +4687,13 @@ impl SkillService {
     ) -> Result<SkillsShSearchResult> {
         let client = crate::proxy::http_client::get();
 
+        let base = SKILLS_SH_URL_OVERRIDE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .unwrap_or_else(|| "https://skills.sh/api/search".to_string());
         let url = url::Url::parse_with_params(
-            "https://skills.sh/api/search",
+            &base,
             &[
                 ("q", query),
                 ("limit", &limit.to_string()),

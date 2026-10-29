@@ -84,11 +84,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "get_subscription_quota",
     () => useSubscriptionQuota("claude", true, true, 1),
   ],
-  [
-    "useScanUnmanagedSkills",
-    "scan_unmanaged_skills",
-    () => useScanUnmanagedSkills({ enabled: true }),
-  ],
   ["useKimiOAuth", "kimi_oauth_status", () => useKimiOAuth()],
   ["useManagedAuth", "auth_get_status", () => useManagedAuth("xai_oauth")],
   [
@@ -162,17 +157,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "useCopilotQuota",
     "copilot_get_usage",
     () => useCopilotQuota(null, { autoQuery: true }),
-  ],
-  ["useSkillRepos", "get_skill_repos", () => useSkillRepos()],
-  [
-    "useSearchSkillsSh",
-    "search_skills_sh",
-    () => useSearchSkillsSh("abc", 10, 0),
-  ],
-  [
-    "useCcSwitchSkillsDir",
-    "get_cc_switch_skills_dir",
-    () => useCcSwitchSkillsDir(),
   ],
 ];
 
@@ -254,8 +238,24 @@ describe("WEB-00: фоновые query молчат в web", () => {
       "scan_openclaw_config_health",
       () => useOpenClawHealth(true),
     ],
+    [
+      "useScanUnmanagedSkills",
+      "scan_unmanaged_skills",
+      () => useScanUnmanagedSkills({ enabled: true }),
+    ],
+    ["useSkillRepos", "get_skill_repos", () => useSkillRepos()],
+    [
+      "useSearchSkillsSh",
+      "search_skills_sh",
+      () => useSearchSkillsSh("abc", 10, 0),
+    ],
+    [
+      "useCcSwitchSkillsDir",
+      "get_cc_switch_skills_dir",
+      () => useCcSwitchSkillsDir(),
+    ],
   ] as Array<[string, string, () => unknown]>)(
-    "%s в web зовёт %s (гейт снят: WEB-15 / WEB-17)",
+    "%s в web зовёт %s (гейт снят: WEB-15 / WEB-17 / WEB-05)",
     async (_name, command, useHook) => {
       setWeb(true);
       const { wrapper } = wrapperFor();

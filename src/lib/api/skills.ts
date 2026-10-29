@@ -353,4 +353,15 @@ export const skillsApi = {
   ): Promise<ZipInstallResult> {
     return await invoke("install_skills_from_zip", { filePath, currentApp });
   },
+
+  /** Web: upload a browser-picked ZIP/.skill file as the raw request body */
+  async installFromZipUpload(
+    file: File,
+    currentApp: AppId,
+  ): Promise<ZipInstallResult> {
+    return await invoke("web_install_skills_from_zip_upload", {
+      file,
+      currentApp,
+    });
+  },
 };

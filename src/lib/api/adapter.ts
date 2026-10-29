@@ -19,6 +19,7 @@ type Args = Record<string, any>;
 interface Endpoint {
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   url: string;
+  /** JSON-serialised, except a `Blob`: sent as is (raw octet-stream upload). */
   body?: unknown;
   /** When set, resolve with `data[pick]` instead of the whole payload. */
   pick?: string;
@@ -278,6 +279,73 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         method: "POST",
         url: "/api/skills/uninstall",
         body: { id: a.id },
+      };
+    case "get_skill_backups":
+      return { method: "GET", url: "/api/skills/backups" };
+    case "delete_skill_backup":
+      return {
+        method: "DELETE",
+        url: `/api/skills/backups/${enc(a.backupId)}`,
+      };
+    case "restore_skill_backup":
+      return {
+        method: "POST",
+        url: `/api/skills/backups/${enc(a.backupId)}/restore`,
+        body: { currentApp: a.currentApp },
+      };
+    case "install_skill_unified":
+      return {
+        method: "POST",
+        url: "/api/skills/install",
+        body: { skill: a.skill, currentApp: a.currentApp },
+      };
+    case "scan_unmanaged_skills":
+      return { method: "GET", url: "/api/skills/unmanaged" };
+    case "import_skills_from_apps":
+      return {
+        method: "POST",
+        url: "/api/skills/import-from-apps",
+        body: { imports: a.imports },
+      };
+    case "discover_available_skills":
+      return { method: "GET", url: "/api/skills/discover" };
+    case "check_skill_updates":
+      return { method: "GET", url: "/api/skills/updates" };
+    // ids are "owner/name:directory": the id travels in the body, not the path
+    case "update_skill":
+      return { method: "POST", url: "/api/skills/update", body: { id: a.id } };
+    case "migrate_skill_storage":
+      return {
+        method: "POST",
+        url: "/api/skills/migrate-storage",
+        body: { target: a.target },
+      };
+    case "get_cc_switch_skills_dir":
+      return { method: "GET", url: "/api/skills/dir" };
+    case "search_skills_sh":
+      return {
+        method: "GET",
+        url: `/api/skills/search${query({ query: a.query, limit: a.limit, offset: a.offset })}`,
+      };
+    case "get_skill_repos":
+      return { method: "GET", url: "/api/skills/repos" };
+    case "add_skill_repo":
+      return {
+        method: "POST",
+        url: "/api/skills/repos",
+        body: { repo: a.repo },
+      };
+    case "remove_skill_repo":
+      return {
+        method: "DELETE",
+        url: `/api/skills/repos/${enc(a.owner)}/${enc(a.name)}`,
+      };
+    // the browser file is the raw request body; the server reads the name from the query
+    case "web_install_skills_from_zip_upload":
+      return {
+        method: "POST",
+        url: `/api/skills/install-zip${query({ currentApp: a.currentApp, filename: a.file?.name })}`,
+        body: a.file,
       };
 
     // ---------- sessions ----------
@@ -1052,12 +1120,15 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
   }
   const mapped = mapCommand(cmd, args);
   if (!mapped) throw new WebUnsupportedError(cmd);
+  const rawBody = mapped.body instanceof Blob;
   const init: RequestInit = {
     method: mapped.method,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": rawBody ? "application/octet-stream" : "application/json",
+    },
   };
   if (mapped.body !== undefined && mapped.method !== "GET") {
-    init.body = JSON.stringify(mapped.body);
+    init.body = rawBody ? (mapped.body as Blob) : JSON.stringify(mapped.body);
   }
   let res: Response;
   try {
