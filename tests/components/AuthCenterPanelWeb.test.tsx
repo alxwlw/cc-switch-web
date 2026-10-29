@@ -87,7 +87,7 @@ describe("AuthCenterPanel in web (WEB-02)", () => {
     stubCapabilities("macos");
     renderPanel();
     const card = await screen.findByRole("region", { name: "Antigravity" });
-    expect(card).toHaveTextContent("Antigravity sign-in runs a loopback");
+    expect(card).toHaveTextContent("Antigravity 登录通过服务器上的本地回环回调完成");
     expect(card.querySelector("#auth-login-agy")).toBeNull();
     expect(card.querySelector("#auth-add-agy")).toBeNull();
     expect(screen.queryByText("kimi-login")).toBeNull();
