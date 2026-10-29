@@ -125,7 +125,7 @@ export const AgyOAuthSection: React.FC<AgyOAuthSectionProps> = ({
         isWeb
           ? t("authCenter.agy.webLoginUnavailable", {
               defaultValue:
-                "Antigravity sign-in runs a loopback callback on the server, so sign in from the desktop app there. Switching and removing accounts work here.",
+                "Antigravity 登录通过服务器上的本地回环回调完成，请在服务器的桌面应用里登录；这里可以切换和移除账号。",
             })
           : undefined
       }

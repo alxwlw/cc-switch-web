@@ -131,7 +131,7 @@ export function readStoredView(): View {
   try {
     const stored =
       parseView(localStorage.getItem(VIEW_STORAGE_KEY)) ?? "providers";
-    // WEB-00: сохранённый скрытый в web view не восстанавливается — снимет WEB-02 (auth)
+    // WEB-00: сохранённый view из WEB_HIDDEN_VIEWS в web не восстанавливается (список сейчас пуст, auth открыт WEB-02, ф.25)
     return isViewAvailable(stored) ? stored : "providers";
   } catch {
     return "providers";

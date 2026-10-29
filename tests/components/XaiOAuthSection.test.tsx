@@ -1,8 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { XaiOAuthSection } from "@/components/providers/forms/XaiOAuthSection";
 
 const mockUseXaiOauth = vi.hoisted(() => vi.fn());
+const mockCopyText = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/clipboard", () => ({ copyText: mockCopyText }));
 
 vi.mock("@/components/providers/forms/hooks/useXaiOauth", () => ({
   useXaiOauth: mockUseXaiOauth,
@@ -64,5 +67,33 @@ describe("XaiOAuthSection", () => {
       "expired@example.com",
     );
     expect(screen.getByRole("combobox")).toHaveTextContent("凭据已失效");
+  });
+
+  it("keeps the device code visible when copying it is rejected", async () => {
+    mockCopyText.mockRejectedValueOnce(new Error("clipboard denied"));
+    const base = mockUseXaiOauth();
+    mockUseXaiOauth.mockReturnValue({
+      ...base,
+      pollingState: "polling",
+      isPolling: true,
+      deviceCode: {
+        device_code: "dev-1",
+        user_code: "ABCD-1234",
+        verification_uri: "https://x.ai/device",
+        expires_in: 600,
+        interval: 5,
+      },
+    });
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    render(<XaiOAuthSection onAccountSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "common.copy" }));
+
+    await waitFor(() => expect(mockCopyText).toHaveBeenCalledWith("ABCD-1234"));
+    await new Promise((r) => setTimeout(r, 0));
+    process.off("unhandledRejection", unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
+    expect(screen.getByText("ABCD-1234")).toBeInTheDocument();
   });
 });
