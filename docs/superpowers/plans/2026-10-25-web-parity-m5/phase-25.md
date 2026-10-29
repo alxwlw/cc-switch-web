@@ -47,6 +47,11 @@ Scope: `src-tauri/src/store.rs` (поля менеджеров), `src-tauri/src/
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-29**: PR #26 merged `b4d41c55` → main; live на `cc-switch-web.service` с 07:41.
+  - Server и `dist-web` пересобраны из main. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p25-20261029-074155/`, прежний бинарник — `cc-switch-web.prev`. Миграций нет.
+  - Smoke: `platform: linux`; статус Copilot пуст; `loginMethod: browser` → 400; `agy/running` → `false`; консоль отдаёт 200. Реальный вход на живом сервисе не запускали.
+  - DX-60 остаётся In Progress (этап 2 — фаза 26), комментарий о merge и деплое со ссылками file:line. Ветка `web-parity/web-02-oauth-device` и worktree `.worktrees/web-02` удалены.
+
 - **Статус до merge (2026-10-29)**: ветка `web-parity/web-02-oauth-device` (worktree `.worktrees/web-02`), PR #26 (https://github.com/alxwlw/cc-switch-web/pull/26) открыт. DX-60 переведена из Backlog в In Progress; там комментарий со ссылкой, «этап 1 из 2» и решением по browser login. Ветка также несёт закрытие фазы 24 в плане (`5d0b3a9a`).
   - Финальные гейты на `3b7310eb`:
     - fmt и `clippy --lib --examples -D warnings` — чисто;
