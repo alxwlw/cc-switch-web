@@ -32,6 +32,19 @@ Scope: `src-tauri/src/proxy/forwarder.rs` (менеджеры из AppState), `s
 - [ ] Тесты: `tests/lib/failoverApi.test.ts`; SSE `provider-switched` после failover инвалидирует providers/proxy queries (маппинг фазы 8).
 - [ ] Снять оставшиеся WEB-00-гейты failover/breaker (таблица фазы 6).
 
+### Task 6: TCP-connect raw-пути с happy eyeballs (IPv6 → IPv4)
+Добавлена по итогам расследования из Notes фазы 27 (proxy висит на upstream за Cloudflare на agentbox). Без неё живая проверка Task 5 на реальных провайдерах невозможна.
+
+Причина:
+- `server.rs:186-203` прикладывает `OriginalHeaderCases` к каждому соединению, поэтому `send_request` (`hyper_client.rs:288-298`) всегда идёт сначала в raw-путь.
+- `send_raw_request` подключается через `tokio::net::TcpStream::connect((host, port))` (`hyper_client.rs:425`). Это последовательный перебор адресов без таймаута на адрес.
+- IPv6-адреса стоят первыми. SYN по v6 до Cloudflare уходит в пустоту, до v4 очередь не доходит.
+- Внешний timeout возвращает `Err(Timeout)`. Fallback на hyper-клиент (`:300-309`), у которого happy eyeballs работает (замер: 0.36 с, v4), срабатывает только на не-timeout ошибки.
+- `connect_via_proxy` (`:502`) подключается так же.
+
+- [ ] TCP для raw-пути (`:425`) и для `connect_via_proxy` (`:502`) — через `hyper_util::client::legacy::connect::HttpConnector` (`enforce_http(false)`, happy eyeballs 300 мс по умолчанию; `tower::ServiceExt::oneshot`, новых зависимостей нет), один общий helper.
+- [ ] Тест без внешней сети: resolver-seam отдаёт `[недостижимый IPv6, 127.0.0.1:<порт stub>]` → raw-запрос доходит до stub за ограниченное время (секунды, не timeout запроса).
+
 ### Task 5: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server`; на agentbox — failover между двумя реальными провайдерами при искусственно сломанном ключе первого.
 - [ ] Ветка `web-parity/web-01-failover-oauth`, PR; DX-59 → In Review + ссылка («этап 2 из 2»). Закрыть чекбоксы, Notes.
