@@ -3597,6 +3597,19 @@ async fn subscription_quota(
 /// loudly instead (phase-31 review risk #2).
 const AGY_CLI_MISSING: &str = "Antigravity CLI is not available on this server: install agy and sign in on the server host to view quota";
 
+/// Normalize the `:accountId` path segment for the codex/xai OAuth quota
+/// routes: the web adapter sends the literal `"default"` placeholder when the
+/// caller passes `accountId: null` (same `"default"` cache key as the query
+/// layer), so map `"default"` (and empty) back to `None` before calling the
+/// inners — desktop `None` resolves via `manager.default_account_id()`, while
+/// a literal lookup of an account named `"default"` would 404 instead.
+fn web_oauth_account_param(segment: &str) -> Option<String> {
+    match segment.trim() {
+        "" | "default" => None,
+        id => Some(id.to_string()),
+    }
+}
+
 /// `GET /api/subscription/codex-oauth/:accountId/quota`: put-only publish
 /// (no emit), exactly like the desktop command.
 async fn subscription_codex_oauth_quota(
@@ -3604,7 +3617,8 @@ async fn subscription_codex_oauth_quota(
     Path(account_id): Path<String>,
 ) -> ApiResult {
     let (resolved, result) =
-        crate::commands::get_codex_oauth_quota_inner(&state, Some(account_id)).await;
+        crate::commands::get_codex_oauth_quota_inner(&state, web_oauth_account_param(&account_id))
+            .await;
     match result {
         Ok(quota) => {
             if let Some(id) = resolved {
@@ -3628,7 +3642,10 @@ async fn subscription_xai_oauth_quota(
     State(state): State<SharedState>,
     Path(account_id): Path<String>,
 ) -> ApiResult {
-    proxy_result(crate::commands::query_xai_oauth_quota_inner(&state, Some(account_id)).await)
+    proxy_result(
+        crate::commands::query_xai_oauth_quota_inner(&state, web_oauth_account_param(&account_id))
+            .await,
+    )
 }
 
 /// `GET /api/subscription/agy/:accountId/quota`: no cache, no emit (desktop
@@ -4655,4 +4672,29 @@ async fn failover_set_auto(
         Err(e) => return e,
     };
     unit_result(crate::commands::set_auto_failover_enabled_inner(&state, app, enabled).await)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::web_oauth_account_param;
+
+    #[test]
+    fn web_oauth_default_segment_resolves_like_desktop_none() {
+        // The adapter sends the literal `"default"` segment for
+        // `accountId: null` (same `"default"` cache key as the query layer);
+        // the handlers must map it back to `None` so the inners resolve via
+        // `manager.default_account_id()` instead of looking up an account
+        // literally named "default".
+        assert_eq!(web_oauth_account_param("default"), None);
+        assert_eq!(web_oauth_account_param(""), None);
+        assert_eq!(web_oauth_account_param("   "), None);
+        assert_eq!(
+            web_oauth_account_param("acc-123"),
+            Some("acc-123".to_string())
+        );
+        assert_eq!(
+            web_oauth_account_param("  acc-123  "),
+            Some("acc-123".to_string())
+        );
+    }
 }
