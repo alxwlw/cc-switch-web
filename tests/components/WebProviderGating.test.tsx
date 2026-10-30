@@ -236,8 +236,9 @@ describe("buildLaunchSections — web", () => {
 });
 
 describe("shared form controls — web", () => {
-  it("disables the fetch-models button", () => {
+  it("keeps the fetch-models button enabled in web (WEB-03)", async () => {
     setWeb(true);
+    const onFetch = vi.fn();
     render(
       <ModelInputWithFetch
         id="m"
@@ -245,12 +246,15 @@ describe("shared form controls — web", () => {
         onChange={vi.fn()}
         fetchedModels={[]}
         isLoading={false}
-        onFetch={vi.fn()}
+        onFetch={onFetch}
       />,
     );
-    expect(
-      screen.getByRole("button", { name: "providerForm.fetchModels" }),
-    ).toBeDisabled();
+    const button = screen.getByRole("button", {
+      name: "providerForm.fetchModels",
+    });
+    expect(button).toBeEnabled();
+    await userEvent.click(button);
+    expect(onFetch).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the fetch-models button enabled on desktop", () => {
@@ -310,23 +314,30 @@ describe("shared form controls — web", () => {
 });
 
 describe("FetchedModelPicker — web", () => {
-  const render_ = (models: { id: string; ownedBy: string | null }[]) =>
+  const render_ = (
+    models: { id: string; ownedBy: string | null }[],
+    onFetch: () => void = vi.fn(),
+  ) =>
     render(
       <FetchedModelPicker
         models={models}
         configuredModelIds={[]}
         onApply={vi.fn()}
-        onFetch={vi.fn()}
+        onFetch={onFetch}
         isFetching={false}
       />,
     );
 
-  it("disables fetching while there is no list", () => {
+  it("fetches the list in web when there is none yet (WEB-03)", async () => {
     setWeb(true);
-    render_([]);
-    expect(
-      screen.getByRole("button", { name: "providerForm.fetchModels" }),
-    ).toBeDisabled();
+    const onFetch = vi.fn();
+    render_([], onFetch);
+    const button = screen.getByRole("button", {
+      name: "providerForm.fetchModels",
+    });
+    expect(button).toBeEnabled();
+    await userEvent.click(button);
+    expect(onFetch).toHaveBeenCalledTimes(1);
   });
 
   it("keeps an already loaded list openable", () => {
