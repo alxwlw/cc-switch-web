@@ -282,11 +282,14 @@ async fn models_fetch_bad_body_is_400_not_422() {
 async fn models_agy_without_cli_surfaces_install_hint() {
     let _lock = test_mutex().lock().unwrap();
     // Hermetic "no agy": empty PATH defeats the PATH scan, SHELL="" defeats
-    // the login-shell fallback (`sh -l -c 'command -v agy'`), and the fresh
-    // test HOME has no ~/.local/bin/agy and no agy settings.json.
+    // the login-shell fallback (`sh -l -c 'command -v agy'`), the seam below
+    // redirects the hardcoded system dirs (`/opt/homebrew/bin`,
+    // `/usr/local/bin`) to this empty dir, and the fresh test HOME has no
+    // ~/.local/bin/agy and no agy settings.json.
     let empty = tempfile::tempdir().unwrap();
     let _path = EnvGuard::set("PATH", empty.path().to_str().unwrap());
     let _shell = EnvGuard::set("SHELL", "");
+    let _sys = EnvGuard::set("CC_SWITCH_AGY_SYSTEM_DIRS", empty.path().to_str().unwrap());
     let (_state, router) = fixture();
     let err = err_text(
         &router,
@@ -301,13 +304,41 @@ async fn models_agy_without_cli_surfaces_install_hint() {
 
 #[tokio::test]
 #[serial]
+async fn models_agy_finds_cli_through_seam_dirs() {
+    let _lock = test_mutex().lock().unwrap();
+    // Reviewer simulation: PATH is empty and the login-shell probe is off, so
+    // the fake CLI is visible ONLY through the seam — without the seam this
+    // would be "Antigravity CLI not found". The test outcome is controlled by
+    // the seam, not by host state.
+    let dir = tempfile::tempdir().unwrap();
+    let fake = dir.path().join("agy");
+    std::fs::write(&fake, "#!/bin/sh\nprintf 'g1\tGemini One\n'\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let empty = tempfile::tempdir().unwrap();
+    let _path = EnvGuard::set("PATH", empty.path().to_str().unwrap());
+    let _shell = EnvGuard::set("SHELL", "");
+    let _sys = EnvGuard::set("CC_SWITCH_AGY_SYSTEM_DIRS", dir.path().to_str().unwrap());
+    let (_state, router) = fixture();
+    let data = ok_data(&router, "POST", "/api/models/agy", Some(json!({}))).await;
+    assert_eq!(data, json!([{"id": "Gemini One", "ownedBy": null}]));
+}
+
+#[tokio::test]
+#[serial]
 async fn models_opencode_without_tool_surfaces_detection_error() {
     let _lock = test_mutex().lock().unwrap();
     // Hermetic "no opencode": empty PATH + plain `sh -c` (no rc files) defeat
-    // `command -v`; fixed dirs and the fresh test HOME have no opencode binary.
+    // `command -v`; the seam below redirects the hardcoded system dirs
+    // (`/usr/local/bin`, `/usr/bin`) to this empty dir; the fresh test HOME
+    // plus removed install-dir envs leave no other candidate behind.
     let empty = tempfile::tempdir().unwrap();
     let _path = EnvGuard::set("PATH", empty.path().to_str().unwrap());
     let _shell = EnvGuard::set("SHELL", "/bin/sh");
+    let _sys = EnvGuard::set("CC_SWITCH_TOOL_SYSTEM_DIRS", empty.path().to_str().unwrap());
     let _install = EnvGuard::remove("OPENCODE_INSTALL_DIR");
     let _xdg = EnvGuard::remove("XDG_BIN_DIR");
     let _gopath = EnvGuard::remove("GOPATH");
@@ -347,6 +378,41 @@ async fn models_opencode_lists_two_refs_through_fake_tool() {
     let (_state, router) = fixture();
     // The runtime executes with the opencode config dir
     // (`<home>/.config/opencode`) as cwd; it must exist.
+    let config_dir = ensure_test_home().join(".config").join("opencode");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    let data = ok_data(&router, "GET", "/api/models/opencode", None).await;
+    assert_eq!(
+        data,
+        json!([
+            {"providerId": "acme", "modelId": "a1"},
+            {"providerId": "zeta", "modelId": "z2"},
+        ])
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn models_opencode_finds_tool_through_seam_dirs() {
+    let _lock = test_mutex().lock().unwrap();
+    // Same reviewer simulation for opencode: PATH is empty, so the fake tool is
+    // visible ONLY through the seam — without the seam
+    // `locate_default_tool` would report "not installed".
+    let dir = tempfile::tempdir().unwrap();
+    let fake = dir.path().join("opencode");
+    std::fs::write(&fake, "#!/bin/sh\necho 'zeta/z2'\necho 'acme/a1'\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let empty = tempfile::tempdir().unwrap();
+    let _path = EnvGuard::set("PATH", empty.path().to_str().unwrap());
+    let _shell = EnvGuard::set("SHELL", "/bin/sh");
+    let _sys = EnvGuard::set("CC_SWITCH_TOOL_SYSTEM_DIRS", dir.path().to_str().unwrap());
+    let _install = EnvGuard::remove("OPENCODE_INSTALL_DIR");
+    let _xdg = EnvGuard::remove("XDG_BIN_DIR");
+    let _gopath = EnvGuard::remove("GOPATH");
+    let (_state, router) = fixture();
     let config_dir = ensure_test_home().join(".config").join("opencode");
     std::fs::create_dir_all(&config_dir).unwrap();
     let data = ok_data(&router, "GET", "/api/models/opencode", None).await;
