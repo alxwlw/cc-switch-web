@@ -14,12 +14,37 @@ use axum::http::StatusCode;
 use cc_switch_lib::{AppState, AppType, Provider, ProviderMeta};
 use serde_json::{json, Value};
 use serial_test::serial;
+use std::ffi::OsString;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use support::{
     create_test_state, ensure_test_home, reset_test_fs, test_mutex, web_call, web_router_with,
 };
+
+/// Save/restore one process-global env var (PATH/SHELL control must not leak
+/// into other tests in this binary). Precedent: web_api_models.rs.
+struct EnvGuard {
+    key: &'static str,
+    prev: Option<OsString>,
+}
+
+impl EnvGuard {
+    fn set(key: &'static str, val: &str) -> Self {
+        let prev = std::env::var_os(key);
+        std::env::set_var(key, val);
+        Self { key, prev }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        match &self.prev {
+            Some(v) => std::env::set_var(self.key, v),
+            None => std::env::remove_var(self.key),
+        }
+    }
+}
 
 /// Router over a fresh state the test keeps (to reach `state.db` /
 /// `state.usage_cache` / `state.events`).
@@ -361,15 +386,25 @@ async fn balance_unknown_provider_is_deterministic_and_key_free() {
     .await;
     let canary = "balance-canary-7c1e-key";
 
-    for body in [
-        json!({"baseUrl": stub.url, "apiKey": canary}),
-        json!({"baseUrl": "https://api.deepseek.com", "apiKey": ""}),
+    for (body, want) in [
+        (
+            json!({"baseUrl": stub.url, "apiKey": canary}),
+            "Unknown balance provider",
+        ),
+        (
+            json!({"baseUrl": "https://api.deepseek.com", "apiKey": ""}),
+            "API key is empty",
+        ),
     ] {
         let (status, resp) = web_call(&router, "POST", "/api/balance", Some(body)).await;
         assert_eq!(status, StatusCode::OK, "{resp}");
         assert_eq!(resp["ok"], json!(true), "{resp}");
         assert_eq!(resp["data"]["success"], json!(false), "{resp}");
-        assert!(resp["data"]["error"].is_string(), "{resp}");
+        // F2: pin the routing branch — the unknown baseUrl must reach
+        // `detect_provider` (not a default vendor), and the empty key must hit
+        // the empty-key guard. This proves `baseUrl` was forwarded.
+        let error = resp["data"]["error"].as_str().unwrap_or_default();
+        assert!(error.contains(want), "expected {want:?}, got: {error}");
         assert!(
             !resp.to_string().contains(canary),
             "apiKey material leaked into the response: {resp}"
@@ -552,10 +587,26 @@ async fn subscription_quota_with_credential_file() {
 #[serial]
 async fn subscription_agy_without_cli_is_intelligible_error() {
     let _lock = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    // Hermetic "no agy" (F1 [DP-014/DP-017]): empty PATH defeats the PATH
+    // scan, SHELL="" defeats the login-shell fallback, the seam below
+    // redirects the hardcoded system dirs to this empty dir, and the test
+    // HOME has no ~/.local/bin/agy. The outcome is controlled by the test,
+    // not by host state — a fake `agy` on the outer PATH must not flip this
+    // to 200. Precedent: web_api_models.rs `models_agy_without_cli_*`.
+    let empty = tempfile::tempdir().unwrap();
+    let _path = EnvGuard::set("PATH", empty.path().to_str().unwrap());
+    let _shell = EnvGuard::set("SHELL", "");
+    let _sys = EnvGuard::set("CC_SWITCH_AGY_SYSTEM_DIRS", empty.path().to_str().unwrap());
     let (_state, router) = fixture();
+    // Belt-and-braces: a stale `~/.local/bin/agy` from another test binary
+    // sharing this HOME slot would otherwise be found via the home probe.
+    let stray = ensure_test_home().join(".local").join("bin").join("agy");
+    if stray.exists() {
+        std::fs::remove_file(&stray).unwrap();
+    }
 
-    // Review risk #2: no agy binary on PATH (test-env assumption, same as the
-    // T1 agy unit test) must be an intelligible error, not an empty card.
+    // No agy binary is discoverable under the scrubbed env (same as the T1
+    // agy unit test) must be an intelligible error, not an empty card.
     for uri in [
         "/api/subscription/agy/some-account/quota",
         "/api/subscription/agy/quota",
