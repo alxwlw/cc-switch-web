@@ -4,6 +4,7 @@ use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use crate::proxy::providers::XAI_API_BASE_URL;
 use crate::services::model_fetch::FetchedModel;
 use crate::services::subscription::{CredentialStatus, SubscriptionQuota};
+use crate::store::AppState;
 use serde::Deserialize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -90,9 +91,17 @@ struct ModelEntry {
 #[tauri::command(rename_all = "camelCase")]
 pub async fn get_xai_oauth_models(
     account_id: Option<String>,
-    state: State<'_, XaiOAuthState>,
+    state: State<'_, AppState>,
 ) -> Result<Vec<FetchedModel>, String> {
-    let manager = state.0.read().await;
+    get_xai_oauth_models_inner(&state, account_id).await
+}
+
+/// Shared by the desktop command and the web route.
+pub(crate) async fn get_xai_oauth_models_inner(
+    state: &AppState,
+    account_id: Option<String>,
+) -> Result<Vec<FetchedModel>, String> {
+    let manager = state.xai_oauth.read().await;
     let resolved = match account_id
         .as_deref()
         .map(str::trim)
@@ -132,4 +141,43 @@ pub async fn get_xai_oauth_models(
         .collect();
     models.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(models)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::Database;
+    use serial_test::serial;
+    use std::sync::Arc;
+
+    struct EnvGuard(Option<std::ffi::OsString>);
+    impl EnvGuard {
+        fn set(path: &std::path::Path) -> Self {
+            let prev = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", path);
+            Self(prev)
+        }
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.0 {
+                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn models_inner_resolves_manager_from_appstate() {
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        assert!(Arc::ptr_eq(
+            &state.managed_auth_states().xai.0,
+            &state.xai_oauth
+        ));
+        let err = get_xai_oauth_models_inner(&state, None).await.unwrap_err();
+        assert_eq!(err, "No usable xAI account available");
+    }
 }

@@ -8,6 +8,7 @@
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::services::model_fetch::FetchedModel;
 use crate::services::subscription::{query_codex_quota, CredentialStatus, SubscriptionQuota};
+use crate::store::AppState;
 use std::sync::Arc;
 use tauri::State;
 
@@ -91,9 +92,17 @@ async fn query_codex_oauth_quota_for(
 #[tauri::command(rename_all = "camelCase")]
 pub async fn get_codex_oauth_models(
     account_id: Option<String>,
-    state: State<'_, CodexOAuthState>,
+    state: State<'_, AppState>,
 ) -> Result<Vec<FetchedModel>, String> {
-    let manager = &state.0;
+    get_codex_oauth_models_inner(&state, account_id).await
+}
+
+/// Shared by the desktop command and the web route.
+pub(crate) async fn get_codex_oauth_models_inner(
+    state: &AppState,
+    account_id: Option<String>,
+) -> Result<Vec<FetchedModel>, String> {
+    let manager = &state.codex_oauth_manager;
     let resolved = match account_id
         .as_deref()
         .map(str::trim)
@@ -116,4 +125,45 @@ pub async fn get_codex_oauth_models(
         .map_err(|e| e.to_string())?;
 
     crate::services::codex_oauth_models::fetch_models_with_token(&token, &chatgpt_account_id).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::Database;
+    use serial_test::serial;
+    use std::sync::Arc;
+
+    struct EnvGuard(Option<std::ffi::OsString>);
+    impl EnvGuard {
+        fn set(path: &std::path::Path) -> Self {
+            let prev = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", path);
+            Self(prev)
+        }
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.0 {
+                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn models_inner_resolves_manager_from_appstate() {
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        assert!(Arc::ptr_eq(
+            &state.managed_auth_states().codex.0,
+            &state.codex_oauth_manager
+        ));
+        let err = get_codex_oauth_models_inner(&state, None)
+            .await
+            .unwrap_err();
+        assert_eq!(err, "No ChatGPT account available");
+    }
 }
