@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { providersApi } from "@/lib/api";
 import * as modelFetch from "@/lib/api/model-fetch";
 import { useOmoModelSource } from "@/components/providers/forms/hooks/useOmoModelSource";
+import { server } from "../msw/server";
 import { setProviders } from "../msw/state";
 import { createTestQueryClient } from "../utils/testQueryClient";
 import { setWeb } from "../helpers/web";
@@ -37,9 +39,15 @@ describe("useOmoModelSource — web", () => {
     });
   });
 
-  it("offers configured models plus runtime models without the live-state calls (WEB-03)", async () => {
+  it("filters configured models by the live ids in web (WEB-14)", async () => {
     setWeb(true);
-    const liveIds = vi.spyOn(providersApi, "getOpenCodeLiveProviderIds");
+    let liveIdsRequests = 0;
+    server.use(
+      http.post("http://tauri.local/get_opencode_live_provider_ids", () => {
+        liveIdsRequests += 1;
+        return HttpResponse.json(["someone-else"]);
+      }),
+    );
     const runtime = vi
       .spyOn(modelFetch, "getOpenCodeModels")
       .mockResolvedValue([]);
@@ -49,12 +57,11 @@ describe("useOmoModelSource — web", () => {
       { wrapper: wrapper() },
     );
 
+    // Живые ids исключают custom: настроенные модели отфильтрованы (раньше в web живой набор не читался)
+    await waitFor(() => expect(liveIdsRequests).toBeGreaterThan(0));
     await waitFor(() =>
-      expect(result.current.omoModelOptions.map((o) => o.value)).toEqual([
-        "custom/m-1",
-      ]),
+      expect(result.current.omoModelOptions.map((o) => o.value)).toEqual([]),
     );
-    expect(liveIds).not.toHaveBeenCalled();
     expect(runtime).toHaveBeenCalled();
     expect(toastWarning).not.toHaveBeenCalled();
   });

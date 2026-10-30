@@ -56,6 +56,7 @@ vi.mock("@/lib/query", () => ({
 
 const providersApiUpdateMock = vi.fn();
 const providersApiUpdateTrayMenuMock = vi.fn();
+const providersApiSetOpenCodeDefaultModelMock = vi.fn();
 const piApiUpdateProviderUsageScriptMock = vi.fn();
 const settingsApiGetMock = vi.fn();
 const settingsApiApplyMock = vi.fn();
@@ -72,6 +73,8 @@ vi.mock("@/lib/api", () => ({
     update: (...args: unknown[]) => providersApiUpdateMock(...args),
     updateTrayMenu: (...args: unknown[]) =>
       providersApiUpdateTrayMenuMock(...args),
+    setOpenCodeDefaultModel: (...args: unknown[]) =>
+      providersApiSetOpenCodeDefaultModelMock(...args),
   },
   settingsApi: {
     get: (...args: unknown[]) => settingsApiGetMock(...args),
@@ -119,6 +122,7 @@ beforeEach(() => {
   switchProviderMutateAsync.mockReset();
   providersApiUpdateMock.mockReset();
   providersApiUpdateTrayMenuMock.mockReset();
+  providersApiSetOpenCodeDefaultModelMock.mockReset();
   piApiUpdateProviderUsageScriptMock.mockReset();
   settingsApiGetMock.mockReset();
   settingsApiApplyMock.mockReset();
@@ -974,6 +978,31 @@ describe("useProviderActions", () => {
     });
     expect(toastSuccessMock).toHaveBeenCalledTimes(1);
     expect(toastSuccessMock.mock.calls[0]?.[1]).toEqual({ closeButton: true });
+  });
+
+  it("sets the opencode default model in web through the providers API (WEB-14)", async () => {
+    setWeb(true);
+    providersApiSetOpenCodeDefaultModelMock.mockResolvedValueOnce(undefined);
+
+    const { wrapper } = createWrapper();
+    const provider = createProvider({
+      settingsConfig: {
+        models: { "gpt-4.1": { name: "GPT 4.1" } },
+      },
+    });
+
+    const { result } = renderHook(() => useProviderActions("opencode"), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.setAsDefaultModel(provider, "gpt-4.1");
+    });
+
+    expect(providersApiSetOpenCodeDefaultModelMock).toHaveBeenCalledWith(
+      "provider-1/gpt-4.1",
+    );
+    expect(toastSuccessMock).toHaveBeenCalledTimes(1);
   });
 
   it("sets the explicitly selected OpenClaw model and preserves existing fallbacks", async () => {

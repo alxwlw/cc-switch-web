@@ -66,7 +66,7 @@ describe("OpenCode built-in provider editing", () => {
     return onSubmit;
   };
 
-  it("web: не запрашивает get_opencode_live_provider_ids при открытии формы", async () => {
+  it("web: запрашивает get_opencode_live_provider_ids при открытии формы (WEB-14)", async () => {
     setWeb(true);
     let requests = 0;
     server.use(
@@ -77,8 +77,7 @@ describe("OpenCode built-in provider editing", () => {
     );
     renderOverride({ options: { apiKey: "test-key" } });
     await screen.findByDisplayValue("test-key");
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(requests).toBe(0);
+    await waitFor(() => expect(requests).toBe(1));
   });
 
   it.each([undefined, "@ai-sdk/openai-compatible"])(

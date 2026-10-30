@@ -129,18 +129,18 @@ describe("ProviderCardActions — web", () => {
 });
 
 describe("ProviderEmptyState — import from live config", () => {
-  it("disables the import button when the import reads the live config", () => {
+  it("disables the import button when the import reads the live config (claude-desktop stays gated, WEB-19)", () => {
     setWeb(true);
     const onImport = vi.fn();
     render(
       <ProviderEmptyState
-        appId="opencode"
+        appId="claude-desktop"
         onImport={onImport}
         importUnavailable
       />,
     );
     expect(
-      screen.getByRole("button", { name: "provider.importCurrent" }),
+      screen.getByRole("button", { name: "provider.importFromClaude" }),
     ).toBeDisabled();
   });
 
