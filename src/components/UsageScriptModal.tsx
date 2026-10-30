@@ -885,6 +885,7 @@ const UsageScriptModal: React.FC<UsageScriptModalProps> = ({
   const footer = (
     <>
       <div className="flex gap-2">
+        {/* WEB-04: test выполняется на сервере через POST /api/:app/providers/:id/usage-script/test */}
         <Button
           variant="secondary"
           size="sm"

@@ -1,3 +1,4 @@
+import { isWeb } from "@/lib/api/adapter";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FormLabel } from "@/components/ui/form";
@@ -207,6 +208,16 @@ export function GeminiFormFields({
               {t("providerForm.fetchModels")}
             </Button>
           </div>
+          {isWeb && appId === "agy" && (
+            <p
+              className="m-0 text-xs text-fg-3"
+              data-testid="agy-cli-server-note"
+            >
+              {t("provider.form.agy.cliServerNote", {
+                defaultValue: "список берётся у CLI на сервере",
+              })}
+            </p>
+          )}
           <ModelInputWithFetch
             id="gemini-model"
             value={model}

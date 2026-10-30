@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setWeb } from "../helpers/web";
 
 import PromptPanel from "@/components/prompts/PromptPanel";
 import { promptsApi, type Prompt } from "@/lib/api";
@@ -121,6 +122,27 @@ describe("Pi prompts page", () => {
       screen.getAllByRole("button", { name: "pi.prompts.newTemplate" }).length,
     ).toBeGreaterThan(0);
     expect(screen.getByText("~/.pi/agent/prompts/")).toBeInTheDocument();
+  });
+
+  it("web: system and templates tabs are offered and read through the native prompt APIs (WEB-17)", async () => {
+    setWeb(true);
+    renderWithClient(
+      <PromptPanel appId="pi" apps={["claude", "pi"]} onAppChange={vi.fn()} />,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "pi.prompts.systemTab" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "pi.prompts.templatesTab" }),
+    );
+    await waitFor(() =>
+      expect(promptsApi.listPiPromptTemplates).toHaveBeenCalled(),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "pi.prompts.systemTab" }),
+    );
+    await waitFor(() => expect(promptsApi.getPiPromptFile).toHaveBeenCalled());
   });
 
   it("locks navigation while a system prompt or template editor is saving", async () => {

@@ -4,7 +4,6 @@ use tauri::ipc::{Channel, Response};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::session_manager;
-use crate::session_manager::cache::chunk_ranges;
 use crate::session_manager::content::{self, BlockContent};
 use crate::session_manager::model::{ContentRef, ImageRef, TranscriptChunk};
 
@@ -49,28 +48,12 @@ pub async fn stream_session_messages(
                 return Err(message);
             }
         };
-        let transcript = loaded.transcript;
-        let send = |chunk: TranscriptChunk| {
+        for chunk in session_manager::transcript_chunks(&loaded) {
             onChunk
                 .send(chunk)
-                .map_err(|e| format!("Failed to send session chunk: {e}"))
-        };
-
-        send(TranscriptChunk::Header {
-            total: transcript.messages.len(),
-            turns: transcript.turns.clone(),
-            cached: loaded.cached,
-            parse_ms: loaded.parse_ms,
-        })?;
-        for (start, end) in chunk_ranges(&transcript.message_bytes) {
-            send(TranscriptChunk::Messages {
-                start,
-                messages: transcript.messages[start..end].to_vec(),
-            })?;
+                .map_err(|e| format!("Failed to send session chunk: {e}"))?;
         }
-        send(TranscriptChunk::Done {
-            payload_bytes: transcript.approx_bytes as u64,
-        })
+        Ok(())
     })
     .await
     .map_err(|e| format!("Failed to stream session messages: {e}"))?

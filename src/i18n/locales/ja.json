@@ -388,6 +388,7 @@
       "title": "セッション履歴の統一をオフにする",
       "message": "オフにすると、Codex CLI では公式サブスクリプションとサードパーティのセッション一覧が再び別々になります（デスクトップ版は引き続き全セッションを表示）。オンの間に作成されたセッションは出所を区別できないためサードパーティ側の履歴に残り、CLI では公式サブスクリプション利用時に表示されません。",
       "restoreBackup": "オンにした際に移行した公式セッションを公式履歴へ復元する（バックアップから正確に復元）",
+      "restoreBackupWeb": "サーバー上で、オンにした際に移行した公式セッションを公式履歴へ復元する（バックアップから正確に復元）",
       "confirm": "オフにする"
     },
     "usage": {
@@ -506,6 +507,15 @@
         "enabledDescription": "cc-switch.log を制御します。リクエスト使用量記録と crash.log には影響しません",
         "openLog": "ログを開く",
         "openLogFailed": "ログの場所を開けませんでした：{{error}}",
+        "viewer": {
+          "title": "サーバーログ",
+          "serverNote": "これは cc-switch-web を実行しているサーバーのログであり、このブラウザのログではありません。",
+          "path": "サーバー上のパス",
+          "unavailable": "ログがまだないか、読み取れません。",
+          "empty": "ログファイルは空です。",
+          "refresh": "更新",
+          "download": "ダウンロード"
+        },
         "level": "ログレベル",
         "levelDescription": "出力する最小ログレベルを設定",
         "levels": {
@@ -544,6 +554,10 @@
     "importPartialSuccess": "設定はインポートされましたが、現在のプロバイダーへの同期に失敗しました。",
     "importPartialHint": "ライブ設定を更新するため、もう一度プロバイダーを選択してください。",
     "configExported": "設定をエクスポートしました:",
+    "configDownloaded": "設定をダウンロードしました:",
+    "importFileReadFailed": "ファイルの読み込みに失敗しました: {{message}}",
+    "importFileTooLarge": "ファイルが大きすぎてインポートできません（上限 {{limit}} MiB）",
+    "importFileNotUtf8": "ファイルは有効な UTF-8 テキストではありません。CC Switch で設定を再度エクスポートし、そのファイルをインポートしてください。",
     "exportFailed": "エクスポートに失敗しました",
     "selectFileFailed": "有効な SQL バックアップファイルを選択してください",
     "configCorrupted": "SQL ファイルが壊れているか形式が無効な可能性があります",
@@ -1003,6 +1017,7 @@
     "toolActionFailed": "インストール/更新コマンドの実行に失敗しました",
     "toolActionInProgress": "アプリの操作が実行中です",
     "toolActionInProgressDetail": "{{tool}} のインストール、更新、またはアンインストールがバックグラウンドで実行中です。完了するまでお待ちください。",
+    "toolActionTimeout": "{{tool}} は 15 分以内に完了せず、プロセスを停止しました",
     "toolNotRunnable": "インストール済みですが実行できません（バージョン未検出）",
     "toolActionVersionUnchangedTitle": "バージョンは変わりませんでした",
     "toolActionVersionUnchanged": "現在も {{version}}（最新: {{latest}}）です。アップデーターが成功を報告しても実際には更新されていない可能性があります。",
@@ -1047,6 +1062,7 @@
     "globalProxy": {
       "label": "グローバルプロキシ",
       "hint": "すべてのリクエスト（API、Skills ダウンロードなど）をプロキシ経由で送信します。ローカルルーティング有効時、アプリのリクエストもこのプロキシを経由します。空欄で直接接続。",
+      "serverSideNote": "プロキシは cc-switch-web サーバーの送信リクエストに適用され、このブラウザには適用されません。スキャンはサーバー自身（その 127.0.0.1）上のプロキシを検索します。",
       "username": "ユーザー名（任意）",
       "password": "パスワード（任意）",
       "test": "接続テスト",
@@ -1943,7 +1959,9 @@
     "testUnavailable": "速度テストを実行できません",
     "noResult": "結果がありません",
     "testFailed": "速度テストに失敗しました: {{error}}",
-    "empty": "エンドポイントがありません"
+    "empty": "エンドポイントがありません",
+    "serverSideNote": "レイテンシは cc-switch-web サーバーから計測されており、このブラウザからの値とは異なる場合があります。http://127.0.0.1 や localhost はサーバー自身のサービスを指します。",
+    "savePartial": "エラー前に保存済み：{{saved}}。エラー：{{error}}"
   },
   "codexConfig": {
     "authJson": "auth.json (JSON) *",
@@ -3027,6 +3045,9 @@
     "saveFailed": "保存に失敗しました",
     "loadFailed": "読み込みに失敗しました",
     "openDirectory": "ファイルマネージャーで開く",
+    "copyPath": "パスをコピー",
+    "pathCopied": "パスをコピーしました",
+    "pathCopyFailed": "パスのコピーに失敗しました",
     "dailyMemory": {
       "title": "デイリーメモリー",
       "sectionTitle": "デイリーメモリー",
@@ -3187,6 +3208,7 @@
       "open": "Hermes Web UI を開く",
       "offline": "Hermes Web UI が起動していません。まず `hermes dashboard` を実行してください。",
       "openFailed": "Hermes Web UI を開けませんでした",
+      "unreachableRemote": "サーバー上の Hermes Web UI が応答しません（ポート {{port}}）。localhost のみで待ち受けている場合は、tailscale serve 経由で開くか、0.0.0.0 で起動してください。",
       "launchConfirmTitle": "Hermes Dashboard が起動していません",
       "launchConfirmMessage": "ターミナルを開いて `hermes dashboard` を実行しますか？\n\n起動完了後、ブラウザが自動的に開きます。\n\nターミナルに `hermes` が見つからない、または web 依存が不足するというエラーが表示される場合は、まず次を実行してください：\npip install hermes-agent[web]",
       "launchConfirmAction": "ターミナルを開いて起動",
@@ -3254,6 +3276,7 @@
       "title": "環境変数を削除しますか？",
       "message": "{{count}} 件の環境変数を削除してもよろしいですか？",
       "backupNotice": "削除前に自動バックアップを作成します。後で復元できます。再起動またはターミナル再起動後に反映されます。",
+      "webHostWarning": "Web モード：変数は、このブラウザのあるコンピューターではなく、cc-switch サーバーが動作しているホストの OS ユーザー環境（シェルの rc ファイル）から削除されます。",
       "confirm": "削除を確認"
     },
     "error": {
@@ -3448,6 +3471,9 @@
       "locationUnified": "共通フォルダ",
       "openFolder": "開く",
       "openFolderAria": "{{path}} を開く",
+      "copyPath": "パスをコピー",
+      "copyPathAria": "サーバーのパス {{path}} をコピー",
+      "pathCopied": "パスをコピーしました",
       "unifiedWarning": "Codex、Gemini CLI、OpenCode などはこのフォルダを直接読むため、アプリごとのスイッチが完全には効かなくなります。",
       "move": "移動して切り替え",
       "moving": "移動中…",
@@ -3467,6 +3493,15 @@
     "updatesIncomplete": "更新は見つかりませんでしたが、{{count}} 個のリポジトリを読み込めませんでした"
   },
   "deeplink": {
+    "paste": {
+      "title": "ccswitch:// リンクからインポート",
+      "placeholder": "ccswitch://… リンクを貼り付け",
+      "open": "開く",
+      "upload": "ファイルを選択",
+      "noLink": "ccswitch:// リンクが見つかりません。",
+      "fileTooLarge": "ファイルが大きすぎます（上限 {{limit}} KiB）。",
+      "fileReadFailed": "ファイルを読み込めませんでした。"
+    },
     "confirmImport": "プロバイダーのインポートを確認",
     "confirmImportDescription": "次の設定をディープリンクから CC Switch へインポートします",
     "importPrompt": "プロンプトをインポート",
@@ -4177,6 +4212,8 @@
     "back": "戻る"
   },
   "appsPage": {
+    "webServerNote": "CLI ツールはこのコンピューターではなく cc-switch-web サーバーにインストールされます。",
+    "webLifecycleSlow": "インストールと更新には最大 15 分かかることがあります。",
     "showInSidebar": "{{name}} をサイドバーに表示",
     "lastChecked": "最終確認 {{time}}",
     "neverChecked": "まだ更新を確認していません",
@@ -4931,7 +4968,8 @@
       "switchTo": "agy をこのアカウントに切り替え",
       "removeNote": "agy からはログアウトしません。agy が現在このアカウントを使っている場合、削除後もそのまま使えます。",
       "switched": "切り替えました。新しく起動する agy はこのアカウントを使います。",
-      "switchedWhileRunning": "切り替えました。agy が実行中です。開いている agy は元のアカウントのままで、元のアカウントを書き戻す可能性があります。agy を終了してから開き直してください。"
+      "switchedWhileRunning": "切り替えました。agy が実行中です。開いている agy は元のアカウントのままで、元のアカウントを書き戻す可能性があります。agy を終了してから開き直してください。",
+      "webLoginUnavailable": "Antigravity のサインインはサーバー上のループバックコールバックで行われます。サーバーのデスクトップアプリでサインインしてください。アカウントの切り替えと削除はここで行えます。"
     }
   },
   "kimi": {
@@ -4953,6 +4991,7 @@
       "cancelled": "ログインがキャンセルされたか、別のログインに置き換えられました。再ログインしてください。",
       "success": "Kimi Code にログインし、公式モデルを追加しました。",
       "removeConfirm": "{{name}} を削除しますか？Kimi Code からこのアカウントのプロバイダーとモデルを削除し、ローカル認証情報とカードも削除します。他のアカウントには影響しません。",
+      "removeConfirmWeb": "このKimi Codeの認証情報はサーバー上のKimi Code CLIと共有されています。このアカウントを削除すると、サーバー上のCLIもサインアウトされます。",
       "dismissConfirm": "{{name}} を一覧から外しますか？これは Kimi Code 自身のログインです。CC Switch はログアウトせず、認証情報とモデルも保持します。ログアウトする場合は Kimi Code で /logout を実行してください。再度ログインすると一覧に戻ります。",
       "primaryHidden": "Kimi Code 自身のログインは一覧から外されています。同じアカウントで再ログインすると戻ります",
       "removeCurrentHint": "このアカウントは使用中です。別のアカウントに切り替えてから削除してください",
@@ -5027,6 +5066,26 @@
       "renameProvider": "Oh My Pi プロバイダキーは変更できません。",
       "providerMissing": "この Oh My Pi プロバイダは保存済みリストにありません。",
       "legacyModelsJson": "Oh My Pi にはまだ旧形式の models.json があり、omp は次回起動時にこれを models.yml へ移行します。omp を一度起動してから、もう一度プロバイダを追加してください。"
+    }
+  },
+  "web": {
+    "unavailable": "Webモードでは利用できません",
+    "serverPath": "パスは手入力で、この端末ではなくサーバーホスト上のパスを指します",
+    "update": {
+      "unsupported": "Webモードではアップデートを利用できません。サーバーの更新は運用者が行います"
+    },
+    "proxyCaption": "プロキシはサーバー上で動作し、サーバー上の CLI の設定を書き換えます。お使いのマシン上の CLI には影響しません。",
+    "proxyListenWarning": "{{address}} で待ち受けると、ネットワーク全体（tailnet を含む）から認証なしでプロキシにアクセスできます。127.0.0.1 を推奨します。",
+    "liveUnknownTitle": "プロバイダー（Webモードでは実際の設定状態を読み取れません）",
+    "sessionResumeCopied": "再開コマンドをコピーしました。サーバーホスト上のプロジェクトフォルダーで、ターミナルに貼り付けて実行してください",
+    "hostNotice": "ファイル、CLI ツール、プロキシはサーバーホスト上にあり、このブラウザを実行しているコンピューター上にはありません。",
+    "hostNoticeDismiss": "閉じる",
+    "initError": {
+      "message": "設定ファイルを読み込めません：\n{{path}}\n\nエラー詳細：\n{{detail}}\n\nサーバーホスト上で修復してください（JSON が有効か確認するか、同じフォルダーの config.json.bak などのバックアップから復元）。その後サーバーを再起動してください。"
+    },
+    "mode": {
+      "title": "Web モード",
+      "serverVersion": "サーバーバージョン"
     }
   }
 }

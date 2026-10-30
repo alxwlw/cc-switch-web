@@ -24,6 +24,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { HoverTip } from "@/components/ui/hover-tip";
+import { isWeb } from "@/lib/api/adapter";
+import { isViewAvailable } from "@/lib/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AppPageHeader } from "@/components/shell/AppPageHeader";
 import { AppGlyph, APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
@@ -126,10 +128,13 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
   const appIds = useVisibleAppIds(SKILLS_APP_IDS);
   const { targets, setTargets, installTo } = useSkillInstallTargets(appIds);
 
-  const [view, setView] = useState<SkillsView>(initialView);
+  const discoverAvailable = isViewAvailable("skillsDiscovery");
+  const [view, setView] = useState<SkillsView>(
+    discoverAvailable ? initialView : "installed",
+  );
   // 「发现」段第一次打开后就一直挂着（隐藏而不卸载），来回切不再重新加载仓库列表
   const [discoverMounted, setDiscoverMounted] = useState(
-    initialView === "discover",
+    discoverAvailable && initialView === "discover",
   );
   useEffect(() => {
     if (view === "discover") setDiscoverMounted(true);
@@ -699,15 +704,18 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
     );
   };
 
-  const handleInstallFromZip = async () => {
+  // web: the ZIP comes from a hidden <input type="file">, not a native dialog
+  const zipInputRef = useRef<HTMLInputElement>(null);
+
+  const handleInstallFromZip = async (file?: File) => {
     if (!beginWrite()) return;
     try {
-      const filePath = await skillsApi.openZipFileDialog();
-      if (!filePath) return;
+      const filePath = file ? null : await skillsApi.openZipFileDialog();
+      if (!file && !filePath) return;
       let skipped: ZipSkippedSkill[] = [];
       const { installed, failures } = await installTo(async (firstApp) => {
         const result = await installFromZipMutation.mutateAsync({
-          filePath,
+          ...(file ? { file } : { filePath: filePath ?? undefined }),
           currentApp: firstApp,
         });
         skipped = result.skipped;
@@ -940,6 +948,21 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
       }
       actions={
         <>
+          {isWeb && (
+            <input
+              ref={zipInputRef}
+              type="file"
+              accept=".zip,.skill"
+              className="hidden"
+              data-testid="skills-zip-input"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                // reset so choosing the same file again still fires onChange
+                event.target.value = "";
+                if (file) void handleInstallFromZip(file);
+              }}
+            />
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -955,10 +978,18 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[220px]">
-              <DropdownMenuItem onSelect={() => setView("discover")}>
-                {t("skillsPage.addMenu.discover")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => void handleInstallFromZip()}>
+              {discoverAvailable && (
+                <DropdownMenuItem onSelect={() => setView("discover")}>
+                  {t("skillsPage.addMenu.discover")}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onSelect={() =>
+                  isWeb
+                    ? zipInputRef.current?.click()
+                    : void handleInstallFromZip()
+                }
+              >
                 {t("skillsPage.addMenu.zip")}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => void handleOpenImport()}>
@@ -1035,10 +1066,14 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
             ? t("skillsPage.viewInstalledCount", { count: nInstalled })
             : t("skillsPage.viewInstalled"),
         },
-        {
-          value: "discover",
-          label: t("skillsPage.viewDiscover"),
-        },
+        ...(discoverAvailable
+          ? [
+              {
+                value: "discover" as const,
+                label: t("skillsPage.viewDiscover"),
+              },
+            ]
+          : []),
       ]}
       trailing={<div ref={setTabsTrailingSlot} className="flex items-center" />}
     />
@@ -1091,14 +1126,16 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
           <h2 className="m-0 text-section">{t("skillsPage.emptyTitle")}</h2>
           <p className="m-0 text-body text-fg-2">{t("skillsPage.emptyBody")}</p>
           <div className="mt-2 flex gap-2">
-            <Button
-              type="button"
-              variant="neutral"
-              size="regular"
-              onClick={() => setView("discover")}
-            >
-              {t("skillsPage.goDiscover")}
-            </Button>
+            {discoverAvailable && (
+              <Button
+                type="button"
+                variant="neutral"
+                size="regular"
+                onClick={() => setView("discover")}
+              >
+                {t("skillsPage.goDiscover")}
+              </Button>
+            )}
             <Button
               type="button"
               variant="neutral"
@@ -1341,20 +1378,22 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
                       >
                         {t("mcpPage.clearSearch")}
                       </Button>
-                      <Button
-                        type="button"
-                        variant="neutral"
-                        size="regular"
-                        onClick={() => {
-                          setDiscoverQuery(searchQuery.trim());
-                          setSearchQuery("");
-                          setView("discover");
-                        }}
-                      >
-                        {t("skillsPage.searchInDiscover", {
-                          query: searchQuery.trim(),
-                        })}
-                      </Button>
+                      {discoverAvailable && (
+                        <Button
+                          type="button"
+                          variant="neutral"
+                          size="regular"
+                          onClick={() => {
+                            setDiscoverQuery(searchQuery.trim());
+                            setSearchQuery("");
+                            setView("discover");
+                          }}
+                        >
+                          {t("skillsPage.searchInDiscover", {
+                            query: searchQuery.trim(),
+                          })}
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <Button

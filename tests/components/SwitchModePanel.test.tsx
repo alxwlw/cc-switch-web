@@ -10,6 +10,7 @@ import type { AppMode } from "@/types/proxy";
 import { SwitchModePanel } from "@/components/providers/mode/SwitchModePanel";
 import { server } from "../msw/server";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 vi.mock("sonner", () => ({
   toast: {
@@ -118,6 +119,44 @@ beforeEach(() => {
   vi.mocked(toast.success).mockClear();
   // jsdom 没有 scrollIntoView，确认框里的下拉打开时会调
   Element.prototype.scrollIntoView = vi.fn();
+});
+
+describe("SwitchModePanel — route settings in web (WEB-01)", () => {
+  it("opens the per-app route settings sheet and shows the failover toggle (phase 28)", async () => {
+    setWeb(true);
+    mockMode("route", "map", "direct");
+    server.use(
+      http.post(`${TAURI_ENDPOINT}/get_proxy_config_for_app`, () =>
+        HttpResponse.json({
+          appType: "claude",
+          enabled: true,
+          autoFailoverEnabled: false,
+          maxRetries: 4,
+          streamingFirstByteTimeout: 60,
+          streamingIdleTimeout: 120,
+          nonStreamingTimeout: 600,
+          circuitFailureThreshold: 5,
+          circuitSuccessThreshold: 2,
+          circuitTimeoutSeconds: 60,
+          circuitErrorRateThreshold: 0.5,
+          circuitMinRequests: 10,
+        }),
+      ),
+    );
+
+    renderPanel("claude", { direct: provider("direct"), map: provider("map") });
+
+    expect(await screen.findByRole("switch")).toBeInTheDocument();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "mode.routeSettings" }),
+    );
+    expect(await screen.findByText("mode.routeSettingsTitle")).toBeVisible();
+    await waitFor(() =>
+      expect(
+        document.querySelector<HTMLInputElement>("#maxRetries-claude")?.value,
+      ).toBe("4"),
+    );
+  });
 });
 
 describe("SwitchModePanel — Stack mode", () => {

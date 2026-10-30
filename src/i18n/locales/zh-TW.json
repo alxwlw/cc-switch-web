@@ -388,6 +388,7 @@
       "title": "關閉統一會話歷史",
       "message": "關閉後，Codex CLI 中官方訂閱與第三方將恢復各自獨立的會話清單（桌面版仍顯示全部會話）。開啟期間產生的會話因無法區分來源，將留在第三方歷史中，CLI 在官方訂閱下將看不到它們。",
       "restoreBackup": "把開啟時遷入的官方會話還原回官方歷史（按備份精確還原）",
+      "restoreBackupWeb": "在伺服器上把開啟時遷入的官方會話還原回官方歷史（按備份精確還原）",
       "confirm": "關閉"
     },
     "usage": {
@@ -506,6 +507,15 @@
         "enabledDescription": "控制 cc-switch.log；不影響請求用量記錄和 crash.log",
         "openLog": "開啟日誌",
         "openLogFailed": "開啟日誌所在位置失敗：{{error}}",
+        "viewer": {
+          "title": "伺服器日誌",
+          "serverNote": "這是執行 cc-switch-web 的伺服器上的日誌，不是本瀏覽器的日誌。",
+          "path": "伺服器上的路徑",
+          "unavailable": "尚無日誌，或無法讀取。",
+          "empty": "日誌檔案為空。",
+          "refresh": "重新整理",
+          "download": "下載"
+        },
         "level": "日誌層級",
         "levelDescription": "設定輸出的最低日誌層級",
         "levels": {
@@ -544,6 +554,10 @@
     "importPartialSuccess": "設定已匯入，但同步至目前供應商失敗。",
     "importPartialHint": "請手動重新選擇一次供應商以重新整理對應設定。",
     "configExported": "設定已匯出至：",
+    "configDownloaded": "設定已下載：",
+    "importFileReadFailed": "讀取檔案失敗：{{message}}",
+    "importFileTooLarge": "檔案過大，無法匯入（上限 {{limit}} MiB）",
+    "importFileNotUtf8": "檔案不是有效的 UTF-8 文字。請從 CC Switch 重新匯出設定，然後匯入該檔案。",
     "exportFailed": "匯出失敗",
     "selectFileFailed": "請選擇有效的 SQL 備份檔案",
     "configCorrupted": "SQL 檔案可能已損壞或格式不正確",
@@ -1004,6 +1018,7 @@
     "toolActionFailed": "安裝/更新指令執行失敗",
     "toolActionInProgress": "應用程式操作仍在進行中",
     "toolActionInProgressDetail": "{{tool}} 已有安裝、升級或解除安裝作業正在背景處理，請等待完成，無需重複操作。",
+    "toolActionTimeout": "{{tool}} 未在 15 分鐘內完成，程序已停止",
     "toolNotRunnable": "已安裝但無法執行（未偵測到版本）",
     "toolActionVersionUnchangedTitle": "版本未變更",
     "toolActionVersionUnchanged": "仍為 {{version}}（最新版本：{{latest}}）。上游更新程式可能回報成功，但實際上並未套用更新。",
@@ -1048,6 +1063,7 @@
     "globalProxy": {
       "label": "全域代理伺服器",
       "hint": "代理所有請求（API、Skills 下載等）。開啟本地路由時，應用程式的請求也會經過此代理伺服器。留空表示直連。",
+      "serverSideNote": "代理作用於 cc-switch-web 伺服器發出的請求，而不是此瀏覽器。掃描會在伺服器本機（其 127.0.0.1）上尋找代理。",
       "username": "使用者名稱（選填）",
       "password": "密碼（選填）",
       "test": "測試連線",
@@ -1944,7 +1960,9 @@
     "testUnavailable": "測速功能不可用",
     "noResult": "未回傳結果",
     "testFailed": "測速失敗：{{error}}",
-    "empty": "暫無端點"
+    "empty": "暫無端點",
+    "serverSideNote": "延遲由 cc-switch-web 伺服器量測，而非目前的瀏覽器，可能與你的實際體驗不同。http://127.0.0.1、localhost 等位址指向伺服器本機的服務。",
+    "savePartial": "出錯前已儲存：{{saved}}。錯誤：{{error}}"
   },
   "codexConfig": {
     "authJson": "auth.json (JSON) *",
@@ -3028,6 +3046,9 @@
     "saveFailed": "儲存失敗",
     "loadFailed": "讀取失敗",
     "openDirectory": "在檔案管理員中開啟",
+    "copyPath": "複製路徑",
+    "pathCopied": "路徑已複製",
+    "pathCopyFailed": "複製路徑失敗",
     "dailyMemory": {
       "title": "每日記憶",
       "sectionTitle": "每日記憶",
@@ -3188,6 +3209,7 @@
       "open": "開啟 Hermes Web UI",
       "offline": "Hermes Web UI 未啟動，請先執行 `hermes dashboard` 啟動服務。",
       "openFailed": "開啟 Hermes Web UI 失敗",
+      "unreachableRemote": "伺服器上的 Hermes Web UI 沒有回應（連接埠 {{port}}）。若它只監聽 localhost，請透過 tailscale serve 開啟，或讓它監聽 0.0.0.0。",
       "launchConfirmTitle": "Hermes Dashboard 未啟動",
       "launchConfirmMessage": "是否開啟終端機並執行 `hermes dashboard` 啟動服務？\n\n啟動完成後會自動開啟瀏覽器。\n\n若終端機提示找不到 hermes 或缺少 web 相依套件，請先執行：\npip install hermes-agent[web]",
       "launchConfirmAction": "開啟終端機並啟動",
@@ -3255,6 +3277,7 @@
       "title": "確認刪除環境變數",
       "message": "確定要刪除 {{count}} 個環境變數嗎？",
       "backupNotice": "刪除前將自動備份，您可以稍後還原。刪除後需要重新啟動應用程式或終端機才能生效。",
+      "webHostWarning": "Web 模式：變數將從執行 cc-switch 伺服器之主機的作業系統使用者環境（shell 設定檔）中刪除，而非目前瀏覽器所在的電腦。",
       "confirm": "確認刪除"
     },
     "error": {
@@ -3449,6 +3472,9 @@
       "locationUnified": "通用目錄",
       "openFolder": "打開",
       "openFolderAria": "打開 {{path}}",
+      "copyPath": "複製路徑",
+      "copyPathAria": "複製伺服器路徑 {{path}}",
+      "pathCopied": "已複製路徑",
       "unifiedWarning": "Codex、Gemini CLI、OpenCode 等會直接讀這個目錄，各應用的開關對它們不再完全生效。",
       "move": "移動並切換",
       "moving": "正在移動…",
@@ -3468,6 +3494,15 @@
     "updatesIncomplete": "沒有發現更新，但有 {{count}} 個倉庫沒有讀到"
   },
   "deeplink": {
+    "paste": {
+      "title": "從 ccswitch:// 連結匯入",
+      "placeholder": "貼上 ccswitch://… 連結",
+      "open": "開啟",
+      "upload": "選擇檔案",
+      "noLink": "找不到 ccswitch:// 連結。",
+      "fileTooLarge": "檔案過大，不是有效的深層連結檔案（上限 {{limit}} KiB）。",
+      "fileReadFailed": "無法讀取該檔案。"
+    },
     "confirmImport": "確認匯入供應商設定",
     "confirmImportDescription": "以下設定將匯入至 CC Switch",
     "importPrompt": "匯入提示詞",
@@ -4178,6 +4213,8 @@
     "back": "返回"
   },
   "appsPage": {
+    "webServerNote": "命令列工具安裝在 cc-switch-web 伺服器上，而不是這台電腦上。",
+    "webLifecycleSlow": "安裝和更新最多可能需要 15 分鐘。",
     "showInSidebar": "在側欄顯示 {{name}}",
     "lastChecked": "上次檢查 {{time}}",
     "neverChecked": "還沒檢查過更新",
@@ -4932,7 +4969,8 @@
       "switchTo": "將 agy 切換到這個帳號",
       "removeNote": "不會讓 agy 登出：agy 目前登入的帳號刪除後仍然可用。",
       "switched": "已切換，新開的 agy 會使用這個帳號。",
-      "switchedWhileRunning": "已切換。偵測到 agy 正在執行：已開啟的 agy 仍使用原帳號，還可能把原帳號寫回去，請結束後重新開啟。"
+      "switchedWhileRunning": "已切換。偵測到 agy 正在執行：已開啟的 agy 仍使用原帳號，還可能把原帳號寫回去，請結束後重新開啟。",
+      "webLoginUnavailable": "Antigravity 登入透過伺服器上的本機回環回呼完成，請在伺服器的桌面應用程式中登入；這裡可以切換和移除帳號。"
     }
   },
   "kimi": {
@@ -4954,6 +4992,7 @@
       "cancelled": "登入已取消或被其他登入取代，請重新登入。",
       "success": "Kimi Code 登入成功，已新增官方模型。",
       "removeConfirm": "刪除 {{name}}？會從 Kimi Code 裡刪掉這個帳號的供應商和模型，並刪除它的本機登入憑證和卡片。其他帳號不受影響。",
+      "removeConfirmWeb": "這裡的 Kimi Code 憑證與伺服器上的 Kimi Code CLI 共用：移除此帳號後，伺服器上的 CLI 也會登出。",
       "dismissConfirm": "把 {{name}} 移出列表？這是 Kimi Code 自己的登入，CC Switch 不會替它登出，憑證和模型都會保留；如需登出，請在 Kimi Code 裡執行 /logout。之後重新登入會讓它回到列表。",
       "primaryHidden": "Kimi Code 自己的登入已移出列表，重新登入同一帳號即可找回",
       "removeCurrentHint": "這個帳號正在使用，請先切換到其他帳號再刪除",
@@ -5028,6 +5067,26 @@
       "renameProvider": "Oh My Pi 供應商識別碼不能重新命名。",
       "providerMissing": "此 Oh My Pi 供應商已不在儲存的清單中。",
       "legacyModelsJson": "Oh My Pi 目錄裡仍是舊的 models.json，omp 會在下次啟動時將它遷移為 models.yml。請先執行一次 omp，再回來新增供應商。"
+    }
+  },
+  "web": {
+    "unavailable": "Web 模式下無法使用",
+    "serverPath": "路徑需手動輸入，指的是伺服器主機上的路徑，而非目前裝置",
+    "update": {
+      "unsupported": "Web 模式下無法檢查更新：伺服器由維運人員負責升級"
+    },
+    "proxyCaption": "代理運行在伺服器上，並重新設定伺服器上的 CLI；不會影響你本機上的 CLI。",
+    "proxyListenWarning": "監聽 {{address}} 會讓整個網路（包括 tailnet）無需驗證即可存取該代理。建議使用 127.0.0.1。",
+    "liveUnknownTitle": "供應商（Web 模式下無法讀取實際設定狀態）",
+    "sessionResumeCopied": "已複製恢復指令。請在伺服器主機上的專案目錄下，貼到終端機執行",
+    "hostNotice": "檔案、CLI 工具和代理位於伺服器主機上，而不是執行此瀏覽器的電腦上。",
+    "hostNoticeDismiss": "關閉",
+    "initError": {
+      "message": "無法讀取設定檔：\n{{path}}\n\n錯誤詳情：\n{{detail}}\n\n請在伺服器主機上修復（檢查 JSON 是否有效，或從同目錄的備份檔如 config.json.bak 還原），然後重新啟動伺服器。"
+    },
+    "mode": {
+      "title": "Web 模式",
+      "serverVersion": "伺服器版本"
     }
   }
 }

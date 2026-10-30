@@ -388,6 +388,7 @@
       "title": "Birleşik oturum geçmişini kapat",
       "message": "Kapatıldığında Codex CLI, resmi abonelik ve üçüncü taraf sağlayıcılar için ayrı oturum listelerine geri döner (masaüstü uygulaması tüm oturumları göstermeye devam eder). Bu açıkken oluşturulan oturumlar birbirinden ayrılamaz, dolayısıyla üçüncü taraf geçmişinde kalırlar ve CLI bunları resmi abonelik altında göstermez.",
       "restoreBackup": "Etkinleştirme zamanında taşınan resmi oturumları resmi geçmişe geri yükleyin (yedekten tam geri yükleme)",
+      "restoreBackupWeb": "Etkinleştirme zamanında taşınan resmi oturumları sunucudaki resmi geçmişe geri yükleyin (yedekten tam geri yükleme)",
       "confirm": "Kapat"
     },
     "usage": {
@@ -506,6 +507,15 @@
         "enabledDescription": "cc-switch.log'u kontrol eder; istek kullanım kayıtları ve Crash.log etkilenmez",
         "openLog": "Günlüğü aç",
         "openLogFailed": "Günlük konumu açılamadı: {{error}}",
+        "viewer": {
+          "title": "Sunucu günlüğü",
+          "serverNote": "Bu, cc-switch-web'i çalıştıran sunucunun günlüğüdür; bu tarayıcının değil.",
+          "path": "Sunucudaki yol",
+          "unavailable": "Henüz günlük yok veya okunamıyor.",
+          "empty": "Günlük dosyası boş.",
+          "refresh": "Yenile",
+          "download": "İndir"
+        },
         "level": "Günlük Düzeyi",
         "levelDescription": "Çıkış için minimum günlük düzeyini ayarlayın",
         "levels": {
@@ -544,6 +554,10 @@
     "importPartialSuccess": "Yapılandırma içe aktarıldı ancak geçerli sağlayıcıyla eşitle edilemedi.",
     "importPartialHint": "Canlı yapılandırmayı yenilemek için lütfen sağlayıcıyı manuel olarak yeniden seçin.",
     "configExported": "Yapılandırma şuraya aktarıldı:",
+    "configDownloaded": "Yapılandırma indirildi:",
+    "importFileReadFailed": "Dosya okunamadı: {{message}}",
+    "importFileTooLarge": "Dosya içe aktarmak için çok büyük (sınır {{limit}} MiB)",
+    "importFileNotUtf8": "Dosya geçerli bir UTF-8 metni değil. Yapılandırmayı CC Switch'ten yeniden dışa aktarın ve bu dosyayı içe aktarın.",
     "exportFailed": "Dışa aktarma başarısız oldu",
     "selectFileFailed": "Lütfen geçerli bir SQL yedekleme dosyası seçin",
     "configCorrupted": "SQL dosyası bozuk veya geçersiz olabilir",
@@ -1003,6 +1017,7 @@
     "toolActionFailed": "Yükleme/güncelleme komutu başarısız oldu",
     "toolActionInProgress": "Kurulum veya güncelleme halen devam ediyor",
     "toolActionInProgressDetail": "{{tool}} için bir kurulum veya güncelleme zaten arka planda gerçekleştiriliyor. Lütfen bitmesini bekleyin; tekrar başlatmaya gerek yoktur.",
+    "toolActionTimeout": "{{tool}} 15 dakika içinde tamamlanmadı; işlem durduruldu",
     "toolNotRunnable": "Yüklendi ancak çalıştırılamıyor (sürüm algılanmadı)",
     "toolActionVersionUnchangedTitle": "Sürüm değişmedi",
     "toolActionVersionUnchanged": "Hala {{version}}'de (en son: {{latest}}). Güncelleyici, güncellemeyi uygulamadan başarı bildirmiş olabilir.",
@@ -1047,6 +1062,7 @@
     "globalProxy": {
       "label": "Küresel Vekil",
       "hint": "Tüm istekleri proxy olarak gönderin (API, Beceri indirme vb.). Yerel yönlendirme etkinleştirildiğinde uygulama trafiği de bu proxy üzerinden yönlendirilir. Doğrudan bağlantı için boş bırakın.",
+      "serverSideNote": "Proxy, bu tarayıcıya değil, cc-switch-web sunucusunun giden isteklerine uygulanır. Tarama, sunucunun kendisinde (onun 127.0.0.1 adresinde) proxy arar.",
       "username": "Kullanıcı adı (isteğe bağlı)",
       "password": "Şifre (isteğe bağlı)",
       "test": "Bağlantıyı Test Et",
@@ -1936,7 +1952,9 @@
     "testUnavailable": "Hız testi kullanılamıyor",
     "noResult": "Sonuç döndürülmedi",
     "testFailed": "Hız testi başarısız oldu: {{error}}",
-    "empty": "Uç nokta yok"
+    "empty": "Uç nokta yok",
+    "serverSideNote": "Gecikme bu tarayıcıdan değil cc-switch-web sunucusundan ölçülür ve sizin deneyiminizden farklı olabilir. http://127.0.0.1 veya localhost gibi adresler sunucunun kendi servislerini gösterir.",
+    "savePartial": "Hatadan önce kaydedilenler: {{saved}}. Hata: {{error}}"
   },
   "codexConfig": {
     "authJson": "auth.json (JSON) *",
@@ -3020,6 +3038,9 @@
     "saveFailed": "Kaydedilemedi",
     "loadFailed": "Yüklenemedi",
     "openDirectory": "Dosya yöneticisinde aç",
+    "copyPath": "Yolu kopyala",
+    "pathCopied": "Yol kopyalandı",
+    "pathCopyFailed": "Yol kopyalanamadı",
     "dailyMemory": {
       "title": "Günlük Hafıza",
       "sectionTitle": "Günlük Hafıza",
@@ -3180,6 +3201,7 @@
       "open": "Hermes Web kullanıcı arayüzünü açın",
       "offline": "Hermes Web kullanıcı arayüzü çalışmıyor. Önce `hermes dashboard` ile başlayın.",
       "openFailed": "Hermes Web kullanıcı arayüzü açılamadı",
+      "unreachableRemote": "Hermes Web kullanıcı arayüzü sunucuda yanıt vermiyor (bağlantı noktası {{port}}). Yalnızca localhost'u dinliyorsa tailscale serve ile açın veya 0.0.0.0 üzerinde başlatın.",
       "launchConfirmTitle": "Hermes Kontrol Paneli çalışmıyor",
       "launchConfirmMessage": "Bir terminal açın ve şimdi `hermes dashboard` ile başlatılsın mı?\n\nBaşlatma tamamlandığında tarayıcı otomatik olarak açılacaktır.\n\nTerminal, `hermes`'nin bulunamadığını veya web ekstralarının eksik olduğunu bildirirse önce şunu çalıştırın:\npip install hermes-agent[web]",
       "launchConfirmAction": "Terminali aç ve başlat",
@@ -3247,6 +3269,7 @@
       "title": "Ortam Değişkenlerini Silmeyi Onayla",
       "message": "{{count}} ortam değişkenlerini silmek istediğinizden emin misiniz?",
       "backupNotice": "Silmeden önce otomatik olarak bir yedek oluşturulacaktır. Daha sonra geri yükleyebilirsiniz. Değişiklikler uygulamayı veya terminali yeniden başlattıktan sonra etkili olur.",
+      "webHostWarning": "Web modu: Değişkenler, bu tarayıcının bulunduğu bilgisayardan değil, cc-switch sunucusunun çalıştığı ana makinenin işletim sistemi kullanıcı ortamından (shell rc dosyaları) silinir.",
       "confirm": "Silmeyi Onayla"
     },
     "error": {
@@ -3441,6 +3464,9 @@
       "locationUnified": "Paylaşılan klasör",
       "openFolder": "Aç",
       "openFolderAria": "{{path}}'yi açın",
+      "copyPath": "Yolu kopyala",
+      "copyPathAria": "{{path}} sunucu yolunu kopyala",
+      "pathCopied": "Yol kopyalandı",
       "unifiedWarning": "Codex, Gemini CLI, OpenCode ve diğerleri bu klasörü doğrudan okur, dolayısıyla uygulama başına anahtarlar artık onlara tam olarak uygulanmaz.",
       "move": "Taşı ve değiştir",
       "moving": "Taşınıyor…",
@@ -3460,6 +3486,15 @@
     "updatesIncomplete": "Güncelleme bulunamadı ancak {{count}} depoları okunamadı"
   },
   "deeplink": {
+    "paste": {
+      "title": "ccswitch:// bağlantısından içe aktar",
+      "placeholder": "ccswitch://… bağlantısını yapıştırın",
+      "open": "Aç",
+      "upload": "Dosya seç",
+      "noLink": "ccswitch:// bağlantısı bulunamadı.",
+      "fileTooLarge": "Dosya çok büyük (sınır {{limit}} KiB).",
+      "fileReadFailed": "Dosya okunamadı."
+    },
     "confirmImport": "İçe Aktarma Sağlayıcısını Onayla",
     "confirmImportDescription": "Aşağıdaki yapılandırma derin bağlantıdan CC Switch uygulamasını aktarılacak",
     "importPrompt": "İçe Aktarma İstemi",
@@ -4170,6 +4205,8 @@
     "back": "Geri"
   },
   "appsPage": {
+    "webServerNote": "CLI araçları bu bilgisayara değil, cc-switch-web sunucusuna kurulur.",
+    "webLifecycleSlow": "Kurulum ve güncelleme 15 dakikaya kadar sürebilir.",
     "showInSidebar": "Kenar çubuğunda {{name}}'yi göster",
     "lastChecked": "Son kontrol: {{time}}",
     "neverChecked": "Güncellemeler henüz kontrol edilmedi",
@@ -4921,7 +4958,8 @@
       "switchTo": "agy'yi bu hesaba geçir",
       "removeNote": "agy'nin oturumu açık kalır: agy bu hesabı kullanıyorsa kaldırdıktan sonra da çalışmaya devam eder.",
       "switched": "Hesap değiştirildi. Yeni agy oturumları bu hesabı kullanacak.",
-      "switchedWhileRunning": "Hesap değiştirildi. agy çalışıyor: açık agy oturumları önceki hesabı kullanmaya devam eder ve hesabı yeniden kaydedebilir. agy'yi kapatıp yeniden açın."
+      "switchedWhileRunning": "Hesap değiştirildi. agy çalışıyor: açık agy oturumları önceki hesabı kullanmaya devam eder ve hesabı yeniden kaydedebilir. agy'yi kapatıp yeniden açın.",
+      "webLoginUnavailable": "Antigravity girişi sunucudaki bir loopback geri çağrısıyla çalışır; sunucudaki masaüstü uygulamasından giriş yapın. Hesap değiştirme ve kaldırma burada çalışır."
     }
   },
   "kimi": {
@@ -4944,6 +4982,7 @@
       "removeAccount": "Hesabı kaldır",
       "dismissAccount": "Listeden gizle",
       "removeConfirm": "{{name}} kaldırılsın mı? Bu hesabın sağlayıcısı ve modelleri, yerel kimlik bilgileri ve kartıyla birlikte Kimi Code'dan kaldırılır. Diğer hesaplar etkilenmez.",
+      "removeConfirmWeb": "Buradaki Kimi Code kimlik bilgileri sunucudaki Kimi Code CLI ile paylaşılır: bu hesabı kaldırmak sunucudaki CLI oturumunu da kapatır.",
       "dismissConfirm": "{{name}} listeden gizlensin mi? Bu, Kimi Code'un kendi oturumudur; CC Switch oturumu kapatmaz ve kimlik bilgileriyle modelleri saklar. Oturumu kapatmak için Kimi Code'da /logout komutunu çalıştırın. Yeniden oturum açınca hesap listeye geri gelir.",
       "primaryHidden": "Kimi Code'un kendi oturumu listeden kaldırıldı; yeniden görünmesi için aynı hesapla oturum açın",
       "removeCurrentHint": "Bu hesap kullanımda. Kaldırmadan önce başka bir hesaba geçin.",
@@ -5005,6 +5044,26 @@
       "duplicateProvider": "Bu Oh My Pi sağlayıcı anahtarı zaten var.",
       "renameProvider": "Oh My Pi sağlayıcı anahtarları yeniden adlandırılamaz.",
       "providerMissing": "Bu Oh My Pi sağlayıcısı artık kayıtlı değil."
+    }
+  },
+  "web": {
+    "unavailable": "Web modunda kullanılamaz",
+    "serverPath": "Yollar elle girilir ve bu cihazı değil sunucu ana makinesini gösterir",
+    "update": {
+      "unsupported": "Web modunda güncellemeler kullanılamaz: sunucuyu operatör günceller"
+    },
+    "proxyCaption": "Proxy sunucuda çalışır ve sunucudaki CLI'ları yeniden yapılandırır; sizin makinenizdeki CLI'lara dokunmaz.",
+    "proxyListenWarning": "{{address}} üzerinde dinlemek, proxy'yi kimlik doğrulaması olmadan tüm ağdan (tailnet dahil) erişilebilir yapar. 127.0.0.1 tercih edin.",
+    "liveUnknownTitle": "Sağlayıcılar (Web modunda canlı yapılandırma durumu bilinmiyor)",
+    "sessionResumeCopied": "Devam komutu kopyalandı. Sunucu ana makinesinde, proje klasöründe bir terminale yapıştırıp çalıştırın",
+    "hostNotice": "Dosyalar, CLI araçları ve proxy, bu tarayıcıyı çalıştıran bilgisayarda değil, sunucu ana makinesindedir.",
+    "hostNoticeDismiss": "Kapat",
+    "initError": {
+      "message": "Yapılandırma dosyası okunamadı:\n{{path}}\n\nHata ayrıntıları:\n{{detail}}\n\nSorunu sunucu ana makinesinde düzeltin (JSON'un geçerli olduğunu kontrol edin veya aynı klasördeki config.json.bak gibi bir yedekten geri yükleyin), ardından sunucuyu yeniden başlatın."
+    },
+    "mode": {
+      "title": "Web modu",
+      "serverVersion": "Sunucu sürümü"
     }
   }
 }

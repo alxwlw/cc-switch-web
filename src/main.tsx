@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { DatabaseUpgrade } from "./components/DatabaseUpgrade";
+import { InitErrorScreen } from "./components/web/InitErrorScreen";
 import { UpdateProvider } from "./contexts/UpdateContext";
 import "./index.css";
 // 导入国际化配置
@@ -11,10 +12,12 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MotionConfig } from "framer-motion";
 import { queryClient } from "@/lib/query";
+import { startEventInvalidation } from "@/lib/query/eventInvalidation";
 import { settingsApi } from "@/lib/api";
 import { Toaster } from "@/components/ui/sonner";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { isWeb } from "@/lib/api/adapter";
 import { message } from "@tauri-apps/plugin-dialog";
 import { exit } from "@tauri-apps/plugin-process";
 import { FrontendErrorBoundary } from "./components/FrontendErrorBoundary";
@@ -110,6 +113,19 @@ async function bootstrap() {
       return;
     }
     if (initError && (initError.path || initError.error)) {
+      if (isWeb) {
+        // 无原生对话框/退出：服务端以「初始化错误」模式保持运行，直接渲染错误页
+        ReactDOM.createRoot(document.getElementById("root")!).render(
+          <React.StrictMode>
+            <FrontendErrorBoundary>
+              <ThemeProvider defaultTheme="system" storageKey="cc-switch-theme">
+                <InitErrorScreen payload={initError} />
+              </ThemeProvider>
+            </FrontendErrorBoundary>
+          </React.StrictMode>,
+        );
+        return;
+      }
       await handleConfigLoadError(initError);
       // 注意：不会执行到这里，因为 exit(1) 会终止进程
       return;
@@ -148,6 +164,12 @@ async function bootstrap() {
         </QueryClientProvider>
       </FrontendErrorBoundary>
     </React.StrictMode>,
+  );
+
+  // WEB-29: SSE events -> query invalidation. Web only: on desktop the
+  // existing per-component listeners own this and behaviour must not change.
+  startEventInvalidation(queryClient, isWeb, (error) =>
+    reportFrontendError("event_invalidation", error),
   );
 
   void syncModelsDevPricingOnStartup()

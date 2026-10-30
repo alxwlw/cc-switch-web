@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { providersApi } from "@/lib/api/providers";
+import { isWeb } from "@/lib/api/adapter";
 
 /**
  * Claude Desktop 配置文件的检查结果（后端 `get_claude_desktop_status`）：平台不支持、profile 里
@@ -13,7 +14,8 @@ export function useDesktopConfigMessages(enabled: boolean): string[] {
     queryKey: ["claudeDesktopStatus"],
     queryFn: () => providersApi.getClaudeDesktopStatus(),
     refetchInterval: 5000,
-    enabled,
+    // WEB-00: get_claude_desktop_status не поддержан (опрос 5 с) — снимет WEB-19
+    enabled: enabled && !isWeb,
   });
 
   return useMemo(() => {

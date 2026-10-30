@@ -14,6 +14,7 @@ import { providersApi } from "@/lib/api";
 import type { ProviderEditorView } from "@/lib/api/providers";
 import { usePresetStep } from "@/components/providers/forms/presetStep";
 import { createPortal } from "react-dom";
+import { setWeb } from "../helpers/web";
 
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ children }: { children: React.ReactNode }) => (
@@ -585,6 +586,24 @@ context_window = 500000
         onSubmit={vi.fn()}
       />,
     );
+    await waitFor(() =>
+      expect(universalProps.onUniversalPresetSelect).toBeTypeOf("function"),
+    );
+    expect(universalProps.onManageUniversalProviders).toBeTypeOf("function");
+  });
+
+  // WEB-07: универсальные провайдеры работают через /api/universal-providers — вход есть и в web.
+  it("отдаёт форме вход в универсальные провайдеры в web", async () => {
+    setWeb(true);
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="claude"
+        onSubmit={vi.fn()}
+      />,
+    );
+    await screen.findByRole("button", { name: "common.add" });
     await waitFor(() =>
       expect(universalProps.onUniversalPresetSelect).toBeTypeOf("function"),
     );

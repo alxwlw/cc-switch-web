@@ -30,7 +30,7 @@ import {
   extractProviderBaseUrl,
 } from "@/utils/providerConfigUtils";
 import { resolveManagedAccountId } from "@/lib/authBinding";
-import { isMac } from "@/lib/platform";
+import { useAgyAccountsAvailable } from "@/hooks/useServerCapabilities";
 import {
   isOfficialAccount,
   resolveCodexOfficialIdentity,
@@ -253,6 +253,7 @@ export function ProviderCard({
   const usageEnabled =
     provider.meta?.usage_script?.enabled ?? isBoundCodexOfficial;
   const isOfficial = isOfficialProvider(provider, appId);
+  const agyAccountsAvailable = useAgyAccountsAvailable();
   const supportsOfficialSubscription =
     isOfficial &&
     ["claude", "codex", "gemini", "grokbuild", "agy"].includes(appId);
@@ -273,7 +274,7 @@ export function ProviderCard({
   const isXaiOauth = provider.meta?.providerType === PROVIDER_TYPES.XAI_OAUTH;
   // Antigravity 官方卡绑了授权中心的账号：额度查绑定的号（只有 macOS 能切号，其他平台忽略绑定）
   const agyBoundAccountId =
-    appId === "agy" && isOfficial && isMac()
+    appId === "agy" && isOfficial && agyAccountsAvailable
       ? resolveManagedAccountId(provider.meta, "agy_oauth")?.trim() || null
       : null;
   // 获取用量数据以判断是否有多套餐

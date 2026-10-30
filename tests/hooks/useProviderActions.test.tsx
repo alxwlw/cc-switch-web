@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useProviderActions } from "@/hooks/useProviderActions";
 import type { Provider, UsageScript } from "@/types";
+import { setWeb } from "../helpers/web";
 
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -55,6 +56,7 @@ vi.mock("@/lib/query", () => ({
 
 const providersApiUpdateMock = vi.fn();
 const providersApiUpdateTrayMenuMock = vi.fn();
+const providersApiSetOpenCodeDefaultModelMock = vi.fn();
 const piApiUpdateProviderUsageScriptMock = vi.fn();
 const settingsApiGetMock = vi.fn();
 const settingsApiApplyMock = vi.fn();
@@ -71,6 +73,8 @@ vi.mock("@/lib/api", () => ({
     update: (...args: unknown[]) => providersApiUpdateMock(...args),
     updateTrayMenu: (...args: unknown[]) =>
       providersApiUpdateTrayMenuMock(...args),
+    setOpenCodeDefaultModel: (...args: unknown[]) =>
+      providersApiSetOpenCodeDefaultModelMock(...args),
   },
   settingsApi: {
     get: (...args: unknown[]) => settingsApiGetMock(...args),
@@ -118,6 +122,7 @@ beforeEach(() => {
   switchProviderMutateAsync.mockReset();
   providersApiUpdateMock.mockReset();
   providersApiUpdateTrayMenuMock.mockReset();
+  providersApiSetOpenCodeDefaultModelMock.mockReset();
   piApiUpdateProviderUsageScriptMock.mockReset();
   settingsApiGetMock.mockReset();
   settingsApiApplyMock.mockReset();
@@ -160,6 +165,40 @@ describe("useProviderActions", () => {
     expect(addProviderMutateAsync).toHaveBeenCalledTimes(1);
     expect(addProviderMutateAsync).toHaveBeenCalledWith(providerInput);
   });
+
+  it.each([
+    ["web", true, 1],
+    ["desktop", false, 1],
+  ])(
+    "openclaw addProvider with suggestedDefaults reads the model catalog %s times (%s; web served since WEB-15)",
+    async (_label, web, catalogCalls) => {
+      setWeb(web);
+      addProviderMutateAsync.mockResolvedValueOnce(undefined);
+      openclawApiGetModelCatalogMock.mockResolvedValue({});
+      openclawApiGetDefaultModelMock.mockResolvedValue(null);
+      const { wrapper } = createWrapper();
+      const { result } = renderHook(() => useProviderActions("openclaw"), {
+        wrapper,
+      });
+
+      await act(async () => {
+        await result.current.addProvider({
+          name: "P",
+          settingsConfig: {},
+          providerKey: "p",
+          suggestedDefaults: {
+            model: { primary: "p/m" },
+            modelCatalog: { "p/m": { alias: "m" } },
+          },
+        } as never);
+      });
+
+      expect(addProviderMutateAsync).toHaveBeenCalledTimes(1);
+      expect(openclawApiGetModelCatalogMock).toHaveBeenCalledTimes(
+        catalogCalls,
+      );
+    },
+  );
 
   it("should update tray menu when calling updateProvider", async () => {
     updateProviderMutateAsync.mockResolvedValueOnce(undefined);
@@ -602,6 +641,28 @@ describe("useProviderActions", () => {
     expect(settingsApiApplyMock).toHaveBeenCalledWith({ official: true });
   });
 
+  it("web: applies the Claude plugin config when switching Claude provider", async () => {
+    setWeb(true);
+    switchProviderMutateAsync.mockResolvedValueOnce(undefined);
+    settingsApiGetMock.mockResolvedValue({
+      enableClaudePluginIntegration: true,
+    });
+    const { wrapper } = createWrapper();
+    const provider = createProvider({ category: "official" });
+
+    const { result } = renderHook(() => useProviderActions("claude"), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.switchProvider(provider);
+    });
+
+    expect(switchProviderMutateAsync).toHaveBeenCalledWith(provider.id);
+    expect(settingsApiApplyMock).toHaveBeenCalledWith({ official: true });
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
   it("should not call applyClaudePluginConfig when integration is disabled", async () => {
     switchProviderMutateAsync.mockResolvedValueOnce(undefined);
     settingsApiGetMock.mockResolvedValueOnce({
@@ -917,6 +978,31 @@ describe("useProviderActions", () => {
     });
     expect(toastSuccessMock).toHaveBeenCalledTimes(1);
     expect(toastSuccessMock.mock.calls[0]?.[1]).toEqual({ closeButton: true });
+  });
+
+  it("sets the opencode default model in web through the providers API (WEB-14)", async () => {
+    setWeb(true);
+    providersApiSetOpenCodeDefaultModelMock.mockResolvedValueOnce(undefined);
+
+    const { wrapper } = createWrapper();
+    const provider = createProvider({
+      settingsConfig: {
+        models: { "gpt-4.1": { name: "GPT 4.1" } },
+      },
+    });
+
+    const { result } = renderHook(() => useProviderActions("opencode"), {
+      wrapper,
+    });
+
+    await act(async () => {
+      await result.current.setAsDefaultModel(provider, "gpt-4.1");
+    });
+
+    expect(providersApiSetOpenCodeDefaultModelMock).toHaveBeenCalledWith(
+      "provider-1/gpt-4.1",
+    );
+    expect(toastSuccessMock).toHaveBeenCalledTimes(1);
   });
 
   it("sets the explicitly selected OpenClaw model and preserves existing fallbacks", async () => {

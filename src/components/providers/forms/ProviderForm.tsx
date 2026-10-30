@@ -99,7 +99,7 @@ import { CodexFormFields } from "./CodexFormFields";
 import { GeminiFormFields } from "./GeminiFormFields";
 import { KimiProviderForm } from "./KimiProviderForm";
 import { AgyAccountSelect } from "./AgyOAuthSection";
-import { isMac } from "@/lib/platform";
+import { useAgyAccountsAvailable } from "@/hooks/useServerCapabilities";
 import { McodeProviderForm } from "./McodeProviderForm";
 import { PiProviderForm } from "./PiProviderForm";
 import { OmoFormFields } from "./OmoFormFields";
@@ -644,6 +644,7 @@ function ProviderFormFull({
     string | null
   >(() => resolveManagedAccountId(initialData?.meta, "xai_oauth"));
   // Antigravity 官方卡绑定的授权中心账号；null = 跟着 agy 当前的登录
+  const agyAccountsAvailable = useAgyAccountsAvailable();
   const [selectedAgyAccountId, setSelectedAgyAccountId] = useState<
     string | null
   >(() => resolveManagedAccountId(initialData?.meta, "agy_oauth"));
@@ -2816,12 +2817,14 @@ function ProviderFormFull({
           )}
 
           {/* 切号只实现了 macOS；别的平台上不显示，卡上已有的绑定原样保留 */}
-          {appId === "agy" && category === "official" && isMac() && (
-            <AgyAccountSelect
-              value={selectedAgyAccountId}
-              onChange={setSelectedAgyAccountId}
-            />
-          )}
+          {appId === "agy" &&
+            category === "official" &&
+            agyAccountsAvailable && (
+              <AgyAccountSelect
+                value={selectedAgyAccountId}
+                onChange={setSelectedAgyAccountId}
+              />
+            )}
 
           {appId === "opencode" && !isAnyOmoCategory && !isNativeOpencode && (
             <OpenCodeFormFields

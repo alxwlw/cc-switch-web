@@ -6,6 +6,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { markdownLanguage } from "@codemirror/lang-markdown";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setWeb } from "../helpers/web";
 
 import {
   createCollapsedMarkdownPreview,
@@ -641,6 +642,27 @@ describe("SessionMarkdown", () => {
         screen.getByRole("button", { name: "在 Finder 中显示" }),
       );
       expect(onRevealPath).toHaveBeenCalledWith("/Users/me/proj/src/config.rs");
+    });
+
+    it("web: the path chip keeps copy but drops the host-side reveal button", async () => {
+      setWeb(true);
+      const user = userEvent.setup();
+      const onRevealPath = vi.fn();
+      render(
+        <SessionMarkdown
+          content="See [config](file:///Users/me/proj/src/config.rs)."
+          projectDir="/Users/me/proj"
+          onRevealPath={onRevealPath}
+        />,
+      );
+
+      expect(
+        screen.queryByRole("button", { name: "在 Finder 中显示" }),
+      ).toBeNull();
+      await user.click(screen.getByRole("button", { name: /复制路径/ }));
+      expect(copyTextMock).toHaveBeenCalledWith("/Users/me/proj/src/config.rs");
+      expect(onRevealPath).not.toHaveBeenCalled();
+      expect(invokeMock).not.toHaveBeenCalled();
     });
 
     it("renders local image paths as a shortened path chip", async () => {

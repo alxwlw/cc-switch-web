@@ -35,6 +35,7 @@ import {
   type ProviderSwitchEvent,
 } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
+import { isWeb } from "@/lib/api/adapter";
 import { useProviderActions } from "@/hooks/useProviderActions";
 import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
 import { hermesKeys, useOpenHermesWebUI } from "@/hooks/useHermes";
@@ -47,6 +48,7 @@ import {
   useTrayNavigation,
 } from "@/hooks/useTrayNavigation";
 import { useTauriEvent } from "@/hooks/useTauriEvent";
+import { useProxyOfficialWarning } from "@/hooks/useProxyOfficialWarning";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
 import {
   extractErrorMessage,
@@ -95,6 +97,7 @@ import {
   useToolUpdatesAvailable,
 } from "@/components/apps/useToolManagement";
 import { UsagePage } from "@/components/usage/UsagePage";
+import { WebHostBanner } from "@/components/web/WebHostBanner";
 import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
 import { SwitchModePanel } from "@/components/providers/mode/SwitchModePanel";
 import { proxyApi } from "@/lib/api/proxy";
@@ -212,7 +215,10 @@ function App() {
   const { data: settingsData } = useSettingsQuery();
   // Windows 一律去掉系统标题栏，用页头里的应用内窗口按钮；Linux 由设置决定
   const useAppWindowControls =
-    isWindows() || (isLinux() && (settingsData?.useAppWindowControls ?? false));
+    // WEB-00: в браузере нет окна приложения — min/max/close не работают
+    !isWeb &&
+    (isWindows() ||
+      (isLinux() && (settingsData?.useAppWindowControls ?? false)));
   const visibleApps = useMemo<VisibleApps>(
     () => ({
       ...DEFAULT_VISIBLE_APPS,
@@ -524,22 +530,13 @@ function App() {
     },
   );
 
-  useTauriEvent<{ appType: string; providerName: string }>(
-    "proxy-official-warning",
-    (payload) => {
-      toast.warning(
-        t("notifications.proxyOfficialWarning", {
-          name: payload.providerName,
-          defaultValue: `当前供应商 ${payload.providerName} 是官方供应商，建议切换到第三方供应商后再使用代理接管`,
-        }),
-        { duration: 8000 },
-      );
-    },
-  );
+  useProxyOfficialWarning();
 
   useEffect(() => {
     // settingsData 未加载时跳过，避免用 fallback false 覆盖 Rust 侧已设好的装饰状态
     if (!settingsData) return;
+    // WEB-00: window-shim без setDecorations — в web нечего синхронизировать
+    if (isWeb) return;
 
     const syncWindowDecorations = async () => {
       try {
@@ -1118,6 +1115,9 @@ function App() {
     ) {
       let liveProviderIds: string[] = [];
       try {
+        // Шаг проверяет коллизию ключа копии с записями живого конфига; в web копия получает ключ,
+        // свободный среди провайдеров БД (addToLive=false, в живой конфиг не пишется). opencode live-ids в web работают (WEB-14).
+        // Hermes (WEB-16), openclaw (WEB-15) и pi/omp (WEB-17) live-ids в web работают
         liveProviderIds =
           activeApp === "opencode"
             ? await queryClient.ensureQueryData({
@@ -1421,6 +1421,9 @@ function App() {
   // OpenClaw / Hermes 没有模式 tab，那一行放它们自己的页面导航。
   // 换整块内容的是页面导航，用下划线页签；分段控件只留给模式和页内筛选。
   const renderAppSegments = () => {
+    // Web: вкладки есть только у openclaw (WEB-15) и hermes (WEB-16)
+    if (isWeb && activeApp !== "hermes" && activeApp !== "openclaw")
+      return null;
     if (activeApp === "openclaw") {
       return (
         <div className="shrink-0 px-6 pt-2">
@@ -1755,6 +1758,7 @@ function App() {
           id="content-area"
           className="relative isolate flex min-w-0 flex-1 flex-col overflow-hidden bg-app"
         >
+          <WebHostBanner />
           {showEnvBanner && envConflicts.length > 0 && (
             <EnvWarningBanner
               conflicts={envConflicts}

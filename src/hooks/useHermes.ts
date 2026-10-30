@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
-import { hermesApi } from "@/lib/api/hermes";
+import { hermesApi, HermesWebUiUnreachableError } from "@/lib/api/hermes";
 import { providersApi } from "@/lib/api/providers";
 import { settingsApi } from "@/lib/api/settings";
 import type { HermesMemoryKind } from "@/types";
@@ -170,6 +170,13 @@ export function useOpenHermesWebUI(onOffline?: () => void) {
       try {
         await hermesApi.openWebUI(path);
       } catch (error) {
+        if (error instanceof HermesWebUiUnreachableError) {
+          // Web: there is no terminal to launch the dashboard in — tell where to look.
+          toast.error(
+            t("hermes.webui.unreachableRemote", { port: error.port }),
+          );
+          return;
+        }
         const detail = extractErrorMessage(error);
         if (detail === HERMES_WEB_OFFLINE_ERROR) {
           if (onOffline) {

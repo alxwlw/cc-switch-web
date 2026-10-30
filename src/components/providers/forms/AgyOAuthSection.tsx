@@ -2,6 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { authApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -120,6 +121,14 @@ export const AgyOAuthSection: React.FC<AgyOAuthSectionProps> = ({
         defaultValue: "用 Google 登录",
       })}
       onAdd={addAccount}
+      loginUnavailableText={
+        isWeb
+          ? t("authCenter.agy.webLoginUnavailable", {
+              defaultValue:
+                "Antigravity 登录通过服务器上的本地回环回调完成，请在服务器的桌面应用里登录；这里可以切换和移除账号。",
+            })
+          : undefined
+      }
       defaultLabel={t("authCenter.agy.current", {
         defaultValue: "agy 在用",
       })}

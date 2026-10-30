@@ -1,3 +1,4 @@
+import { isWeb } from "@/lib/api/adapter";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -129,7 +130,8 @@ export function OpenTerminalDialog({
   const { data: agyStatus } = useQuery({
     queryKey: ["managed-auth-status", "agy_oauth"],
     queryFn: () => authApi.authGetStatus("agy_oauth"),
-    enabled: boundAgyAccount !== null,
+    // WEB-00: auth_get_status не поддержан (диалог в web недостижим — вход disabled; запросы выключены на всякий случай) — снимет WEB-02
+    enabled: !isWeb && boundAgyAccount !== null,
   });
   const agyWillSwitch =
     boundAgyAccount !== null &&
@@ -138,6 +140,8 @@ export function OpenTerminalDialog({
   const { data: agyRunning } = useQuery({
     queryKey: ["agy-running", provider?.id],
     queryFn: () => authApi.agyAccountIsRunning(),
+    // WEB-00: agy_account_is_running не поддержан; в web agyStatus выключен (выше) → agyWillSwitch
+    // всегда false, отдельный гейт не нужен — desktop-only (терминал на сервере не открыть)
     enabled: agyWillSwitch,
     staleTime: 0,
   });

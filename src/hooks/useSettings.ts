@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { providersApi, settingsApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { syncCurrentProvidersLiveSafe } from "@/utils/postChangeSync";
 import {
   invalidatePiDirectoryCaches,
@@ -252,7 +253,9 @@ export function useSettings(): UseSettingsResult {
         await saveMutation.mutateAsync(payload);
 
         // 如果开机自启状态改变，调用系统 API
+        // WEB-00: set_auto_launch не поддержан (автозапуск ОС — desktop-only, в web не обслуживается)
         if (
+          !isWeb &&
           payload.launchOnStartup !== undefined &&
           payload.launchOnStartup !== data?.launchOnStartup
         ) {
@@ -396,12 +399,18 @@ export function useSettings(): UseSettingsResult {
 
         await saveMutation.mutateAsync(payload);
 
-        await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
+        // WEB-00: set_app_config_dir_override не поддержан; без пропуска save падает уже после
+        // успешного save_settings (fake failure) — снимет WEB-26
+        if (!isWeb) {
+          await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
+        }
         // 基准值换成刚存的：设置页不卸载，下次比较和「需要重启」都只跟真正没保存的改动走
         commitAppConfigDir(sanitizedAppDir);
 
         // 只在开机自启状态真正改变时调用系统 API
+        // WEB-00: set_auto_launch не поддержан (автозапуск ОС — desktop-only, в web не обслуживается)
         if (
+          !isWeb &&
           payload.launchOnStartup !== undefined &&
           payload.launchOnStartup !== data?.launchOnStartup
         ) {
@@ -500,7 +509,9 @@ export function useSettings(): UseSettingsResult {
           await invalidatePiDirectoryCaches(queryClient, "omp");
         }
 
-        const appDirChanged = sanitizedAppDir !== (previousAppDir ?? undefined);
+        // WEB-00: data dir в web не меняется (override не поддержан), restart-prompt недостижим — снимет WEB-26
+        const appDirChanged =
+          !isWeb && sanitizedAppDir !== (previousAppDir ?? undefined);
         setRequiresRestart(appDirChanged);
 
         if (!options?.silent) {

@@ -1,5 +1,5 @@
 use indexmap::IndexMap;
-use tauri::{Emitter, Manager, State};
+use tauri::{Manager, State};
 
 use crate::app_config::AppType;
 use crate::commands::copilot::CopilotAuthState;
@@ -518,12 +518,17 @@ pub(crate) fn suggested_claude_desktop_routes(
 pub async fn queryProviderUsage(
     app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
-    copilot_state: State<'_, CopilotAuthState>,
-    xai_state: State<'_, XaiOAuthState>,
     #[allow(non_snake_case)] providerId: String, // 使用 camelCase 匹配前端
     app: String,
 ) -> Result<crate::provider::UsageResult, String> {
+    use crate::services::{publish_usage, UsageKind};
+
     let app_type = AppType::from_str(&app).map_err(|e| e.to_string())?;
+    // Managers come from `AppState` (same `Arc`s the desktop `State` wrappers
+    // hold — see `AppState::managed_auth_states`), so the headless web route
+    // can call the inner with the same wiring.
+    let copilot_state = CopilotAuthState(state.copilot_auth.clone());
+    let xai_state = XaiOAuthState(state.xai_oauth.clone());
     // inner 可能以两种形式失败：
     //   1) 返回 Ok(UsageResult { success: false, .. }) —— 确定性失败（401、脚本
     //      报错、未知供应商等）。写进 UsageCache 并刷新托盘，让
@@ -541,18 +546,14 @@ pub async fn queryProviderUsage(
     )
     .await;
     if let Ok(snapshot) = &inner {
-        let payload = serde_json::json!({
-            "kind": "script",
-            "appType": app_type.as_str(),
-            "providerId": &providerId,
-            "data": snapshot,
-        });
-        if let Err(e) = app_handle.emit("usage-cache-updated", payload) {
-            log::error!("emit usage-cache-updated (script) 失败: {e}");
-        }
-        state
-            .usage_cache
-            .put_script(app_type, providerId, snapshot.clone());
+        publish_usage(
+            &state,
+            UsageKind::Script {
+                app_type: app_type.clone(),
+                provider_id: providerId.clone(),
+                data: snapshot.clone(),
+            },
+        );
         crate::tray::schedule_tray_refresh(&app_handle);
     }
     inner
@@ -602,7 +603,10 @@ fn resolve_coding_plan_credentials(
     }
 }
 
-async fn query_provider_usage_inner(
+/// Shared with the headless web route: handle-free, takes the auth managers
+/// as explicit wrappers so web callers construct them from `AppState` fields
+/// (same `Arc`s as `AppState::managed_auth_states`).
+pub(crate) async fn query_provider_usage_inner(
     state: &AppState,
     copilot_state: &CopilotAuthState,
     xai_state: &XaiOAuthState,
@@ -947,7 +951,6 @@ pub fn update_providers_sort_order(
 
 use crate::provider::UniversalProvider;
 use std::collections::HashMap;
-use tauri::AppHandle;
 
 #[derive(Clone, serde::Serialize)]
 pub struct UniversalProviderSyncedEvent {
@@ -955,14 +958,40 @@ pub struct UniversalProviderSyncedEvent {
     pub id: String,
 }
 
-fn emit_universal_provider_synced(app: &AppHandle, action: &str, id: &str) {
-    let _ = app.emit(
+fn emit_universal_provider_synced(state: &AppState, action: &str, id: &str) {
+    state.events.emit(
         "universal-provider-synced",
         UniversalProviderSyncedEvent {
             action: action.to_string(),
             id: id.to_string(),
         },
     );
+}
+
+/// Upsert + `universal-provider-synced` on success. Shared by the Tauri
+/// command and the web API so both emit the same event.
+pub fn upsert_universal_provider_emit(
+    state: &AppState,
+    provider: UniversalProvider,
+) -> Result<bool, AppError> {
+    let id = provider.id.clone();
+    let result = ProviderService::upsert_universal(state, provider)?;
+    emit_universal_provider_synced(state, "upsert", &id);
+    Ok(result)
+}
+
+/// Delete + `universal-provider-synced` on success.
+pub fn delete_universal_provider_emit(state: &AppState, id: &str) -> Result<bool, AppError> {
+    let result = ProviderService::delete_universal(state, id)?;
+    emit_universal_provider_synced(state, "delete", id);
+    Ok(result)
+}
+
+/// Sync to apps + `universal-provider-synced` on success.
+pub fn sync_universal_provider_emit(state: &AppState, id: &str) -> Result<bool, AppError> {
+    let result = ProviderService::sync_universal_to_apps(state, id)?;
+    emit_universal_provider_synced(state, "sync", id);
+    Ok(result)
 }
 
 #[tauri::command]
@@ -982,45 +1011,20 @@ pub fn get_universal_provider(
 
 #[tauri::command]
 pub fn upsert_universal_provider(
-    app: AppHandle,
     state: State<'_, AppState>,
     provider: UniversalProvider,
 ) -> Result<bool, String> {
-    let id = provider.id.clone();
-    let result =
-        ProviderService::upsert_universal(state.inner(), provider).map_err(|e| e.to_string())?;
-
-    emit_universal_provider_synced(&app, "upsert", &id);
-
-    Ok(result)
+    upsert_universal_provider_emit(state.inner(), provider).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn delete_universal_provider(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<bool, String> {
-    let result =
-        ProviderService::delete_universal(state.inner(), &id).map_err(|e| e.to_string())?;
-
-    emit_universal_provider_synced(&app, "delete", &id);
-
-    Ok(result)
+pub fn delete_universal_provider(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+    delete_universal_provider_emit(state.inner(), &id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn sync_universal_provider(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<bool, String> {
-    let result =
-        ProviderService::sync_universal_to_apps(state.inner(), &id).map_err(|e| e.to_string())?;
-
-    emit_universal_provider_synced(&app, "sync", &id);
-
-    Ok(result)
+pub fn sync_universal_provider(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+    sync_universal_provider_emit(state.inner(), &id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1351,5 +1355,97 @@ mod native_query_credentials_tests {
 
         assert_eq!(base_url, "https://provider.zenmux.example/v1");
         assert_eq!(api_key, "sk-provider");
+    }
+}
+
+#[cfg(test)]
+mod appstate_wiring_tests {
+    use super::{query_provider_usage_inner, CopilotAuthState};
+    use crate::app_config::AppType;
+    use crate::commands::XaiOAuthState;
+    use crate::database::Database;
+    use crate::provider::{Provider, ProviderMeta, UsageScript};
+    use crate::store::AppState;
+    use serial_test::serial;
+    use std::sync::Arc;
+
+    struct EnvGuard(Option<std::ffi::OsString>);
+    impl EnvGuard {
+        fn set(path: &std::path::Path) -> Self {
+            let prev = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", path);
+            Self(prev)
+        }
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.0 {
+                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
+
+    fn test_state() -> (tempfile::TempDir, EnvGuard, AppState) {
+        let home = tempfile::tempdir().unwrap();
+        let env = EnvGuard::set(home.path());
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        (home, env, state)
+    }
+
+    #[test]
+    #[serial]
+    fn inner_wrappers_resolve_the_same_arcs_as_managed_states() {
+        let (_home, _env, state) = test_state();
+        let managed = state.managed_auth_states();
+        let copilot = CopilotAuthState(state.copilot_auth.clone());
+        let xai = XaiOAuthState(state.xai_oauth.clone());
+        assert!(Arc::ptr_eq(&copilot.0, &state.copilot_auth));
+        assert!(Arc::ptr_eq(&xai.0, &state.xai_oauth));
+        assert!(Arc::ptr_eq(&copilot.0, &managed.copilot.0));
+        assert!(Arc::ptr_eq(&xai.0, &managed.xai.0));
+    }
+
+    /// Disabled `official_subscription` script short-circuits to a deterministic
+    /// failure snapshot before touching any manager or the network.
+    #[tokio::test]
+    #[serial]
+    async fn inner_disabled_official_subscription_returns_failure_snapshot() {
+        let (_home, _env, state) = test_state();
+        let mut provider = Provider::with_id(
+            "off-sub".to_string(),
+            "Off Sub".to_string(),
+            serde_json::json!({}),
+            None,
+        );
+        provider.meta = Some(ProviderMeta {
+            usage_script: Some(UsageScript {
+                enabled: false,
+                language: "javascript".to_string(),
+                code: String::new(),
+                timeout: Some(10),
+                api_key: None,
+                base_url: None,
+                access_token: None,
+                user_id: None,
+                template_type: Some("official_subscription".to_string()),
+                auto_query_interval: None,
+                coding_plan_provider: None,
+                access_key_id: None,
+                secret_access_key: None,
+                team_organization_id: None,
+                team_project_id: None,
+            }),
+            ..Default::default()
+        });
+        state.db.save_provider("claude", &provider).unwrap();
+
+        let copilot = CopilotAuthState(state.copilot_auth.clone());
+        let xai = XaiOAuthState(state.xai_oauth.clone());
+        let result = query_provider_usage_inner(&state, &copilot, &xai, AppType::Claude, "off-sub")
+            .await
+            .expect("disabled script is a deterministic Ok");
+        assert!(!result.success);
+        assert_eq!(result.error.as_deref(), Some("Usage query is disabled"));
     }
 }

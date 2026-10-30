@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { HoverTip } from "@/components/ui/hover-tip";
+import { isWeb } from "@/lib/api/adapter";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { fieldClass } from "@/components/ui/input";
 import { useSessionUsageSummary } from "@/lib/query/usage";
@@ -128,10 +129,12 @@ export const SessionReaderHeader = memo(function SessionReaderHeader({
         ? t("sessionManager.resumeCommandCopied", {
             defaultValue: "已复制恢复命令",
           })
-        : t("sessionManager.resumeCopiedNoLaunch", {
-            defaultValue:
-              "已复制恢复命令。这个平台暂不支持一键恢复，请在项目目录下粘贴到终端运行",
-          }),
+        : isWeb
+          ? t("web.sessionResumeCopied")
+          : t("sessionManager.resumeCopiedNoLaunch", {
+              defaultValue:
+                "已复制恢复命令。这个平台暂不支持一键恢复，请在项目目录下粘贴到终端运行",
+            }),
     );
 
   let resume: ReactNode;

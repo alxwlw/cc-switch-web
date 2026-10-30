@@ -21,7 +21,9 @@ vi.mock("@/lib/api/usage", () => ({
 import {
   MODELS_DEV_STARTUP_SYNC_INTERVAL_MS,
   syncModelsDevPricing,
+  syncModelsDevPricingOnStartup,
 } from "@/lib/modelsDevAutoSync";
+import { setWeb } from "../helpers/web";
 
 const state = {
   configPath: "C:/Users/test/.cc-switch/model-pricing.json",
@@ -195,5 +197,48 @@ describe("syncModelsDevPricing", () => {
 
     await expect(syncModelsDevPricing()).rejects.toThrow("offline");
     expect(recordModelsDevSyncResult).toHaveBeenCalledWith(null, "offline");
+  });
+});
+
+describe("syncModelsDevPricing · batch failure", () => {
+  it("rejects and records the error when the batch update fails, so the UI never reports an update", async () => {
+    getModelsDevSyncConfig.mockResolvedValue(state);
+    updateModelPricingBatch.mockRejectedValue(new Error("invalid entry"));
+    recordModelsDevSyncResult.mockResolvedValue(undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          relay: {
+            models: {
+              "custom-model": { name: "Custom", cost: { input: 1, output: 2 } },
+            },
+          },
+        }),
+      }),
+    );
+
+    await expect(syncModelsDevPricing(state, true)).rejects.toThrow(
+      "invalid entry",
+    );
+    expect(recordModelsDevSyncResult).toHaveBeenCalledWith(
+      null,
+      "invalid entry",
+    );
+  });
+});
+
+describe("syncModelsDevPricingOnStartup · web", () => {
+  it("is not skipped in web: reads the sync config like on desktop", async () => {
+    getModelsDevSyncConfig.mockReset().mockResolvedValue({
+      ...state,
+      config: { ...state.config, autoSyncEnabled: false },
+    });
+    setWeb(true);
+
+    const result = await syncModelsDevPricingOnStartup();
+    expect(getModelsDevSyncConfig).toHaveBeenCalled();
+    expect(result.skipped).toBe(true);
   });
 });

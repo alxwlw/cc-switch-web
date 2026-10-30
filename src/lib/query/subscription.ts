@@ -91,6 +91,7 @@ export function useSubscriptionQuota(
   const query = useQuery({
     queryKey: subscriptionKeys.quota(appId),
     queryFn: () => subscriptionApi.getQuota(appId),
+    // WEB-04: quota-запросы работают в web (CLI читает файлы на сервере)
     enabled:
       enabled &&
       ["claude", "codex", "gemini", "grokbuild", "agy"].includes(appId),
@@ -138,6 +139,7 @@ export function useCodexOauthQuotaByAccountId(
   const query = useQuery({
     queryKey: ["codex_oauth", "quota", accountId ?? "default"],
     queryFn: () => subscriptionApi.getCodexOauthQuota(accountId),
+    // WEB-04: работает в web через GET /api/subscription/codex-oauth/:accountId/quota
     enabled,
     refetchInterval,
     refetchIntervalInBackground: Boolean(refetchInterval),
@@ -194,7 +196,8 @@ export function useXaiOauthQuotaByAccountId(
   const query = useQuery({
     queryKey: ["xai_oauth", "quota", accountId ?? "default"],
     queryFn: () => subscriptionApi.getXaiOauthQuota(accountId),
-    enabled,
+    // WEB-04: работает в web через GET /api/subscription/xai-oauth/:accountId/quota
+    enabled: enabled,
     refetchInterval: autoQuery ? REFETCH_INTERVAL : false,
     refetchIntervalInBackground: autoQuery,
     refetchOnWindowFocus: autoQuery,
@@ -225,7 +228,8 @@ export function useAgyAccountQuota(
   const query = useQuery({
     queryKey: ["agy_oauth", "quota", accountId],
     queryFn: () => subscriptionApi.getAgyAccountQuota(accountId),
-    enabled,
+    // WEB-04: работает в web через GET /api/subscription/agy/:accountId/quota
+    enabled: enabled,
     refetchInterval,
     refetchIntervalInBackground: Boolean(refetchInterval),
     refetchOnWindowFocus: Boolean(refetchInterval),

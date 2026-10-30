@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { FormProvider, useForm } from "react-hook-form";
 import { OpenClawFormFields } from "@/components/providers/forms/OpenClawFormFields";
+import { setWeb } from "../helpers/web";
 
 const models = [
   {
@@ -55,6 +56,14 @@ function renderForm() {
 }
 
 describe("OpenClawFormFields model editor", () => {
+  it("web: fetch-models button works", () => {
+    setWeb(true);
+    renderForm();
+    expect(
+      screen.getByRole("button", { name: "providerForm.fetchModels" }),
+    ).toBeEnabled();
+  });
+
   it("uses the family model-row layout without inferred model roles", () => {
     renderForm();
 

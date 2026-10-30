@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SkillsStorageSheet } from "@/components/skills/SkillsStorageSheet";
+import { setWeb } from "../helpers/web";
 
 const m = vi.hoisted(() => ({
   settings: {
@@ -225,5 +226,84 @@ describe("SkillsStorageSheet", () => {
     await userEvent.click(screen.getByRole("button", { name: "common.done" }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("web: radios stay enabled and the server path is shown with a copy button instead of open-folder", async () => {
+    setWeb(true);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    renderDialog();
+
+    expect(radio("skills.storageSheet.locationCcSwitch")).toBeEnabled();
+    expect(radio(/skills\.storageSheet\.locationUnified/)).toBeEnabled();
+    expect(screen.getByText("~/.cc-switch/skills")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "skills.storageSheet.openFolderAria",
+      }),
+    ).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", { name: "skills.storageSheet.copyPathAria" }),
+    );
+    expect(writeText).toHaveBeenCalledWith("/Users/jason/.cc-switch/skills");
+    expect(m.openDir).not.toHaveBeenCalled();
+    expect(m.toastSuccess).toHaveBeenCalledWith(
+      "skills.storageSheet.pathCopied",
+      { closeButton: true },
+    );
+    // the button reads "copy", not "open"
+    expect(
+      screen.getByRole("button", { name: "skills.storageSheet.copyPathAria" }),
+    ).toHaveTextContent("skills.storageSheet.copyPath");
+  });
+
+  it("web: a clipboard failure is reported as an error toast", async () => {
+    setWeb(true);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+      configurable: true,
+    });
+    renderDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "skills.storageSheet.copyPathAria" }),
+    );
+    await waitFor(() =>
+      expect(m.toastError).toHaveBeenCalledWith("common.error", {
+        description: "denied",
+      }),
+    );
+    expect(m.toastSuccess).not.toHaveBeenCalled();
+  });
+
+  it("web: sync method and resync keep working", async () => {
+    setWeb(true);
+    m.resync.mockResolvedValue([{ app: "claude", ok: true, failedSkills: [] }]);
+    renderDialog();
+
+    await userEvent.click(radio(/skills\.storageSheet\.syncCopy/));
+    expect(m.updateSettings).toHaveBeenCalledWith({ skillSyncMethod: "copy" });
+    await userEvent.click(
+      screen.getByRole("button", { name: "skills.storageSheet.resync" }),
+    );
+    await waitFor(() => expect(m.resync).toHaveBeenCalledTimes(1));
+  });
+
+  it("desktop: the location radios and open-folder are enabled", () => {
+    renderDialog();
+    expect(radio("skills.storageSheet.locationCcSwitch")).toBeEnabled();
+    expect(radio(/skills\.storageSheet\.locationUnified/)).toBeEnabled();
+    expect(
+      screen.getByRole("button", {
+        name: "skills.storageSheet.openFolderAria",
+      }),
+    ).toBeEnabled();
+    expect(
+      screen.queryByRole("button", {
+        name: "skills.storageSheet.copyPathAria",
+      }),
+    ).toBeNull();
   });
 });

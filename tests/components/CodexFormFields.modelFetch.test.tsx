@@ -22,6 +22,7 @@ import {
   showFetchModelsError,
   type FetchedModel,
 } from "@/lib/api/model-fetch";
+import { setWeb } from "../helpers/web";
 
 vi.mock("@/lib/api/copilot", () => ({
   copilotGetModels: vi.fn(),
@@ -161,6 +162,31 @@ describe("Codex model-fetch lifecycle", () => {
   });
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it.each(providerKinds)(
+    "web: every fetch-models button works in web (%s)",
+    (kind) => {
+      setWeb(true);
+      render(<Harness {...makeProps(kind)} />);
+      const buttons = screen.getAllByRole("button", {
+        name: /^providerForm\.(fetchModels|modelPicker\.title)$/,
+        hidden: true,
+      });
+      expect(buttons.length).toBeGreaterThan(0);
+      for (const button of buttons) expect(button).toBeEnabled();
+    },
+  );
+
+  it("web: the single-model fetch button (no catalog editor) works", () => {
+    setWeb(true);
+    render(
+      <Harness {...makeProps("config")} onCatalogModelsChange={undefined} />,
+    );
+    const button = screen.getByRole("button", {
+      name: "providerForm.fetchModels",
+    });
+    expect(button).toBeEnabled();
   });
 
   it("fetches only models supporting the selected Copilot protocol", async () => {

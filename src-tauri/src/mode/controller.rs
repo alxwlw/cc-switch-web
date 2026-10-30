@@ -3128,6 +3128,72 @@ mod mode_tests {
         }
     }
 
+    /// 无头服务的启动：崩溃时写到一半的接管，经 recover_on_startup 补完后，
+    /// run_headless_startup 重新接上并拉起代理（desktop 的同一段）。
+    #[tokio::test]
+    #[serial]
+    async fn headless_startup_after_a_crash_reattaches_and_brings_the_proxy_up() {
+        let _home = Home::new();
+        seed_settings(USER_SETTINGS);
+        let state = state_with(
+            AppType::Claude,
+            &[claude("a", "https://a.example", json!({}))],
+            "a",
+        )
+        .await;
+        failpoint::crash_at(Some("published:0"));
+        let result = enter(&state, &AppType::Claude, false).await;
+        failpoint::crash_at(None);
+        assert!(result.is_err());
+        // The process "died": no proxy survives, the journal and DB flags stay.
+        if state.proxy_service.is_running().await {
+            state.proxy_service.stop().await.unwrap();
+        }
+        assert!(!state.proxy_service.is_running().await);
+
+        crate::mode::operation::recover_on_startup(&state.db);
+        crate::bootstrap::run_headless_startup(&state).await;
+
+        assert!(state.proxy_service.is_running().await);
+        assert!(mode(&AppType::Claude).attached);
+        assert_eq!(
+            settings()["env"]["ANTHROPIC_AUTH_TOKEN"],
+            PROXY_TOKEN_PLACEHOLDER
+        );
+        assert!(state::pending(&DeviceStore::for_device(), "claude")
+            .unwrap()
+            .is_none());
+        assert!(take_startup_attach_failures().is_empty());
+        state.proxy_service.stop().await.unwrap();
+    }
+
+    /// 无头服务的退出：客户端文件逐字节回到用户原文，代理停掉；模式和路由留给下次启动。
+    #[tokio::test]
+    #[serial]
+    async fn shutdown_cleanup_restores_the_live_files_byte_for_byte_and_stops_the_proxy() {
+        let _home = Home::new();
+        // Proxy fields are rewritten at the end of `env`, so the user's own file
+        // keeps them last: the restore is then identical to the byte.
+        const ORIGINAL: &str = "{\n  \"env\": {\n    \"DISABLE_TELEMETRY\": \"1\",\n    \"ANTHROPIC_BASE_URL\": \"https://a.example\",\n    \"ANTHROPIC_AUTH_TOKEN\": \"sk-a\",\n    \"ANTHROPIC_MODEL\": \"claude-sonnet-4-6\"\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash\"\n    ]\n  }\n}\n";
+        seed_settings(ORIGINAL);
+        let state = state_with(
+            AppType::Claude,
+            &[claude("a", "https://a.example", json!({}))],
+            "a",
+        )
+        .await;
+        enter(&state, &AppType::Claude, false).await.expect("enter");
+        assert!(state.proxy_service.is_running().await);
+        assert_ne!(fs::read_to_string(settings_path()).unwrap(), ORIGINAL);
+
+        crate::bootstrap::shutdown_cleanup(&state).await;
+
+        assert_eq!(fs::read_to_string(settings_path()).unwrap(), ORIGINAL);
+        assert!(!state.proxy_service.is_running().await);
+        assert!(mode(&AppType::Claude).is_proxy());
+        assert!(!mode(&AppType::Claude).attached);
+    }
+
     #[tokio::test]
     #[serial]
     async fn startup_moves_legacy_takeover_state_over_to_the_modes() {
@@ -8722,5 +8788,101 @@ model_provider = "c"
         assert!(err.to_string().contains("requires_openai_auth"), "{err}");
         assert!(state.db.get_provider_by_id("c", "codex").unwrap().is_none());
         assert_eq!(codex_text(), before);
+    }
+
+    fn drain_switch_events(
+        rx: &mut tokio::sync::broadcast::Receiver<crate::events::Event>,
+    ) -> Vec<Value> {
+        let mut out = Vec::new();
+        while let Ok(event) = rx.try_recv() {
+            if event.name == "provider-switched" {
+                out.push(event.payload);
+            }
+        }
+        out
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn failover_switch_without_an_app_handle_records_the_route_and_emits_on_the_bus() {
+        let _home = Home::new();
+        seed_settings(USER_SETTINGS);
+        let state = state_with(
+            AppType::Claude,
+            &[
+                claude("a", "https://a.example", json!({})),
+                claude("b", "https://b.example", json!({})),
+            ],
+            "a",
+        )
+        .await;
+        enter(&state, &AppType::Claude, false).await.expect("enter");
+        let mut rx = state.events.subscribe();
+
+        let switched = crate::proxy::failover_switch::FailoverSwitchManager::new()
+            .try_switch(&state, None, "claude", "b", "B")
+            .await
+            .expect("try_switch");
+
+        assert!(switched);
+        assert_eq!(mode(&AppType::Claude).proxy_route.as_deref(), Some("b"));
+        assert_eq!(
+            drain_switch_events(&mut rx),
+            vec![json!({ "appType": "claude", "providerId": "b", "source": "failover" })]
+        );
+        exit(&state, &AppType::Claude).await.expect("exit");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn failover_switch_in_stack_mode_neither_moves_the_route_nor_emits() {
+        let _home = Home::new();
+        seed_settings(USER_SETTINGS);
+        let state = state_with(AppType::Claude, &stack_rows(), "a").await;
+        enter(&state, &AppType::Claude, true).await.expect("enter");
+        let mut rx = state.events.subscribe();
+
+        let switched = crate::proxy::failover_switch::FailoverSwitchManager::new()
+            .try_switch(&state, None, "claude", "kimi", "Kimi")
+            .await
+            .expect("try_switch");
+
+        assert!(!switched);
+        assert_eq!(in_use(&state, &AppType::Claude).as_deref(), Some("a"));
+        assert!(drain_switch_events(&mut rx).is_empty());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn resetting_a_breaker_switches_back_to_the_higher_priority_provider_via_the_bus() {
+        let _home = Home::new();
+        seed_settings(USER_SETTINGS);
+        let mut a = claude("a", "https://a.example", json!({}));
+        a.sort_index = Some(0);
+        let mut b = claude("b", "https://b.example", json!({}));
+        b.sort_index = Some(1);
+        let state = state_with(AppType::Claude, &[a, b], "a").await;
+        enter(&state, &AppType::Claude, false).await.expect("enter");
+        state.db.add_to_failover_queue("claude", "a").unwrap();
+        state.db.add_to_failover_queue("claude", "b").unwrap();
+        let mut config = state.db.get_proxy_config_for_app("claude").await.unwrap();
+        config.auto_failover_enabled = true;
+        state.db.update_proxy_config_for_app(config).await.unwrap();
+        // Failover had moved the route to b; a's breaker was open.
+        assert!(record_failover_route(&state, &AppType::Claude, "b")
+            .await
+            .unwrap());
+        let mut rx = state.events.subscribe();
+
+        crate::commands::reset_circuit_breaker_inner(&state, "a".into(), "claude".into())
+            .await
+            .expect("reset");
+
+        assert_eq!(mode(&AppType::Claude).proxy_route.as_deref(), Some("a"));
+        assert_eq!(
+            drain_switch_events(&mut rx),
+            vec![json!({ "appType": "claude", "providerId": "a", "source": "failover" })]
+        );
+        exit(&state, &AppType::Claude).await.expect("exit");
     }
 }

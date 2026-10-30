@@ -29,16 +29,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { settingsApi, type AppId } from "@/lib/api";
 import { useSettingsQuery } from "@/lib/query";
-import type { SettingsSection } from "@/lib/navigation";
+import { resolveSettingsSection, type SettingsSection } from "@/lib/navigation";
 import { AppPageHeader } from "@/components/shell/AppPageHeader";
 import { DirectoryInput } from "@/components/settings/DirectorySettings";
+import { DeepLinkPasteEntry } from "@/components/deeplink/DeepLinkPasteEntry";
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
 import { BackupListSection } from "@/components/settings/BackupListSection";
 import { WebdavSyncSection } from "@/components/settings/WebdavSyncSection";
 import { AboutSection } from "@/components/settings/AboutSection";
-import { RoutingSection } from "@/components/settings/sections/RoutingSection";
 import { GlobalProxySettings } from "@/components/settings/GlobalProxySettings";
 import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
+import { ServerLogViewer } from "@/components/settings/ServerLogViewer";
+import { RoutingSection } from "@/components/settings/sections/RoutingSection";
+import { isWeb } from "@/lib/api/adapter";
 import { GeneralSection } from "@/components/settings/sections/GeneralSection";
 import { AppConfigSection } from "@/components/settings/sections/AppConfigSection";
 import {
@@ -80,13 +83,15 @@ interface SettingsPageProps {
  * 开关类即时保存；路径类改完点本节的「保存」。
  */
 export function SettingsPage({
-  section,
+  section: requestedSection,
   appConfigScrollTarget,
   onImportSuccess,
   onOpenApps,
   onOpenApp,
 }: SettingsPageProps) {
   const { t } = useTranslation();
+  // WEB-00: скрытая в web секция (из любого входа) показывается как general; сейчас скрытых нет (network открыта WEB-23), откат сохранён для будущих гейтов
+  const section = resolveSettingsSection(requestedSection);
   const {
     settings,
     isLoading,
@@ -123,6 +128,7 @@ export function SettingsPage({
   } = useImportExport({ onImportSuccess });
 
   const [showRestartPrompt, setShowRestartPrompt] = useState(false);
+  const [logViewerOpen, setLogViewerOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -408,44 +414,47 @@ export function SettingsPage({
       case "data":
         return (
           <>
-            <SettingsBlock
-              title={t("settings.data.location")}
-              actions={
-                appConfigDirty ? (
-                  <Button
-                    variant="solid"
-                    size="compact"
-                    disabled={isSaving}
-                    onClick={() => void handleSave()}
+            {/* WEB-00: location/sync are desktop-only until WEB-26/11; backups (WEB-10) and import/export (WEB-09) work in web. */}
+            {!isWeb && (
+              <SettingsBlock
+                title={t("settings.data.location")}
+                actions={
+                  appConfigDirty ? (
+                    <Button
+                      variant="solid"
+                      size="compact"
+                      disabled={isSaving}
+                      onClick={() => void handleSave()}
+                    >
+                      {isSaving && (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      )}
+                      {t("common.save")}
+                    </Button>
+                  ) : null
+                }
+              >
+                <SettingsCard>
+                  <SettingsRow
+                    label={t("settings.appConfigDir")}
+                    help={{
+                      title: t("settings.appConfigDir"),
+                      body: t("settings.appConfigDirDescription"),
+                    }}
                   >
-                    {isSaving && (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    )}
-                    {t("common.save")}
-                  </Button>
-                ) : null
-              }
-            >
-              <SettingsCard>
-                <SettingsRow
-                  label={t("settings.appConfigDir")}
-                  help={{
-                    title: t("settings.appConfigDir"),
-                    body: t("settings.appConfigDirDescription"),
-                  }}
-                >
-                  <DirectoryInput
-                    label=""
-                    value={appConfigDir}
-                    resolvedValue={resolvedDirs.appConfig}
-                    placeholder={t("settings.browsePlaceholderApp")}
-                    onChange={updateAppConfigDir}
-                    onBrowse={browseAppConfigDir}
-                    onReset={resetAppConfigDir}
-                  />
-                </SettingsRow>
-              </SettingsCard>
-            </SettingsBlock>
+                    <DirectoryInput
+                      label=""
+                      value={appConfigDir}
+                      resolvedValue={resolvedDirs.appConfig}
+                      placeholder={t("settings.browsePlaceholderApp")}
+                      onChange={updateAppConfigDir}
+                      onBrowse={browseAppConfigDir}
+                      onReset={resetAppConfigDir}
+                    />
+                  </SettingsRow>
+                </SettingsCard>
+              </SettingsBlock>
+            )}
             <SettingsBlock
               title={t("settings.advanced.data.title")}
               help={{
@@ -465,6 +474,11 @@ export function SettingsPage({
                   onExport={exportConfig}
                   onClear={clearSelection}
                 />
+                {isWeb && (
+                  <div className="mt-4">
+                    <DeepLinkPasteEntry />
+                  </div>
+                )}
               </div>
             </SettingsBlock>
             <SettingsBlock
@@ -482,22 +496,24 @@ export function SettingsPage({
                 />
               </div>
             </SettingsBlock>
-            <SettingsBlock
-              title={t("settings.advanced.cloudSync.title")}
-              help={{
-                title: t("settings.advanced.cloudSync.title"),
-                body: t("settings.advanced.cloudSync.description"),
-              }}
-            >
-              <div className="rounded-panel border border-border bg-surface p-5">
-                <WebdavSyncSection
-                  config={settings.webdavSync}
-                  s3Config={settings.s3Sync}
-                  settings={settings}
-                  onAutoSave={handleAutoSave}
-                />
-              </div>
-            </SettingsBlock>
+            {!isWeb && (
+              <SettingsBlock
+                title={t("settings.advanced.cloudSync.title")}
+                help={{
+                  title: t("settings.advanced.cloudSync.title"),
+                  body: t("settings.advanced.cloudSync.description"),
+                }}
+              >
+                <div className="rounded-panel border border-border bg-surface p-5">
+                  <WebdavSyncSection
+                    config={settings.webdavSync}
+                    s3Config={settings.s3Sync}
+                    settings={settings}
+                    onAutoSave={handleAutoSave}
+                  />
+                </div>
+              </SettingsBlock>
+            )}
             <SettingsBlock
               title={t("settings.advanced.logConfig.title")}
               help={{
@@ -508,7 +524,9 @@ export function SettingsPage({
                 <Button
                   variant="neutral"
                   size="compact"
-                  onClick={() => void handleRevealLogFile()}
+                  onClick={() =>
+                    isWeb ? setLogViewerOpen(true) : void handleRevealLogFile()
+                  }
                 >
                   <FolderOpen className="h-3.5 w-3.5" />
                   {t("settings.advanced.logConfig.openLog")}
@@ -518,6 +536,12 @@ export function SettingsPage({
               <div className="rounded-panel border border-border bg-surface p-5">
                 <LogConfigPanel />
               </div>
+              {isWeb && (
+                <ServerLogViewer
+                  open={logViewerOpen}
+                  onClose={() => setLogViewerOpen(false)}
+                />
+              )}
             </SettingsBlock>
           </>
         );

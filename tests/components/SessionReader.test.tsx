@@ -19,6 +19,7 @@ import {
 } from "@/lib/query/sessions";
 import type { SessionMessage, SessionMeta } from "@/types";
 import { call, fixtures, msg, result, text } from "./sessions/reader/helpers";
+import { setWeb } from "../helpers/web";
 
 // jsdom 没有布局，虚拟列表一条都不渲染；这里让它把全部行都画出来
 vi.mock("@tanstack/react-virtual", () => ({
@@ -491,6 +492,45 @@ describe("SessionReader", () => {
     expect(name).toBe("claude 会话.md");
     expect(content).toContain("claude 会话");
     expect(content).toContain("cargo build 一直报 tokio_util 找不到");
+  });
+
+  it("web: 导出 Markdown 文件在工具栏和菜单里都可用，调用 export_session_markdown", async () => {
+    setWeb(true);
+    const exportMarkdown = vi
+      .spyOn(sessionsApi, "exportMarkdown")
+      .mockResolvedValue("claude 会话.md");
+    renderReader("claude", fixtures.claude);
+
+    const iconButton = screen.getByRole("button", {
+      name: "导出为 Markdown 文件",
+    });
+    expect(iconButton).toBeEnabled();
+    fireEvent.click(iconButton);
+    await waitFor(() => expect(exportMarkdown).toHaveBeenCalledTimes(1));
+    expect(exportMarkdown.mock.calls[0][0]).toBe("claude 会话.md");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "claude 会话 的更多操作" }),
+    );
+    const menuItem = await screen.findByRole("menuitem", {
+      name: "导出为 Markdown 文件",
+    });
+    expect(menuItem).not.toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(menuItem);
+    await waitFor(() => expect(exportMarkdown).toHaveBeenCalledTimes(2));
+  });
+
+  it("web: 图片照常请求 get_session_image 并显示为可放大的 <img>", async () => {
+    setWeb(true);
+    const getImage = vi.mocked(sessionsApi.getImage);
+
+    renderReader("claude", fixtures.claude);
+
+    expect(
+      await screen.findByRole("button", { name: /放大查看/ }),
+    ).toBeInTheDocument();
+    expect(getImage).toHaveBeenCalled();
+    expect(screen.queryByText("web.sessionImage")).not.toBeInTheDocument();
   });
 
   it("全部 / 对话 / 改动 三选一", () => {

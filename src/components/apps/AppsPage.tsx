@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import type { AppId } from "@/lib/api";
 import { providersApi } from "@/lib/api/providers";
+import { isWeb } from "@/lib/api/adapter";
 import type { ToolInstallationReport } from "@/lib/api/settings";
 import type { VisibleApps } from "@/types";
 import { DEFAULT_VISIBLE_APPS, orderAppIds } from "@/config/appConfig";
@@ -181,12 +182,15 @@ export function AppsPage() {
     queryKey: ["claude-desktop-status"],
     queryFn: () => providersApi.getClaudeDesktopStatus(),
     staleTime: 30_000,
+    // WEB-00: get_claude_desktop_status не поддержан — снимет WEB-19
+    enabled: !isWeb,
   });
 
   // 按「已安装 / 未安装」分两组。Claude Desktop 没有命令可探，用后端按数据目录 / 应用包推断的结果。
   // 首次探测还没出结果时不分组，免得各行探完一个跳一个；之后重新检查时沿用上次结果，位置不动。
   const rowInstalled = (row: Row): boolean | null => {
     if (row.kind === "desktop") {
+      // WEB-00: в web запрос выключен и остаётся pending => null, список без групп — снимет WEB-19
       return isDesktopStatusPending ? null : Boolean(desktopStatus?.installed);
     }
     const info = tools.toolVersionByName.get(row.tool);
@@ -483,6 +487,16 @@ export function AppsPage() {
         className="min-h-0 flex-1 overflow-y-auto scroll-stable"
       >
         <div ref={tableRef} className="px-6 pb-10 pt-4">
+          {isWeb && (
+            <p
+              className="mb-3 text-caption text-fg-2"
+              data-testid="apps-web-server-note"
+            >
+              {t("appsPage.webServerNote")}
+              {(tools.batchAction || tools.busyTools.size > 0) &&
+                ` ${t("appsPage.webLifecycleSlow")}`}
+            </p>
+          )}
           <div
             className={cn(
               APP_ROW_GRID,

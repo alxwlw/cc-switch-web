@@ -421,6 +421,7 @@ export function useProviderLimits(providerId: string, appType: string) {
   return useQuery({
     queryKey: usageKeys.limits(providerId, appType),
     queryFn: () => usageApi.checkProviderLimits(providerId, appType),
+    // WEB-04: работает в web через GET /api/:app/providers/:id/limits
     enabled: !!providerId && !!appType,
   });
 }

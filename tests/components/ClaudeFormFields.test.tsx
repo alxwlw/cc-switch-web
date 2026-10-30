@@ -10,6 +10,7 @@ import { useForm } from "react-hook-form";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ClaudeFormFields } from "@/components/providers/forms/ClaudeFormFields";
 import { Form } from "@/components/ui/form";
+import { setWeb } from "../helpers/web";
 
 const copilotApiMock = vi.hoisted(() => ({
   copilotGetModels: vi.fn(),
@@ -133,6 +134,16 @@ describe("ClaudeFormFields", () => {
     copilotApiMock.copilotGetModelsForAccount.mockResolvedValue([]);
     modelFetchApiMock.fetchCodexOauthModels.mockResolvedValue([]);
     modelFetchApiMock.fetchModelsForConfig.mockResolvedValue([]);
+  });
+
+  it("web: classic layout fetch-models button works", () => {
+    setWeb(true);
+    renderCopilotForm({ variant: "classic" });
+    const buttons = screen.getAllByRole("button", {
+      name: "providerForm.fetchModels",
+    });
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const button of buttons) expect(button).toBeEnabled();
   });
 
   it("不会在 Copilot 表单打开时自动获取模型列表", () => {

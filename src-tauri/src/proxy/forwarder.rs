@@ -26,12 +26,12 @@ use super::{
     types::{CopilotOptimizerConfig, OptimizerConfig, ProxyStatus, RectifierConfig},
     ProxyError,
 };
-use crate::commands::{CodexOAuthState, CopilotAuthState, XaiOAuthState};
 use crate::proxy::providers::copilot_auth::{CopilotAuthError, CopilotAuthManager};
 use crate::proxy::providers::copilot_model_map::{
     CopilotProtocol, CopilotTransport, ResolvedCopilotModel,
 };
 use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
+use crate::proxy::server::OAuthManagers;
 use crate::{
     app_config::AppType,
     provider::{CodexCopilotApiFormat, LocalProxyRequestOverrides, Provider},
@@ -42,7 +42,6 @@ use http::Extensions;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use tauri::Manager;
 use tokio::sync::RwLock;
 
 const PROXY_AUTH_PLACEHOLDER: &str = "PROXY_MANAGED";
@@ -350,6 +349,10 @@ pub struct RequestForwarder {
     failover_manager: Arc<FailoverSwitchManager>,
     /// AppHandle，用于发射事件和更新托盘
     app_handle: Option<tauri::AppHandle>,
+    /// OAuth 管理器（桌面与 headless 同源）
+    auth: Option<OAuthManagers>,
+    /// 应用状态：故障转移切换的路由记录与事件总线（未绑定则不切换）
+    app_state: Option<crate::store::AppState>,
     /// 请求开始时的"当前供应商 ID"（用于判断是否需要同步 UI/托盘）
     current_provider_id_at_start: String,
     /// 代理会话 ID（用于 Gemini Native shadow replay）
@@ -457,6 +460,8 @@ impl RequestForwarder {
         codex_chat_history: Arc<CodexChatHistoryStore>,
         failover_manager: Arc<FailoverSwitchManager>,
         app_handle: Option<tauri::AppHandle>,
+        auth: Option<OAuthManagers>,
+        app_state: Option<crate::store::AppState>,
         current_provider_id_at_start: String,
         session_id: String,
         session_client_provided: bool,
@@ -478,6 +483,8 @@ impl RequestForwarder {
             codex_chat_history,
             failover_manager,
             app_handle,
+            auth,
+            app_state,
             current_provider_id_at_start,
             session_id,
             session_client_provided,
@@ -653,14 +660,16 @@ impl RequestForwarder {
             if self.current_provider_id_at_start.as_str() != provider.id.as_str() {
                 status.failover_count += 1;
 
-                let fm = self.failover_manager.clone();
-                let ah = self.app_handle.clone();
-                let pid = provider.id.clone();
-                let pname = provider.name.clone();
-                let at = app_type_str.to_string();
-                tokio::spawn(async move {
-                    let _ = fm.try_switch(ah.as_ref(), &at, &pid, &pname).await;
-                });
+                if let Some(state) = self.app_state.clone() {
+                    let fm = self.failover_manager.clone();
+                    let ah = self.app_handle.clone();
+                    let pid = provider.id.clone();
+                    let pname = provider.name.clone();
+                    let at = app_type_str.to_string();
+                    tokio::spawn(async move {
+                        let _ = fm.try_switch(&state, ah.as_ref(), &at, &pid, &pname).await;
+                    });
+                }
             }
             refresh_success_rate(&mut status);
         }
@@ -1421,12 +1430,13 @@ impl RequestForwarder {
                 .and_then(|meta| meta.managed_account_id_for("codex_oauth"))
             {
                 Some(local_account_id) => {
-                    let app_handle = self.app_handle.as_ref().ok_or_else(|| {
-                        ProxyError::AuthError("Codex OAuth 认证不可用（无 AppHandle）".to_string())
+                    let auth = self.auth.as_ref().ok_or_else(|| {
+                        ProxyError::AuthError(
+                            "Codex OAuth 认证不可用（无 OAuth 管理器）".to_string(),
+                        )
                     })?;
-                    let codex_state = app_handle.state::<CodexOAuthState>();
-                    let chatgpt_account_id = codex_state
-                        .0
+                    let chatgpt_account_id = auth
+                        .codex
                         .chatgpt_account_id_for_account(&local_account_id)
                         .await
                         .map_err(|error| {
@@ -1677,9 +1687,8 @@ impl RequestForwarder {
         // GitHub Copilot 动态 endpoint 路由
         // 从 CopilotAuthManager 获取缓存的 API endpoint（支持企业版等非默认 endpoint）
         if is_copilot && !is_full_url {
-            if let Some(app_handle) = &self.app_handle {
-                let copilot_state = app_handle.state::<CopilotAuthState>();
-                let copilot_auth = copilot_state.0.read().await;
+            if let Some(auth) = &self.auth {
+                let copilot_auth = auth.copilot.read().await;
 
                 // 从 provider.meta 获取关联的 GitHub 账号 ID
                 let account_id = provider
@@ -2103,10 +2112,9 @@ impl RequestForwarder {
         let mut auth_headers = if let Some(mut auth) = adapter.extract_auth(provider) {
             // GitHub Copilot 特殊处理：从 CopilotAuthManager 获取真实 token
             if auth.strategy == AuthStrategy::GitHubCopilot {
-                if let Some(app_handle) = &self.app_handle {
-                    let copilot_state = app_handle.state::<CopilotAuthState>();
+                if let Some(proxy_auth) = &self.auth {
                     let copilot_auth: tokio::sync::RwLockReadGuard<'_, CopilotAuthManager> =
-                        copilot_state.0.read().await;
+                        proxy_auth.copilot.read().await;
 
                     // 从 provider.meta 获取关联的 GitHub 账号 ID（多账号支持）
                     let account_id = provider
@@ -2145,18 +2153,17 @@ impl RequestForwarder {
                         }
                     }
                 } else {
-                    log::error!("[Copilot] AppHandle 不可用");
+                    log::error!("[Copilot] OAuth 管理器不可用");
                     return Err(ProxyError::AuthError(
-                        "GitHub Copilot 认证不可用（无 AppHandle）".to_string(),
+                        "GitHub Copilot 认证不可用（无 OAuth 管理器）".to_string(),
                     ));
                 }
             }
 
             // Codex OAuth 特殊处理：从 CodexOAuthManager 获取真实 access_token
             if auth.strategy == AuthStrategy::CodexOAuth {
-                if let Some(app_handle) = &self.app_handle {
-                    let codex_state = app_handle.state::<CodexOAuthState>();
-                    let codex_auth = &codex_state.0;
+                if let Some(proxy_auth) = &self.auth {
+                    let codex_auth = &proxy_auth.codex;
 
                     // 从 provider.meta 获取关联的 ChatGPT 账号 ID
                     let account_id = provider
@@ -2212,9 +2219,9 @@ impl RequestForwarder {
                         }
                     }
                 } else {
-                    log::error!("[CodexOAuth] AppHandle 不可用");
+                    log::error!("[CodexOAuth] OAuth 管理器不可用");
                     return Err(ProxyError::AuthError(
-                        "Codex OAuth 认证不可用（无 AppHandle）".to_string(),
+                        "Codex OAuth 认证不可用（无 OAuth 管理器）".to_string(),
                     ));
                 }
             }
@@ -2223,10 +2230,9 @@ impl RequestForwarder {
             // sending the request. Invalid refresh credentials are persisted as
             // requiring re-authentication by the manager.
             if auth.strategy == AuthStrategy::XaiOAuth {
-                if let Some(app_handle) = &self.app_handle {
-                    let xai_state = app_handle.state::<XaiOAuthState>();
+                if let Some(proxy_auth) = &self.auth {
                     let xai_auth: tokio::sync::RwLockReadGuard<'_, XaiOAuthManager> =
-                        xai_state.0.read().await;
+                        proxy_auth.xai.read().await;
                     let account_id = provider
                         .meta
                         .as_ref()
@@ -2252,7 +2258,7 @@ impl RequestForwarder {
                     }
                 } else {
                     return Err(ProxyError::AuthError(
-                        "xAI OAuth 认证不可用（无 AppHandle）".to_string(),
+                        "xAI OAuth 认证不可用（无 OAuth 管理器）".to_string(),
                     ));
                 }
             }
@@ -3193,11 +3199,10 @@ impl RequestForwarder {
         };
         let model_id = model_id.to_string();
 
-        let Some(app_handle) = &self.app_handle else {
+        let Some(proxy_auth) = &self.auth else {
             return;
         };
-        let copilot_state = app_handle.state::<CopilotAuthState>();
-        let copilot_auth = copilot_state.0.read().await;
+        let copilot_auth = proxy_auth.copilot.read().await;
         let account_id = provider
             .meta
             .as_ref()
@@ -3240,14 +3245,13 @@ impl RequestForwarder {
                     "Codex Copilot requests require a non-empty string model".to_string(),
                 )
             })?;
-        let app_handle = self.app_handle.as_ref().ok_or_else(|| {
+        let proxy_auth = self.auth.as_ref().ok_or_else(|| {
             ProxyError::ConfigError(format!(
-                "GitHub Copilot capabilities for model {model_id} cannot be resolved: AppHandle unavailable"
+                "GitHub Copilot capabilities for model {model_id} cannot be resolved: OAuth manager unavailable"
             ))
         })?;
 
-        let copilot_state = app_handle.state::<CopilotAuthState>();
-        let copilot_auth = copilot_state.0.read().await;
+        let copilot_auth = proxy_auth.copilot.read().await;
         let account_id = provider
             .meta
             .as_ref()
@@ -3265,13 +3269,12 @@ impl RequestForwarder {
     }
 
     async fn copilot_model_vendor(&self, provider: &Provider, model_id: &str) -> Option<String> {
-        let Some(app_handle) = &self.app_handle else {
-            log::debug!("[Copilot] AppHandle unavailable, fallback to chat/completions");
+        let Some(proxy_auth) = &self.auth else {
+            log::debug!("[Copilot] OAuth manager unavailable, fallback to chat/completions");
             return None;
         };
 
-        let copilot_state = app_handle.state::<CopilotAuthState>();
-        let copilot_auth = copilot_state.0.read().await;
+        let copilot_auth = proxy_auth.copilot.read().await;
         let account_id = provider
             .meta
             .as_ref()
@@ -4751,6 +4754,8 @@ mod tests {
             codex_chat_history: Arc::new(CodexChatHistoryStore::default()),
             failover_manager: Arc::new(FailoverSwitchManager::new()),
             app_handle: None,
+            app_state: None,
+            auth: None,
             current_provider_id_at_start: String::new(),
             session_id: String::new(),
             session_client_provided: false,
@@ -6344,7 +6349,7 @@ mod tests {
             };
             if body["model"] == "gpt-5.5" {
                 assert!(matches!(&error, ProxyError::ConfigError(message)
-                    if message.contains("AppHandle") && message.contains("gpt-5.5")));
+                    if message.contains("OAuth manager unavailable") && message.contains("gpt-5.5")));
                 assert_eq!(
                     forwarder.categorize_proxy_error(&error, &copilot),
                     ErrorCategory::Retryable
@@ -6945,7 +6950,20 @@ mod tests {
 
     /// Codex Stack 请求的转发改写：身份头、模型名、托管 web_search。
     /// 在本机一个空闲端口上起假上游 `app`，返回它的地址。
+    ///
+    /// Only `POST` reaches `app`: peers on the dev host probe every fresh loopback listener with
+    /// `GET /`, and the scripted fakes popped a scripted response for it ("upstream script
+    /// exhausted", `bookkeeping::*` in about one full run in five). The forwarder only POSTs.
     async fn serve_upstream(app: axum::Router) -> String {
+        let app = app.layer(axum::middleware::from_fn(
+            |request: axum::extract::Request, next: axum::middleware::Next| async move {
+                if request.method() == http::Method::POST {
+                    next.run(request).await
+                } else {
+                    axum::response::IntoResponse::into_response(StatusCode::METHOD_NOT_ALLOWED)
+                }
+            },
+        ));
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
             .await
             .expect("bind upstream");
@@ -6954,6 +6972,28 @@ mod tests {
             axum::serve(listener, app).await.expect("serve upstream");
         });
         format!("http://{addr}")
+    }
+
+    /// A probe on the fake upstream's port must not reach the scripted handler.
+    #[tokio::test]
+    async fn serve_upstream_hands_only_posts_to_the_app() {
+        let hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = hits.clone();
+        let base = serve_upstream(axum::Router::new().fallback(move || {
+            let counter = counter.clone();
+            async move {
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                "ok"
+            }
+        }))
+        .await;
+        let client = reqwest::Client::new();
+        let probe = client.get(&base).send().await.expect("probe");
+        assert_eq!(probe.status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 0);
+        let post = client.post(&base).send().await.expect("post");
+        assert_eq!(post.status(), StatusCode::OK);
+        assert_eq!(hits.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     mod codex_stack {

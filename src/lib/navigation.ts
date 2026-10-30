@@ -1,4 +1,5 @@
 import type { AppId } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 
 /**
  * 主窗口的导航模型（v7）：侧栏选一个应用或一个全局页；设置单独占一屏。
@@ -42,6 +43,31 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   "data",
   "about",
 ];
+
+// WEB-00: секции целиком из desktop-only команд скрыты в web. network открыта WEB-23 (список пуст,
+// точка гейта остаётся здесь). routing открыта WEB-01 (failover-блок скрыт до фазы 28), data открыта WEB-24, но в web показывает только рабочие блоки (лог): остальное
+// гейтится в SettingsPage до WEB-26/09/10/11 (data). isWeb читается в момент вызова.
+const WEB_HIDDEN_SETTINGS_SECTIONS: SettingsSection[] = [];
+
+export function isSettingsSectionAvailable(section: SettingsSection): boolean {
+  return !(isWeb && WEB_HIDDEN_SETTINGS_SECTIONS.includes(section));
+}
+
+/** Скрытая в web секция (запрошенная, сохранённая, из ссылки) открывается как `general`. */
+export function resolveSettingsSection(
+  section: SettingsSection,
+): SettingsSection {
+  return isSettingsSectionAvailable(section) ? section : "general";
+}
+
+// WEB-00: экраны целиком из desktop-only команд скрываются в web через этот список.
+// Сейчас пуст: auth открыт WEB-02 (Copilot/Codex/xAI — этап 1, Kimi — этап 2),
+// skillsDiscovery — WEB-05, workspace/openclawConfig — WEB-15, hermesMemory — WEB-16.
+const WEB_HIDDEN_VIEWS: View[] = [];
+
+export function isViewAvailable(view: View): boolean {
+  return !(isWeb && WEB_HIDDEN_VIEWS.includes(view));
+}
 
 const APP_PAGES: AppPage[] = [
   "providers",
@@ -103,7 +129,10 @@ export function appPageBelongsTo(page: AppPage, app: AppId): boolean {
 
 export function readStoredView(): View {
   try {
-    return parseView(localStorage.getItem(VIEW_STORAGE_KEY)) ?? "providers";
+    const stored =
+      parseView(localStorage.getItem(VIEW_STORAGE_KEY)) ?? "providers";
+    // WEB-00: сохранённый view из WEB_HIDDEN_VIEWS в web не восстанавливается (список сейчас пуст, auth открыт WEB-02, ф.25)
+    return isViewAvailable(stored) ? stored : "providers";
   } catch {
     return "providers";
   }

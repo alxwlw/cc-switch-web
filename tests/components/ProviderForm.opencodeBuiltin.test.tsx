@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProviderForm } from "@/components/providers/forms/ProviderForm";
 import { server } from "../msw/server";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 const toastError = vi.hoisted(() => vi.fn());
 vi.mock("sonner", () => ({ toast: { error: toastError, success: vi.fn() } }));
@@ -64,6 +65,20 @@ describe("OpenCode built-in provider editing", () => {
     );
     return onSubmit;
   };
+
+  it("web: запрашивает get_opencode_live_provider_ids при открытии формы (WEB-14)", async () => {
+    setWeb(true);
+    let requests = 0;
+    server.use(
+      http.post("http://tauri.local/get_opencode_live_provider_ids", () => {
+        requests += 1;
+        return HttpResponse.json([]);
+      }),
+    );
+    renderOverride({ options: { apiKey: "test-key" } });
+    await screen.findByDisplayValue("test-key");
+    await waitFor(() => expect(requests).toBe(1));
+  });
 
   it.each([undefined, "@ai-sdk/openai-compatible"])(
     "edits an existing key-only override with npm %s without requiring models",

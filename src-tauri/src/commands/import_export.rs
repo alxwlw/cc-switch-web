@@ -16,7 +16,10 @@ use crate::services::skill::skill_state_write_guard;
 use crate::services::sync_protocol::sync_mutex;
 use crate::store::AppState;
 
-async fn run_with_database_restore_lock<T, Start, Fut>(start_operation: Start) -> T
+/// Serialises database-replacing operations (manual restore, SQL import) behind the
+/// global sync lock. Used by `restore_db_backup_file` (desktop command and web backup
+/// restore route); the web SQL import (`import_config_with`) takes the same lock.
+pub(crate) async fn run_with_database_restore_lock<T, Start, Fut>(start_operation: Start) -> T
 where
     Start: FnOnce() -> Fut,
     Fut: std::future::Future<Output = T>,
@@ -48,25 +51,23 @@ pub async fn export_config_to_file(
     .map_err(|e: AppError| e.to_string())
 }
 
-/// 从 SQL 备份导入数据库
-#[tauri::command]
-pub async fn import_config_from_file(
-    #[allow(non_snake_case)] filePath: String,
-    state: State<'_, AppState>,
-) -> Result<Value, String> {
-    let app_state_for_sync = state.inner().clone();
-    let db = app_state_for_sync.db.clone();
+/// Handle-free core of the SQL import (desktop file import and web text import):
+/// global restore lock -> skill-state guard -> `import` -> post-import sync.
+/// `import` runs under both locks and returns the safety backup id.
+pub(crate) async fn import_config_with<F>(state: AppState, import: F) -> Result<Value, AppError>
+where
+    F: FnOnce(&Database) -> Result<String, AppError> + Send + 'static,
+{
+    let db = state.db.clone();
     run_with_database_restore_lock(move || {
-        tauri::async_runtime::spawn_blocking(move || {
-            let path_buf = PathBuf::from(&filePath);
+        tokio::task::spawn_blocking(move || {
             let backup_id = {
                 // SQL restore replaces the `skills` table. Exclude local Skill
                 // mutations while the database image is being swapped.
                 let _skill_state_guard = skill_state_write_guard();
-                db.import_sql(&path_buf)?
+                import(&db)?
             };
-            let warning =
-                post_sync_warning_from_result(Ok(run_post_import_sync(&app_state_for_sync)));
+            let warning = post_sync_warning_from_result(Ok(run_post_import_sync(&state)));
             if let Some(msg) = warning.as_ref() {
                 log::warn!("[Import] post-import sync warning: {msg}");
             }
@@ -74,14 +75,27 @@ pub async fn import_config_from_file(
         })
     })
     .await
-    .map_err(|e| format!("导入配置失败: {e}"))?
-    .map_err(|e: AppError| e.to_string())
+    .map_err(|e| AppError::Message(format!("导入配置失败: {e}")))?
 }
 
+/// 从 SQL 备份导入数据库
 #[tauri::command]
-pub async fn sync_current_providers_live(state: State<'_, AppState>) -> Result<Value, String> {
-    let db = state.db.clone();
-    tauri::async_runtime::spawn_blocking(move || {
+pub async fn import_config_from_file(
+    #[allow(non_snake_case)] filePath: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    import_config_with(state.inner().clone(), move |db| {
+        db.import_sql(&PathBuf::from(&filePath))
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// Handle-free core of `sync_current_providers_live`.
+pub(crate) async fn sync_current_providers_live_core(
+    db: std::sync::Arc<Database>,
+) -> Result<Value, AppError> {
+    tokio::task::spawn_blocking(move || {
         let app_state = AppState::new(db);
         ProviderService::sync_current_to_live(&app_state)?;
         Ok::<_, AppError>(json!({
@@ -90,8 +104,14 @@ pub async fn sync_current_providers_live(state: State<'_, AppState>) -> Result<V
         }))
     })
     .await
-    .map_err(|e| format!("同步当前供应商失败: {e}"))?
-    .map_err(|e: AppError| e.to_string())
+    .map_err(|e| AppError::Message(format!("同步当前供应商失败: {e}")))?
+}
+
+#[tauri::command]
+pub async fn sync_current_providers_live(state: State<'_, AppState>) -> Result<Value, String> {
+    sync_current_providers_live_core(state.db.clone())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // ─── File dialogs ────────────────────────────────────────────
@@ -142,11 +162,11 @@ pub async fn open_zip_file_dialog<R: tauri::Runtime>(
 
 // ─── Database backup management ─────────────────────────────
 
-/// Manually create a database backup
-#[tauri::command]
-pub async fn create_db_backup(state: State<'_, AppState>) -> Result<String, String> {
-    let db = state.db.clone();
-    tauri::async_runtime::spawn_blocking(move || match db.backup_database_file()? {
+/// Handle-free core of `create_db_backup`: snapshot the DB, return the new file name.
+pub(crate) async fn create_db_backup_file(
+    db: std::sync::Arc<Database>,
+) -> Result<String, AppError> {
+    tokio::task::spawn_blocking(move || match db.backup_database_file()? {
         Some(path) => Ok(path
             .file_name()
             .map(|f| f.to_string_lossy().into_owned())
@@ -156,8 +176,15 @@ pub async fn create_db_backup(state: State<'_, AppState>) -> Result<String, Stri
         )),
     })
     .await
-    .map_err(|e| format!("Backup failed: {e}"))?
-    .map_err(|e: AppError| e.to_string())
+    .map_err(|e| AppError::Message(format!("Backup failed: {e}")))?
+}
+
+/// Manually create a database backup
+#[tauri::command]
+pub async fn create_db_backup(state: State<'_, AppState>) -> Result<String, String> {
+    create_db_backup_file(state.db.clone())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// List all database backup files
@@ -166,24 +193,23 @@ pub fn list_db_backups() -> Result<Vec<BackupEntry>, String> {
     Database::list_backups().map_err(|e| e.to_string())
 }
 
-/// Restore database from a backup file
-#[tauri::command]
-pub async fn restore_db_backup(
-    state: State<'_, AppState>,
+/// Handle-free core of `restore_db_backup`: global lock -> skill-state guard ->
+/// restore -> post-import sync (a sync warning is only logged). Returns the id
+/// of the safety backup taken before the restore (not the restored file name).
+pub(crate) async fn restore_db_backup_file(
+    state: AppState,
     filename: String,
-) -> Result<String, String> {
-    let app_state_for_sync = state.inner().clone();
-    let db = app_state_for_sync.db.clone();
+) -> Result<String, AppError> {
+    let db = state.db.clone();
     run_with_database_restore_lock(move || {
-        tauri::async_runtime::spawn_blocking(move || {
+        tokio::task::spawn_blocking(move || {
             let restored = {
                 let _skill_state_guard = skill_state_write_guard();
                 db.restore_from_backup(&filename)?
             };
-            let warning =
-                post_sync_warning_from_result(Ok(run_post_import_sync(&app_state_for_sync)));
+            let warning = post_sync_warning_from_result(Ok(run_post_import_sync(&state)));
             if let Some(message) = warning {
-                // This legacy command returns only the restored filename, so keep
+                // This legacy command returns only the safety backup id, so keep
                 // restore success and surface incomplete projection in the log.
                 log::warn!("[Restore] post-import sync warning: {message}");
             }
@@ -191,8 +217,18 @@ pub async fn restore_db_backup(
         })
     })
     .await
-    .map_err(|e| format!("Restore failed: {e}"))?
-    .map_err(|e: AppError| e.to_string())
+    .map_err(|e| AppError::Message(format!("Restore failed: {e}")))?
+}
+
+/// Restore database from a backup file
+#[tauri::command]
+pub async fn restore_db_backup(
+    state: State<'_, AppState>,
+    filename: String,
+) -> Result<String, String> {
+    restore_db_backup_file(state.inner().clone(), filename)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Rename a database backup file
@@ -242,8 +278,10 @@ pub async fn reveal_backup_location(id: String) -> Result<bool, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::run_with_database_restore_lock;
+    use super::{import_config_with, run_with_database_restore_lock};
+    use crate::database::Database;
     use crate::services::sync_protocol::sync_mutex;
+    use crate::store::AppState;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
@@ -274,5 +312,70 @@ mod tests {
             .expect("restore should start after lock release")
             .expect("blocking restore task should complete");
         assert!(entered.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn sql_import_starts_only_after_global_lock_release() {
+        let state = AppState::new(Arc::new(Database::memory().expect("memory db")));
+        let guard = sync_mutex().lock().await;
+        let entered = Arc::new(AtomicBool::new(false));
+        let entered_in_import = Arc::clone(&entered);
+        let import = import_config_with(state, move |_db| {
+            entered_in_import.store(true, Ordering::SeqCst);
+            // Fail the import so the post-import sync never touches the real HOME.
+            Err(crate::error::AppError::Message("stop".to_string()))
+        });
+        tokio::pin!(import);
+
+        assert!(
+            tokio::time::timeout(Duration::from_millis(40), import.as_mut())
+                .await
+                .is_err(),
+            "import must wait while another sync operation holds the global lock"
+        );
+        assert!(!entered.load(Ordering::SeqCst));
+
+        drop(guard);
+        let result = tokio::time::timeout(Duration::from_secs(5), import.as_mut())
+            .await
+            .expect("import should start after lock release");
+        assert!(entered.load(Ordering::SeqCst));
+        assert_eq!(
+            result.expect_err("closure error propagates").to_string(),
+            "stop"
+        );
+    }
+
+    #[tokio::test]
+    async fn sql_import_waits_for_skill_state_write_guard() {
+        use crate::services::skill::skill_state_write_guard;
+        let state = AppState::new(Arc::new(Database::memory().expect("memory db")));
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
+        let skill_guard = skill_state_write_guard();
+        let import = tokio::spawn(import_config_with(state, move |_db| {
+            let _ = tx.send(());
+            // Fail the import so the post-import sync never touches the real HOME.
+            Err(crate::error::AppError::Message("stop".to_string()))
+        }));
+
+        // No deterministic "blocked" signal exists for a std RwLock writer, so a
+        // short negative wait stands in; the positive half below is bounded by a
+        // channel, not a sleep.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            rx.try_recv().is_err(),
+            "import closure must not run while a Skill mutation holds the state guard"
+        );
+
+        drop(skill_guard);
+        tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("import should start after the skill guard is released")
+            .expect("closure signals start");
+        let result = import.await.expect("import task joins");
+        assert_eq!(
+            result.expect_err("closure error propagates").to_string(),
+            "stop"
+        );
     }
 }

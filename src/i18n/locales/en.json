@@ -388,6 +388,7 @@
       "title": "Turn off unified session history",
       "message": "When turned off, the Codex CLI goes back to separate session lists for the official subscription and third-party providers (the desktop app still shows all sessions). Sessions created while this was on can't be told apart, so they stay in the third-party history and the CLI won't show them under the official subscription.",
       "restoreBackup": "Restore the official sessions migrated at enable time back to the official history (exact restore from backup)",
+      "restoreBackupWeb": "Restore the official sessions migrated at enable time back to the official history on the server (exact restore from backup)",
       "confirm": "Turn off"
     },
     "usage": {
@@ -506,6 +507,15 @@
         "enabledDescription": "Controls cc-switch.log; request usage records and crash.log are unaffected",
         "openLog": "Open log",
         "openLogFailed": "Failed to open the log location: {{error}}",
+        "viewer": {
+          "title": "Server log",
+          "serverNote": "This is the log of the machine running cc-switch-web, not of this browser.",
+          "path": "Path on the server",
+          "unavailable": "No log yet or it cannot be read.",
+          "empty": "The log file is empty.",
+          "refresh": "Refresh",
+          "download": "Download"
+        },
         "level": "Log Level",
         "levelDescription": "Set the minimum log level to output",
         "levels": {
@@ -544,6 +554,10 @@
     "importPartialSuccess": "Config imported, but failed to sync to the current provider.",
     "importPartialHint": "Please manually reselect the provider to refresh the live configuration.",
     "configExported": "Config exported to:",
+    "configDownloaded": "Config downloaded:",
+    "importFileReadFailed": "Failed to read the file: {{message}}",
+    "importFileTooLarge": "File is too large to import (limit {{limit}} MiB)",
+    "importFileNotUtf8": "The file is not valid UTF-8 text. Export the configuration again from CC Switch and import that file.",
     "exportFailed": "Export failed",
     "selectFileFailed": "Please choose a valid SQL backup file",
     "configCorrupted": "SQL file may be corrupted or invalid",
@@ -1003,6 +1017,7 @@
     "toolActionFailed": "Install/update command failed",
     "toolActionInProgress": "An app operation is still running",
     "toolActionInProgressDetail": "{{tool}} already has an installation, update or uninstall running in the background. Please wait for it to finish.",
+    "toolActionTimeout": "{{tool}} did not finish within 15 minutes; the process was stopped",
     "toolNotRunnable": "Installed but not runnable (no version detected)",
     "toolActionVersionUnchangedTitle": "Version did not change",
     "toolActionVersionUnchanged": "Still on {{version}} (latest: {{latest}}). The updater may have reported success without applying the update.",
@@ -1047,6 +1062,7 @@
     "globalProxy": {
       "label": "Global Proxy",
       "hint": "Proxy all requests (API, Skills download, etc.). When local routing is enabled, app traffic is also routed through this proxy. Leave empty for direct connection.",
+      "serverSideNote": "The proxy applies to outgoing requests of the cc-switch-web server, not to this browser. Scan looks for proxies on the server itself (its 127.0.0.1).",
       "username": "Username (optional)",
       "password": "Password (optional)",
       "test": "Test Connection",
@@ -1943,7 +1959,9 @@
     "testUnavailable": "Speed test unavailable",
     "noResult": "No result returned",
     "testFailed": "Speed test failed: {{error}}",
-    "empty": "No endpoints"
+    "empty": "No endpoints",
+    "serverSideNote": "Latency is measured from the cc-switch-web server, not from this browser, and may differ from what you get. URLs such as http://127.0.0.1 or localhost point to services on the server itself.",
+    "savePartial": "Saved before the error: {{saved}}. Error: {{error}}"
   },
   "codexConfig": {
     "authJson": "auth.json (JSON) *",
@@ -3027,6 +3045,9 @@
     "saveFailed": "Failed to save",
     "loadFailed": "Failed to load",
     "openDirectory": "Open in file manager",
+    "copyPath": "Copy path",
+    "pathCopied": "Path copied",
+    "pathCopyFailed": "Failed to copy path",
     "dailyMemory": {
       "title": "Daily Memory",
       "sectionTitle": "Daily Memory",
@@ -3187,6 +3208,7 @@
       "open": "Open Hermes Web UI",
       "offline": "Hermes Web UI is not running. Start it with `hermes dashboard` first.",
       "openFailed": "Failed to open Hermes Web UI",
+      "unreachableRemote": "Hermes Web UI is not responding on the server (port {{port}}). If it listens only on localhost, open it via tailscale serve or start it on 0.0.0.0.",
       "launchConfirmTitle": "Hermes Dashboard is not running",
       "launchConfirmMessage": "Open a terminal and start it now with `hermes dashboard`?\n\nThe browser will open automatically once startup completes.\n\nIf the terminal reports that `hermes` cannot be found or the web extras are missing, run first:\npip install hermes-agent[web]",
       "launchConfirmAction": "Open terminal & launch",
@@ -3254,6 +3276,7 @@
       "title": "Confirm Delete Environment Variables",
       "message": "Are you sure you want to delete {{count}} environment variable(s)?",
       "backupNotice": "A backup will be created automatically before deletion. You can restore it later. Changes take effect after restarting the application or terminal.",
+      "webHostWarning": "Web mode: the variables are removed from the OS user environment (shell rc files) of the machine running the cc-switch server, not of the computer this browser is on.",
       "confirm": "Confirm Delete"
     },
     "error": {
@@ -3448,6 +3471,9 @@
       "locationUnified": "Shared folder",
       "openFolder": "Open",
       "openFolderAria": "Open {{path}}",
+      "copyPath": "Copy path",
+      "copyPathAria": "Copy server path {{path}}",
+      "pathCopied": "Path copied",
       "unifiedWarning": "Codex, Gemini CLI, OpenCode and others read this folder directly, so the per-app switches no longer fully apply to them.",
       "move": "Move and switch",
       "moving": "Moving…",
@@ -3467,6 +3493,15 @@
     "updatesIncomplete": "No updates found, but {{count}} repositories couldn't be read"
   },
   "deeplink": {
+    "paste": {
+      "title": "Import from a ccswitch:// link",
+      "placeholder": "Paste a ccswitch://… link",
+      "open": "Open",
+      "upload": "Choose file",
+      "noLink": "No ccswitch:// link found.",
+      "fileTooLarge": "File is too large for a deep link (limit {{limit}} KiB).",
+      "fileReadFailed": "Could not read the file."
+    },
     "confirmImport": "Confirm Import Provider",
     "confirmImportDescription": "The following configuration will be imported from deep link into CC Switch",
     "importPrompt": "Import Prompt",
@@ -4177,6 +4212,8 @@
     "back": "Back"
   },
   "appsPage": {
+    "webServerNote": "CLI tools are installed on the cc-switch-web server, not on this computer.",
+    "webLifecycleSlow": "Install and update can take up to 15 minutes.",
     "showInSidebar": "Show {{name}} in the sidebar",
     "lastChecked": "Last checked {{time}}",
     "neverChecked": "Not checked for updates yet",
@@ -4931,7 +4968,8 @@
       "switchTo": "Switch agy to this account",
       "removeNote": "agy stays signed in: if agy is using this account, it keeps working after removal.",
       "switched": "Switched. New agy sessions will use this account.",
-      "switchedWhileRunning": "Switched. agy is running: open agy sessions keep using the previous account and may write it back. Quit agy and open it again."
+      "switchedWhileRunning": "Switched. agy is running: open agy sessions keep using the previous account and may write it back. Quit agy and open it again.",
+      "webLoginUnavailable": "Antigravity sign-in runs a loopback callback on the server, so sign in from the desktop app there. Switching and removing accounts work here."
     }
   },
   "kimi": {
@@ -4953,6 +4991,7 @@
       "cancelled": "This sign-in was cancelled or replaced. Please sign in again.",
       "success": "Signed in to Kimi Code and added the official models.",
       "removeConfirm": "Remove {{name}}? Its provider and models are removed from Kimi Code, along with its local credentials and card. Other accounts are not affected.",
+      "removeConfirmWeb": "The server's Kimi Code credentials are shared with Kimi Code CLI on the server: removing this account signs the CLI out too.",
       "dismissConfirm": "Hide {{name}} from the list? This is Kimi Code's own login; CC Switch will not sign it out and keeps its credentials and models. To sign out, run /logout in Kimi Code. Signing in again brings it back to the list.",
       "primaryHidden": "Kimi Code's own login was removed from the list; sign in to the same account to bring it back",
       "removeCurrentHint": "This account is in use. Switch to another account before removing it.",
@@ -5027,6 +5066,26 @@
       "renameProvider": "Oh My Pi provider keys cannot be renamed.",
       "providerMissing": "This Oh My Pi provider is no longer saved.",
       "legacyModelsJson": "Oh My Pi still has a legacy models.json, which omp migrates to models.yml on its next start. Run omp once, then add the provider again."
+    }
+  },
+  "web": {
+    "unavailable": "Unavailable in web mode",
+    "serverPath": "Paths are entered manually and refer to the server host, not this device",
+    "update": {
+      "unsupported": "Updates are unavailable in web mode: the server operator updates the app"
+    },
+    "proxyCaption": "The proxy runs on the server and reconfigures the CLIs on the server; it does not touch CLIs on your machine.",
+    "proxyListenWarning": "Listening on {{address}} makes the proxy reachable from the whole network (including the tailnet) without authentication. Prefer 127.0.0.1.",
+    "liveUnknownTitle": "Providers (live config state is unknown in web mode)",
+    "sessionResumeCopied": "Resume command copied. Run it in a terminal on the server host, in the project folder.",
+    "hostNotice": "Files, CLI tools and the proxy live on the server host, not on the computer running this browser.",
+    "hostNoticeDismiss": "Dismiss",
+    "initError": {
+      "message": "Unable to read configuration file:\n{{path}}\n\nError details:\n{{detail}}\n\nFix the problem on the server host (check the JSON, or restore a backup such as config.json.bak from the same directory), then restart the server."
+    },
+    "mode": {
+      "title": "Web mode",
+      "serverVersion": "Server version"
     }
   }
 }

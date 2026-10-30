@@ -643,6 +643,8 @@ export interface LaunchInput {
   t: TFunction;
   providers: Provider[];
   openTerminal: (provider: Provider) => void;
+  /** WEB-00: терминал на сервере не открыть — текст причины (только в web), кнопка disabled (desktop-only) */
+  terminalUnavailableReason?: string;
 }
 
 /**
@@ -671,6 +673,7 @@ export function buildLaunchSections(input: LaunchInput): ProviderSection[] {
               key: "openTerminal",
               label: t("provider.openTerminalWithProvider"),
               onClick: () => openTerminal(p),
+              disabledReason: input.terminalUnavailableReason,
             },
           ],
         },
@@ -700,6 +703,12 @@ export interface AdditiveInput {
   piStateUnavailable?: boolean;
   /** Kimi：原生 default_model 别名所属的供应商。 */
   kimiCurrentId?: string | null;
+  /**
+   * WEB-00: web не читает живой конфиг (get_*_live_provider_ids), «в конфиге ли» неизвестно. Не
+   * делим на «добавленные/доступные» (иначе все ложно «не в конфиге»): одна секция, у каждой
+   * карточки и «добавить», и «убрать» — снимет WEB-14 (openclaw открыт WEB-15, hermes — WEB-16)
+   */
+  membershipUnknown?: boolean;
   actions: {
     add: (provider: Provider) => void;
     remove: (provider: Provider) => void;
@@ -712,6 +721,7 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
   const { app, t, providers, actions } = input;
   const added: ProviderSection["items"] = [];
   const available: ProviderSection["items"] = [];
+  const unknownMembership: ProviderSection["items"] = [];
   const piBlocked =
     isPiFamilyApp(app) && input.piStateUnavailable
       ? t(`${app}.current.stateUnavailableHint`)
@@ -834,6 +844,34 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
       ? t("provider.managedByHermesHint")
       : undefined;
 
+    if (input.membershipUnknown) {
+      unknownMembership.push({
+        provider: p,
+        presentation: {
+          chips,
+          dim: managed,
+          editDisabledReason: readOnlyReason,
+          deleteDisabledReason: readOnlyReason,
+          buttons: [
+            {
+              key: "add",
+              label: t("providerCard.action.add"),
+              onClick: () => actions.add(p),
+            },
+            {
+              key: "remove",
+              label: t("providerCard.action.remove"),
+              onClick: () => actions.remove(p),
+              // Секция «членство неизвестно» в web осталась только у opencode (openclaw — WEB-15,
+              // hermes — WEB-16 читают живой конфиг); guard-а на удаление «default» у opencode нет
+              disabledReason: readOnlyReason,
+            },
+          ],
+        },
+      });
+      continue;
+    }
+
     if (!input.isInConfig(p)) {
       available.push({
         provider: p,
@@ -943,6 +981,31 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
         menuItems: menuItems.length ? menuItems : undefined,
       },
     });
+  }
+
+  if (unknownMembership.length > 0) {
+    // OMO-карточки (состояние известно: get_current_omo_*) остаются в своих секциях, если они есть
+    return [
+      {
+        key: "unknownMembership",
+        title: t("web.liveUnknownTitle"),
+        items: unknownMembership,
+      },
+      ...[
+        {
+          key: "added",
+          title: t("providerCard.section.added", { count: added.length }),
+          items: added,
+        },
+        {
+          key: "available",
+          title: t("providerCard.section.available", {
+            count: available.length,
+          }),
+          items: available,
+        },
+      ].filter((section) => section.items.length > 0),
+    ];
   }
 
   return [

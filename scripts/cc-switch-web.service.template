@@ -1,0 +1,19 @@
+[Unit]
+Description=cc-switch-web headless console (tailscale-only, no in-app auth)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/cc-switch-web
+Environment=HOST=@TAILSCALE_IP@
+Environment=PORT=@PORT@
+Environment=TRUSTED_TAILNET=1
+Environment=CC_SWITCH_CONFIG_DIR=%h/.cc-switch-web
+Environment=WEB_DIST=%h/cc-switch-web/dist-web
+Environment=RUST_LOG=info
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

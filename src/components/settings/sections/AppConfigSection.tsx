@@ -6,6 +6,7 @@ import type {
 } from "@/hooks/useSettings";
 import type { Settings } from "@/types";
 import { Button } from "@/components/ui/button";
+import { isWeb } from "@/lib/api/adapter";
 import {
   DirectoryInput,
   type DirectoryAppId,
@@ -141,6 +142,12 @@ export function AppConfigSection({
 
   return (
     <>
+      {/* WEB-00: пути вводятся вручную и относятся к серверному хосту — снимет WEB-26 */}
+      {isWeb && (
+        <p role="note" className="text-caption text-fg-2">
+          {t("web.serverPath")}
+        </p>
+      )}
       {DIRECTORY_APPS.map((app) => (
         <SettingsBlock
           key={app}

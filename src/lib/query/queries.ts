@@ -260,6 +260,7 @@ export const useUsageQuery = (
   const query = useQuery<UsageResult>({
     queryKey: usageKeys.script(providerId, appId),
     queryFn: async () => usageApi.query(providerId, appId),
+    // WEB-04: query_provider_usage работает в web через POST /api/:app/providers/:id/usage
     enabled: enabled && !!providerId,
     refetchInterval:
       autoQueryInterval > 0

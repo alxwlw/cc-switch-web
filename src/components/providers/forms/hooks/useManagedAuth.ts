@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { authApi, settingsApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { CODEX_OAUTH_DUPLICATE_ACCOUNT_ERROR } from "@/lib/api/auth";
 import type { CodexLoginMethod } from "@/lib/api/auth";
 import { copyText } from "@/lib/clipboard";
@@ -22,8 +23,13 @@ type LoginRequest = {
 export function useManagedAuth(
   authProvider: ManagedAuthProvider,
   githubDomain?: string,
-  loginMethod?: CodexLoginMethod,
+  requestedLoginMethod?: CodexLoginMethod,
 ) {
+  // WEB-02: the browser flow is a loopback callback on the server, unreachable
+  // from the user's browser; web always uses the device code.
+  const loginMethod: CodexLoginMethod | undefined = isWeb
+    ? "device_code"
+    : requestedLoginMethod;
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const queryKey = ["managed-auth-status", authProvider];

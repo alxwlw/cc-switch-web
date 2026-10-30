@@ -6,6 +6,7 @@ import {
   deeplinkApi,
 } from "@/lib/api/deeplink";
 import { providersApi } from "@/lib/api";
+import { OPEN_DEEPLINK_EVENT } from "@/lib/deeplinkOpen";
 import { parseDeepLinkConfigPreview } from "@/utils/deepLinkConfigPreview";
 import {
   Dialog,
@@ -142,6 +143,34 @@ export function DeepLinkImportDialog() {
   // 已显示过的链接编号：同一条链接的重复通知只弹一次框
   const shownIdRef = useRef<number | null>(null);
 
+  // Merge the link's config (if any), then show the confirmation dialog for it.
+  // Shared by the pending queue (desktop) and the web paste/upload event.
+  // Returns false when interrupted by unmount (isDisposed), true once shown.
+  const presentRequest = async (
+    incoming: DeepLinkImportRequest,
+    isDisposed: () => boolean,
+  ): Promise<boolean> => {
+    let next = incoming;
+    // If config is present, merge it to get the complete configuration
+    if (incoming.config) {
+      try {
+        next = await deeplinkApi.mergeDeeplinkConfig(incoming);
+      } catch (error) {
+        console.error("Failed to merge config:", error);
+        toast.error(tRef.current("deeplink.configMergeError"), {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    if (isDisposed()) return false;
+    // 与请求一起初始化，避免弹窗先显示旧开关状态，再由 effect 更新。
+    setActivateAfterImport(initialActivation(next));
+    shownRequestRef.current = next;
+    setRequest(next);
+    setIsOpen(true);
+    return true;
+  };
+
   useEffect(() => {
     let disposed = false;
     // 串行处理：同一时间只有一次读取在进行，期间来的通知只记一笔，处理完再读一次。
@@ -160,26 +189,7 @@ export function DeepLinkImportDialog() {
         return true;
       }
 
-      const incoming = pending.request;
-      let next = incoming;
-      // If config is present, merge it to get the complete configuration
-      if (incoming.config) {
-        try {
-          next = await deeplinkApi.mergeDeeplinkConfig(incoming);
-        } catch (error) {
-          console.error("Failed to merge config:", error);
-          toast.error(tRef.current("deeplink.configMergeError"), {
-            description: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-      if (disposed) return false;
-      // 与请求一起初始化，避免弹窗先显示旧开关状态，再由 effect 更新。
-      setActivateAfterImport(initialActivation(next));
-      shownRequestRef.current = next;
-      setRequest(next);
-      setIsOpen(true);
-      return true;
+      return presentRequest(pending.request, () => disposed);
     };
 
     // 读取不清除，显示之后才按编号确认清除：读到后、显示前被打断，链接也不会丢
@@ -227,6 +237,21 @@ export function DeepLinkImportDialog() {
     return () => {
       disposed = true;
       unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  // Web: paste/upload entries hand over an already parsed request (no pending queue involved).
+  useEffect(() => {
+    let disposed = false;
+    const onOpen = (event: Event) => {
+      const incoming = (event as CustomEvent<DeepLinkImportRequest>).detail;
+      if (!incoming) return;
+      void presentRequest(incoming, () => disposed);
+    };
+    window.addEventListener(OPEN_DEEPLINK_EVENT, onOpen);
+    return () => {
+      disposed = true;
+      window.removeEventListener(OPEN_DEEPLINK_EVENT, onOpen);
     };
   }, []);
 

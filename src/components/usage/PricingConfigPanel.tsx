@@ -460,7 +460,9 @@ export function PricingConfigPanel() {
                             type="button"
                             variant="quiet"
                             size="icon-compact"
-                            aria-label={t("usage.pricing.deleteAria", { name })}
+                            aria-label={t("usage.pricing.deleteAria", {
+                              name,
+                            })}
                             className="hover:text-danger-text"
                             onClick={() => setDeleteTarget(model)}
                           >

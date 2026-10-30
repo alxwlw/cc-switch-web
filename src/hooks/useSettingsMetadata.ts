@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { settingsApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 
 export interface UseSettingsMetadataResult {
   isPortable: boolean;
@@ -23,6 +24,11 @@ export function useSettingsMetadata(): UseSettingsMetadataResult {
   // 加载元数据
   useEffect(() => {
     let active = true;
+    // WEB-00: is_portable_mode не поддержан — в web не вызываем, isPortable остаётся false — снимет WEB-28
+    if (isWeb) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
 
     const load = async () => {

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { homeDir, join } from "@tauri-apps/api/path";
 import { settingsApi, type AppId } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import type { SettingsFormState } from "./useSettingsForm";
 
 export type DirectoryAppId = Exclude<
@@ -208,7 +209,9 @@ export function useDirectorySettings({
           defaultPiDir,
           defaultOmpDir,
         ] = await Promise.all([
-          settingsApi.getAppConfigDirOverride(),
+          // WEB-00: get_app_config_dir_override не поддержан; его throw ронял всю загрузку
+          // (resolvedDirs оставались пустыми) — в web override = null — снимет WEB-26
+          isWeb ? Promise.resolve(null) : settingsApi.getAppConfigDirOverride(),
           settingsApi.getConfigDir("claude"),
           settingsApi.getConfigDir("codex"),
           settingsApi.getConfigDir("gemini"),

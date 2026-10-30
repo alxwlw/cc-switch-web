@@ -14,6 +14,11 @@ export interface ConfigTransferResult {
   backupId?: string;
 }
 
+export interface ConfigExportPayload {
+  filename: string;
+  content: string;
+}
+
 export interface WebDavTestResult {
   success: boolean;
   message?: string;
@@ -158,6 +163,16 @@ export const settingsApi = {
 
   async importConfigFromFile(filePath: string): Promise<ConfigTransferResult> {
     return await invoke("import_config_from_file", { filePath });
+  },
+
+  /** Web build: dump the server DB as text; the browser saves it as `filename`. */
+  async exportConfigForDownload(): Promise<ConfigExportPayload> {
+    return await invoke("export_config_to_string");
+  },
+
+  /** Web build: import an uploaded SQL dump (file text) into the server DB. */
+  async importConfigFromText(content: string): Promise<ConfigTransferResult> {
+    return await invoke("import_config_from_string", { content });
   },
 
   // ─── WebDAV sync ──────────────────────────────────────────
@@ -341,6 +356,11 @@ export const settingsApi = {
     return await invoke("set_optimizer_config", { config });
   },
 
+  /** Web only: last lines of the server's own log file (`GET /api/logs/tail`). */
+  async getServerLogTail(lines?: number): Promise<ServerLogTail> {
+    return await invoke("get_server_log_tail", { lines });
+  },
+
   async getLogConfig(): Promise<LogConfig> {
     return await invoke("get_log_config");
   },
@@ -408,6 +428,15 @@ export interface OptimizerConfig {
   thinkingOptimizer: boolean;
   cacheInjection: boolean;
 }
+
+export interface ServerLogTail {
+  /** Absolute path of the log file on the server host. */
+  path: string;
+  lines: string[];
+}
+
+/** Web only: streams the whole server log as an attachment (plain link, no auth headers). */
+export const SERVER_LOG_DOWNLOAD_URL = "/api/logs/download";
 
 export interface LogConfig {
   enabled: boolean;

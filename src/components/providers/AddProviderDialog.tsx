@@ -4,6 +4,8 @@ import { Loader2 } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
+import { DeepLinkPasteEntry } from "@/components/deeplink/DeepLinkPasteEntry";
+import { isWeb } from "@/lib/api/adapter";
 import { APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
 import {
   PresetStepContext,
@@ -567,6 +569,11 @@ export function AddProviderDialog({
       }
     >
       <PresetStepContext.Provider value={stepState}>
+        {isWeb && step === "pick" && (
+          <div className="border-b border-border px-6 py-4">
+            <DeepLinkPasteEntry onOpened={() => onOpenChange(false)} />
+          </div>
+        )}
         {step === "pick" && (
           <div ref={setPickerHost} className="min-h-0 flex-1" />
         )}

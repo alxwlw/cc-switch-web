@@ -11,6 +11,8 @@ import type { AppMode, StartupAttachFailure } from "@/types/proxy";
 import type { ModeAppId } from "@/config/appConfig";
 import { isProxyAppId, isStackAppId } from "@/config/appConfig";
 import { settingsApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
+import { WebProxyCaption } from "@/components/providers/mode/WebProxyCaption";
 import { providersApi } from "@/lib/api/providers";
 import { proxyApi } from "@/lib/api/proxy";
 import { useSettingsQuery } from "@/lib/query";
@@ -610,6 +612,7 @@ export function SwitchModePanel({
         id="main-content"
         className="min-h-0 flex-1 overflow-y-auto scroll-stable overflow-x-hidden px-6 pb-12 pt-3"
       >
+        {isWeb && <WebProxyCaption className="mb-3" />}
         {notices.length > 0 && (
           <div role="status" className="mb-3 flex flex-col gap-2">
             {notices}
@@ -663,6 +666,7 @@ export function SwitchModePanel({
         }}
       />
 
+      {/* per-app retries/timeouts/circuit config (get/update_proxy_config_for_app), works in web */}
       {isProxyAppId(app) && (
         <RouteSettingsSheet
           app={app}

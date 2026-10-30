@@ -771,7 +771,12 @@ export function useToolManagement() {
               void diagnoseToolSilently(toolName);
             }
           } catch (error) {
-            const detail = extractErrorMessage(error) || String(error);
+            const rawDetail = extractErrorMessage(error) || String(error);
+            const detail = rawDetail.startsWith("TOOL_ACTION_TIMEOUT")
+              ? t("settings.toolActionTimeout", {
+                  tool: TOOL_DISPLAY_NAMES[toolName],
+                })
+              : rawDetail;
             if (detail === "TOOL_ACTION_IN_PROGRESS") {
               toast.info(t("settings.toolActionInProgress"), {
                 description: t("settings.toolActionInProgressDetail", {

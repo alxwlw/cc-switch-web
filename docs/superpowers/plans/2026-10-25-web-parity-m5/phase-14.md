@@ -1,0 +1,54 @@
+# Phase 14 — WEB-20 / DX-78: app-specific settings Claude и Codex
+
+Цель: Claude plugin config и onboarding skip, а также Codex multi-agent probe, сжатие сессий, disk usage и восстановление unified history работают в web.
+
+Спека: § WEB-20. Оценка M (2–4 дн.).
+
+Scope: `src-tauri/src/web_api.rs` (9 роутов), `src-tauri/tests/web_api_app_settings.rs`, `src/lib/api/adapter.ts` (9 case), тесты фронта.
+
+Факты разведки:
+- Фронт settings.ts: Codex — `has_codex_unify_history_backup` (:44), `codex_forces_multi_agent_v2` (:49), `get_codex_session_compression` (:54), `set_codex_session_compression {enabled}` (:59), `get_codex_sessions_disk_usage` (:64), `restore_codex_unified_history` (:69); Claude — `apply_claude_plugin_config {official}` (:132-137), `apply_claude_onboarding_skip` (:139), `clear_claude_onboarding_skip` (:143). Диалогов нет.
+- Вызовы: `CodexAuthSettings.tsx:40,46,60,77,112` (112 — restore), `StackSubagentFields.tsx:90`, `useSettings.ts:167,169,280,282,426,428`, `useProviderActions.ts:64`.
+- Backend — все handle-free; State только у одной команды:
+  - commands/settings.rs:178 `has_codex_unify_history_backup()` → `codex_history_migration::has_codex_official_history_unify_backup` (:429); :185 `codex_forces_multi_agent_v2()` → `codex_config::read_codex_config_text` + `codex_config_forces_multi_agent_v2`; :194 `get_codex_session_compression()` → `codex_session_compression::is_enabled()` (:28); :200 `set_codex_session_compression(state, enabled)` → `set_enabled(&Database, bool)` (:37); :216 `get_codex_sessions_disk_usage()` → `sessions_disk_usage() -> u64` (:67); :228 `restore_codex_unified_history()` → `restore_codex_official_history_from_backups` (codex_history_migration.rs:455).
+  - commands/plugin.rs:24 `apply_claude_plugin_config(official)`, :40 `apply_claude_onboarding_skip()`, :46 `clear_claude_onboarding_skip()` → `claude_plugin::write_claude_config`/`clear_claude_config` (claude_plugin.rs:51,:90) и `claude_mcp::set_has_completed_onboarding`/`clear_has_completed_onboarding` (claude_mcp.rs:126).
+- DTO `CodexUnifyHistoryRestoreResult` (settings.rs:243-251) — camelCase (`restoredJsonlFiles`, `restoredStateRows`, `skippedReason` — опускается при None); остальное — bool/u64.
+- Codex side effects общего `save_settings` уже сделаны в web (web_api.rs:937-984) — не дублировать.
+- Тесты: ~30 в codex_history_migration.rs (restore :1871, :1945), 4 в codex_session_compression.rs, `tests/components/CodexAuthSettings.test.tsx`; для Claude plugin-команд тестов нет.
+
+### Task 1: backend — роуты + тесты
+- [x] Codex: `GET /api/codex/unify-history-backup`, `GET /api/codex/forces-multi-agent-v2`, `GET/PUT /api/codex/session-compression` (`{enabled}`), `GET /api/codex/sessions-disk-usage`, `POST /api/codex/restore-unified-history`. Claude: `POST /api/claude/plugin-config` (`{official}`), `POST /api/claude/onboarding-skip`, `DELETE /api/claude/onboarding-skip`. Команды без tauri-типов вызывать напрямую; блокирующие (restore, disk usage, файловые записи) — в `spawn_blocking`.
+- [x] `src-tauri/tests/web_api_app_settings.rs` (temp HOME): plugin-config `official:false` пишет ожидаемый Claude-конфиг, `official:true` — снимает (так в desktop-команде `commands/plugin.rs`; исходная формулировка плана была перевёрнута); onboarding skip ставит/снимает флаг в `~/.claude.json`; compression round-trip; disk usage на подготовленных сессиях возвращает их суммарный размер; restore с подготовленным backup → `restoredJsonlFiles > 0`; restore без backup → `skippedReason` присутствует и `{ok:true}`.
+
+### Task 2: frontend
+- [x] 9 case в `mapCommand`.
+- [x] `tests/lib/appSettingsApi.test.ts`: URL/метод/body; `CodexAuthSettings.test.tsx` остаётся зелёным.
+- [x] Снять WEB-00-гейты с соответствующих controls (таблица фазы 6). В подписи restore в web — «восстанавливает историю Codex на сервере».
+
+### Task 3: гейты, PR, Plane
+- [x] Полный набор гейтов + `cargo build --release --example server`.
+- [x] Ветка `web-parity/web-20-app-settings`, PR; DX-78 → In Review + ссылка. Закрыть чекбоксы, Notes.
+
+Риски для ревью:
+- Restore во время работающего Codex CLI на сервере: поведение как на desktop, но в web пользователь не видит процессов сервера — подтверждение в UI до restore (если на desktop его нет — добавить только для web). **Снят**: на desktop restore вызывается только из ConfirmDialog `unifyCodexHistoryOff` с чекбоксом `restoreBackup`; в web у чекбокса своя подпись `restoreBackupWeb` («…на сервере»).
+
+## Notes for next phase
+
+- **Закрыта 2026-10-26**: PR #15 merged `d665f078` → main; live на `cc-switch-web.service`.
+  - Server пересобран из main (`cargo build --release --example server` → `~/.local/bin/cc-switch-web`); бинарник фазы 13 сохранён в `cc-switch-web.prev`. `pnpm build:web` выполнен в main-checkout. Перед restart БД скопирована в `~/.cc-switch-web/backups-predeploy-p14-<ts>/`. Миграций нет.
+  - Проверено: unit active, WARN/ERROR в journal нет. `/api/health`, `/api/init-status`, `GET /api/codex/{unify-history-backup,forces-multi-agent-v2,session-compression,sessions-disk-usage}` → 200; отдаваемый `index.html` совпадает со сборкой.
+  - DX-78 Done (комментарий со ссылками file:line). Worktree `.worktrees/web-20` и локальная ветка удалены; remote-ветку `web-parity/web-20-app-settings` удаляет владелец (push --delete заблокирован классификатором). Ledgers прогона p14 не перенесены в main-checkout — `.claude/` в `.gitignore`, ушли вместе с worktree.
+- **Статус до merge (2026-10-26)**: ветка `web-parity/web-20-app-settings` (worktree `.worktrees/web-20`), PR #15 (https://github.com/alxwlw/cc-switch-web/pull/15) открыт; DX-78 In Review (комментарий со ссылкой).
+  - Т1 и Т2 одобрены с r0, fix round не понадобился. NIT DP-019 из ревью Т2 (владельцы строк в таблице фазы 6) закрыл контроллер в `718dcb26`.
+  - Финальные гейты на `718dcb26`: `cargo fmt --check` и `cargo clippy -- -D warnings` чисто. `cargo test --no-fail-fast`: 4354 passed / 3 failed — только baseline (omp_search_paths, 2× file_modes::switch_*), bookkeeping в этот раз зелёные. `cargo build --release --example server` ок. `pnpm typecheck`/`format:check`/`build:renderer`/`build:web` ок; `test:unit` 3727 passed / 3 failed (baseline: 2× UsageDashboard, rememberedChoice).
+- **Post-merge**: пересобрать server и `dist-web` (Rust менялся); перед install — `cp cc-switch-web cc-switch-web.prev`. Миграций БД нет. DX-78 → Done.
+- **Роуты** (`web_api.rs`, блок «app-specific settings (WEB-20)»):
+  - Codex: `GET /api/codex/unify-history-backup`, `GET /api/codex/forces-multi-agent-v2`, `GET|PUT /api/codex/session-compression` (body `{enabled}`), `GET /api/codex/sessions-disk-usage` (число байт), `POST /api/codex/restore-unified-history` (DTO `CodexUnifyHistoryRestoreResult`, camelCase; без backup — `{ok:true, skippedReason:"no_backup_ledger"}`).
+  - Claude: `POST /api/claude/plugin-config` (body `{official}`), `POST|DELETE /api/claude/onboarding-skip`.
+  - **`official:true` СНИМАЕТ plugin-config, `false` — пишет** (как desktop `commands/plugin.rs`). Исходный текст плана был перевёрнут; адаптер передаёт `official` как есть.
+  - Блокирующие операции — в `spawn_blocking`; ошибки — `fail(e.to_string())`.
+- **Тесты**: `src-tauri/tests/web_api_app_settings.rs` — 7 тестов, все `#[serial]`. На `mod support;` стоит `#[allow(dead_code)]`: это единственный `web_api_*`-файл без `test_mutex`, а у `test_mutex` в `support.rs` своего allow нет. Фронт: `tests/lib/appSettingsApi.test.ts`, `tests/components/CodexAuthSettings.web.test.tsx`; четыре WEB-00-теста (`useSettings.web.test.tsx` ×2, `useProviderActions.test.tsx`, `WebShellGating.test.tsx`) переписаны под новый гейтинг — оставшиеся гейты в них по-прежнему проверяются.
+- **Гейты, оставленные намеренно**:
+  - `set_auto_launch` и silent startup (`GeneralSection.tsx`, `useSettings.ts`) — desktop-only: в web это был бы автозапуск ОС на серверном хосте, а сервис живёт как systemd-юнит. Фазы-владельца в M5 нет; строка таблицы фазы 6 говорит это явно.
+  - `sync_current_providers_live` — WEB-09 (ф.19); `set_app_config_dir_override` и `pick_directory` (Browse) — WEB-26 (ф.35).
+- **Инвентаризация фазы 6**: строки settings › general и settings › appConfig обновлены (Claude plugin/onboarding и 6 Codex-команд закрыты ф.14, владельцы остатка переписаны).

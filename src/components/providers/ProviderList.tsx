@@ -23,6 +23,7 @@ import type { OpenClawProviderConfig, Provider } from "@/types";
 import { getOpencodeDeclaredModels } from "@/components/providers/forms/helpers/opencodeFormUtils";
 import type { AppId } from "@/lib/api";
 import { providersApi } from "@/lib/api/providers";
+import { isWeb } from "@/lib/api/adapter";
 import {
   extractErrorMessage,
   translatePiProviderMutationError,
@@ -64,6 +65,12 @@ import {
 
 /** 切换式应用（Claude Code / Codex / Gemini CLI / Grok Build）的模式状态和动作，由供应商页传入。 */
 export type SwitchModeProps = Omit<SwitchModeInput, "app" | "t" | "providers">;
+
+/** Приложения, у которых «в конфиге ли» берётся из живого конфига, недоступного в web. Сейчас таких нет: opencode открыт WEB-14 (openclaw/hermes — своими хуками). */
+const WEB_LIVE_MEMBERSHIP_APPS: AppId[] = [];
+
+/** Приложения, у которых «импорт текущего» читает живой конфиг (import_*_from_live вне mapCommand). opencode открыт WEB-14, остался claude-desktop (WEB-19). */
+const WEB_LIVE_IMPORT_APPS: AppId[] = ["claude-desktop"];
 
 const verticalDragModifiers: Modifier[] = [
   ({ transform }) => ({ ...transform, x: 0 }),
@@ -162,10 +169,11 @@ export function ProviderList({
   // 累加式应用要等 live 里有哪些供应商读回来（成功或失败）才知道卡片该进哪个分区；
   // 在那之前按加载中画骨架，不然卡片先全落进「可添加」，读回来再整体搬到「已添加」。
   // 一张卡都没有时不用等，直接出空状态
+  // В web opencode тоже ждёт живые ids (читаются с сервера, WEB-14)
   const isLiveMembershipPending =
-    (appId === "opencode" && isOpencodeLiveIdsPending) ||
-    (appId === "openclaw" && isOpenclawLiveIdsPending) ||
     (appId === "hermes" && isHermesLiveIdsPending) ||
+    (appId === "openclaw" && isOpenclawLiveIdsPending) ||
+    (appId === "opencode" && isOpencodeLiveIdsPending) ||
     (isPiFamilyApp(appId) && isPiCurrentStatePending);
 
   const isInConfig = useCallback(
@@ -339,6 +347,8 @@ export function ProviderList({
         t,
         providers: filteredProviders,
         openTerminal: (provider) => onOpenTerminal?.(provider),
+        // WEB-00: open_provider_terminal: desktop-only (терминал на сервере не открыть)
+        terminalUnavailableReason: isWeb ? t("web.unavailable") : undefined,
       });
     }
     const defaultPrimary =
@@ -380,6 +390,8 @@ export function ProviderList({
         isHermesReadOnlyProvider(provider.settingsConfig),
       piStateUnavailable: isPiFamilyApp(appId) && !isPiStateReady,
       kimiCurrentId: currentProviderId,
+      // opencode в web читает живой конфиг (WEB-14): членство известно; список пуст — ветка для будущих live-membership приложений
+      membershipUnknown: isWeb && WEB_LIVE_MEMBERSHIP_APPS.includes(appId),
       actions: {
         add: onSwitch,
         remove: (provider) =>
@@ -460,6 +472,8 @@ export function ProviderList({
               ? undefined
               : () => importMutation.mutate()
           }
+          // import_*_from_live не поддержан (import_default_config — работает); opencode открыт WEB-14, остался claude-desktop (WEB-19); openclaw/hermes открыты WEB-15/16
+          importUnavailable={isWeb && WEB_LIVE_IMPORT_APPS.includes(appId)}
         />
       </div>
     );

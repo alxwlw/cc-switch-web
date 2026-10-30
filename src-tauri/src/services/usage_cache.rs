@@ -9,6 +9,7 @@ use std::sync::RwLock;
 use crate::app_config::AppType;
 use crate::provider::UsageResult;
 use crate::services::subscription::SubscriptionQuota;
+use crate::store::AppState;
 
 #[derive(Default)]
 pub struct UsageCache {
@@ -116,10 +117,79 @@ impl UsageCache {
     }
 }
 
+/// Which usage snapshot `publish_usage` writes through to the cache.
+pub enum UsageKind {
+    /// Script-provider result: `put_script` + emit
+    /// `{kind:"script", appType, providerId, data}`.
+    Script {
+        app_type: AppType,
+        provider_id: String,
+        data: UsageResult,
+    },
+    /// Official-subscription quota: `put_subscription` + emit
+    /// `{kind:"subscription", appType, data}` (no `providerId`).
+    Subscription {
+        app_type: AppType,
+        data: SubscriptionQuota,
+    },
+    /// Codex OAuth quota: ONLY `put_codex_oauth`, NO emit (parity with the
+    /// desktop Codex OAuth command, which never emitted).
+    CodexOAuth {
+        account_id: String,
+        data: SubscriptionQuota,
+    },
+}
+
+/// Shared publish tail for usage queries: write-through into `UsageCache` +
+/// emit `usage-cache-updated` on the bus with the desktop-identical payload.
+///
+/// Emit-then-put order matches both desktop call sites it replaces
+/// (`commands::provider::queryProviderUsage`,
+/// `commands::subscription::get_subscription_quota`).
+/// Tray refresh stays in the desktop command wrappers (it needs `AppHandle`,
+/// which this handle-free function deliberately cannot touch).
+pub(crate) fn publish_usage(state: &AppState, kind: UsageKind) {
+    match kind {
+        UsageKind::Script {
+            app_type,
+            provider_id,
+            data,
+        } => {
+            state.events.emit(
+                "usage-cache-updated",
+                serde_json::json!({
+                    "kind": "script",
+                    "appType": app_type.as_str(),
+                    "providerId": &provider_id,
+                    "data": &data,
+                }),
+            );
+            state.usage_cache.put_script(app_type, provider_id, data);
+        }
+        UsageKind::Subscription { app_type, data } => {
+            state.events.emit(
+                "usage-cache-updated",
+                serde_json::json!({
+                    "kind": "subscription",
+                    "appType": app_type.as_str(),
+                    "data": &data,
+                }),
+            );
+            state.usage_cache.put_subscription(app_type, data);
+        }
+        UsageKind::CodexOAuth { account_id, data } => {
+            state.usage_cache.put_codex_oauth(account_id, data);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::Database;
     use crate::services::subscription::CredentialStatus;
+    use serial_test::serial;
+    use std::sync::Arc;
 
     fn fake_quota() -> SubscriptionQuota {
         SubscriptionQuota {
@@ -142,6 +212,142 @@ mod tests {
             data: None,
             error: None,
         }
+    }
+
+    struct EnvGuard(Option<std::ffi::OsString>);
+    impl EnvGuard {
+        fn set(path: &std::path::Path) -> Self {
+            let prev = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", path);
+            Self(prev)
+        }
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.0 {
+                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
+
+    struct TestState {
+        _env: EnvGuard,
+        _home: tempfile::TempDir,
+        state: AppState,
+    }
+
+    fn test_state() -> TestState {
+        let home = tempfile::tempdir().unwrap();
+        let env = EnvGuard::set(home.path());
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        TestState {
+            _env: env,
+            _home: home,
+            state,
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn publish_script_writes_cache_and_emits_exact_payload() {
+        let held = test_state();
+        let state = &held.state;
+        let mut rx = state.events.subscribe();
+        let data = UsageResult {
+            success: true,
+            data: Some(vec![crate::provider::UsageData {
+                plan_name: Some("pro".to_string()),
+                remaining: Some(80.0),
+                total: Some(100.0),
+                used: Some(20.0),
+                unit: Some("%".to_string()),
+                is_valid: Some(true),
+                invalid_message: None,
+                extra: None,
+            }]),
+            error: None,
+        };
+
+        publish_usage(
+            state,
+            UsageKind::Script {
+                app_type: AppType::Claude,
+                provider_id: "p1".to_string(),
+                data: data.clone(),
+            },
+        );
+
+        assert!(state
+            .usage_cache
+            .with_script(&AppType::Claude, "p1", |r| r.success)
+            .unwrap_or(false));
+        let event = rx.try_recv().expect("usage-cache-updated event");
+        assert_eq!(event.name, "usage-cache-updated");
+        assert_eq!(
+            event.payload,
+            serde_json::json!({
+                "kind": "script",
+                "appType": "claude",
+                "providerId": "p1",
+                "data": serde_json::to_value(&data).unwrap(),
+            })
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn publish_subscription_writes_cache_and_emits_without_provider_id() {
+        let held = test_state();
+        let state = &held.state;
+        let mut rx = state.events.subscribe();
+        let quota = fake_quota();
+
+        publish_usage(
+            state,
+            UsageKind::Subscription {
+                app_type: AppType::Codex,
+                data: quota.clone(),
+            },
+        );
+
+        assert!(state
+            .usage_cache
+            .with_subscription(&AppType::Codex, |q| q.success)
+            .unwrap_or(false));
+        let event = rx.try_recv().expect("usage-cache-updated event");
+        assert_eq!(event.name, "usage-cache-updated");
+        assert!(event.payload.get("providerId").is_none());
+        assert_eq!(
+            event.payload,
+            serde_json::json!({
+                "kind": "subscription",
+                "appType": "codex",
+                "data": serde_json::to_value(&quota).unwrap(),
+            })
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn publish_codex_oauth_writes_cache_and_emits_nothing() {
+        let held = test_state();
+        let state = &held.state;
+        let mut rx = state.events.subscribe();
+
+        publish_usage(
+            state,
+            UsageKind::CodexOAuth {
+                account_id: "acc-1".to_string(),
+                data: fake_quota(),
+            },
+        );
+
+        assert!(state
+            .usage_cache
+            .with_codex_oauth("acc-1", |q| q.success)
+            .unwrap_or(false));
+        assert!(rx.try_recv().is_err(), "codex kind must not emit");
     }
 
     #[test]

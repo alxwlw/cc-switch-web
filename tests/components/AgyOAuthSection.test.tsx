@@ -1,7 +1,14 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AgyOAuthSection } from "@/components/providers/forms/AgyOAuthSection";
+import {
+  AgyAccountSelect,
+  AgyOAuthSection,
+} from "@/components/providers/forms/AgyOAuthSection";
+import { authApi } from "@/lib/api";
+import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 const mocks = vi.hoisted(() => ({
   useManagedAuth: vi.fn(),
@@ -133,8 +140,38 @@ describe("AgyOAuthSection", () => {
     mocks.useManagedAuth.mockReturnValue(auth);
     render(<AgyOAuthSection />);
 
-    const quotas = screen.getAllByTestId("agy-quota").map((el) => el.textContent);
+    const quotas = screen
+      .getAllByTestId("agy-quota")
+      .map((el) => el.textContent);
     // 不只是 agy 在用的号，其他号也查；登录失效的不查
     expect(quotas).toEqual(["a", "c"]);
+  });
+});
+
+describe("AgyAccountSelect status query (WEB-00)", () => {
+  const renderSelect = () =>
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <AgyAccountSelect value={null} onChange={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+  it("desktop: запрашивает статус agy_oauth", async () => {
+    const spy = vi
+      .spyOn(authApi, "authGetStatus")
+      .mockResolvedValue({ accounts: [] } as never);
+    renderSelect();
+    await waitFor(() => expect(spy).toHaveBeenCalledWith("agy_oauth"));
+    spy.mockRestore();
+  });
+
+  it("web: запрашивает статус agy_oauth (WEB-02)", async () => {
+    setWeb(true);
+    const spy = vi
+      .spyOn(authApi, "authGetStatus")
+      .mockResolvedValue({ accounts: [] } as never);
+    renderSelect();
+    await waitFor(() => expect(spy).toHaveBeenCalledWith("agy_oauth"));
+    spy.mockRestore();
   });
 });

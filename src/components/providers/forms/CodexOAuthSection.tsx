@@ -1,4 +1,5 @@
 import React from "react";
+import { isWeb } from "@/lib/api/adapter";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -468,29 +469,34 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
       })}
       loginLabel={t("codexOauth.loginWithChatGPT", "使用 ChatGPT 登录")}
       onAdd={addAccount}
+      // WEB-02: web logs in by device code only — no method choice
       loginOptions={
-        <div className="flex items-center gap-3 border-t border-border px-4 py-2">
-          <Label htmlFor="codex-login-method">
-            {t("codexOauth.loginMethod")}
-          </Label>
-          <Select
-            value={loginMethod}
-            onValueChange={(value) => setLoginMethod(value as CodexLoginMethod)}
-            disabled={isAddingAccount}
-          >
-            <SelectTrigger id="codex-login-method" className="w-[200px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="browser">
-                {t("codexOauth.browserLogin")}
-              </SelectItem>
-              <SelectItem value="device_code">
-                {t("codexOauth.deviceCodeLogin")}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        isWeb ? undefined : (
+          <div className="flex items-center gap-3 border-t border-border px-4 py-2">
+            <Label htmlFor="codex-login-method">
+              {t("codexOauth.loginMethod")}
+            </Label>
+            <Select
+              value={loginMethod}
+              onValueChange={(value) =>
+                setLoginMethod(value as CodexLoginMethod)
+              }
+              disabled={isAddingAccount}
+            >
+              <SelectTrigger id="codex-login-method" className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="browser">
+                  {t("codexOauth.browserLogin")}
+                </SelectItem>
+                <SelectItem value="device_code">
+                  {t("codexOauth.deviceCodeLogin")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )
       }
       canReauth
       onReauth={reauthAccount}

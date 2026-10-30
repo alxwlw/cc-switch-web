@@ -25,7 +25,12 @@ import type { AppId } from "@/lib/api";
 import type { VisibleApps } from "@/types";
 import { orderAppIds } from "@/config/appConfig";
 import type { GlobalPage, SettingsSection, View } from "@/lib/navigation";
-import { isAppPage } from "@/lib/navigation";
+import {
+  isAppPage,
+  isSettingsSectionAvailable,
+  isViewAvailable,
+  resolveSettingsSection,
+} from "@/lib/navigation";
 import { SkillsIcon } from "@/components/BrandIcons";
 import { useUpdate } from "@/contexts/UpdateContext";
 import { sidebarWidth, useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
@@ -292,6 +297,9 @@ function MainDirectory({
     },
   ];
 
+  // WEB-00: гейт скрытых в web nav-пунктов (список WEB_HIDDEN_VIEWS сейчас пуст: auth открыт WEB-02, ф.25)
+  const visibleGlobals = globals.filter((g) => isViewAvailable(g.page));
+
   const isGlobalSelected = (page: GlobalPage) =>
     view === page || (page === "skills" && view === "skillsDiscovery");
 
@@ -330,7 +338,7 @@ function MainDirectory({
       />
 
       <div className="flex shrink-0 flex-col">
-        {globals.map((item) => (
+        {visibleGlobals.map((item) => (
           <NavItem
             key={item.page}
             collapsed={collapsed}
@@ -745,11 +753,15 @@ function SettingsDirectory({
         aria-label={t("nav.settings")}
         className={cn("flex min-h-0 flex-1 flex-col", collapsed && "mt-2")}
       >
-        {SETTINGS_ITEMS.map(({ section, icon }) => (
+        {/* WEB-00: скрытых в web секций сейчас нет (network открыта WEB-23; routing/data открыты с урезанным содержимым: rectifier и лог-вьювер, WEB-24), фильтр сохранён для будущих гейтов */}
+        {SETTINGS_ITEMS.filter(({ section }) =>
+          isSettingsSectionAvailable(section),
+        ).map(({ section, icon }) => (
           <NavItem
             key={section}
             collapsed={collapsed}
-            selected={settingsSection === section}
+            // WEB-00: запрошенная скрытая секция подсвечивает general (её и рисует SettingsPage)
+            selected={resolveSettingsSection(settingsSection) === section}
             icon={icon}
             label={t(`settings.sections.${section}`)}
             dot={section === "about" && hasUpdate}

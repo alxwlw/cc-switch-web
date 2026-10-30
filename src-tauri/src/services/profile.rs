@@ -190,6 +190,54 @@ fn plan_toggles(
     (toggles, dangling)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileDto {
+    pub id: String,
+    pub name: String,
+    pub payload: ProfilePayload,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<i64>,
+}
+
+impl From<Profile> for ProfileDto {
+    fn from(profile: Profile) -> Self {
+        // 单条 payload 损坏不应拖垮整个列表：降级为默认值并记日志
+        let payload = serde_json::from_str(&profile.payload).unwrap_or_else(|e| {
+            log::warn!(
+                "解析 profile '{}' payload 失败，使用默认值: {e}",
+                profile.id
+            );
+            ProfilePayload::default()
+        });
+        Self {
+            id: profile.id,
+            name: profile.name,
+            payload,
+            created_at: profile.created_at,
+            updated_at: profile.updated_at,
+        }
+    }
+}
+
+/// 每个分组当前激活的项目 id（未使用项目时为 null）
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentProfileIds {
+    pub claude: Option<String>,
+    pub claude_desktop: Option<String>,
+    pub codex: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfilesResponse {
+    pub profiles: Vec<ProfileDto>,
+    pub current_ids: CurrentProfileIds,
+}
+
 pub struct ProfileService;
 
 impl ProfileService {
@@ -239,6 +287,67 @@ impl ProfileService {
             }
         }
         Ok(payload)
+    }
+
+    /// 列表响应：全部项目 + 各分组当前激活 id（桌面命令与 web 路由共用）
+    pub fn list_response(state: &AppState) -> Result<ProfilesResponse, AppError> {
+        let profiles = Self::list(state)?;
+        let current_ids = CurrentProfileIds {
+            claude: state
+                .db
+                .get_current_profile_id(ProfileScope::Claude.as_str())?,
+            claude_desktop: state
+                .db
+                .get_current_profile_id(ProfileScope::ClaudeDesktop.as_str())?,
+            codex: state
+                .db
+                .get_current_profile_id(ProfileScope::Codex.as_str())?,
+        };
+        Ok(ProfilesResponse {
+            profiles: profiles.into_iter().map(ProfileDto::from).collect(),
+            current_ids,
+        })
+    }
+
+    /// 应用项目后需发出的事件 `(name, payload)`，按发出顺序：
+    /// 分组内每个应用一条 `provider-switched`，最后 `profile-applied`。
+    /// 不依赖 AppHandle；payload 形状与 `provider_switched_payload` 一致
+    /// （前端 provider-switched 监听依赖，proxyEnabled 取自运行模式）。
+    pub fn apply_events(
+        state: &AppState,
+        profile_id: &str,
+        scope: ProfileScope,
+    ) -> Vec<(String, serde_json::Value)> {
+        let mut events: Vec<(String, serde_json::Value)> = scope
+            .apps()
+            .iter()
+            .map(|app_type| {
+                let provider_id = crate::mode::current::provider_for(
+                    &state.db,
+                    app_type,
+                    crate::mode::current::Purpose::InUse,
+                )
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+                (
+                    "provider-switched".to_string(),
+                    crate::events::provider_switched_payload(state, app_type, &provider_id),
+                )
+            })
+            .collect();
+        events.push((
+            "profile-applied".to_string(),
+            serde_json::json!({ "profileId": profile_id, "scope": scope.as_str() }),
+        ));
+        events
+    }
+
+    /// 经 `state.events` 发出 [`Self::apply_events`] 的全部事件
+    pub fn emit_apply_events(state: &AppState, profile_id: &str, scope: ProfileScope) {
+        for (name, payload) in Self::apply_events(state, profile_id, scope) {
+            state.events.emit(&name, payload);
+        }
     }
 
     /// 列出所有项目（项目实体全应用共享，current 标记按分组单独读取）

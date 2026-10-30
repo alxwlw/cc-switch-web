@@ -9,6 +9,7 @@ import {
   type SwitchModeProps,
 } from "@/components/providers/ProviderList";
 import { server } from "../msw/server";
+import { setWeb } from "../helpers/web";
 
 vi.mock("sonner", () => ({
   toast: {
@@ -362,6 +363,416 @@ describe("ProviderList Component", () => {
     fireEvent.click(screen.getByTestId("add-a"));
     expect(onSwitch).toHaveBeenCalledWith(providerA);
   });
+
+  describe("web: opencode live membership is served (WEB-14)", () => {
+    const providerA = createProvider({
+      id: "a",
+      name: "A",
+      settingsConfig: { models: { "m-1": { name: "M1" } } },
+    });
+    const live = createProvider({
+      id: "live",
+      name: "Live",
+      settingsConfig: { models: { "m-1": { name: "M1" } } },
+    });
+
+    it("splits cards into added/available from the live ids, no unknown-membership section", async () => {
+      setWeb(true);
+      let liveIdsRequests = 0;
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [providerA, live],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      server.use(
+        http.post(`${TAURI_ENDPOINT}/get_opencode_live_provider_ids`, () => {
+          liveIdsRequests += 1;
+          return HttpResponse.json(["live"]);
+        }),
+        http.post(`${TAURI_ENDPOINT}/get_opencode_default_model`, () =>
+          HttpResponse.json(null),
+        ),
+      );
+
+      renderWithQueryClient(
+        <ProviderList
+          {...baseProps}
+          providers={{ a: providerA, live }}
+          appId="opencode"
+        />,
+      );
+
+      expect(await screen.findByTestId("remove-live")).toBeInTheDocument();
+      expect(liveIdsRequests).toBe(1);
+      expect(screen.getByTestId("add-a")).toBeInTheDocument();
+      expect(screen.queryByTestId("remove-a")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: "web.liveUnknownTitle" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: /providerCard\.section\.added/ }),
+      ).toBeInTheDocument();
+    });
+
+    it("draws a skeleton, not cards, while the live ids are pending", async () => {
+      setWeb(true);
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [providerA],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      server.use(
+        http.post(
+          `${TAURI_ENDPOINT}/get_opencode_live_provider_ids`,
+          async () => {
+            await gate;
+            return HttpResponse.json([]);
+          },
+        ),
+        http.post(`${TAURI_ENDPOINT}/get_opencode_default_model`, () =>
+          HttpResponse.json(null),
+        ),
+      );
+
+      const { container } = renderWithQueryClient(
+        <ProviderList
+          {...baseProps}
+          providers={{ a: providerA }}
+          appId="opencode"
+        />,
+      );
+
+      expect(
+        container.querySelectorAll(".border-dashed").length,
+      ).toBeGreaterThan(0);
+      expect(screen.queryByTestId("add-a")).not.toBeInTheDocument();
+      release();
+      expect(await screen.findByTestId("add-a")).toBeInTheDocument();
+    });
+
+    it("keeps import-from-live enabled on an empty list", () => {
+      setWeb(true);
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      renderWithQueryClient(
+        <ProviderList {...baseProps} providers={{}} appId="opencode" />,
+      );
+      expect(
+        screen.getByRole("button", { name: "provider.importCurrent" }),
+      ).toBeEnabled();
+    });
+
+    it("marks the default-model owner and offers set-as-default on the others", async () => {
+      setWeb(true);
+      const onSetAsDefault = vi.fn();
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [providerA, live],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      server.use(
+        http.post(`${TAURI_ENDPOINT}/get_opencode_live_provider_ids`, () =>
+          HttpResponse.json(["a", "live"]),
+        ),
+        http.post(`${TAURI_ENDPOINT}/get_opencode_default_model`, () =>
+          HttpResponse.json("live/m-1"),
+        ),
+      );
+
+      renderWithQueryClient(
+        <ProviderList
+          {...baseProps}
+          providers={{ a: providerA, live }}
+          appId="opencode"
+          onSetAsDefault={onSetAsDefault}
+        />,
+      );
+
+      expect(await screen.findByTestId("remove-live")).toBeInTheDocument();
+      // Владелец default-model: статус и чип, без «добавить»
+      expect(screen.getByTestId("status-live")).toHaveTextContent(
+        "providerCard.status.default",
+      );
+      expect(lastProps("live")?.presentation.chips).toContainEqual({
+        key: "defaultModel",
+        label: "providerCard.chip.defaultModel",
+        tone: "outline",
+      });
+      expect(screen.queryByTestId("add-live")).not.toBeInTheDocument();
+      // Остальные: «设为默认» в меню «больше»
+      expect(screen.getByTestId("remove-a")).toBeInTheDocument();
+      lastProps("a")
+        ?.presentation.menuItems.find(
+          (action: { key: string }) => action.key === "setDefault",
+        )
+        .onSelect();
+      expect(onSetAsDefault).toHaveBeenLastCalledWith(providerA, "m-1");
+    });
+  });
+
+  describe("web: hermes live membership is served (WEB-16)", () => {
+    const providerA = createProvider({ id: "a", name: "A" });
+    const live = createProvider({ id: "live", name: "Live" });
+
+    it("splits cards into added/available from the live ids, no unknown-membership section", async () => {
+      setWeb(true);
+      let liveIdsRequests = 0;
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [providerA, live],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      server.use(
+        http.post(`${TAURI_ENDPOINT}/get_hermes_live_provider_ids`, () => {
+          liveIdsRequests += 1;
+          return HttpResponse.json(["live"]);
+        }),
+      );
+
+      renderWithQueryClient(
+        <ProviderList
+          {...baseProps}
+          providers={{ a: providerA, live }}
+          appId="hermes"
+        />,
+      );
+
+      expect(await screen.findByTestId("remove-live")).toBeInTheDocument();
+      expect(liveIdsRequests).toBe(1);
+      expect(screen.getByTestId("add-a")).toBeInTheDocument();
+      expect(screen.queryByTestId("remove-a")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: "web.liveUnknownTitle" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: /providerCard\.section\.added/ }),
+      ).toBeInTheDocument();
+    });
+
+    it("draws a skeleton, not cards, while the live ids are pending", async () => {
+      setWeb(true);
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [providerA],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      server.use(
+        http.post(
+          `${TAURI_ENDPOINT}/get_hermes_live_provider_ids`,
+          async () => {
+            await gate;
+            return HttpResponse.json([]);
+          },
+        ),
+      );
+
+      const { container } = renderWithQueryClient(
+        <ProviderList
+          {...baseProps}
+          providers={{ a: providerA }}
+          appId="hermes"
+        />,
+      );
+
+      expect(
+        container.querySelectorAll(".border-dashed").length,
+      ).toBeGreaterThan(0);
+      expect(screen.queryByTestId("add-a")).not.toBeInTheDocument();
+      release();
+      expect(await screen.findByTestId("add-a")).toBeInTheDocument();
+    });
+
+    it("keeps import-from-live enabled on an empty list", () => {
+      setWeb(true);
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      renderWithQueryClient(
+        <ProviderList {...baseProps} providers={{}} appId="hermes" />,
+      );
+      expect(
+        screen.getByRole("button", { name: "provider.importCurrent" }),
+      ).toBeEnabled();
+    });
+  });
+
+  describe("web: openclaw live membership is served (WEB-15)", () => {
+    const providerA = createProvider({ id: "a", name: "A" });
+    const live = createProvider({ id: "live", name: "Live" });
+
+    it("splits cards into added/available from the live ids, no unknown-membership section", async () => {
+      setWeb(true);
+      let liveIdsRequests = 0;
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [providerA, live],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      server.use(
+        http.post(`${TAURI_ENDPOINT}/get_openclaw_live_provider_ids`, () => {
+          liveIdsRequests += 1;
+          return HttpResponse.json(["live"]);
+        }),
+        http.post(`${TAURI_ENDPOINT}/get_openclaw_default_model`, () =>
+          HttpResponse.json(null),
+        ),
+      );
+
+      renderWithQueryClient(
+        <ProviderList
+          {...baseProps}
+          providers={{ a: providerA, live }}
+          appId="openclaw"
+        />,
+      );
+
+      expect(await screen.findByTestId("remove-live")).toBeInTheDocument();
+      expect(liveIdsRequests).toBe(1);
+      expect(screen.getByTestId("add-a")).toBeInTheDocument();
+      expect(screen.queryByTestId("remove-a")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: "web.liveUnknownTitle" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("draws a skeleton, not cards, while the live ids are pending", async () => {
+      setWeb(true);
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [providerA],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      server.use(
+        http.post(
+          `${TAURI_ENDPOINT}/get_openclaw_live_provider_ids`,
+          async () => {
+            await gate;
+            return HttpResponse.json([]);
+          },
+        ),
+        http.post(`${TAURI_ENDPOINT}/get_openclaw_default_model`, () =>
+          HttpResponse.json(null),
+        ),
+      );
+
+      const { container } = renderWithQueryClient(
+        <ProviderList
+          {...baseProps}
+          providers={{ a: providerA }}
+          appId="openclaw"
+        />,
+      );
+
+      expect(
+        container.querySelectorAll(".border-dashed").length,
+      ).toBeGreaterThan(0);
+      expect(screen.queryByTestId("add-a")).not.toBeInTheDocument();
+      release();
+      expect(await screen.findByTestId("add-a")).toBeInTheDocument();
+    });
+
+    it.each([
+      ["pi", "get_pi_current_state"],
+      ["omp", "get_omp_current_state"],
+    ] as const)(
+      "%s: draws a skeleton, not blocked cards, while current state is pending (WEB-17)",
+      async (appId, command) => {
+        setWeb(true);
+        useDragSortMock.mockReturnValue({
+          sortedProviders: [providerA],
+          sensors: [],
+          handleDragEnd: vi.fn(),
+        });
+        let release: () => void = () => {};
+        const gate = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        server.use(
+          http.post(`${TAURI_ENDPOINT}/${command}`, async () => {
+            await gate;
+            return HttpResponse.json({
+              enabledProviderIds: ["a"],
+              defaultProviderId: null,
+            });
+          }),
+        );
+
+        const { container } = renderWithQueryClient(
+          <ProviderList
+            {...baseProps}
+            providers={{ a: providerA }}
+            appId={appId}
+          />,
+        );
+
+        expect(
+          container.querySelectorAll(".border-dashed").length,
+        ).toBeGreaterThan(0);
+        expect(screen.queryByTestId("provider-card-a")).not.toBeInTheDocument();
+        release();
+        expect(
+          await screen.findByTestId("provider-card-a"),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it("keeps import-from-live enabled on an empty list", () => {
+      setWeb(true);
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+      renderWithQueryClient(
+        <ProviderList {...baseProps} providers={{}} appId="openclaw" />,
+      );
+      expect(
+        screen.getByRole("button", { name: "provider.importCurrent" }),
+      ).toBeEnabled();
+    });
+  });
+
+  it.each([
+    ["web", true, true],
+    ["desktop", false, false],
+  ])(
+    "empty claude-desktop list: import-from-live disabled=%s (%s)",
+    (_label, web, disabled) => {
+      setWeb(web);
+      useDragSortMock.mockReturnValue({
+        sortedProviders: [],
+        sensors: [],
+        handleDragEnd: vi.fn(),
+      });
+
+      renderWithQueryClient(
+        <ProviderList {...baseProps} providers={{}} appId="claude-desktop" />,
+      );
+
+      const button = screen.getByRole("button", {
+        name: "provider.importFromClaude",
+      });
+      if (disabled) expect(button).toBeDisabled();
+      else expect(button).toBeEnabled();
+    },
+  );
 
   it.each(["mcode"] as const)(
     "uses native membership to add and remove %s providers",

@@ -82,6 +82,30 @@ pub fn set_hermes_memory_enabled(
 // Hermes Web UI launcher
 // ============================================================================
 
+/// Hermes Web UI port: `HERMES_WEB_PORT`, else 9119.
+pub(crate) fn hermes_web_port() -> u16 {
+    std::env::var("HERMES_WEB_PORT")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u16>().ok())
+        .unwrap_or(9119)
+}
+
+/// Probe `/api/status` on loopback with a short timeout. Hermes returns 200
+/// when open or 401 when the session token is required — either way the
+/// server is live. Only a connection error / timeout means it isn't running.
+pub(crate) async fn probe_hermes_web(port: u16) -> Result<bool, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(1200))
+        .no_proxy()
+        .build()
+        .map_err(|e| format!("failed to build probe client: {e}"))?;
+    Ok(client
+        .get(format!("http://127.0.0.1:{port}/api/status"))
+        .send()
+        .await
+        .is_ok())
+}
+
 /// Probe the local Hermes Web UI (FastAPI) and open it in the system browser.
 ///
 /// Port discovery priority:
@@ -96,26 +120,11 @@ pub fn set_hermes_memory_enabled(
 /// the URL and let Hermes handle auth.
 #[tauri::command]
 pub async fn open_hermes_web_ui(app: AppHandle, path: Option<String>) -> Result<(), String> {
-    let port = std::env::var("HERMES_WEB_PORT")
-        .ok()
-        .and_then(|raw| raw.trim().parse::<u16>().ok())
-        .unwrap_or(9119);
-
+    let port = hermes_web_port();
     let base = format!("http://127.0.0.1:{port}");
 
-    // Probe /api/status with a short timeout. Hermes returns 200 when open or
-    // 401 when the session token is required — either way the server is live.
-    // Only a connection error / timeout means the server isn't running.
-    let probe_url = format!("{base}/api/status");
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_millis(1200))
-        .no_proxy()
-        .build()
-        .map_err(|e| format!("failed to build probe client: {e}"))?;
-
-    match client.get(&probe_url).send().await {
-        Ok(_) => {}
-        Err(_) => return Err(HERMES_WEB_OFFLINE_ERROR.to_string()),
+    if !probe_hermes_web(port).await? {
+        return Err(HERMES_WEB_OFFLINE_ERROR.to_string());
     }
 
     let target = match path.as_deref() {

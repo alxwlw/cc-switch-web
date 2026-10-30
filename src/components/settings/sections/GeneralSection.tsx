@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { isLinux } from "@/lib/platform";
+import { isWeb } from "@/lib/api/adapter";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { TerminalSelect } from "@/components/settings/TerminalSettings";
 import {
   SettingsBlock,
@@ -187,6 +189,8 @@ export function GeneralSection({
         <SettingsCard>
           <SettingsSwitchRow
             label={t("settings.launchOnStartup")}
+            // WEB-00: set_auto_launch — автозапуск ОС (desktop-only), в web не обслуживается
+            unavailableInWeb
             checked={!!settings.launchOnStartup}
             onCheckedChange={(value) =>
               void onAutoSave({ launchOnStartup: value })
@@ -195,6 +199,8 @@ export function GeneralSection({
           {settings.launchOnStartup && (
             <SettingsSwitchRow
               label={t("settings.silentStartup")}
+              // WEB-00: зависит от автозапуска (set_auto_launch), в web не обслуживается
+              unavailableInWeb
               help={{
                 title: t("settings.silentStartup"),
                 body: t("settings.silentStartupDescription"),
@@ -207,6 +213,8 @@ export function GeneralSection({
           )}
           <SettingsSwitchRow
             label={t("settings.minimizeToTray")}
+            // WEB-00: трей — desktop-only, в браузере настройка ни на что не влияет — снимет WEB-28
+            unavailableInWeb
             help={{
               title: t("settings.minimizeToTray"),
               body: t("settings.general.minimizeToTrayHelp"),
@@ -225,30 +233,35 @@ export function GeneralSection({
                 body: t("settings.general.trayStyleHelp"),
               }}
               control={
-                <SegmentedControl
-                  size="sm"
-                  aria-label={t("settings.general.trayStyle")}
-                  value={settings.nativeTrayMenu ? "menu" : "panel"}
-                  onValueChange={(value) =>
-                    void onAutoSave({ nativeTrayMenu: value === "menu" })
-                  }
-                  items={[
-                    {
-                      value: "panel",
-                      label: t("settings.general.trayStylePanel"),
-                    },
-                    {
-                      value: "menu",
-                      label: t("settings.general.trayStyleMenu"),
-                    },
-                  ]}
-                />
+                // WEB-00: трей — desktop-only; контрол disabled + подсказка — снимет WEB-28
+                <WebUnavailableTip active={isWeb}>
+                  <SegmentedControl
+                    size="sm"
+                    aria-label={t("settings.general.trayStyle")}
+                    value={settings.nativeTrayMenu ? "menu" : "panel"}
+                    onValueChange={(value) =>
+                      void onAutoSave({ nativeTrayMenu: value === "menu" })
+                    }
+                    items={[
+                      {
+                        value: "panel",
+                        label: t("settings.general.trayStylePanel"),
+                      },
+                      {
+                        value: "menu",
+                        label: t("settings.general.trayStyleMenu"),
+                      },
+                    ].map((item) => ({ ...item, disabled: isWeb }))}
+                  />
+                </WebUnavailableTip>
               }
             />
           )}
           {isLinux() && (
             <SettingsSwitchRow
               label={t("settings.useAppWindowControls")}
+              // WEB-00: в web useAppWindowControls принудительно false (нет окна приложения)
+              unavailableInWeb
               help={{
                 title: t("settings.useAppWindowControls"),
                 body: t("settings.useAppWindowControlsDescription"),
@@ -266,13 +279,17 @@ export function GeneralSection({
               body: t("settings.general.terminalHelp"),
             }}
             control={
-              <TerminalSelect
-                className="h-8 w-[160px]"
-                value={settings.preferredTerminal}
-                onChange={(terminal) =>
-                  void onAutoSave({ preferredTerminal: terminal })
-                }
-              />
+              // WEB-00: запуск терминала desktop-only (resume в web — copy-command; терминал на сервере не открыть)
+              <WebUnavailableTip active={isWeb}>
+                <TerminalSelect
+                  className="h-8 w-[160px]"
+                  disabled={isWeb}
+                  value={settings.preferredTerminal}
+                  onChange={(terminal) =>
+                    void onAutoSave({ preferredTerminal: terminal })
+                  }
+                />
+              </WebUnavailableTip>
             }
           />
         </SettingsCard>

@@ -2817,12 +2817,11 @@ pub fn handle_profile_tray_event(app: &tauri::AppHandle, event_id: &str) -> bool
             }
         }
         // 通知主窗口刷新（profileId=null 表示该分组已清除当前项目）
-        if let Err(e) = app.emit(
+        crate::events::emit_via_app(
+            app,
             "profile-applied",
             serde_json::json!({ "profileId": null, "scope": scope.as_str() }),
-        ) {
-            log::error!("发射 profile-applied 事件失败: {e}");
-        }
+        );
         refresh_tray_menu(app);
         return true;
     }
@@ -2988,23 +2987,17 @@ fn handle_provider_click(
 }
 
 fn emit_switched(app: &tauri::AppHandle, app_type: &AppType, provider_id: &str) {
-    let proxy_enabled = crate::mode::current::is_proxy(app_type);
-    let auto_failover = app
-        .try_state::<AppState>()
-        .map(|state| state.db.get_proxy_flags_sync(app_type.as_str()).1)
-        .unwrap_or(false);
-    let event_data = serde_json::json!({
-        "appType": app_type.as_str(),
-        "proxyEnabled": proxy_enabled,
-        "autoFailoverEnabled": auto_failover,
-        "providerId": provider_id
-    });
-    if let Err(e) = app.emit("proxy-flags-changed", event_data.clone()) {
-        log::error!("发射 proxy-flags-changed 事件失败: {e}");
-    }
-    if let Err(e) = app.emit("provider-switched", event_data) {
-        log::error!("发射 provider-switched 事件失败: {e}");
-    }
+    let event_data = match app.try_state::<AppState>() {
+        Some(state) => crate::events::provider_switched_payload(&state, app_type, provider_id),
+        None => serde_json::json!({
+            "appType": app_type.as_str(),
+            "proxyEnabled": crate::mode::current::is_proxy(app_type),
+            "autoFailoverEnabled": false,
+            "providerId": provider_id
+        }),
+    };
+    crate::events::emit_via_app(app, "proxy-flags-changed", event_data.clone());
+    crate::events::emit_via_app(app, "provider-switched", event_data);
 }
 
 #[cfg(target_os = "macos")]
@@ -3100,7 +3093,6 @@ pub fn schedule_tray_refresh(app: &tauri::AppHandle) {
 /// `TRAY_APPS.len()` 个用量查询；按供应商用量开关查询，Codex 托管账号
 /// 未保存开关时与卡片一致默认启用。
 pub(crate) async fn refresh_all_usage_in_tray(app: &tauri::AppHandle) {
-    use crate::commands::CopilotAuthState;
     use futures::future::join_all;
 
     {
@@ -3161,22 +3153,14 @@ pub(crate) async fn refresh_all_usage_in_tray(app: &tauri::AppHandle) {
         if let Some(source) = tray_usage_source(app_type, &current) {
             let app_clone = app.clone();
             let state = app.state::<AppState>();
-            let copilot_state = app.state::<CopilotAuthState>();
-            let xai_state = app.state::<crate::commands::XaiOAuthState>();
             let provider_id = current_id.clone();
             let app_str = app_type_str.to_string();
             usage_futures.push(async move {
                 let result = match source {
                     TrayUsageSource::ManagedCodex(account_id) => {
-                        let codex_state = app.state::<crate::commands::CodexOAuthState>();
-                        crate::commands::get_codex_oauth_quota(
-                            app_clone,
-                            state,
-                            Some(account_id),
-                            codex_state,
-                        )
-                        .await
-                        .map(|_| ())
+                        crate::commands::get_codex_oauth_quota(app_clone, state, Some(account_id))
+                            .await
+                            .map(|_| ())
                     }
                     TrayUsageSource::Subscription => {
                         crate::commands::get_subscription_quota(app_clone, state, app_str)
@@ -3186,8 +3170,6 @@ pub(crate) async fn refresh_all_usage_in_tray(app: &tauri::AppHandle) {
                     TrayUsageSource::Script => crate::commands::queryProviderUsage(
                         app_clone,
                         state,
-                        copilot_state,
-                        xai_state,
                         provider_id.clone(),
                         app_str,
                     )
@@ -3213,7 +3195,6 @@ static PANEL_SCRIPT_QUERIES: Lazy<Mutex<HashMap<(AppType, String), std::time::In
 /// 后台补查一次——和主界面供应商卡片是同一个查询，结果写进 `UsageCache` 后面板跟着刷新。
 /// 自动查询间隔为 0（关掉了）的不查；在用的那家由 `refresh_all_usage_in_tray` 负责。
 pub(crate) async fn refresh_panel_provider_usage(app: &tauri::AppHandle) {
-    use crate::commands::CopilotAuthState;
     use futures::future::join_all;
 
     let Some(app_state) = app.try_state::<AppState>() else {
@@ -3271,8 +3252,6 @@ pub(crate) async fn refresh_panel_provider_usage(app: &tauri::AppHandle) {
             let result = crate::commands::queryProviderUsage(
                 app.clone(),
                 app.state::<AppState>(),
-                app.state::<CopilotAuthState>(),
-                app.state::<crate::commands::XaiOAuthState>(),
                 provider_id.clone(),
                 app_type.as_str().to_string(),
             )

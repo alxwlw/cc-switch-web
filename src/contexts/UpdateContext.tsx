@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import type { UpdateInfo } from "../lib/updater";
 import { checkForUpdate } from "../lib/updater";
+import { isWeb } from "@/lib/api/adapter";
 import { extractErrorMessage } from "../utils/errorUtils";
 
 interface UpdateContextValue {
@@ -16,6 +17,8 @@ interface UpdateContextValue {
   updateInfo: UpdateInfo | null;
   isChecking: boolean;
   error: string | null;
+  /** WEB-00: в web обновления недоступны (сервер обновляет оператор) — не "up-to-date" */
+  unsupported: boolean;
 
   // 提示状态
   isDismissed: boolean;
@@ -88,7 +91,7 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
         setHasUpdate(false);
         setUpdateInfo(null);
         setIsDismissed(false);
-        return false; // 已是最新
+        return false; // 已是最新；web 下的 unsupported 也走这里（WEB-00）
       }
     } catch (err) {
       console.error("检查更新失败:", err);
@@ -118,6 +121,8 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
 
   // 应用启动时自动检查更新
   useEffect(() => {
+    // WEB-00: авто-чек на маунте пропускается в web — снимет WEB-28
+    if (isWeb) return;
     // 延迟1秒后检查，避免影响启动体验
     const timer = setTimeout(() => {
       checkUpdate().catch(console.error);
@@ -131,6 +136,7 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
     updateInfo,
     isChecking,
     error,
+    unsupported: isWeb, // WEB-00: состояние «недоступно» вместо «up-to-date» — снимет WEB-28
     isDismissed,
     dismissUpdate,
     checkUpdate,
