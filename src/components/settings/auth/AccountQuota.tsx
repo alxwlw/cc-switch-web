@@ -30,6 +30,7 @@ import {
   quotaRows,
 } from "@/components/SubscriptionQuotaFooter";
 import type { SubscriptionQuota } from "@/types/subscription";
+import { isWeb } from "@/lib/api/adapter";
 import { useCopilotQuota } from "@/lib/query/copilot";
 import {
   useAgyAccountQuota,
@@ -317,6 +318,22 @@ export function CopilotAccountQuota({
   );
 }
 
+/** WEB-04: в web额度查自服务器 — подпись после соседних authCenter.quota.* ключей. */
+function WebAuthQuotaServerNote() {
+  const { t } = useTranslation();
+  if (!isWeb) return null;
+  return (
+    <span
+      className="self-end text-caption text-fg-3"
+      data-testid="quota-server-note"
+    >
+      {t("authCenter.quota.serverNote", {
+        defaultValue: "данные запрашиваются на сервере",
+      })}
+    </span>
+  );
+}
+
 /** xAI 账号的订阅额度（get_xai_oauth_quota(accountId)） */
 export function XaiAccountQuota({
   accountId,
@@ -336,13 +353,16 @@ export function XaiAccountQuota({
     autoQuery: false,
   });
   return (
-    <AccountQuotaColumn
-      login={login}
-      state={subscriptionQuotaState(t, quota, loading, i18n.language, display)}
-      queriedAt={quota?.queriedAt ?? null}
-      loading={loading}
-      onRefresh={() => void refetch()}
-    />
+    <>
+      <AccountQuotaColumn
+        login={login}
+        state={subscriptionQuotaState(t, quota, loading, i18n.language, display)}
+        queriedAt={quota?.queriedAt ?? null}
+        loading={loading}
+        onRefresh={() => void refetch()}
+      />
+      <WebAuthQuotaServerNote />
+    </>
   );
 }
 
@@ -400,12 +420,15 @@ export function AgyAccountQuota({
     refetch,
   } = useAgyAccountQuota(accountId, { enabled: true, autoQuery: false });
   return (
-    <AccountQuotaColumn
-      login={login}
-      state={subscriptionQuotaState(t, quota, loading, i18n.language, display)}
-      queriedAt={quota?.queriedAt ?? null}
-      loading={loading}
-      onRefresh={() => void refetch()}
-    />
+    <>
+      <AccountQuotaColumn
+        login={login}
+        state={subscriptionQuotaState(t, quota, loading, i18n.language, display)}
+        queriedAt={quota?.queriedAt ?? null}
+        loading={loading}
+        onRefresh={() => void refetch()}
+      />
+      <WebAuthQuotaServerNote />
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { isWeb } from "@/lib/api/adapter";
 import { useCodexOauthQuotaByAccountId } from "@/lib/query/subscription";
 import {
   AccountQuotaColumn,
@@ -36,13 +37,25 @@ const CodexOauthAccountQuota: React.FC<CodexOauthAccountQuotaProps> = ({
   });
 
   return (
-    <AccountQuotaColumn
-      login={login}
-      state={subscriptionQuotaState(t, quota, loading, i18n.language, display)}
-      queriedAt={quota?.queriedAt ?? null}
-      loading={loading}
-      onRefresh={() => void refetch()}
-    />
+    <>
+      <AccountQuotaColumn
+        login={login}
+        state={subscriptionQuotaState(t, quota, loading, i18n.language, display)}
+        queriedAt={quota?.queriedAt ?? null}
+        loading={loading}
+        onRefresh={() => void refetch()}
+      />
+      {isWeb && (
+        <span
+          className="self-end text-caption text-fg-3"
+          data-testid="quota-server-note"
+        >
+          {t("authCenter.quota.serverNote", {
+            defaultValue: "данные запрашиваются на сервере",
+          })}
+        </span>
+      )}
+    </>
   );
 };
 

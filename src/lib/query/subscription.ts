@@ -9,7 +9,6 @@ import { resolveManagedAccountId } from "@/lib/authBinding";
 import { PROVIDER_TYPES } from "@/config/constants";
 import { resolveDisplayUsage, type LastGoodSnapshot } from "./queries";
 import { extractErrorMessage } from "@/utils/errorUtils";
-import { isWeb } from "@/lib/api/adapter";
 
 const REFETCH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
@@ -92,9 +91,8 @@ export function useSubscriptionQuota(
   const query = useQuery({
     queryKey: subscriptionKeys.quota(appId),
     queryFn: () => subscriptionApi.getQuota(appId),
-    // WEB-00: quota-запросы (get_subscription_quota и др.) не поддержаны — снимет WEB-02/04
+    // WEB-04: quota-запросы работают в web (CLI читает файлы на сервере)
     enabled:
-      !isWeb &&
       enabled &&
       ["claude", "codex", "gemini", "grokbuild", "agy"].includes(appId),
     refetchInterval,
@@ -141,8 +139,8 @@ export function useCodexOauthQuotaByAccountId(
   const query = useQuery({
     queryKey: ["codex_oauth", "quota", accountId ?? "default"],
     queryFn: () => subscriptionApi.getCodexOauthQuota(accountId),
-    // WEB-00: quota-запросы не поддержаны — снимет WEB-02/04
-    enabled: enabled && !isWeb,
+    // WEB-04: работает в web через GET /api/subscription/codex-oauth/:accountId/quota
+    enabled,
     refetchInterval,
     refetchIntervalInBackground: Boolean(refetchInterval),
     refetchOnWindowFocus: Boolean(refetchInterval),
@@ -198,8 +196,8 @@ export function useXaiOauthQuotaByAccountId(
   const query = useQuery({
     queryKey: ["xai_oauth", "quota", accountId ?? "default"],
     queryFn: () => subscriptionApi.getXaiOauthQuota(accountId),
-    // WEB-00: quota-запросы не поддержаны — снимет WEB-02/04
-    enabled: enabled && !isWeb,
+    // WEB-04: работает в web через GET /api/subscription/xai-oauth/:accountId/quota
+    enabled: enabled,
     refetchInterval: autoQuery ? REFETCH_INTERVAL : false,
     refetchIntervalInBackground: autoQuery,
     refetchOnWindowFocus: autoQuery,
@@ -230,8 +228,8 @@ export function useAgyAccountQuota(
   const query = useQuery({
     queryKey: ["agy_oauth", "quota", accountId],
     queryFn: () => subscriptionApi.getAgyAccountQuota(accountId),
-    // WEB-00: quota-запросы не поддержаны — снимет WEB-02/04
-    enabled: enabled && !isWeb,
+    // WEB-04: работает в web через GET /api/subscription/agy/:accountId/quota
+    enabled: enabled,
     refetchInterval,
     refetchIntervalInBackground: Boolean(refetchInterval),
     refetchOnWindowFocus: Boolean(refetchInterval),

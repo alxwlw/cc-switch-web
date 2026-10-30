@@ -188,16 +188,22 @@ export function ProviderCardActions({
               {t("provider.duplicate")}
             </DropdownMenuItem>
           )}
-          {/* WEB-00: stream_check_provider не поддержан — пункт disabled с причиной — снимет WEB-04 */}
+          {/* WEB-04: stream check работает в web — проверка выполняется на сервере */}
           {onTest && (
             <DropdownMenuItem
-              disabled={isTesting || isWeb}
+              disabled={isTesting}
               onSelect={onTest}
               className={cn(isWeb && "flex-col items-start gap-0.5")}
             >
               {isTesting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {t("provider.connectivityCheck")}
-              {isWeb && <WebUnavailableCaption />}
+              {isWeb && (
+                <span className="text-caption text-fg-3">
+                  {t("provider.connectivityCheckServerNote", {
+                    defaultValue: "проверка выполняется с сервера",
+                  })}
+                </span>
+              )}
             </DropdownMenuItem>
           )}
           {onConfigureUsage && (
