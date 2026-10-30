@@ -3093,7 +3093,6 @@ pub fn schedule_tray_refresh(app: &tauri::AppHandle) {
 /// `TRAY_APPS.len()` 个用量查询；按供应商用量开关查询，Codex 托管账号
 /// 未保存开关时与卡片一致默认启用。
 pub(crate) async fn refresh_all_usage_in_tray(app: &tauri::AppHandle) {
-    use crate::commands::CopilotAuthState;
     use futures::future::join_all;
 
     {
@@ -3154,22 +3153,14 @@ pub(crate) async fn refresh_all_usage_in_tray(app: &tauri::AppHandle) {
         if let Some(source) = tray_usage_source(app_type, &current) {
             let app_clone = app.clone();
             let state = app.state::<AppState>();
-            let copilot_state = app.state::<CopilotAuthState>();
-            let xai_state = app.state::<crate::commands::XaiOAuthState>();
             let provider_id = current_id.clone();
             let app_str = app_type_str.to_string();
             usage_futures.push(async move {
                 let result = match source {
                     TrayUsageSource::ManagedCodex(account_id) => {
-                        let codex_state = app.state::<crate::commands::CodexOAuthState>();
-                        crate::commands::get_codex_oauth_quota(
-                            app_clone,
-                            state,
-                            Some(account_id),
-                            codex_state,
-                        )
-                        .await
-                        .map(|_| ())
+                        crate::commands::get_codex_oauth_quota(app_clone, state, Some(account_id))
+                            .await
+                            .map(|_| ())
                     }
                     TrayUsageSource::Subscription => {
                         crate::commands::get_subscription_quota(app_clone, state, app_str)
@@ -3179,8 +3170,6 @@ pub(crate) async fn refresh_all_usage_in_tray(app: &tauri::AppHandle) {
                     TrayUsageSource::Script => crate::commands::queryProviderUsage(
                         app_clone,
                         state,
-                        copilot_state,
-                        xai_state,
                         provider_id.clone(),
                         app_str,
                     )
@@ -3206,7 +3195,6 @@ static PANEL_SCRIPT_QUERIES: Lazy<Mutex<HashMap<(AppType, String), std::time::In
 /// 后台补查一次——和主界面供应商卡片是同一个查询，结果写进 `UsageCache` 后面板跟着刷新。
 /// 自动查询间隔为 0（关掉了）的不查；在用的那家由 `refresh_all_usage_in_tray` 负责。
 pub(crate) async fn refresh_panel_provider_usage(app: &tauri::AppHandle) {
-    use crate::commands::CopilotAuthState;
     use futures::future::join_all;
 
     let Some(app_state) = app.try_state::<AppState>() else {
@@ -3264,8 +3252,6 @@ pub(crate) async fn refresh_panel_provider_usage(app: &tauri::AppHandle) {
             let result = crate::commands::queryProviderUsage(
                 app.clone(),
                 app.state::<AppState>(),
-                app.state::<CopilotAuthState>(),
-                app.state::<crate::commands::XaiOAuthState>(),
                 provider_id.clone(),
                 app_type.as_str().to_string(),
             )

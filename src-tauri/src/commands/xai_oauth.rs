@@ -66,13 +66,24 @@ pub(crate) async fn query_xai_oauth_quota_for(
     .await
 }
 
+/// Shared with the headless web route: builds the `XaiOAuthState` wrapper from
+/// the `AppState` field (same `Arc` as `managed_auth_states().xai`) and
+/// delegates — no cache/emit here, matching desktop behaviour.
+pub(crate) async fn query_xai_oauth_quota_inner(
+    state: &AppState,
+    account_id: Option<String>,
+) -> Result<SubscriptionQuota, String> {
+    let wrapper = XaiOAuthState(state.xai_oauth.clone());
+    query_xai_oauth_quota_for(&wrapper, account_id).await
+}
+
 /// 查询 xAI OAuth (SuperGrok 反代) 订阅额度
 #[tauri::command(rename_all = "camelCase")]
 pub async fn get_xai_oauth_quota(
     account_id: Option<String>,
-    state: State<'_, XaiOAuthState>,
+    state: State<'_, AppState>,
 ) -> Result<SubscriptionQuota, String> {
-    query_xai_oauth_quota_for(&state, account_id).await
+    query_xai_oauth_quota_inner(&state, account_id).await
 }
 
 #[derive(Debug, Deserialize)]
@@ -179,5 +190,30 @@ mod tests {
         ));
         let err = get_xai_oauth_models_inner(&state, None).await.unwrap_err();
         assert_eq!(err, "No usable xAI account available");
+    }
+
+    /// Quota inner builds its wrapper from `AppState`; with no accounts it
+    /// returns `not_found` without touching credentials or the network.
+    #[tokio::test]
+    #[serial]
+    async fn quota_inner_without_accounts_returns_not_found() {
+        use crate::services::subscription::CredentialStatus;
+
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        assert!(Arc::ptr_eq(
+            &state.managed_auth_states().xai.0,
+            &state.xai_oauth
+        ));
+        let quota = query_xai_oauth_quota_inner(&state, None)
+            .await
+            .expect("missing account is a deterministic Ok");
+        assert_eq!(quota.tool, "xai_oauth");
+        assert!(!quota.success);
+        assert!(matches!(
+            quota.credential_status,
+            CredentialStatus::NotFound
+        ));
     }
 }

@@ -19,6 +19,33 @@ use tauri::State;
 /// 时阻塞其他命令（切换 / 认证中心操作 / token 读取）。
 pub struct CodexOAuthState(pub Arc<CodexOAuthManager>);
 
+/// Resolve the account and query its quota. Shared with the headless web
+/// route: the manager comes from `AppState`, no `State` wrapper needed.
+///
+/// Returns the resolved account id alongside the result so the desktop
+/// wrapper can refresh the tray under exactly the old condition (account
+/// resolved AND `Ok` — `not_found` without an account never touched the
+/// tray). Publishing (put-only, no emit) stays in the caller so script and
+/// subscription kinds keep their emit shapes in one place.
+pub(crate) async fn get_codex_oauth_quota_inner(
+    state: &AppState,
+    account_id: Option<String>,
+) -> (Option<String>, Result<SubscriptionQuota, String>) {
+    let manager = &state.codex_oauth_manager;
+
+    // 解析最终使用的账号 ID：显式 > 默认账号 > 无账号 (not_found)
+    let resolved = match account_id {
+        Some(id) => Some(id.trim().to_string()),
+        None => manager.default_account_id().await,
+    };
+    let Some(id) = resolved else {
+        return (None, Ok(SubscriptionQuota::not_found("codex_oauth")));
+    };
+
+    let result = query_codex_oauth_quota_for(manager, &id).await;
+    (Some(id), result)
+}
+
 /// 查询 Codex OAuth (ChatGPT Plus/Pro) 订阅额度
 ///
 /// - `account_id` 未指定时回退到 `CodexOAuthManager` 的默认账号
@@ -30,25 +57,19 @@ pub async fn get_codex_oauth_quota(
     app: tauri::AppHandle,
     app_state: State<'_, crate::store::AppState>,
     account_id: Option<String>,
-    state: State<'_, CodexOAuthState>,
 ) -> Result<SubscriptionQuota, String> {
-    let manager = &state.0;
-
-    // 解析最终使用的账号 ID：显式 > 默认账号 > 无账号 (not_found)
-    let resolved = match account_id {
-        Some(id) => Some(id.trim().to_string()),
-        None => manager.default_account_id().await,
-    };
-    let Some(id) = resolved else {
-        return Ok(SubscriptionQuota::not_found("codex_oauth"));
-    };
-
-    let result = query_codex_oauth_quota_for(manager, &id).await;
+    let (resolved_id, result) = get_codex_oauth_quota_inner(&app_state, account_id).await;
     // Cache by the resolved account, even if the default/binding changes while
     // the request is in flight. Transport errors retain the last good snapshot;
     // authentication/HTTP failures replace it so the tray hides invalid quotas.
-    if let Ok(quota) = &result {
-        app_state.usage_cache.put_codex_oauth(id, quota.clone());
+    if let (Some(id), Ok(quota)) = (&resolved_id, &result) {
+        crate::services::publish_usage(
+            &app_state,
+            crate::services::UsageKind::CodexOAuth {
+                account_id: id.clone(),
+                data: quota.clone(),
+            },
+        );
         crate::tray::schedule_tray_refresh(&app);
     }
     result
@@ -165,5 +186,31 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(err, "No ChatGPT account available");
+    }
+
+    /// Quota inner resolves the manager from `AppState`; with no accounts it
+    /// returns `not_found` without touching the cache or the network.
+    #[tokio::test]
+    #[serial]
+    async fn quota_inner_without_accounts_returns_not_found() {
+        use crate::services::subscription::CredentialStatus;
+
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        assert!(Arc::ptr_eq(
+            &state.managed_auth_states().codex.0,
+            &state.codex_oauth_manager
+        ));
+        let (resolved, result) = get_codex_oauth_quota_inner(&state, None).await;
+        assert!(resolved.is_none());
+        let quota = result.expect("missing account is a deterministic Ok");
+        assert_eq!(quota.tool, "codex_oauth");
+        assert!(!quota.success);
+        assert!(matches!(
+            quota.credential_status,
+            CredentialStatus::NotFound
+        ));
+        assert!(state.usage_cache.with_codex_oauth("any", |_| ()).is_none());
     }
 }
