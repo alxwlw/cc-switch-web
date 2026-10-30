@@ -3628,9 +3628,7 @@ async fn subscription_xai_oauth_quota(
     State(state): State<SharedState>,
     Path(account_id): Path<String>,
 ) -> ApiResult {
-    proxy_result(
-        crate::commands::query_xai_oauth_quota_inner(&state, Some(account_id)).await,
-    )
+    proxy_result(crate::commands::query_xai_oauth_quota_inner(&state, Some(account_id)).await)
 }
 
 /// `GET /api/subscription/agy/:accountId/quota`: no cache, no emit (desktop
@@ -3643,9 +3641,7 @@ async fn subscription_agy_quota(
     if crate::agy_config::real_agy_bin().is_none() {
         return fail(AGY_CLI_MISSING);
     }
-    proxy_result(
-        crate::commands::agy_quota(&state.agy_account, Some(&account_id)).await,
-    )
+    proxy_result(crate::commands::agy_quota(&state.agy_account, Some(&account_id)).await)
 }
 
 /// `POST /api/subscription/coding-plan`: full `get_coding_plan_quota` arg
