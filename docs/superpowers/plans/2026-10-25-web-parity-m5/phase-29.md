@@ -40,3 +40,4 @@ Scope: `src-tauri/src/commands/{codex_oauth,xai_oauth,copilot}.rs` (inner от `
 ## Notes for next phase
 
 - (заполнить по итогам)
+- `CC_SWITCH_MODEL_FETCH_TIMEOUT_SECS` (services/model_fetch.rs): per-attempt timeout for `fetch_models`, default 15 s when unset/non-positive/unparsable — test seam and manual override; companion test-only seams (never set on desktop) are `CC_SWITCH_AGY_SYSTEM_DIRS` / `CC_SWITCH_TOOL_SYSTEM_DIRS`, which redirect the hardcoded CLI search dirs so the `web_api_models` no-CLI tests stay hermetic.
