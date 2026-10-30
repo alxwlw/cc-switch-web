@@ -210,14 +210,14 @@ describe("UsageScriptModal Oh My Pi credentials", () => {
 });
 
 describe("UsageScriptModal — web", () => {
-  it("disables the test button (usage scripts cannot run) but keeps saving", async () => {
+  it("keeps the test button enabled in web (WEB-04, runs on the server) and keeps saving", async () => {
     setWeb(true);
     const onSave = vi.fn();
     renderModal(onSave);
 
     expect(
       screen.getByRole("button", { name: "usageScript.testScript" }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     await userEvent.click(
       screen.getByRole("button", { name: "usageScript.saveConfig" }),
     );
