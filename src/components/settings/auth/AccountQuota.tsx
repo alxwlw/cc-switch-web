@@ -356,7 +356,13 @@ export function XaiAccountQuota({
     <>
       <AccountQuotaColumn
         login={login}
-        state={subscriptionQuotaState(t, quota, loading, i18n.language, display)}
+        state={subscriptionQuotaState(
+          t,
+          quota,
+          loading,
+          i18n.language,
+          display,
+        )}
         queriedAt={quota?.queriedAt ?? null}
         loading={loading}
         onRefresh={() => void refetch()}
@@ -423,7 +429,13 @@ export function AgyAccountQuota({
     <>
       <AccountQuotaColumn
         login={login}
-        state={subscriptionQuotaState(t, quota, loading, i18n.language, display)}
+        state={subscriptionQuotaState(
+          t,
+          quota,
+          loading,
+          i18n.language,
+          display,
+        )}
         queriedAt={quota?.queriedAt ?? null}
         loading={loading}
         onRefresh={() => void refetch()}

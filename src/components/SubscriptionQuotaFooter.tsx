@@ -238,10 +238,7 @@ function WebQuotaServerNote({
     appIdForExpiredHint,
   );
   return (
-    <p
-      className="m-0 text-xs text-fg-3"
-      data-testid="quota-server-note"
-    >
+    <p className="m-0 text-xs text-fg-3" data-testid="quota-server-note">
       {isCli
         ? t("subscription.cliServerNote", {
             defaultValue: "по учётным данным CLI на сервере",
