@@ -4,6 +4,7 @@
 //! `*Service::*(state: &AppState, …)` functions the Tauri commands wrap.
 //! Blocking ops run in `spawn_blocking`, mirroring `commands::*`.
 
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -302,6 +303,18 @@ pub fn router(state: SharedState) -> Router {
             post(kimi_use_account),
         )
         .route("/api/env/conflicts", get(env_conflicts))
+        // Model lists (WEB-03): global, not app-scoped — same inners as the
+        // desktop commands. No app-check macros (cf. breaker-config).
+        .route("/api/models/fetch", post(models_fetch))
+        .route("/api/models/agy", post(models_agy))
+        .route("/api/models/opencode", get(models_opencode))
+        .route("/api/models/codex-oauth", get(models_codex_oauth))
+        .route("/api/models/xai-oauth", get(models_xai_oauth))
+        .route("/api/models/copilot", get(models_copilot))
+        .route(
+            "/api/models/copilot/:accountId",
+            get(models_copilot_for_account),
+        )
         .route("/api/env/conflicts/cleanup", post(env_cleanup))
         .route("/api/env/restore", post(env_restore))
         // OMO / OMO Slim live config
@@ -2569,6 +2582,117 @@ async fn kimi_use_account(
     Path(account_id): Path<String>,
 ) -> ApiResult {
     unit_result(state.kimi_oauth.use_account(&account_id).await)
+}
+
+// ---------- Model lists (WEB-03): same inners as the desktop commands ----------
+
+/// Optional camelCase string field of a `Json<Value>` body; a present-but-wrong
+/// type is a 400, never axum's 422.
+fn body_opt_string(body: &Value, field: &str) -> Result<Option<String>, ApiResult> {
+    match body.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s.clone())),
+        Some(_) => Err(bad_request(format!("{field} must be a string"))),
+    }
+}
+
+/// `POST /api/models/fetch`: the same camelCase fields the desktop invoke sends
+/// today (`model-fetch.ts`); missing/wrong types are 400 via `Json<Value>`.
+/// The apiKey travels in the POST body to our own server (tailnet model) and is
+/// never logged here — the service redacts known secrets from error bodies.
+async fn models_fetch(State(_state): State<SharedState>, Json(body): Json<Value>) -> ApiResult {
+    let base_url = match body_str(&body, "baseUrl") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let api_key = match body_str(&body, "apiKey") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let is_full_url = match body.get("isFullUrl") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(b)) => *b,
+        Some(_) => return bad_request("isFullUrl must be a boolean"),
+    };
+    let models_url = match body_opt_string(&body, "modelsUrl") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let custom_user_agent = match body_opt_string(&body, "customUserAgent") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let api_format = match body_opt_string(&body, "apiFormat") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let request_headers: Option<BTreeMap<String, String>> = match body.get("requestHeaders") {
+        None | Some(Value::Null) => None,
+        Some(v) => match serde_json::from_value(v.clone()) {
+            Ok(m) => Some(m),
+            Err(e) => return bad_request(format!("invalid requestHeaders: {e}")),
+        },
+    };
+    proxy_result(
+        crate::commands::fetch_models_for_config(
+            base_url,
+            api_key,
+            Some(is_full_url),
+            models_url,
+            custom_user_agent,
+            api_format,
+            request_headers,
+        )
+        .await,
+    )
+}
+
+/// `POST /api/models/agy`: `{apiKey?, baseUrl?}` — no account scoping.
+async fn models_agy(State(_state): State<SharedState>, Json(body): Json<Value>) -> ApiResult {
+    let api_key = match body_opt_string(&body, "apiKey") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let base_url = match body_opt_string(&body, "baseUrl") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    proxy_result(crate::commands::get_agy_models(api_key, base_url).await)
+}
+
+async fn models_opencode(State(_state): State<SharedState>) -> ApiResult {
+    proxy_result(crate::commands::get_opencode_models().await)
+}
+
+#[derive(Deserialize)]
+struct ModelsAccountQuery {
+    #[serde(rename = "accountId")]
+    account_id: Option<String>,
+}
+
+async fn models_codex_oauth(
+    State(state): State<SharedState>,
+    Query(q): Query<ModelsAccountQuery>,
+) -> ApiResult {
+    proxy_result(crate::commands::get_codex_oauth_models_inner(&state, q.account_id).await)
+}
+
+async fn models_xai_oauth(
+    State(state): State<SharedState>,
+    Query(q): Query<ModelsAccountQuery>,
+) -> ApiResult {
+    proxy_result(crate::commands::get_xai_oauth_models_inner(&state, q.account_id).await)
+}
+
+async fn models_copilot(State(state): State<SharedState>) -> ApiResult {
+    proxy_result(crate::commands::copilot_get_models_inner(&state, None).await)
+}
+
+async fn models_copilot_for_account(
+    State(state): State<SharedState>,
+    Path(account_id): Path<String>,
+) -> ApiResult {
+    proxy_result(crate::commands::copilot_get_models_inner(&state, Some(account_id)).await)
 }
 
 async fn auth_remove_account(
