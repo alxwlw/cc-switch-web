@@ -71,7 +71,7 @@ describe("Antigravity model discovery", () => {
     setWeb(true);
     const { unmount } = render(<Harness appId="agy" />);
     expect(screen.getByTestId("agy-cli-server-note")).toHaveTextContent(
-      "список берётся у CLI на сервере",
+      /^список берётся у CLI на сервере$/,
     );
     unmount();
     render(<Harness appId="gemini" />);

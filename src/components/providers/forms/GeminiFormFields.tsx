@@ -213,7 +213,9 @@ export function GeminiFormFields({
               className="m-0 text-xs text-fg-3"
               data-testid="agy-cli-server-note"
             >
-              список берётся у CLI на сервере
+              {t("provider.form.agy.cliServerNote", {
+                defaultValue: "список берётся у CLI на сервере",
+              })}
             </p>
           )}
           <ModelInputWithFetch
