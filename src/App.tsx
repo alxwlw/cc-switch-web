@@ -1115,37 +1115,34 @@ function App() {
     ) {
       let liveProviderIds: string[] = [];
       try {
-        // WEB-00: live-ids opencode (get_opencode_live_provider_ids) не поддержаны. Шаг только
-        // проверяет коллизию ключа копии с записями живого конфига; в web копия получает ключ,
-        // свободный среди провайдеров БД (addToLive=false, в живой конфиг не пишется) — снимет WEB-14.
+        // Шаг проверяет коллизию ключа копии с записями живого конфига; в web копия получает ключ,
+        // свободный среди провайдеров БД (addToLive=false, в живой конфиг не пишется). opencode live-ids в web работают (WEB-14).
         // Hermes (WEB-16), openclaw (WEB-15) и pi/omp (WEB-17) live-ids в web работают
         liveProviderIds =
-          isWeb && activeApp === "opencode"
-            ? []
-            : activeApp === "opencode"
+          activeApp === "opencode"
+            ? await queryClient.ensureQueryData({
+                queryKey: ["opencodeLiveProviderIds"],
+                queryFn: () => providersApi.getOpenCodeLiveProviderIds(),
+              })
+            : activeApp === "openclaw"
               ? await queryClient.ensureQueryData({
-                  queryKey: ["opencodeLiveProviderIds"],
-                  queryFn: () => providersApi.getOpenCodeLiveProviderIds(),
+                  queryKey: openclawKeys.liveProviderIds,
+                  queryFn: () => providersApi.getOpenClawLiveProviderIds(),
                 })
-              : activeApp === "openclaw"
+              : activeApp === "hermes"
                 ? await queryClient.ensureQueryData({
-                    queryKey: openclawKeys.liveProviderIds,
-                    queryFn: () => providersApi.getOpenClawLiveProviderIds(),
+                    queryKey: hermesKeys.liveProviderIds,
+                    queryFn: () => providersApi.getHermesLiveProviderIds(),
                   })
-                : activeApp === "hermes"
-                  ? await queryClient.ensureQueryData({
-                      queryKey: hermesKeys.liveProviderIds,
-                      queryFn: () => providersApi.getHermesLiveProviderIds(),
+                : (
+                    await queryClient.ensureQueryData({
+                      queryKey: [activeApp, "currentState"],
+                      queryFn: () =>
+                        piApi.getCurrentState(
+                          activeApp === "omp" ? "omp" : "pi",
+                        ),
                     })
-                  : (
-                      await queryClient.ensureQueryData({
-                        queryKey: [activeApp, "currentState"],
-                        queryFn: () =>
-                          piApi.getCurrentState(
-                            activeApp === "omp" ? "omp" : "pi",
-                          ),
-                      })
-                    ).enabledProviderIds;
+                  ).enabledProviderIds;
       } catch (error) {
         console.error(
           "[App] Failed to load live provider IDs for duplication",

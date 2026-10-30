@@ -39,6 +39,9 @@ Scope: `src-tauri/src/commands/{codex_oauth,xai_oauth,copilot}.rs` (inner от `
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-30**: PR #30 merged `68f03f92` → main; live на `cc-switch-web.service` с 13:46; DX-61 Done.
+  - Server и `dist-web` пересобраны из main. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p29-20261030-134318/`, прежний бинарник — `cc-switch-web.prev`. Миграций нет. Нюанс деплоя: cargo кладёт example server в `src-tauri/target/release/examples/server`, не в `target/release/examples/`; первый `cp` мимо, доустановлен после stop (бинарник от 13:45, `Text file busy` без stop).
+  - Smoke: консоль 200; `GET /api/models/opencode` — живой JSON со списком CLI; fetch против реального провайдера — 28 моделей; кнопка fetch-models в web и подпись у agy — ок; паник в журнале нет.
 - **Статус до merge (2026-10-30)**: ветка `web-parity/web-03-model-lists` (worktree `.worktrees/web-03-models`), PR #30 (https://github.com/alxwlw/cc-switch-web/pull/30) открыт; DX-61 → In Review (комментарий со ссылкой). Чекбоксы Т1–Т4 закрыты, Notes заполнены (`docs(plans)` — WEB-03 T4).
   - Финальные гейты:
     - `cargo fmt --check` — чисто (RC=0);

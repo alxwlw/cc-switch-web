@@ -906,6 +906,20 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "get_openclaw_workspace_paths":
       return { method: "GET", url: "/api/openclaw/workspace-paths" };
 
+    // ---------- OpenCode live config & default model (WEB-14) ----------
+    case "import_opencode_providers_from_live":
+      return { method: "POST", url: "/api/opencode/import-live" };
+    case "get_opencode_live_provider_ids":
+      return { method: "GET", url: "/api/opencode/live-provider-ids" };
+    case "get_opencode_default_model":
+      return { method: "GET", url: "/api/opencode/default-model" };
+    case "set_opencode_default_model":
+      return {
+        method: "PUT",
+        url: "/api/opencode/default-model",
+        body: { model: a.model },
+      };
+
     // ---------- settings & environment ----------
     case "get_settings":
       return { method: "GET", url: "/api/settings" };

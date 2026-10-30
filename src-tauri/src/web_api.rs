@@ -430,6 +430,16 @@ pub fn router(state: SharedState) -> Router {
                 .put(openclaw_daily_memory_set)
                 .delete(openclaw_daily_memory_delete),
         )
+        // OpenCode (WEB-14)
+        .route("/api/opencode/import-live", post(opencode_import_live))
+        .route(
+            "/api/opencode/live-provider-ids",
+            get(opencode_live_provider_ids),
+        )
+        .route(
+            "/api/opencode/default-model",
+            get(opencode_default_model_get).put(opencode_default_model_set),
+        )
         // Pi / Oh My Pi (WEB-17)
         .route("/api/:app/current-state", get(pi_current_state))
         .route(
@@ -3497,6 +3507,42 @@ async fn pi_prompt_template_delete(
             &slug,
             &body.expected_revision,
         )
+    })
+    .await
+}
+
+// ---------- OpenCode (WEB-14) ----------
+
+async fn opencode_import_live(State(state): State<SharedState>) -> ApiResult {
+    blocking_api("opencode import", move || {
+        crate::services::provider::import_opencode_providers_from_live(&state)
+    })
+    .await
+}
+
+async fn opencode_live_provider_ids() -> ApiResult {
+    blocking_api(
+        "opencode live provider ids",
+        crate::commands::get_opencode_live_provider_ids,
+    )
+    .await
+}
+
+async fn opencode_default_model_get() -> ApiResult {
+    blocking_api(
+        "opencode default model",
+        crate::opencode_config::get_default_model,
+    )
+    .await
+}
+
+async fn opencode_default_model_set(Json(body): Json<Value>) -> ApiResult {
+    let model = match body_str(&body, "model") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    blocking_api("opencode default model write", move || {
+        crate::opencode_config::set_default_model(&model)
     })
     .await
 }
