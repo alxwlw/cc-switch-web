@@ -45,7 +45,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 27 — WEB-01 / DX-59 (этап 1): local proxy lifecycle, routing/Stack, takeover](2026-10-25-web-parity-m5/phase-27.md) — PR #28, merged `63fefd44` → main 2026-10-29, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-59 In Progress (этап 1 из 2).
 - [x] [Phase 28 — WEB-01 / DX-59 (этап 2): failover, circuit breaker, health, OAuth data plane](2026-10-25-web-parity-m5/phase-28.md) — PR #29, merged `12fc922e` → main 2026-10-30, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-59 Done (этап 2 из 2).
 - [x] [Phase 29 — WEB-03 / DX-61: списки моделей от провайдера и CLI](2026-10-25-web-parity-m5/phase-29.md) — PR #30, merged `68f03f92` → main 2026-10-30, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-61 Done.
-- [ ] [Phase 30 — WEB-14 / DX-72: OpenCode live import и default model](2026-10-25-web-parity-m5/phase-30.md)
+- [x] [Phase 30 — WEB-14 / DX-72: OpenCode live import и default model](2026-10-25-web-parity-m5/phase-30.md) — PR #31, merged `cb02afbb` → main 2026-10-30, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-72 Done.
 - [ ] [Phase 31 — WEB-04 / DX-62: provider usage, подписки, баланс и connectivity](2026-10-25-web-parity-m5/phase-31.md)
 - [ ] [Phase 32 — WEB-19 / DX-77: Claude Desktop integration и official cards](2026-10-25-web-parity-m5/phase-32.md)
 
