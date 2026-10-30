@@ -2571,6 +2571,44 @@ fn merge_path_segments_win(parts: &[&str]) -> String {
     merged.join(";")
 }
 
+/// Env override for the hardcoded system dirs below. Same test-seam pattern as
+/// `CC_SWITCH_MODEL_FETCH_TIMEOUT_SECS` (services/model_fetch.rs): read at call
+/// time, unset = current behaviour exactly (same dirs, same order). When present —
+/// even empty — its `split_paths` value replaces the platform list (empty = no
+/// system dirs), so tests can redirect the search to a fake bin dir or an empty
+/// dir regardless of what the host has in `/usr/local/bin` / `/usr/bin`. The
+/// desktop never sets it. Only this dir list is overridden; HOME dirs, tool
+/// extras and the effective PATH are untouched.
+const TOOL_SYSTEM_DIRS_ENV: &str = "CC_SWITCH_TOOL_SYSTEM_DIRS";
+
+#[cfg_attr(target_os = "windows", allow(dead_code))]
+fn tool_system_dirs() -> Vec<std::path::PathBuf> {
+    if let Some(raw) = std::env::var_os(TOOL_SYSTEM_DIRS_ENV) {
+        if raw.is_empty() {
+            return Vec::new();
+        }
+        return std::env::split_paths(&raw).collect();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        vec![
+            std::path::PathBuf::from("/opt/homebrew/bin"),
+            std::path::PathBuf::from("/usr/local/bin"),
+        ]
+    }
+    #[cfg(target_os = "linux")]
+    {
+        vec![
+            std::path::PathBuf::from("/usr/local/bin"),
+            std::path::PathBuf::from("/usr/bin"),
+        ]
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        Vec::new()
+    }
+}
+
 /// 构建某工具的候选搜索目录（原生安装优先，PATH 兜底）。
 /// 单探兜底 (`scan_cli_version`) 与全量枚举 (`enumerate_tool_installations`) 共用，
 /// 确保两条路径看到的是同一组安装位置。
@@ -2618,14 +2656,9 @@ fn build_tool_search_paths(tool: &str) -> Vec<std::path::PathBuf> {
 
     #[cfg(target_os = "macos")]
     {
-        push_unique_path(
-            &mut search_paths,
-            std::path::PathBuf::from("/opt/homebrew/bin"),
-        );
-        push_unique_path(
-            &mut search_paths,
-            std::path::PathBuf::from("/usr/local/bin"),
-        );
+        for dir in tool_system_dirs() {
+            push_unique_path(&mut search_paths, dir);
+        }
         if tool == "hermes" {
             let python_base = home.join("Library").join("Python");
             if python_base.exists() {
@@ -2643,11 +2676,9 @@ fn build_tool_search_paths(tool: &str) -> Vec<std::path::PathBuf> {
 
     #[cfg(target_os = "linux")]
     {
-        push_unique_path(
-            &mut search_paths,
-            std::path::PathBuf::from("/usr/local/bin"),
-        );
-        push_unique_path(&mut search_paths, std::path::PathBuf::from("/usr/bin"));
+        for dir in tool_system_dirs() {
+            push_unique_path(&mut search_paths, dir);
+        }
     }
 
     #[cfg(target_os = "windows")]
