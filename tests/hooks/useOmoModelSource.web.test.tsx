@@ -37,10 +37,12 @@ describe("useOmoModelSource — web", () => {
     });
   });
 
-  it("offers configured models without the live-state calls or failure toasts", async () => {
+  it("offers configured models plus runtime models without the live-state calls (WEB-03)", async () => {
     setWeb(true);
     const liveIds = vi.spyOn(providersApi, "getOpenCodeLiveProviderIds");
-    const runtime = vi.spyOn(modelFetch, "getOpenCodeModels");
+    const runtime = vi
+      .spyOn(modelFetch, "getOpenCodeModels")
+      .mockResolvedValue([]);
 
     const { result } = renderHook(
       () => useOmoModelSource({ isOmoCategory: true }),
@@ -53,7 +55,7 @@ describe("useOmoModelSource — web", () => {
       ]),
     );
     expect(liveIds).not.toHaveBeenCalled();
-    expect(runtime).not.toHaveBeenCalled();
+    expect(runtime).toHaveBeenCalled();
     expect(toastWarning).not.toHaveBeenCalled();
   });
 

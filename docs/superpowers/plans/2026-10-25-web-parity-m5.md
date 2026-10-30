@@ -43,7 +43,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 25 — WEB-02 / DX-60 (этап 1): managed OAuth state, device-code flows, accounts](2026-10-25-web-parity-m5/phase-25.md) — PR #26, merged `b4d41c55` → main 2026-10-29, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-60 In Progress (этап 1 из 2).
 - [x] [Phase 26 — WEB-02 / DX-60 (этап 2): Kimi OAuth и official account cards](2026-10-25-web-parity-m5/phase-26.md) — PR #27, merged `acb117d8` → main 2026-10-29, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-60 Done (этап 2 из 2).
 - [x] [Phase 27 — WEB-01 / DX-59 (этап 1): local proxy lifecycle, routing/Stack, takeover](2026-10-25-web-parity-m5/phase-27.md) — PR #28, merged `63fefd44` → main 2026-10-29, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-59 In Progress (этап 1 из 2).
-- [ ] [Phase 28 — WEB-01 / DX-59 (этап 2): failover, circuit breaker, health, OAuth data plane](2026-10-25-web-parity-m5/phase-28.md) — PR #29 открыт (ветка `web-parity/web-01-failover-oauth`), DX-59 In Review (этап 2 из 2).
+- [x] [Phase 28 — WEB-01 / DX-59 (этап 2): failover, circuit breaker, health, OAuth data plane](2026-10-25-web-parity-m5/phase-28.md) — PR #29, merged `12fc922e` → main 2026-10-30, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-59 Done (этап 2 из 2).
 - [ ] [Phase 29 — WEB-03 / DX-61: списки моделей от провайдера и CLI](2026-10-25-web-parity-m5/phase-29.md)
 - [ ] [Phase 30 — WEB-14 / DX-72: OpenCode live import и default model](2026-10-25-web-parity-m5/phase-30.md)
 - [ ] [Phase 31 — WEB-04 / DX-62: provider usage, подписки, баланс и connectivity](2026-10-25-web-parity-m5/phase-31.md)

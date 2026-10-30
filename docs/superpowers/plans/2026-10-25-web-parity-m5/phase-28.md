@@ -72,6 +72,9 @@ Scope: `src-tauri/src/proxy/forwarder.rs` (менеджеры из AppState), `s
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-30**: PR #29 merged `12fc922e` → main; live на `cc-switch-web.service` с 09:07; DX-59 Done (этап 2 из 2).
+  - Server и `dist-web` пересобраны из main. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p28-20261030-090756/`, прежний бинарник — `cc-switch-web.prev`. Миграций нет.
+  - Smoke: консоль 200; `/api/failover/breaker-config`, `/queue/claude`, `/auto/claude`, `/health/claude/<id>` отвечают ok; claude-desktop отклоняется; proxy и takeover выключены; паник в журнале нет. Takeover на живом сервисе не включали.
 - **Статус до merge (2026-10-29)**: ветка `web-parity/web-01-failover-oauth` (worktree `.worktrees/web-01-failover`), PR #29 (https://github.com/alxwlw/cc-switch-web/pull/29) открыт; DX-59 → In Review (комментарий со ссылкой, «этап 2 из 2»). Ветка также несёт закрытие фазы 27 в плане (`a34fa730`).
   - Финальные гейты на `7a36def4`:
     - fmt и `clippy --lib --examples -D warnings` — чисто;

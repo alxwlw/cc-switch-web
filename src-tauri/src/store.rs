@@ -326,6 +326,94 @@ mod tests {
         upstream.abort();
     }
 
+    /// The Copilot models inner resolves its manager from AppState and serves the
+    /// stub catalog with the manager's token: no external network, the models
+    /// endpoint is seeded to the stub via `test_seed_runtime`. Codex/xAI inners
+    /// hit hardcoded upstreams, so they cannot be stubbed this way (hence Copilot).
+    #[tokio::test]
+    #[serial]
+    async fn copilot_models_inner_serves_stub_catalog_with_manager_token() {
+        use axum::{http::HeaderMap, routing::any, Router};
+        use std::sync::Mutex;
+
+        type SeenHit = (String, String, Option<String>);
+
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let dir = crate::config::get_app_config_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("copilot_auth.json"),
+            r#"{"version":3,"default_account_id":"1001","accounts":{"1001":{"github_token":"gh-secret","user":{"login":"octo","id":1001,"avatar_url":null},"authenticated_at":1}}}"#,
+        )
+        .unwrap();
+
+        let seen: Arc<Mutex<Vec<SeenHit>>> = Arc::default();
+        let log = seen.clone();
+        let app = Router::new().fallback(any(
+            move |method: axum::http::Method,
+                  uri: axum::http::Uri,
+                  headers: HeaderMap| {
+                let log = log.clone();
+                async move {
+                    log.lock().unwrap().push((
+                        method.to_string(),
+                        uri.path().to_string(),
+                        headers
+                            .get("authorization")
+                            .and_then(|v| v.to_str().ok())
+                            .map(str::to_string),
+                    ));
+                    (
+                        [("content-type", "application/json")],
+                        r#"{"data":[
+                            {"id":"stub-gpt","name":"Stub GPT","vendor":"Stub","model_picker_enabled":true},
+                            {"id":"stub-hidden","name":"Stub Hidden","vendor":"Stub","model_picker_enabled":false}
+                        ]}"#,
+                    )
+                }
+            },
+        ));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let upstream = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        let managed = state.managed_auth_states();
+        assert!(Arc::ptr_eq(&managed.copilot.0, &state.copilot_auth));
+        state
+            .copilot_auth
+            .read()
+            .await
+            .test_seed_runtime("1001", "tid-models-token", &format!("http://{addr}"))
+            .await;
+
+        let models = crate::commands::copilot_get_models_inner(&state, Some("1001".to_string()))
+            .await
+            .expect("stub catalog");
+        assert_eq!(
+            models.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+            vec!["stub-gpt"]
+        );
+
+        let via_default = crate::commands::copilot_get_models_inner(&state, None)
+            .await
+            .expect("stub catalog via default");
+        assert_eq!(via_default.len(), models.len());
+        assert_eq!(via_default[0].id, "stub-gpt");
+
+        let hits: Vec<_> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(method, path, _)| method == "GET" && path.ends_with("/models"))
+            .map(|(_, _, auth)| auth.clone())
+            .collect();
+        assert_eq!(hits, vec![Some("Bearer tid-models-token".to_string())]);
+
+        upstream.abort();
+    }
+
     /// A fresh server has fresh (closed) breakers, so health rows left by the previous
     /// server must not survive: on the first start and on the config-restart path.
     #[tokio::test]

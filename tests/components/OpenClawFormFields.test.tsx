@@ -56,12 +56,12 @@ function renderForm() {
 }
 
 describe("OpenClawFormFields model editor", () => {
-  it("web: fetch-models button is disabled", () => {
+  it("web: fetch-models button works", () => {
     setWeb(true);
     renderForm();
     expect(
       screen.getByRole("button", { name: "providerForm.fetchModels" }),
-    ).toBeDisabled();
+    ).toBeEnabled();
   });
 
   it("uses the family model-row layout without inferred model roles", () => {

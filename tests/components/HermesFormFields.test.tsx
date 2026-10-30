@@ -52,12 +52,12 @@ const renderHermesForm = (overrides: Partial<HermesFormFieldsProps> = {}) => {
 };
 
 describe("HermesFormFields", () => {
-  it("web: fetch models is disabled (fetch_models_for_config is unsupported)", () => {
+  it("web: fetch models works (fetch_models_for_config is supported)", () => {
     setWeb(true);
     renderHermesForm();
     expect(
       screen.getByRole("button", { name: "providerForm.fetchModels" }),
-    ).toBeDisabled();
+    ).toBeEnabled();
   });
 
   it("fills the context length of a model picked from the fetched list", async () => {

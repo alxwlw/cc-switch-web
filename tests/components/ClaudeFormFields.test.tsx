@@ -136,13 +136,14 @@ describe("ClaudeFormFields", () => {
     modelFetchApiMock.fetchModelsForConfig.mockResolvedValue([]);
   });
 
-  it("web: classic layout fetch-models button is disabled", () => {
+  it("web: classic layout fetch-models button works", () => {
     setWeb(true);
     renderCopilotForm({ variant: "classic" });
     const buttons = screen.getAllByRole("button", {
       name: "providerForm.fetchModels",
     });
-    for (const button of buttons) expect(button).toBeDisabled();
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const button of buttons) expect(button).toBeEnabled();
   });
 
   it("不会在 Copilot 表单打开时自动获取模型列表", () => {

@@ -1,5 +1,3 @@
-import { isWeb } from "@/lib/api/adapter";
-import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { useTranslation } from "react-i18next";
 import { useState, useRef, useCallback, useMemo } from "react";
 import { FormLabel } from "@/components/ui/form";
@@ -285,24 +283,21 @@ export function HermesFormFields({
             {t("hermes.form.models", { defaultValue: "模型列表" })}
           </h3>
           <div className="flex gap-1">
-            {/* WEB-00: fetch_models_for_config/copilot_get_models не поддержаны — кнопка disabled — снимет WEB-03 */}
-            <WebUnavailableTip active={isWeb}>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleFetchModels}
-                disabled={isFetchingModels || isWeb}
-                className="h-7 gap-1"
-              >
-                {isFetchingModels ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Download className="h-3.5 w-3.5" />
-                )}
-                {t("providerForm.fetchModels")}
-              </Button>
-            </WebUnavailableTip>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleFetchModels}
+              disabled={isFetchingModels}
+              className="h-7 gap-1"
+            >
+              {isFetchingModels ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              {t("providerForm.fetchModels")}
+            </Button>
             <Button
               type="button"
               variant="outline"

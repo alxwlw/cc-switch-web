@@ -62,6 +62,7 @@ fn catalog_model_ids(models: Option<serde_json::Value>) -> Vec<String> {
 }
 
 const FETCH_TIMEOUT_SECS: u64 = 15;
+const FETCH_TIMEOUT_ENV: &str = "CC_SWITCH_MODEL_FETCH_TIMEOUT_SECS";
 const MAX_REQUEST_HEADERS: usize = 64;
 const MAX_HEADER_NAME_BYTES: usize = 256;
 const MAX_HEADER_VALUE_BYTES: usize = 16 * 1024;
@@ -82,6 +83,19 @@ const KNOWN_COMPAT_SUFFIXES: &[&str] = &[
     "/coding",
     "/claude",
 ];
+
+/// Effective per-attempt timeout. The env override exists only so tests can run
+/// the slow-stub case in ~1 s instead of 15 s; the desktop path never sets it,
+/// so the shared default is untouched. Non-positive or unparsable values fall
+/// back to the default.
+fn fetch_timeout() -> Duration {
+    std::env::var(FETCH_TIMEOUT_ENV)
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|&s| s > 0)
+        .map(Duration::from_secs)
+        .unwrap_or(Duration::from_secs(FETCH_TIMEOUT_SECS))
+}
 
 /// 获取供应商的可用模型列表
 ///
@@ -124,9 +138,16 @@ pub async fn fetch_models(
         let request = crate::proxy::http_client::get_for_url(url)
             .get(url)
             .headers(headers.clone())
-            .timeout(Duration::from_secs(FETCH_TIMEOUT_SECS));
+            .timeout(fetch_timeout());
         let response = match request.send().await {
             Ok(r) => r,
+            // reqwest 0.12's Display for a timeout is
+            // `error sending request for url (…)` with no "timeout"/"timed out"
+            // text (only `is_timeout()` / the source chain know), so map it
+            // explicitly — `showFetchModelsError` matches on "timed out".
+            Err(e) if e.is_timeout() => {
+                return Err(format!("Request timed out: {e}"));
+            }
             Err(e) => {
                 return Err(format!("Request failed: {e}"));
             }
