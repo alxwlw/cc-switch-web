@@ -798,6 +798,14 @@ pub fn init_global_http_client(db: &Database) -> Result<(), String> {
     Ok(())
 }
 
+/// Installs the ring rustls `CryptoProvider` as the process default. rustls
+/// 0.23 panics on `ClientConfig::builder()` when both ring and aws-lc-rs are
+/// linked and no default is set. Idempotent: an already installed provider is
+/// kept (the `Err` of `install_default` is that case).
+pub fn install_rustls_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 /// Full headless startup: paths, legacy config, version precheck, DB open,
 /// log level, legacy migration, `AppState`, post-DB steps. No dialogs, no
 /// Tauri runtime. `codex_history` decides where the (slow) Codex history
@@ -811,6 +819,7 @@ pub fn init_global_http_client(db: &Database) -> Result<(), String> {
 pub fn run_headless_bootstrap_with(
     codex_history: CodexHistory<'_>,
 ) -> Result<Bootstrapped, BootstrapError> {
+    install_rustls_provider();
     let paths = BootstrapPaths::resolve();
 
     let legacy = if needs_legacy_migration(&paths) {
@@ -844,6 +853,7 @@ pub fn run_headless_bootstrap_with(
     }
 
     let state = AppState::new(db);
+    state.proxy_service.bind_app_state(state.clone());
     crate::usage_events::init(state.events.clone());
     run_post_db_bootstrap(&state, codex_history, &mut report);
     Ok(Bootstrapped { state, report })

@@ -441,7 +441,7 @@ export function RoutingSection({ onOpenApp }: RoutingSectionProps) {
         )}
       </SettingsBlock>
 
-      {/* per-app retries/timeouts/circuit config: works in web (phase 27); the failover queue and toggle stay gated until phase 28 */}
+      {/* per-app retries/timeouts/circuit config: works in web (phase 27); the failover queue and toggle work in web (phase 28) */}
       <SettingsBlock
         title={t("settings.advanced.failover.title")}
         help={{

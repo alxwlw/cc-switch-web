@@ -23,9 +23,9 @@ describe("adapter invoke · desktop-only fire-and-forget (WEB-00)", () => {
   );
 
   it("контроль: прочие неподдержанные команды по-прежнему кидают WebUnsupportedError", async () => {
-    await expect(
-      invoke("get_failover_queue", { appType: "claude" }),
-    ).rejects.toBeInstanceOf(WebUnsupportedError);
+    await expect(invoke("launch_hermes_dashboard")).rejects.toBeInstanceOf(
+      WebUnsupportedError,
+    );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

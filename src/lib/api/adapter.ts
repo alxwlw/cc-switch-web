@@ -1089,6 +1089,55 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return { method: "POST", url: "/api/proxy/codex/restart-daemon" };
     case "acknowledge_codex_stale_clients":
       return { method: "POST", url: "/api/proxy/codex/ack-stale-clients" };
+    // ---------- failover queue, circuit breaker, health (WEB-01 stage 2) ----------
+    case "get_provider_health":
+      return {
+        method: "GET",
+        url: `/api/failover/health/${enc(a.appType)}/${enc(a.providerId)}`,
+      };
+    case "reset_circuit_breaker":
+      return {
+        method: "POST",
+        url: `/api/failover/breaker/${enc(a.appType)}/${enc(a.providerId)}/reset`,
+      };
+    case "get_circuit_breaker_config":
+      return { method: "GET", url: "/api/failover/breaker-config" };
+    case "update_circuit_breaker_config":
+      return {
+        method: "PUT",
+        url: "/api/failover/breaker-config",
+        body: a.config,
+      };
+    case "get_circuit_breaker_stats":
+      return {
+        method: "GET",
+        url: `/api/failover/breaker-stats/${enc(a.appType)}/${enc(a.providerId)}`,
+      };
+    case "get_failover_queue":
+      return { method: "GET", url: `/api/failover/queue/${enc(a.appType)}` };
+    case "get_available_providers_for_failover":
+      return {
+        method: "GET",
+        url: `/api/failover/available/${enc(a.appType)}`,
+      };
+    case "add_to_failover_queue":
+      return {
+        method: "POST",
+        url: `/api/failover/queue/${enc(a.appType)}/${enc(a.providerId)}`,
+      };
+    case "remove_from_failover_queue":
+      return {
+        method: "DELETE",
+        url: `/api/failover/queue/${enc(a.appType)}/${enc(a.providerId)}`,
+      };
+    case "get_auto_failover_enabled":
+      return { method: "GET", url: `/api/failover/auto/${enc(a.appType)}` };
+    case "set_auto_failover_enabled":
+      return {
+        method: "PUT",
+        url: `/api/failover/auto/${enc(a.appType)}`,
+        body: { enabled: a.enabled },
+      };
     case "get_global_proxy_config":
       return { method: "GET", url: "/api/proxy/config" };
     case "update_global_proxy_config":

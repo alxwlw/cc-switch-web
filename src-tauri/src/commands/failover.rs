@@ -7,7 +7,7 @@ use crate::provider::Provider;
 use crate::store::AppState;
 use std::str::FromStr;
 
-fn require_failover_app(app_type: &str) -> Result<(), String> {
+pub(crate) fn require_failover_app(app_type: &str) -> Result<(), String> {
     let app = crate::app_config::AppType::from_str(app_type)
         .map_err(|error| format!("无效的应用类型: {error}"))?;
     if !app.supports_local_proxy() {
@@ -74,23 +74,31 @@ pub async fn get_failover_queue(
     state: tauri::State<'_, AppState>,
     app_type: String,
 ) -> Result<Vec<FailoverQueueItem>, String> {
-    require_failover_app(&app_type)?;
+    get_failover_queue_inner(state.inner(), &app_type)
+}
+
+/// 不依赖 tauri::State 的队列读取（web 路由共用）。
+pub(crate) fn get_failover_queue_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<Vec<FailoverQueueItem>, String> {
+    require_failover_app(app_type)?;
     let queue = state
         .db
-        .get_failover_queue(&app_type)
+        .get_failover_queue(app_type)
         .map_err(|e| e.to_string())?;
     if app_type != "codex" {
         return Ok(queue);
     }
     let providers = state
         .db
-        .get_all_providers(&app_type)
+        .get_all_providers(app_type)
         .map_err(|e| e.to_string())?;
     Ok(queue
         .into_iter()
         .filter(|item| {
             providers.get(&item.provider_id).is_some_and(|provider| {
-                crate::proxy::provider_router::provider_supports_failover(&app_type, provider)
+                crate::proxy::provider_router::provider_supports_failover(app_type, provider)
             })
         })
         .collect())
@@ -102,15 +110,23 @@ pub async fn get_available_providers_for_failover(
     state: tauri::State<'_, AppState>,
     app_type: String,
 ) -> Result<Vec<Provider>, String> {
-    require_failover_app(&app_type)?;
+    get_available_providers_for_failover_inner(state.inner(), &app_type)
+}
+
+/// 不依赖 tauri::State 的候选读取（web 路由共用）。
+pub(crate) fn get_available_providers_for_failover_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<Vec<Provider>, String> {
+    require_failover_app(app_type)?;
     let providers = state
         .db
-        .get_available_providers_for_failover(&app_type)
+        .get_available_providers_for_failover(app_type)
         .map_err(|e| e.to_string())?;
     Ok(providers
         .into_iter()
         .filter(|provider| {
-            crate::proxy::provider_router::provider_supports_failover(&app_type, provider)
+            crate::proxy::provider_router::provider_supports_failover(app_type, provider)
         })
         .collect())
 }
@@ -123,14 +139,23 @@ pub async fn add_to_failover_queue(
     app_type: String,
     provider_id: String,
 ) -> Result<(), String> {
-    require_failover_app(&app_type)?;
-    require_failover_provider(&state.db, &app_type, &provider_id)?;
-    state
-        .db
-        .add_to_failover_queue(&app_type, &provider_id)
-        .map_err(|e| e.to_string())?;
+    add_to_failover_queue_inner(state.inner(), &app_type, &provider_id)?;
     crate::tray::refresh_tray_menu(&app);
     Ok(())
+}
+
+/// 不依赖 AppHandle 的入队逻辑（web 路由共用）。
+pub(crate) fn add_to_failover_queue_inner(
+    state: &AppState,
+    app_type: &str,
+    provider_id: &str,
+) -> Result<(), String> {
+    require_failover_app(app_type)?;
+    require_failover_provider(&state.db, app_type, provider_id)?;
+    state
+        .db
+        .add_to_failover_queue(app_type, provider_id)
+        .map_err(|e| e.to_string())
 }
 
 /// 从故障转移队列移除供应商
@@ -141,13 +166,22 @@ pub async fn remove_from_failover_queue(
     app_type: String,
     provider_id: String,
 ) -> Result<(), String> {
-    require_failover_app(&app_type)?;
-    state
-        .db
-        .remove_from_failover_queue(&app_type, &provider_id)
-        .map_err(|e| e.to_string())?;
+    remove_from_failover_queue_inner(state.inner(), &app_type, &provider_id)?;
     crate::tray::refresh_tray_menu(&app);
     Ok(())
+}
+
+/// 不依赖 AppHandle 的出队逻辑（web 路由共用）。
+pub(crate) fn remove_from_failover_queue_inner(
+    state: &AppState,
+    app_type: &str,
+    provider_id: &str,
+) -> Result<(), String> {
+    require_failover_app(app_type)?;
+    state
+        .db
+        .remove_from_failover_queue(app_type, provider_id)
+        .map_err(|e| e.to_string())
 }
 
 /// 获取指定应用的自动故障转移开关状态（从 proxy_config 表读取）
@@ -156,10 +190,18 @@ pub async fn get_auto_failover_enabled(
     state: tauri::State<'_, AppState>,
     app_type: String,
 ) -> Result<bool, String> {
-    require_failover_app(&app_type)?;
+    get_auto_failover_enabled_inner(state.inner(), &app_type).await
+}
+
+/// 不依赖 tauri::State 的开关读取（web 路由共用）。
+pub(crate) async fn get_auto_failover_enabled_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<bool, String> {
+    require_failover_app(app_type)?;
     state
         .db
-        .get_proxy_config_for_app(&app_type)
+        .get_proxy_config_for_app(app_type)
         .await
         .map(|config| config.auto_failover_enabled)
         .map_err(|e| e.to_string())
@@ -172,6 +214,18 @@ pub async fn get_auto_failover_enabled(
 pub async fn set_auto_failover_enabled(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
+    app_type: String,
+    enabled: bool,
+) -> Result<(), String> {
+    set_auto_failover_enabled_inner(state.inner(), app_type, enabled).await?;
+    // 刷新托盘，确保状态同步（Linux 重建原生菜单，其它平台通知托盘面板，不挂原生菜单）
+    crate::tray::refresh_tray_menu(&app);
+    Ok(())
+}
+
+/// 不依赖 AppHandle 的开关逻辑（web 路由共用）；`provider-switched` 走 `state.events`。
+pub(crate) async fn set_auto_failover_enabled_inner(
+    state: &AppState,
     app_type: String,
     enabled: bool,
 ) -> Result<(), String> {
@@ -265,12 +319,9 @@ pub async fn set_auto_failover_enabled(
     // 避免 P1 不可切换（例如 official provider）时留下“开关已开但目标未切”的脏状态。
     // Stack 模式不做故障转移，切换在锁内拒绝（见 `switch_route_for_failover`）。
     if enabled {
-        if let Err(e) = crate::mode::controller::switch_route_for_failover(
-            state.inner(),
-            &app_enum,
-            &p1_provider_id,
-        )
-        .await
+        if let Err(e) =
+            crate::mode::controller::switch_route_for_failover(state, &app_enum, &p1_provider_id)
+                .await
         {
             if let Some(provider_id) = auto_added_provider_id {
                 let _ = state.db.remove_from_failover_queue(&app_type, &provider_id);
@@ -299,9 +350,6 @@ pub async fn set_auto_failover_enabled(
         });
         state.events.emit("provider-switched", event_data);
     }
-
-    // 刷新托盘，确保状态同步（Linux 重建原生菜单，其它平台通知托盘面板，不挂原生菜单）
-    crate::tray::refresh_tray_menu(&app);
 
     Ok(())
 }

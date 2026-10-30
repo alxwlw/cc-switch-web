@@ -538,6 +538,18 @@ pub async fn reset_circuit_breaker(
     provider_id: String,
     app_type: String,
 ) -> Result<(), String> {
+    reset_circuit_breaker_inner(state.inner(), provider_id, app_type).await?;
+    // 可能切回了高优先级供应商：托盘比对一次（桌面独有）
+    crate::tray::refresh_tray_menu(&app_handle);
+    Ok(())
+}
+
+/// 与 `reset_circuit_breaker` 同逻辑，不依赖 AppHandle（web 路由共用）；切换事件走总线。
+pub(crate) async fn reset_circuit_breaker_inner(
+    state: &AppState,
+    provider_id: String,
+    app_type: String,
+) -> Result<(), String> {
     let app = require_proxy_app(&app_type)?;
     // 1. 重置数据库健康状态
     let db = &state.db;
@@ -603,7 +615,7 @@ pub async fn reset_circuit_breaker(
                     let switch_manager =
                         crate::proxy::failover_switch::FailoverSwitchManager::new();
                     if let Err(e) = switch_manager
-                        .try_switch(Some(&app_handle), &app_type, &provider_id, &provider_name)
+                        .try_switch(state, None, &app_type, &provider_id, &provider_name)
                         .await
                     {
                         log::error!("[Recovery] 自动切换失败: {e}");

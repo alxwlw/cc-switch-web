@@ -503,6 +503,33 @@ pub fn router(state: SharedState) -> Router {
             "/api/proxy/codex/ack-stale-clients",
             post(proxy_codex_ack_stale_clients),
         )
+        // Failover queue, breaker, health (WEB-01 stage 2)
+        .route(
+            "/api/failover/breaker-config",
+            get(failover_breaker_config).put(failover_set_breaker_config),
+        )
+        .route(
+            "/api/failover/health/:app/:provider_id",
+            get(failover_health),
+        )
+        .route(
+            "/api/failover/breaker/:app/:provider_id/reset",
+            post(failover_reset_breaker),
+        )
+        .route(
+            "/api/failover/breaker-stats/:app/:provider_id",
+            get(failover_breaker_stats),
+        )
+        .route("/api/failover/queue/:app", get(failover_queue))
+        .route("/api/failover/available/:app", get(failover_available))
+        .route(
+            "/api/failover/queue/:app/:provider_id",
+            post(failover_queue_add).delete(failover_queue_remove),
+        )
+        .route(
+            "/api/failover/auto/:app",
+            get(failover_auto).put(failover_set_auto),
+        )
         .with_state(state)
 }
 
@@ -4027,4 +4054,132 @@ async fn proxy_codex_restart_daemon() -> ApiResult {
 
 async fn proxy_codex_ack_stale_clients() -> ApiResult {
     unit_result(crate::commands::acknowledge_codex_stale_clients_inner().await)
+}
+
+// ---------- Failover queue, breaker, health (WEB-01 stage 2) ----------
+
+/// App that supports failover (desktop `require_failover_app`); anything else is a 400.
+macro_rules! failover_app {
+    ($app:expr) => {
+        if let Err(e) = crate::commands::require_failover_app($app) {
+            return bad_request(e);
+        }
+    };
+}
+
+/// Body is the whole `CircuitBreakerConfig` (camelCase). The breaker config is global.
+async fn failover_breaker_config(State(state): State<SharedState>) -> ApiResult {
+    proxy_result(
+        state
+            .db
+            .get_circuit_breaker_config()
+            .await
+            .map_err(|e| e.to_string()),
+    )
+}
+
+async fn failover_set_breaker_config(
+    State(state): State<SharedState>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    let config =
+        match serde_json::from_value::<crate::proxy::circuit_breaker::CircuitBreakerConfig>(body) {
+            Ok(c) => c,
+            Err(e) => return bad_request(format!("invalid circuit breaker config: {e}")),
+        };
+    if let Err(e) = state.db.update_circuit_breaker_config(&config).await {
+        return fail(e.to_string());
+    }
+    unit_result(
+        state
+            .proxy_service
+            .update_circuit_breaker_configs(config)
+            .await,
+    )
+}
+
+async fn failover_health(
+    State(state): State<SharedState>,
+    Path((app, provider_id)): Path<(String, String)>,
+) -> ApiResult {
+    mode_app!(&app);
+    proxy_result(
+        state
+            .db
+            .get_provider_health(&provider_id, &app)
+            .await
+            .map_err(|e| e.to_string()),
+    )
+}
+
+async fn failover_reset_breaker(
+    State(state): State<SharedState>,
+    Path((app, provider_id)): Path<(String, String)>,
+) -> ApiResult {
+    proxy_app!(&app);
+    unit_result(crate::commands::reset_circuit_breaker_inner(&state, provider_id, app).await)
+}
+
+/// Parity with the desktop command, which is a stub: always `null`.
+async fn failover_breaker_stats(Path((app, _provider_id)): Path<(String, String)>) -> ApiResult {
+    mode_app!(&app);
+    ok(Value::Null)
+}
+
+async fn failover_queue(State(state): State<SharedState>, Path(app): Path<String>) -> ApiResult {
+    failover_app!(&app);
+    proxy_result(crate::commands::get_failover_queue_inner(&state, &app))
+}
+
+async fn failover_available(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+) -> ApiResult {
+    failover_app!(&app);
+    proxy_result(crate::commands::get_available_providers_for_failover_inner(
+        &state, &app,
+    ))
+}
+
+async fn failover_queue_add(
+    State(state): State<SharedState>,
+    Path((app, provider_id)): Path<(String, String)>,
+) -> ApiResult {
+    failover_app!(&app);
+    unit_result(crate::commands::add_to_failover_queue_inner(
+        &state,
+        &app,
+        &provider_id,
+    ))
+}
+
+async fn failover_queue_remove(
+    State(state): State<SharedState>,
+    Path((app, provider_id)): Path<(String, String)>,
+) -> ApiResult {
+    failover_app!(&app);
+    unit_result(crate::commands::remove_from_failover_queue_inner(
+        &state,
+        &app,
+        &provider_id,
+    ))
+}
+
+async fn failover_auto(State(state): State<SharedState>, Path(app): Path<String>) -> ApiResult {
+    failover_app!(&app);
+    proxy_result(crate::commands::get_auto_failover_enabled_inner(&state, &app).await)
+}
+
+/// Body `{enabled}`.
+async fn failover_set_auto(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    failover_app!(&app);
+    let enabled = match body_bool(&body, "enabled") {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+    unit_result(crate::commands::set_auto_failover_enabled_inner(&state, app, enabled).await)
 }

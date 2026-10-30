@@ -40,7 +40,13 @@ impl AppState {
         let xai_oauth = Arc::new(RwLock::new(XaiOAuthManager::new(app_config_dir.clone())));
         let agy_account = Arc::new(AgyAccountManager::new(app_config_dir));
         let events = EventHub::new();
-        let proxy_service = ProxyService::new(db.clone()).with_events(events.clone());
+        let proxy_service = ProxyService::new(db.clone())
+            .with_events(events.clone())
+            .with_auth(crate::proxy::server::OAuthManagers {
+                copilot: copilot_auth.clone(),
+                codex: codex_oauth_manager.clone(),
+                xai: xai_oauth.clone(),
+            });
 
         Self {
             db,
@@ -144,5 +150,291 @@ mod tests {
         let xai = state.xai_oauth.read().await.list_accounts().await;
         assert_eq!(xai.len(), 1);
         assert_eq!(xai[0].login, "grok-user");
+    }
+
+    #[test]
+    #[serial]
+    fn proxy_auth_bundle_shares_appstate_arcs() {
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        let auth = state.proxy_service.auth_for_test().expect("bundle set");
+        assert!(Arc::ptr_eq(&auth.copilot, &state.copilot_auth));
+        assert!(Arc::ptr_eq(&auth.codex, &state.codex_oauth_manager));
+        assert!(Arc::ptr_eq(&auth.xai, &state.xai_oauth));
+    }
+
+    /// Headless (no AppHandle): the forwarder takes the Copilot token from the manager
+    /// that AppState owns; after the account is removed through that manager the next
+    /// request fails closed and nothing with the old token reaches the upstream.
+    ///
+    /// The Copilot manager exchanges the GitHub token at api.github.com on a cold cache,
+    /// so the test seeds the manager's token + endpoint cache (`test_seed_runtime`).
+    #[tokio::test]
+    #[serial]
+    async fn headless_proxy_forwards_with_manager_token_and_stops_after_logout() {
+        use axum::{http::HeaderMap, routing::any, Router};
+        use std::sync::Mutex;
+
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let dir = crate::config::get_app_config_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("copilot_auth.json"),
+            r#"{"version":3,"default_account_id":"1001","accounts":{"1001":{"github_token":"gh-secret","user":{"login":"octo","id":1001,"avatar_url":null},"authenticated_at":1}}}"#,
+        )
+        .unwrap();
+
+        let seen: Arc<Mutex<Vec<(String, Option<String>)>>> = Arc::default();
+        let log = seen.clone();
+        let app = Router::new().fallback(any(
+            move |uri: axum::http::Uri, headers: HeaderMap| {
+                let log = log.clone();
+                async move {
+                    log.lock().unwrap().push((
+                        uri.path().to_string(),
+                        headers
+                            .get("authorization")
+                            .and_then(|v| v.to_str().ok())
+                            .map(str::to_string),
+                    ));
+                    (
+                        [("content-type", "application/json")],
+                        r#"{"id":"c1","object":"chat.completion","created":1,"model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
+                    )
+                }
+            },
+        ));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let upstream = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        state
+            .copilot_auth
+            .read()
+            .await
+            .test_seed_runtime("1001", "tid-managed-token", &format!("http://{addr}"))
+            .await;
+        let mut provider = crate::provider::Provider::with_id(
+            "copilot-1".to_string(),
+            "Copilot".to_string(),
+            serde_json::json!({"env": {"ANTHROPIC_BASE_URL": "https://api.githubcopilot.com"}}),
+            None,
+        );
+        provider.meta = Some(crate::provider::ProviderMeta {
+            provider_type: Some("github_copilot".to_string()),
+            ..Default::default()
+        });
+        state.db.save_provider("claude", &provider).unwrap();
+        state
+            .db
+            .set_current_provider("claude", "copilot-1")
+            .unwrap();
+        let mut config = state.db.get_proxy_config().await.unwrap();
+        config.listen_address = "127.0.0.1".to_string();
+        config.listen_port = 0;
+        state.db.update_proxy_config(config).await.unwrap();
+        let info = state.proxy_service.start().await.expect("start proxy");
+
+        let client = reqwest::Client::new();
+        let send_to = |port: u16| {
+            let client = client.clone();
+            async move {
+                client
+                    .post(format!("http://127.0.0.1:{port}/v1/messages"))
+                    .json(&serde_json::json!({
+                        "model": "gpt-4o", "max_tokens": 8,
+                        "messages": [{"role": "user", "content": "hi"}]
+                    }))
+                    .send()
+                    .await
+                    .unwrap()
+            }
+        };
+
+        let first = send_to(info.port).await;
+        assert!(
+            first.status().is_success(),
+            "{}",
+            first.text().await.unwrap()
+        );
+        let chat_auth: Vec<_> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("/chat/completions"))
+            .map(|(_, auth)| auth.clone())
+            .collect();
+        assert_eq!(
+            chat_auth,
+            vec![Some("Bearer tid-managed-token".to_string())]
+        );
+
+        // Config update restarts the server through start_with; the restarted forwarder
+        // must still carry the managers.
+        let mut config = state.db.get_proxy_config().await.unwrap();
+        config.listen_port = 0; // differs from the persisted ephemeral port -> restart
+        assert!(state.proxy_service.update_config(&config).await.unwrap());
+        let new_port = state.proxy_service.get_status().await.unwrap().port;
+        assert_ne!(new_port, info.port, "server did not restart");
+        let restarted = send_to(new_port).await;
+        assert!(
+            restarted.status().is_success(),
+            "{}",
+            restarted.text().await.unwrap()
+        );
+        let chat_auth: Vec<_> = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("/chat/completions"))
+            .map(|(_, auth)| auth.clone())
+            .collect();
+        assert_eq!(
+            chat_auth,
+            vec![Some("Bearer tid-managed-token".to_string()); 2],
+            "restart path lost the managers"
+        );
+
+        // Logout through the same manager, then the next request must not leave with the old token.
+        state
+            .copilot_auth
+            .read()
+            .await
+            .remove_account("1001")
+            .await
+            .unwrap();
+        let before = seen.lock().unwrap().len();
+        let second = send_to(new_port).await;
+        assert!(
+            !second.status().is_success(),
+            "request after logout must fail"
+        );
+        let leaked: Vec<_> = seen.lock().unwrap()[before..]
+            .iter()
+            .filter(|(_, auth)| {
+                auth.as_deref()
+                    .is_some_and(|a| a.contains("tid-managed-token"))
+            })
+            .cloned()
+            .collect();
+        assert!(leaked.is_empty(), "old token reached upstream: {leaked:?}");
+
+        state.proxy_service.stop().await.unwrap();
+        upstream.abort();
+    }
+
+    /// A fresh server has fresh (closed) breakers, so health rows left by the previous
+    /// server must not survive: on the first start and on the config-restart path.
+    #[tokio::test]
+    #[serial]
+    async fn starting_a_server_clears_stale_provider_health() {
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let db = Arc::new(Database::memory().unwrap());
+        db.update_proxy_config(crate::proxy::types::ProxyConfig {
+            listen_port: 0,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        db.save_provider(
+            "claude",
+            &crate::provider::Provider::with_id(
+                "p1".into(),
+                "P1".into(),
+                serde_json::json!({}),
+                None,
+            ),
+        )
+        .unwrap();
+        let state = AppState::new(db.clone());
+        let unhealthy = || async {
+            db.update_provider_health("p1", "claude", false, Some("boom".into()))
+                .await
+                .unwrap();
+            // threshold 5: four more failures flip is_healthy
+            for _ in 0..4 {
+                db.update_provider_health("p1", "claude", false, Some("boom".into()))
+                    .await
+                    .unwrap();
+            }
+            assert!(
+                !db.get_provider_health("p1", "claude")
+                    .await
+                    .unwrap()
+                    .is_healthy
+            );
+        };
+
+        unhealthy().await;
+        state.proxy_service.start().await.unwrap();
+        assert!(
+            db.get_provider_health("p1", "claude")
+                .await
+                .unwrap()
+                .is_healthy
+        );
+
+        unhealthy().await;
+        let mut config = db.get_proxy_config().await.unwrap();
+        config.listen_port = 0; // differs from the persisted ephemeral port -> restart
+        assert!(state.proxy_service.update_config(&config).await.unwrap());
+        assert!(
+            db.get_provider_health("p1", "claude")
+                .await
+                .unwrap()
+                .is_healthy
+        );
+
+        state.proxy_service.stop().await.unwrap();
+    }
+
+    /// The bound AppState reaches the forwarder's ProxyState on both construction paths
+    /// (first start, config restart); unbound services start without one.
+    #[tokio::test]
+    #[serial]
+    async fn bound_app_state_reaches_the_proxy_server_on_start_and_restart() {
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let db = Arc::new(Database::memory().unwrap());
+        db.update_proxy_config(crate::proxy::types::ProxyConfig {
+            listen_port: 0,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        let state = AppState::new(db.clone());
+
+        state.proxy_service.start().await.unwrap();
+        assert!(
+            !state
+                .proxy_service
+                .app_state_bound_in_server_for_test()
+                .await
+        );
+        state.proxy_service.stop().await.unwrap();
+
+        state.proxy_service.bind_app_state(state.clone());
+        state.proxy_service.start().await.unwrap();
+        assert!(
+            state
+                .proxy_service
+                .app_state_bound_in_server_for_test()
+                .await
+        );
+
+        let mut config = db.get_proxy_config().await.unwrap();
+        config.listen_port = 0;
+        assert!(state.proxy_service.update_config(&config).await.unwrap());
+        assert!(
+            state
+                .proxy_service
+                .app_state_bound_in_server_for_test()
+                .await
+        );
+        state.proxy_service.stop().await.unwrap();
     }
 }
