@@ -1138,6 +1138,46 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: `/api/failover/auto/${enc(a.appType)}`,
         body: { enabled: a.enabled },
       };
+    // ---------- model lists (WEB-03) ----------
+    case "fetch_models_for_config":
+      return {
+        method: "POST",
+        url: "/api/models/fetch",
+        body: {
+          baseUrl: a.baseUrl,
+          apiKey: a.apiKey,
+          isFullUrl: a.isFullUrl,
+          modelsUrl: a.modelsUrl,
+          customUserAgent: a.customUserAgent,
+          apiFormat: a.apiFormat,
+          requestHeaders: a.requestHeaders,
+        },
+      };
+    case "get_agy_models":
+      return {
+        method: "POST",
+        url: "/api/models/agy",
+        body: { apiKey: a.apiKey, baseUrl: a.baseUrl },
+      };
+    case "get_opencode_models":
+      return { method: "GET", url: "/api/models/opencode" };
+    case "get_codex_oauth_models":
+      return {
+        method: "GET",
+        url: `/api/models/codex-oauth${query({ accountId: a.accountId })}`,
+      };
+    case "get_xai_oauth_models":
+      return {
+        method: "GET",
+        url: `/api/models/xai-oauth${query({ accountId: a.accountId })}`,
+      };
+    case "copilot_get_models":
+      return { method: "GET", url: "/api/models/copilot" };
+    case "copilot_get_models_for_account":
+      return {
+        method: "GET",
+        url: `/api/models/copilot/${enc(a.accountId)}`,
+      };
     case "get_global_proxy_config":
       return { method: "GET", url: "/api/proxy/config" };
     case "update_global_proxy_config":
