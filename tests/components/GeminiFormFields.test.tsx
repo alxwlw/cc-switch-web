@@ -51,15 +51,31 @@ describe("Antigravity model discovery", () => {
     api.getAgyModels.mockResolvedValue([{ id: "Gemini 3.8 Flash (Low)" }]);
   });
 
-  it("web: fetch-models button is disabled and does not call the API", () => {
+  it("web: fetch-models button works and calls the API", async () => {
     setWeb(true);
     render(<Harness />);
     const button = screen.getByRole("button", {
       name: "providerForm.fetchModels",
     });
-    expect(button).toBeDisabled();
+    expect(button).toBeEnabled();
     fireEvent.click(button);
-    expect(api.getAgyModels).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(api.getAgyModels).toHaveBeenCalledWith({
+        apiKey: "fixture-key",
+        baseUrl: "",
+      }),
+    );
+  });
+
+  it("web: agy shows the CLI-on-server note, gemini does not", () => {
+    setWeb(true);
+    const { unmount } = render(<Harness appId="agy" />);
+    expect(screen.getByTestId("agy-cli-server-note")).toHaveTextContent(
+      "список берётся у CLI на сервере",
+    );
+    unmount();
+    render(<Harness appId="gemini" />);
+    expect(screen.queryByTestId("agy-cli-server-note")).toBeNull();
   });
 
   // agy 的 API Key 模式只认它内置清单里的显示名，Gemini 接口的模型 ID 用不了

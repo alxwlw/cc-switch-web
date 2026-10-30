@@ -146,7 +146,7 @@ describe("ClaudeDesktopProviderForm", () => {
       },
     ],
   ] as const)(
-    "web: fetch-models button is disabled in the %s",
+    "web: fetch-models button works in the %s",
     (_label, initialData) => {
       setWeb(true);
       renderForm(initialData as never);
@@ -154,7 +154,7 @@ describe("ClaudeDesktopProviderForm", () => {
         name: "获取模型",
       });
       expect(buttons.length).toBeGreaterThan(0);
-      for (const button of buttons) expect(button).toBeDisabled();
+      for (const button of buttons) expect(button).toBeEnabled();
     },
   );
 

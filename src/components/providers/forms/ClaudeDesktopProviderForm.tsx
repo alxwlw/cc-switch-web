@@ -1,4 +1,3 @@
-import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -937,24 +936,21 @@ export function ClaudeDesktopProviderForm({
 
   const renderActionButtons = (onAdd: () => void, addLabel: string) => (
     <div className="flex gap-1">
-      {/* WEB-00: fetch_models_for_config/copilot_get_models не поддержаны — кнопка disabled — снимет WEB-03 */}
-      <WebUnavailableTip active={isWeb}>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleFetchModels}
-          disabled={isFetchingModels || isWeb}
-          className="h-7 gap-1"
-        >
-          {isFetchingModels ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Download className="h-3.5 w-3.5" />
-          )}
-          {t("providerForm.fetchModels", { defaultValue: "获取模型" })}
-        </Button>
-      </WebUnavailableTip>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={handleFetchModels}
+        disabled={isFetchingModels}
+        className="h-7 gap-1"
+      >
+        {isFetchingModels ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Download className="h-3.5 w-3.5" />
+        )}
+        {t("providerForm.fetchModels", { defaultValue: "获取模型" })}
+      </Button>
       <Button
         type="button"
         variant="outline"
@@ -1186,26 +1182,23 @@ export function ClaudeDesktopProviderForm({
                             defaultValue: "模型映射",
                           })}
                         </Label>
-                        {/* WEB-00: fetch_models_for_config/copilot_get_models не поддержаны — кнопка disabled — снимет WEB-03 */}
-                        <WebUnavailableTip active={isWeb}>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={handleFetchModels}
-                            disabled={isFetchingModels || isWeb}
-                            className="h-7 gap-1"
-                          >
-                            {isFetchingModels ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Download className="h-3.5 w-3.5" />
-                            )}
-                            {t("providerForm.fetchModels", {
-                              defaultValue: "获取模型",
-                            })}
-                          </Button>
-                        </WebUnavailableTip>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleFetchModels}
+                          disabled={isFetchingModels}
+                          className="h-7 gap-1"
+                        >
+                          {isFetchingModels ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                          {t("providerForm.fetchModels", {
+                            defaultValue: "获取模型",
+                          })}
+                        </Button>
                       </div>
                       <p className="text-xs leading-relaxed text-fg-2">
                         {t("claudeDesktop.routeMapHint", {

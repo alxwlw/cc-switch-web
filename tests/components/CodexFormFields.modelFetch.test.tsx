@@ -165,7 +165,7 @@ describe("Codex model-fetch lifecycle", () => {
   });
 
   it.each(providerKinds)(
-    "web: every fetch-models button is disabled (%s)",
+    "web: every fetch-models button works in web (%s)",
     (kind) => {
       setWeb(true);
       render(<Harness {...makeProps(kind)} />);
@@ -174,11 +174,11 @@ describe("Codex model-fetch lifecycle", () => {
         hidden: true,
       });
       expect(buttons.length).toBeGreaterThan(0);
-      for (const button of buttons) expect(button).toBeDisabled();
+      for (const button of buttons) expect(button).toBeEnabled();
     },
   );
 
-  it("web: the single-model fetch button (no catalog editor) is disabled", () => {
+  it("web: the single-model fetch button (no catalog editor) works", () => {
     setWeb(true);
     render(
       <Harness {...makeProps("config")} onCatalogModelsChange={undefined} />,
@@ -186,7 +186,7 @@ describe("Codex model-fetch lifecycle", () => {
     const button = screen.getByRole("button", {
       name: "providerForm.fetchModels",
     });
-    expect(button).toBeDisabled();
+    expect(button).toBeEnabled();
   });
 
   it("fetches only models supporting the selected Copilot protocol", async () => {

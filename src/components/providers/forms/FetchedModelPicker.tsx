@@ -1,5 +1,3 @@
-import { isWeb } from "@/lib/api/adapter";
-import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -88,28 +86,25 @@ export function FetchedModelPicker({
 
   return (
     <>
-      {/* WEB-00: fetch_models_for_config и др. не поддерживаются — без готового списка кнопка disabled — снимет WEB-03 */}
-      <WebUnavailableTip active={isWeb && !hasModels}>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={hasModels ? () => setOpen(true) : startFetch}
-          disabled={isFetching || (isWeb && !hasModels)}
-          className="h-7 gap-1"
-        >
-          {isFetching ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : hasModels ? (
-            <ListChecks className="h-3.5 w-3.5" />
-          ) : (
-            <Download className="h-3.5 w-3.5" />
-          )}
-          {hasModels
-            ? t("providerForm.modelPicker.title")
-            : t("providerForm.fetchModels")}
-        </Button>
-      </WebUnavailableTip>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={hasModels ? () => setOpen(true) : startFetch}
+        disabled={isFetching}
+        className="h-7 gap-1"
+      >
+        {isFetching ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : hasModels ? (
+          <ListChecks className="h-3.5 w-3.5" />
+        ) : (
+          <Download className="h-3.5 w-3.5" />
+        )}
+        {hasModels
+          ? t("providerForm.modelPicker.title")
+          : t("providerForm.fetchModels")}
+      </Button>
 
       {/* 弹窗内容只在打开时挂载：每次打开按当时的列表重新起草勾选 */}
       <V7Dialog open={open} width={560} onOpenChange={setOpen}>

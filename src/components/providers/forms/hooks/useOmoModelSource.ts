@@ -58,8 +58,7 @@ export function useOmoModelSource({
   } = useQuery({
     queryKey: ["opencode", "runtime-models"],
     queryFn: getOpenCodeModels,
-    // WEB-00: get_opencode_models не поддержан — без него только настроенные провайдеры, не ошибка — снимет WEB-14
-    enabled: isOmoCategory && !isWeb,
+    enabled: isOmoCategory,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: 1,
