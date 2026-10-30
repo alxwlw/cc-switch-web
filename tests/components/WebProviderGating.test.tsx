@@ -87,7 +87,7 @@ async function openMenu(props: {
 }
 
 describe("ProviderCardActions — web", () => {
-  it("disables connectivity check and open terminal with the web reason", async () => {
+  it("keeps connectivity check enabled with the server caption; open terminal stays gated (WEB-04)", async () => {
     setWeb(true);
     const onTest = vi.fn();
     const onOpenTerminal = vi.fn();
@@ -99,13 +99,15 @@ describe("ProviderCardActions — web", () => {
     const terminal = within(menu).getByRole("menuitem", {
       name: /provider\.openTerminal/,
     });
-    expect(test).toHaveAttribute("aria-disabled", "true");
-    expect(test).toHaveTextContent("web.unavailable");
+    // WEB-04: stream check работает в web — пункт включён, подпись про сервер.
+    expect(test).not.toHaveAttribute("aria-disabled", "true");
+    expect(test).toHaveTextContent("проверка выполняется с сервера");
+    await user.click(test);
+    expect(onTest).toHaveBeenCalledTimes(1);
+    // Соседнее покрытие: терминал остаётся desktop-only.
     expect(terminal).toHaveAttribute("aria-disabled", "true");
     expect(terminal).toHaveTextContent("web.unavailable");
-    await user.click(test);
     await user.click(terminal);
-    expect(onTest).not.toHaveBeenCalled();
     expect(onOpenTerminal).not.toHaveBeenCalled();
   });
 

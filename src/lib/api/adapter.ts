@@ -645,6 +645,77 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         body: { value: a.value },
       };
 
+    // ---------- provider usage / subscriptions / balance / connectivity (WEB-04) ----------
+    case "queryProviderUsage":
+      return {
+        method: "POST",
+        url: `/api/${enc(a.app)}/providers/${enc(a.providerId)}/usage`,
+      };
+    case "testUsageScript":
+      return {
+        method: "POST",
+        url: `/api/${enc(a.app)}/providers/${enc(a.providerId)}/usage-script/test`,
+        body: {
+          scriptCode: a.scriptCode,
+          timeout: a.timeout,
+          apiKey: a.apiKey,
+          baseUrl: a.baseUrl,
+          accessToken: a.accessToken,
+          userId: a.userId,
+          templateType: a.templateType,
+        },
+      };
+    case "check_provider_limits":
+      return {
+        method: "GET",
+        url: `/api/${enc(a.appType)}/providers/${enc(a.providerId)}/limits`,
+      };
+    case "get_subscription_quota":
+      return {
+        method: "GET",
+        url: `/api/subscription/${enc(a.tool)}/quota`,
+      };
+    case "get_codex_oauth_quota":
+      return {
+        method: "GET",
+        url: `/api/subscription/codex-oauth/${enc(a.accountId ?? "default")}/quota`,
+      };
+    case "get_xai_oauth_quota":
+      return {
+        method: "GET",
+        url: `/api/subscription/xai-oauth/${enc(a.accountId ?? "default")}/quota`,
+      };
+    case "agy_account_quota":
+      return {
+        method: "GET",
+        url: `/api/subscription/agy/${enc(a.accountId)}/quota`,
+      };
+    case "get_coding_plan_quota":
+      return {
+        method: "POST",
+        url: "/api/subscription/coding-plan",
+        body: {
+          baseUrl: a.baseUrl,
+          apiKey: a.apiKey,
+          accessKeyId: a.accessKeyId,
+          secretAccessKey: a.secretAccessKey,
+          codingPlanProvider: a.codingPlanProvider,
+          teamOrganizationId: a.teamOrganizationId,
+          teamProjectId: a.teamProjectId,
+        },
+      };
+    case "get_balance":
+      return {
+        method: "POST",
+        url: "/api/balance",
+        body: { baseUrl: a.baseUrl, apiKey: a.apiKey },
+      };
+    case "stream_check_provider":
+      return {
+        method: "POST",
+        url: `/api/${enc(a.appType)}/providers/${enc(a.providerId)}/stream-check`,
+      };
+
     // ---------- app-specific settings (WEB-20) ----------
     case "has_codex_unify_history_backup":
       return { method: "GET", url: "/api/codex/unify-history-backup" };

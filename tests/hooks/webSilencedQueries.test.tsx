@@ -60,7 +60,23 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 // Каждый кейс: хук и команда, которую он обязан звать на desktop и не звать в web.
+// WEB-04 снял гейты с usage/quota (ниже — WEB-04-кейсы зовут и в web); здесь остаются
+// только desktop-only (desktop config) и copilot (OUT of scope WEB-04).
 const CASES: Array<[string, string, () => unknown]> = [
+  [
+    "useDesktopConfigMessages",
+    "get_claude_desktop_status",
+    () => useDesktopConfigMessages(true),
+  ],
+  [
+    "useCopilotQuota",
+    "copilot_get_usage",
+    () => useCopilotQuota(null, { autoQuery: true }),
+  ],
+];
+
+// WEB-04: usage/quota работают в web — те же хуки зовут свои команды и в web.
+const WEB04_CASES: Array<[string, string, () => unknown]> = [
   [
     "useUsageQuery",
     "queryProviderUsage",
@@ -70,11 +86,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "useSubscriptionQuota",
     "get_subscription_quota",
     () => useSubscriptionQuota("claude", true, true, 1),
-  ],
-  [
-    "useDesktopConfigMessages",
-    "get_claude_desktop_status",
-    () => useDesktopConfigMessages(true),
   ],
   [
     "useProviderLimits",
@@ -95,11 +106,6 @@ const CASES: Array<[string, string, () => unknown]> = [
     "useAgyAccountQuota",
     "agy_account_quota",
     () => useAgyAccountQuota("a1", { autoQuery: true }),
-  ],
-  [
-    "useCopilotQuota",
-    "copilot_get_usage",
-    () => useCopilotQuota(null, { autoQuery: true }),
   ],
 ];
 
@@ -318,4 +324,33 @@ describe("WEB-00: фоновые query молчат в web", () => {
       expect(calledCommands()).toContain(command);
     },
   );
+
+  it.each(WEB04_CASES)(
+    "%s: WEB-04 открыт в web, зовёт %s",
+    async (_name, command, useHook) => {
+      setWeb(true);
+      const { wrapper } = wrapperFor();
+      renderHook(useHook, { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(calledCommands()).toContain(command);
+    },
+  );
+
+  it("useStreamCheck: гейта нет (no isWeb) — зовёт stream_check_provider и в web", async () => {
+    const { useStreamCheck } = await import("@/hooks/useStreamCheck");
+    for (const web of [false, true]) {
+      invokeMock.mockClear();
+      if (web) setWeb(true);
+      const { wrapper } = wrapperFor();
+      const { result } = renderHook(() => useStreamCheck("claude"), {
+        wrapper,
+      });
+      await act(async () => {
+        await result.current.checkProvider("p1", "P1");
+      });
+      expect(calledCommands()).toContain("stream_check_provider");
+    }
+  });
 });

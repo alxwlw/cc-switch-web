@@ -31,6 +31,9 @@ Scope: `src-tauri/src/web_api.rs` (4 роута), `src-tauri/tests/web_api_openc
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-30**: PR #31 merged `cb02afbb` → main; live на `cc-switch-web.service` с 15:29; DX-72 Done.
+  - Server и `dist-web` пересобраны из main. Перед restart, при остановленном unit, БД скопирована в `~/.cc-switch-web/backups-predeploy-p30-20261030-152903/`, прежний бинарник — `cc-switch-web.prev`. Миграций нет.
+  - Smoke: консоль 200; `POST /api/opencode/import-live` → 0, `GET /api/opencode/live-provider-ids` → `[]` (консистентно, серверный `opencode.json` пуст); web-проверка default-model не выполнялась; паник в журнале нет.
 - **Статус до merge (2026-10-30)**: ветка `web-parity/web-14-opencode-live` (worktree `.worktrees/web-14-opencode`), PR → main (открывается в T3 STEP 4; URL — в T3-отчёте и комментарии DX-72); DX-72 → In Review + ссылка. Чекбоксы Т1–Т3 закрыты, Notes заполнены (`docs(plans)` — WEB-14 T3).
   - Финальные гейты на `df191a5f` (код; docs-коммит T3 сверху):
     - `cargo fmt --check --manifest-path src-tauri/Cargo.toml` — чисто (RC=0);

@@ -446,6 +446,36 @@ pub fn router(state: SharedState) -> Router {
             "/api/:app/providers/:id/usage-script",
             put(pi_usage_script_set),
         )
+        // provider usage, subscriptions, balance, connectivity (WEB-04):
+        // same inners as the desktop commands; cache publish, no tray.
+        .route("/api/:app/providers/:id/usage", post(provider_usage))
+        .route(
+            "/api/:app/providers/:id/usage-script/test",
+            post(test_usage_script),
+        )
+        .route("/api/:app/providers/:id/limits", get(provider_limits))
+        .route(
+            "/api/:app/providers/:id/stream-check",
+            post(provider_stream_check),
+        )
+        .route("/api/subscription/:tool/quota", get(subscription_quota))
+        .route(
+            "/api/subscription/codex-oauth/:accountId/quota",
+            get(subscription_codex_oauth_quota),
+        )
+        .route(
+            "/api/subscription/xai-oauth/:accountId/quota",
+            get(subscription_xai_oauth_quota),
+        )
+        .route(
+            "/api/subscription/agy/:accountId/quota",
+            get(subscription_agy_quota),
+        )
+        .route(
+            "/api/subscription/coding-plan",
+            post(subscription_coding_plan),
+        )
+        .route("/api/balance", post(balance_query))
         .route("/api/pi/session-discovery", get(pi_session_discovery))
         .route(
             "/api/pi/prompt-files/:kind",
@@ -3412,6 +3442,296 @@ async fn pi_session_discovery() -> ApiResult {
     .await
 }
 
+// ---------- provider usage / subscriptions / balance (WEB-04) ----------
+//
+// Thin wrappers over the same handle-free inners the desktop commands use
+// (`commands::provider::query_provider_usage_inner`,
+// `ProviderService::test_usage_script`, `commands::subscription::*`, …).
+// Service errors surface verbatim via `fail`; malformed bodies are 400 via
+// `Json<Value>` (never axum's 422). Cache publish mirrors desktop
+// (`publish_usage` + `AppType` gate); tray refresh stays desktop-only. The
+// usage-script sandbox (16 MiB / 256 KiB / 5 s / https-only + loopback) lives
+// in the shared `usage_script` service, so it applies unchanged here. No
+// handler logs request bodies: `apiKey` material must never reach the logs.
+
+/// `POST /api/:app/providers/:id/usage`: full usage resolution (copilot /
+/// coding-plan / balance / official-subscription / JS-script branches) with
+/// the `script` publish tail on `Ok` — including deterministic
+/// `success:false` snapshots, exactly like the desktop command.
+async fn provider_usage(
+    State(state): State<SharedState>,
+    Path((app, id)): Path<(String, String)>,
+) -> ApiResult {
+    let app_type = app_type!(&app);
+    // Same `Arc`s the desktop `State` wrappers hold
+    // (`AppState::managed_auth_states`); see T1 wiring.
+    let copilot_state = crate::commands::CopilotAuthState(state.copilot_auth.clone());
+    let xai_state = crate::commands::XaiOAuthState(state.xai_oauth.clone());
+    match crate::commands::query_provider_usage_inner(
+        &state,
+        &copilot_state,
+        &xai_state,
+        app_type.clone(),
+        &id,
+    )
+    .await
+    {
+        Ok(snapshot) => {
+            crate::services::publish_usage(
+                &state,
+                crate::services::UsageKind::Script {
+                    app_type,
+                    provider_id: id,
+                    data: snapshot.clone(),
+                },
+            );
+            ok(snapshot)
+        }
+        Err(e) => fail(e),
+    }
+}
+
+/// `POST /api/:app/providers/:id/usage-script/test`: body mirrors the
+/// `testUsageScript` invoke args (`scriptCode` required, rest optional;
+/// vestigial `providerId`/`app` echoes are accepted and ignored — the path
+/// wins). Desktop parity: NO cache write, NO emit.
+async fn test_usage_script(
+    State(state): State<SharedState>,
+    Path((app, id)): Path<(String, String)>,
+    Json(body): Json<Value>,
+) -> ApiResult {
+    let app_type = app_type!(&app);
+    let script_code = match body_str(&body, "scriptCode") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let timeout = match body.get("timeout") {
+        None | Some(Value::Null) => 10,
+        Some(Value::Number(n)) => match n.as_u64() {
+            Some(t) => t,
+            None => return bad_request("timeout must be a non-negative integer"),
+        },
+        Some(_) => return bad_request("timeout must be a non-negative integer"),
+    };
+    let api_key = match body_opt_string(&body, "apiKey") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let base_url = match body_opt_string(&body, "baseUrl") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let access_token = match body_opt_string(&body, "accessToken") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let user_id = match body_opt_string(&body, "userId") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let template_type = match body_opt_string(&body, "templateType") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    proxy_result(
+        ProviderService::test_usage_script(
+            &state,
+            app_type,
+            &id,
+            &script_code,
+            timeout,
+            api_key.as_deref(),
+            base_url.as_deref(),
+            access_token.as_deref(),
+            user_id.as_deref(),
+            template_type.as_deref(),
+        )
+        .await
+        .map_err(|e| e.to_string()),
+    )
+}
+
+/// `GET /api/:app/providers/:id/limits`: `check_provider_limits` is a single
+/// indexed DB read, so like the other sync `ProviderService` getters it runs
+/// inline — no `spawn_blocking`.
+async fn provider_limits(
+    State(state): State<SharedState>,
+    Path((app, id)): Path<(String, String)>,
+) -> ApiResult {
+    let app_type = app_type!(&app);
+    match state.db.check_provider_limits(&id, app_type.as_str()) {
+        Ok(v) => ok(v),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
+/// `GET /api/subscription/:tool/quota`: CLI-tool quotas plus the agy branch,
+/// with the `subscription` publish tail on `Ok` behind the same `AppType`
+/// gate the desktop command uses.
+async fn subscription_quota(
+    State(state): State<SharedState>,
+    Path(tool): Path<String>,
+) -> ApiResult {
+    if tool == "agy" && crate::agy_config::real_agy_bin().is_none() {
+        return fail(AGY_CLI_MISSING);
+    }
+    match crate::commands::get_subscription_quota_inner(&state, &tool).await {
+        Ok(snapshot) => {
+            if let Ok(app_type) = AppType::from_str(&tool) {
+                crate::services::publish_usage(
+                    &state,
+                    crate::services::UsageKind::Subscription {
+                        app_type,
+                        data: snapshot.clone(),
+                    },
+                );
+            }
+            ok(snapshot)
+        }
+        Err(e) => fail(e),
+    }
+}
+
+/// Headless-server fallback when the agy CLI is absent: desktop would surface
+/// an empty (hidden) card; on web that reads as a silent failure, so fail
+/// loudly instead (phase-31 review risk #2).
+const AGY_CLI_MISSING: &str = "Antigravity CLI is not available on this server: install agy and sign in on the server host to view quota";
+
+/// Normalize the `:accountId` path segment for the codex/xai OAuth quota
+/// routes: the web adapter sends the literal `"default"` placeholder when the
+/// caller passes `accountId: null` (same `"default"` cache key as the query
+/// layer), so map `"default"` (and empty) back to `None` before calling the
+/// inners — desktop `None` resolves via `manager.default_account_id()`, while
+/// a literal lookup of an account named `"default"` would 404 instead.
+fn web_oauth_account_param(segment: &str) -> Option<String> {
+    match segment.trim() {
+        "" | "default" => None,
+        id => Some(id.to_string()),
+    }
+}
+
+/// `GET /api/subscription/codex-oauth/:accountId/quota`: put-only publish
+/// (no emit), exactly like the desktop command.
+async fn subscription_codex_oauth_quota(
+    State(state): State<SharedState>,
+    Path(account_id): Path<String>,
+) -> ApiResult {
+    let (resolved, result) =
+        crate::commands::get_codex_oauth_quota_inner(&state, web_oauth_account_param(&account_id))
+            .await;
+    match result {
+        Ok(quota) => {
+            if let Some(id) = resolved {
+                crate::services::publish_usage(
+                    &state,
+                    crate::services::UsageKind::CodexOAuth {
+                        account_id: id,
+                        data: quota.clone(),
+                    },
+                );
+            }
+            ok(quota)
+        }
+        Err(e) => fail(e),
+    }
+}
+
+/// `GET /api/subscription/xai-oauth/:accountId/quota`: no cache, no emit
+/// (desktop parity).
+async fn subscription_xai_oauth_quota(
+    State(state): State<SharedState>,
+    Path(account_id): Path<String>,
+) -> ApiResult {
+    proxy_result(
+        crate::commands::query_xai_oauth_quota_inner(&state, web_oauth_account_param(&account_id))
+            .await,
+    )
+}
+
+/// `GET /api/subscription/agy/:accountId/quota`: no cache, no emit (desktop
+/// parity); without the CLI on the server the fallback is an intelligible
+/// error, not an empty card.
+async fn subscription_agy_quota(
+    State(state): State<SharedState>,
+    Path(account_id): Path<String>,
+) -> ApiResult {
+    if crate::agy_config::real_agy_bin().is_none() {
+        return fail(AGY_CLI_MISSING);
+    }
+    proxy_result(crate::commands::agy_quota(&state.agy_account, Some(&account_id)).await)
+}
+
+/// `POST /api/subscription/coding-plan`: full `get_coding_plan_quota` arg
+/// body (camelCase, like the frontend invoke); direct service call.
+async fn subscription_coding_plan(Json(body): Json<Value>) -> ApiResult {
+    let base_url = match body_str(&body, "baseUrl") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let api_key = match body_str(&body, "apiKey") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let access_key_id = match body_opt_string(&body, "accessKeyId") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let secret_access_key = match body_opt_string(&body, "secretAccessKey") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let coding_plan_provider = match body_opt_string(&body, "codingPlanProvider") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let team_organization_id = match body_opt_string(&body, "teamOrganizationId") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let team_project_id = match body_opt_string(&body, "teamProjectId") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    proxy_result(
+        crate::services::coding_plan::get_coding_plan_quota(
+            &base_url,
+            &api_key,
+            access_key_id.as_deref(),
+            secret_access_key.as_deref(),
+            coding_plan_provider.as_deref(),
+            team_organization_id.as_deref(),
+            team_project_id.as_deref(),
+        )
+        .await,
+    )
+}
+
+/// `POST /api/balance`: `{baseUrl, apiKey}`; direct service call.
+async fn balance_query(Json(body): Json<Value>) -> ApiResult {
+    let base_url = match body_str(&body, "baseUrl") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let api_key = match body_str(&body, "apiKey") {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    proxy_result(crate::services::balance::get_balance(&base_url, &api_key).await)
+}
+
+/// `POST /api/:app/providers/:id/stream-check`: handle-free inner, Copilot
+/// base_url override resolved from `AppState` (desktop parity).
+async fn provider_stream_check(
+    State(state): State<SharedState>,
+    Path((app, id)): Path<(String, String)>,
+) -> ApiResult {
+    let app_type = app_type!(&app);
+    match crate::commands::stream_check_provider_inner(&state, &app_type, &id).await {
+        Ok(v) => ok(v),
+        Err(e) => fail(e.to_string()),
+    }
+}
+
 async fn pi_prompt_file_get(Path(kind): Path<String>) -> ApiResult {
     let kind = match parse_pi_prompt_kind(&kind) {
         Ok(k) => k,
@@ -4352,4 +4672,29 @@ async fn failover_set_auto(
         Err(e) => return e,
     };
     unit_result(crate::commands::set_auto_failover_enabled_inner(&state, app, enabled).await)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::web_oauth_account_param;
+
+    #[test]
+    fn web_oauth_default_segment_resolves_like_desktop_none() {
+        // The adapter sends the literal `"default"` segment for
+        // `accountId: null` (same `"default"` cache key as the query layer);
+        // the handlers must map it back to `None` so the inners resolve via
+        // `manager.default_account_id()` instead of looking up an account
+        // literally named "default".
+        assert_eq!(web_oauth_account_param("default"), None);
+        assert_eq!(web_oauth_account_param(""), None);
+        assert_eq!(web_oauth_account_param("   "), None);
+        assert_eq!(
+            web_oauth_account_param("acc-123"),
+            Some("acc-123".to_string())
+        );
+        assert_eq!(
+            web_oauth_account_param("  acc-123  "),
+            Some("acc-123".to_string())
+        );
+    }
 }

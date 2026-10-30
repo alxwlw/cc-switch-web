@@ -2,6 +2,7 @@ import React from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import type { AppId } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { useSubscriptionQuota } from "@/lib/query/subscription";
 import type { QuotaTier, SubscriptionQuota } from "@/types/subscription";
 import { QuotaBars, QuotaLines } from "@/components/quota/QuotaLines";
@@ -222,6 +223,33 @@ export function quotaFailureReason(
  * - `SubscriptionQuotaFooter`（CLI 凭据路径，by appId）
  * - `CodexOauthQuotaFooter`（cc-switch 自管 OAuth 路径，by ChatGPT account）
  */
+/**
+ * WEB-04: в web额度查自服务器 — CLI凭据读服务器上的文件，OAuth读服务器上的托管令牌。
+ * Подпись через t() + defaultValue (урок фазы 29, образец provider.form.agy.cliServerNote).
+ */
+function WebQuotaServerNote({
+  appIdForExpiredHint,
+}: {
+  appIdForExpiredHint: string;
+}) {
+  const { t } = useTranslation();
+  if (!isWeb) return null;
+  const isCli = !["codex_oauth", "xai_oauth", "agy"].includes(
+    appIdForExpiredHint,
+  );
+  return (
+    <p className="m-0 text-xs text-fg-3" data-testid="quota-server-note">
+      {isCli
+        ? t("subscription.cliServerNote", {
+            defaultValue: "по учётным данным CLI на сервере",
+          })
+        : t("subscription.serverNote", {
+            defaultValue: "данные запрашиваются на сервере",
+          })}
+    </p>
+  );
+}
+
 export const SubscriptionQuotaView: React.FC<SubscriptionQuotaViewProps> = ({
   quota,
   loading,
@@ -246,34 +274,40 @@ export const SubscriptionQuotaView: React.FC<SubscriptionQuotaViewProps> = ({
     const lines = failedLines(t, reason);
     if (inline) {
       return (
-        <QuotaLines
-          lines={lines}
-          queriedAt={quota.queriedAt}
-          loading={loading}
-          onRefresh={refetch}
-        />
+        <>
+          <QuotaLines
+            lines={lines}
+            queriedAt={quota.queriedAt}
+            loading={loading}
+            onRefresh={refetch}
+          />
+          <WebQuotaServerNote appIdForExpiredHint={appIdForExpiredHint} />
+        </>
       );
     }
     return (
-      <QuotaBars
-        className="mt-3"
-        title={t("subscription.title")}
-        rows={[]}
-        loading={loading}
-        onRefresh={refetch}
-        footer={
-          <p className="text-caption">
-            <span className="font-medium text-danger-text">
-              {t("quota.failed")}
-            </span>{" "}
-            <span className="text-fg-3">
-              {expired
-                ? t("subscription.expiredHint", { tool: appIdForExpiredHint })
-                : reason}
-            </span>
-          </p>
-        }
-      />
+      <>
+        <QuotaBars
+          className="mt-3"
+          title={t("subscription.title")}
+          rows={[]}
+          loading={loading}
+          onRefresh={refetch}
+          footer={
+            <p className="text-caption">
+              <span className="font-medium text-danger-text">
+                {t("quota.failed")}
+              </span>{" "}
+              <span className="text-fg-3">
+                {expired
+                  ? t("subscription.expiredHint", { tool: appIdForExpiredHint })
+                  : reason}
+              </span>
+            </p>
+          }
+        />
+        <WebQuotaServerNote appIdForExpiredHint={appIdForExpiredHint} />
+      </>
     );
   }
 
@@ -282,71 +316,83 @@ export const SubscriptionQuotaView: React.FC<SubscriptionQuotaViewProps> = ({
     if (!emptyText) return null;
     if (inline) {
       return (
-        <QuotaLines
-          lines={[
-            { key: "empty", left: Infinity, tone: "muted", text: emptyText },
-          ]}
-          queriedAt={quota.queriedAt}
-          loading={loading}
-          onRefresh={refetch}
-        />
+        <>
+          <QuotaLines
+            lines={[
+              { key: "empty", left: Infinity, tone: "muted", text: emptyText },
+            ]}
+            queriedAt={quota.queriedAt}
+            loading={loading}
+            onRefresh={refetch}
+          />
+          <WebQuotaServerNote appIdForExpiredHint={appIdForExpiredHint} />
+        </>
       );
     }
     return (
-      <QuotaBars
-        className="mt-3"
-        title={t("subscription.title")}
-        rows={[]}
-        queriedAt={quota.queriedAt}
-        loading={loading}
-        onRefresh={refetch}
-        footer={<p className="text-caption text-fg-3">{emptyText}</p>}
-      />
+      <>
+        <QuotaBars
+          className="mt-3"
+          title={t("subscription.title")}
+          rows={[]}
+          queriedAt={quota.queriedAt}
+          loading={loading}
+          onRefresh={refetch}
+          footer={<p className="text-caption text-fg-3">{emptyText}</p>}
+        />
+        <WebQuotaServerNote appIdForExpiredHint={appIdForExpiredHint} />
+      </>
     );
   }
 
   if (inline) {
     return (
-      <QuotaLines
-        lines={rows.map((row) => row.line)}
-        queriedAt={quota.queriedAt}
-        loading={loading}
-        onRefresh={refetch}
-        breakdown={tierBreakdown(t, quota.tiers || [], display) ?? undefined}
-      />
+      <>
+        <QuotaLines
+          lines={rows.map((row) => row.line)}
+          queriedAt={quota.queriedAt}
+          loading={loading}
+          onRefresh={refetch}
+          breakdown={tierBreakdown(t, quota.tiers || [], display) ?? undefined}
+        />
+        <WebQuotaServerNote appIdForExpiredHint={appIdForExpiredHint} />
+      </>
     );
   }
 
   const extra = quota.extraUsage;
   return (
-    <QuotaBars
-      className="mt-3"
-      title={t("subscription.title", { defaultValue: "Subscription Quota" })}
-      rows={rows}
-      queriedAt={quota.queriedAt}
-      loading={loading}
-      onRefresh={refetch}
-      footer={
-        extra?.isEnabled ? (
-          <div className="mt-2 border-t border-border pt-2 text-caption text-fg-2">
-            <span className="font-medium">
-              {t("subscription.extraUsage")}:{" "}
-            </span>
-            <span className="tabular-nums">
-              {extra.currency === "USD" ? "$" : ""}
-              {(extra.usedCredits ?? 0).toFixed(2)}
-              {extra.monthlyLimit != null && (
-                <>
-                  {" "}
-                  / {extra.currency === "USD" ? "$" : ""}
-                  {extra.monthlyLimit.toFixed(2)}
-                </>
-              )}
-            </span>
-          </div>
-        ) : null
-      }
-    />
+    <>
+      <QuotaBars
+        className="mt-3"
+        title={t("subscription.title", { defaultValue: "Subscription Quota" })}
+        rows={rows}
+        queriedAt={quota.queriedAt}
+        loading={loading}
+        onRefresh={refetch}
+        footer={
+          extra?.isEnabled ? (
+            <div className="mt-2 border-t border-border pt-2 text-caption text-fg-2">
+              <span className="font-medium">
+                {t("subscription.extraUsage")}:{" "}
+              </span>
+              <span className="tabular-nums">
+                {extra.currency === "USD" ? "$" : ""}
+                {(extra.usedCredits ?? 0).toFixed(2)}
+                {extra.monthlyLimit != null && (
+                  <>
+                    {" "}
+                    / {extra.currency === "USD" ? "$" : ""}
+                    {extra.monthlyLimit.toFixed(2)}
+                  </>
+                )}
+              </span>
+            </div>
+          ) : null
+        }
+      />
+      <WebQuotaServerNote appIdForExpiredHint={appIdForExpiredHint} />
+    </>
   );
 };
 

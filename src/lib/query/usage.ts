@@ -5,7 +5,6 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { usageApi } from "@/lib/api/usage";
-import { isWeb } from "@/lib/api/adapter";
 import { resolveUsageRange } from "@/lib/usageRange";
 import type {
   LogFilters,
@@ -422,8 +421,8 @@ export function useProviderLimits(providerId: string, appType: string) {
   return useQuery({
     queryKey: usageKeys.limits(providerId, appType),
     queryFn: () => usageApi.checkProviderLimits(providerId, appType),
-    // WEB-00: check_provider_limits не поддержан — снимет WEB-04 (ф.31)
-    enabled: !!providerId && !!appType && !isWeb,
+    // WEB-04: работает в web через GET /api/:app/providers/:id/limits
+    enabled: !!providerId && !!appType,
   });
 }
 
