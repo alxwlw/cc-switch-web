@@ -95,7 +95,11 @@ async fn unknown_backend_is_400_even_without_a_body() {
     ] {
         let (status, json) = web_call(&router, method, uri, None).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{method} {uri}");
-        assert_eq!(json["ok"], json!(false), "{method} {uri}");
+        assert_eq!(
+            json,
+            json!({ "ok": false, "error": "unknown sync backend: ftp (expected webdav or s3)" }),
+            "{method} {uri}"
+        );
     }
 }
 
