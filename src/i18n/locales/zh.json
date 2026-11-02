@@ -5078,6 +5078,8 @@
     },
     "proxyCaption": "代理运行在服务器上，并重新配置服务器上的 CLI；不会影响你本机上的 CLI。",
     "desktopRouteHost": "Claude Desktop 会按「连接地址」和端口连接服务器上的代理。如果 Claude Desktop 装在另一台机器上，请在 设置 → 本地路由 中把连接地址（client host）改成那台机器能访问到的主机。",
+    "syncHost": "连接测试、上传和下载都在 cc-switch-web 服务器上执行，而不是在当前浏览器中。服务器必须能访问该 WebDAV 或 S3 端点，下载会覆盖服务器上的数据。",
+    "syncAutoLater": "web 模式下的自动同步将在下一个版本提供。",
     "proxyListenWarning": "监听 {{address}} 会让整个网络（包括 tailnet）无需认证即可访问该代理。建议使用 127.0.0.1。",
     "liveUnknownTitle": "供应商（Web 模式下无法读取实际配置状态）",
     "sessionResumeCopied": "已复制恢复命令。请在服务器主机上的项目目录下，粘贴到终端运行",

@@ -298,7 +298,7 @@ describe("SettingsPage · WEB-00", () => {
     expect(screen.getByText("routing-section")).toBeInTheDocument();
   });
 
-  it("web: data shows backups, import/export and the log block; location and cloud sync stay hidden", async () => {
+  it("web: data shows backups, import/export, cloud sync and the log block; location stays hidden", async () => {
     setWeb(true);
     renderPage("data");
     expect(screen.getByText("log-config-panel")).toBeInTheDocument();
@@ -308,7 +308,10 @@ describe("SettingsPage · WEB-00", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("settings.data.location")).toBeNull();
     expect(screen.getByText("import-export-section")).toBeInTheDocument();
-    expect(screen.queryByText("webdav-section")).toBeNull();
+    expect(screen.getByText("webdav-section")).toBeInTheDocument();
+    expect(
+      screen.getByText("settings.advanced.cloudSync.title"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("server-log-viewer")).toBeNull();
     await userEvent.click(
       screen.getByRole("button", {

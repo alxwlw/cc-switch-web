@@ -496,24 +496,22 @@ export function SettingsPage({
                 />
               </div>
             </SettingsBlock>
-            {!isWeb && (
-              <SettingsBlock
-                title={t("settings.advanced.cloudSync.title")}
-                help={{
-                  title: t("settings.advanced.cloudSync.title"),
-                  body: t("settings.advanced.cloudSync.description"),
-                }}
-              >
-                <div className="rounded-panel border border-border bg-surface p-5">
-                  <WebdavSyncSection
-                    config={settings.webdavSync}
-                    s3Config={settings.s3Sync}
-                    settings={settings}
-                    onAutoSave={handleAutoSave}
-                  />
-                </div>
-              </SettingsBlock>
-            )}
+            <SettingsBlock
+              title={t("settings.advanced.cloudSync.title")}
+              help={{
+                title: t("settings.advanced.cloudSync.title"),
+                body: t("settings.advanced.cloudSync.description"),
+              }}
+            >
+              <div className="rounded-panel border border-border bg-surface p-5">
+                <WebdavSyncSection
+                  config={settings.webdavSync}
+                  s3Config={settings.s3Sync}
+                  settings={settings}
+                  onAutoSave={handleAutoSave}
+                />
+              </div>
+            </SettingsBlock>
             <SettingsBlock
               title={t("settings.advanced.logConfig.title")}
               help={{

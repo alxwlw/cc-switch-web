@@ -33,6 +33,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { settingsApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { SettingsFormState } from "@/hooks/useSettings";
 import type {
@@ -964,6 +965,7 @@ export function WebdavSyncSection({
         <h3 className="text-base font-semibold text-fg-1">
           {t("settings.webdavSync.title")}
         </h3>
+        {isWeb && <p className="text-xs text-fg-2">{t("web.syncHost")}</p>}
       </header>
 
       {/* ─── Sync type selector ───────────────────────────── */}
@@ -1109,8 +1111,13 @@ export function WebdavSyncSection({
                   checked={form.autoSync}
                   onCheckedChange={handleAutoSyncChange}
                   aria-label={t("settings.webdavSync.autoSync")}
-                  disabled={isLoading}
+                  disabled={isLoading || isWeb}
                 />
+                {isWeb && (
+                  <p className="mt-1 text-badge text-fg-2">
+                    {t("web.syncAutoLater")}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -1393,8 +1400,13 @@ export function WebdavSyncSection({
                     markS3Dirty();
                   }}
                   aria-label={t("settings.s3Sync.autoSync")}
-                  disabled={isS3Loading}
+                  disabled={isS3Loading || isWeb}
                 />
+                {isWeb && (
+                  <p className="mt-1 text-badge text-fg-2">
+                    {t("web.syncAutoLater")}
+                  </p>
+                )}
               </div>
             </div>
 
