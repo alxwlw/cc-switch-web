@@ -82,6 +82,8 @@ const { settingsApiMock } = vi.hoisted(() => ({
     webdavSyncDownload: vi.fn(),
     s3SyncSaveSettings: vi.fn(),
     s3TestConnection: vi.fn(),
+    s3SyncFetchRemoteInfo: vi.fn(),
+    s3SyncDownload: vi.fn(),
   },
 }));
 
@@ -140,6 +142,8 @@ describe("WebdavSyncSection", () => {
     settingsApiMock.webdavSyncDownload.mockReset();
     settingsApiMock.s3SyncSaveSettings.mockReset();
     settingsApiMock.s3TestConnection.mockReset();
+    settingsApiMock.s3SyncFetchRemoteInfo.mockReset();
+    settingsApiMock.s3SyncDownload.mockReset();
 
     settingsApiMock.s3SyncSaveSettings.mockResolvedValue({ success: true });
     settingsApiMock.s3TestConnection.mockResolvedValue({ success: true });
@@ -158,6 +162,15 @@ describe("WebdavSyncSection", () => {
     });
     settingsApiMock.webdavSyncUpload.mockResolvedValue({ status: "uploaded" });
     settingsApiMock.webdavSyncDownload.mockResolvedValue({ status: "downloaded" });
+    settingsApiMock.s3SyncFetchRemoteInfo.mockResolvedValue({
+      deviceName: "My MacBook",
+      createdAt: "2026-02-01T10:00:00Z",
+      snapshotId: "snapshot-1",
+      version: 2,
+      compatible: true,
+      artifacts: ["db.sql", "skills.zip"],
+    });
+    settingsApiMock.s3SyncDownload.mockResolvedValue({ status: "downloaded" });
   });
 
   it("shows auto sync error callout when last auto sync failed", () => {
@@ -696,6 +709,34 @@ describe("WebdavSyncSection", () => {
           false,
         );
       });
+    });
+  });
+
+  describe("form rows at phone width (WEB-11)", () => {
+    // jsdom has no layout: this pins the classes, the widths were measured in a browser.
+    const rowLabels = () =>
+      screen
+        .getAllByText(/^settings\.(syncType|webdavSync|s3Sync)\./)
+        .filter((el) => el.tagName === "LABEL");
+
+    function expectStackedBelowSm(labels: HTMLElement[], count: number) {
+      expect(labels).toHaveLength(count);
+      for (const label of labels) {
+        expect(label.className).toContain("sm:w-40");
+        expect(label.className).not.toMatch(/(^|\s)w-40(\s|$)/);
+        expect(label.parentElement?.className).toContain("flex-col");
+        expect(label.parentElement?.className).toContain("sm:flex-row");
+      }
+    }
+
+    it("WebDAV form: the label sits above the field below sm, beside it from sm", () => {
+      renderSection(baseConfig);
+      expectStackedBelowSm(rowLabels(), 8);
+    });
+
+    it("S3 form: the label sits above the field below sm, beside it from sm", () => {
+      renderSection(baseConfig, s3Config);
+      expectStackedBelowSm(rowLabels(), 11);
     });
   });
 });
