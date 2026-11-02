@@ -18,9 +18,9 @@ Scope: `src-tauri/src/web_api.rs` (10 роутов), `src-tauri/tests/web_api_sy
 - [x] Ответ хендлера = значение, которое возвращает команда, через `ok(...)`; ошибка команды (`Err(String)`) → `fail`.
 
 ### Task 2: тесты backend
-- [ ] `src-tauri/tests/web_api_sync.rs`: заглушка WebDAV на axum в том же тесте, отвечающая на методы, которые реально вызывает `services/webdav_sync.rs` (посмотреть по коду: PUT/GET/PROPFIND/MKCOL), с хранением в памяти.
-- [ ] Кейсы: `test` против заглушки → ok; `test` против закрытого порта localhost → `{ok:false}` за время меньше таймаута сервиса; save → get_settings возвращает сохранённое, `passwordTouched:false` сохраняет прежний пароль; upload → заглушка получила архив; download с заглушки → провайдеры восстановлены в DB и `run_post_import_sync` отработал (live-файл в temp HOME обновлён); неизвестный backend → 400.
-- [ ] S3: только error-path (недоступный endpoint → `{ok:false}`, save/get round-trip). Happy path S3 (SigV4) проверить вручную на agentbox и записать результат в Notes.
+- [x] `src-tauri/tests/web_api_sync.rs`: заглушка WebDAV на axum в том же тесте, отвечающая на методы, которые реально вызывает `services/webdav_sync.rs` (посмотреть по коду: PUT/GET/PROPFIND/MKCOL), с хранением в памяти.
+- [x] Кейсы: `test` против заглушки → ok; `test` против закрытого порта localhost → `{ok:false}` за время меньше таймаута сервиса; save → get_settings возвращает сохранённое, `passwordTouched:false` сохраняет прежний пароль; upload → заглушка получила архив; download с заглушки → провайдеры восстановлены в DB и `run_post_import_sync` отработал (live-файл в temp HOME обновлён); неизвестный backend → 400.
+- [x] S3: только error-path (недоступный endpoint → `{ok:false}`, save/get round-trip). Happy path S3 (SigV4) проверить вручную на agentbox и записать результат в Notes.
 
 ### Task 3: frontend
 - [ ] 10 case в `mapCommand` с теми же camelCase-полями body.
