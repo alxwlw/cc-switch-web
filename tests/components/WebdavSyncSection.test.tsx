@@ -767,24 +767,59 @@ describe("WebdavSyncSection", () => {
         .getAllByText(/^settings\.(syncType|webdavSync|s3Sync)\./)
         .filter((el) => el.tagName === "LABEL");
 
-    function expectStackedBelowSm(labels: HTMLElement[], count: number) {
+    // From sm up a row is the old one: a label beside the field, items-start only on the
+    // three toggle rows (autoSync, S3 enabled), items-center on every other row.
+    const TOP_ROW =
+      /^settings\.(webdavSync\.autoSync|s3Sync\.(autoSync|enabled))/;
+
+    function expectRowLayout(
+      labels: HTMLElement[],
+      count: number,
+      tops: number,
+    ) {
       expect(labels).toHaveLength(count);
+      let top = 0;
       for (const label of labels) {
+        const row = label.parentElement?.className ?? "";
+        const isTop = TOP_ROW.test(label.textContent ?? "");
+        top += isTop ? 1 : 0;
         expect(label.className).toContain("sm:w-40");
+        expect(label.className).toContain("sm:shrink-0");
         expect(label.className).not.toMatch(/(^|\s)w-40(\s|$)/);
-        expect(label.parentElement?.className).toContain("flex-col");
-        expect(label.parentElement?.className).toContain("sm:flex-row");
+        expect(row).toContain("flex-col");
+        expect(row).toContain("sm:flex-row");
+        expect(row).toContain("sm:gap-4");
+        expect(row).toContain(isTop ? "sm:items-start" : "sm:items-center");
       }
+      expect(top).toBe(tops);
     }
 
     it("WebDAV form: the label sits above the field below sm, beside it from sm", () => {
       renderSection(baseConfig);
-      expectStackedBelowSm(rowLabels(), 8);
+      expectRowLayout(rowLabels(), 8, 1);
     });
 
     it("S3 form: the label sits above the field below sm, beside it from sm", () => {
       renderSection(baseConfig, s3Config);
-      expectStackedBelowSm(rowLabels(), 11);
+      expectRowLayout(rowLabels(), 11, 2);
     });
+
+    it.each([
+      [
+        "WebDAV",
+        "https://dav.jianguoyun.com/dav/",
+        undefined,
+        "settings.webdavSync.presets.jianguoyunHint",
+      ],
+      ["S3", baseConfig.baseUrl, s3Config, "settings.s3Sync.presets.awsS3Hint"],
+    ])(
+      "%s preset hint is indented under the field only from sm",
+      (_n, baseUrl, s3, key) => {
+        renderSection({ ...baseConfig, baseUrl }, s3);
+        const hint = screen.getByText(key).parentElement?.className ?? "";
+        expect(hint).toContain("sm:pl-44");
+        expect(hint).not.toMatch(/(^|\s)pl-44(\s|$)/);
+      },
+    );
   });
 });
