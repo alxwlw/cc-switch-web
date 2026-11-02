@@ -1,7 +1,7 @@
 //! In-memory WebDAV server on loopback for the stub-backed sync tests (`web_api_sync.rs`).
 //! Pulled in with `#[path]` by that test binary alone, so other binaries do not compile it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
@@ -26,6 +26,9 @@ pub struct Seen {
 struct StubState {
     /// In-memory remote: request path -> stored body (PUT writes it, GET / HEAD read it).
     files: Mutex<BTreeMap<String, Vec<u8>>>,
+    /// Collections that exist, without a trailing slash. `/dav` (the base URL of the tests)
+    /// exists from the start; MKCOL adds the rest. PUT needs its parent in here.
+    collections: Mutex<BTreeSet<String>>,
     seen: Mutex<Vec<Seen>>,
     /// Held by every PUT / GET / HEAD before it answers; widens the window in which two
     /// unserialised operations would overlap. No assertion depends on it elapsing.
@@ -82,9 +85,27 @@ async fn stub_handler(State(st): State<Arc<StubState>>, req: Request<Body>) -> R
     }
 
     let stored = st.files.lock().unwrap().get(&path).cloned();
+    // Like a real server: MKCOL is 405 on an existing collection and 409 without its parent,
+    // PUT is 409 without its parent collection, PROPFIND is 404 on what does not exist.
+    let key = path.trim_end_matches('/').to_string();
+    let parent_exists = |key: &str| {
+        let parent = key.rsplit_once('/').map_or("", |(parent, _)| parent);
+        parent.is_empty() || st.collections.lock().unwrap().contains(parent)
+    };
     match method.as_str() {
-        "PROPFIND" => reply(StatusCode::MULTI_STATUS).body(Body::empty()),
-        "MKCOL" => reply(StatusCode::CREATED).body(Body::empty()),
+        "PROPFIND" if stored.is_some() || st.collections.lock().unwrap().contains(&key) => {
+            reply(StatusCode::MULTI_STATUS).body(Body::empty())
+        }
+        "PROPFIND" => reply(StatusCode::NOT_FOUND).body(Body::empty()),
+        "MKCOL" if st.collections.lock().unwrap().contains(&key) => {
+            reply(StatusCode::METHOD_NOT_ALLOWED).body(Body::empty())
+        }
+        "MKCOL" if !parent_exists(&key) => reply(StatusCode::CONFLICT).body(Body::empty()),
+        "MKCOL" => {
+            st.collections.lock().unwrap().insert(key);
+            reply(StatusCode::CREATED).body(Body::empty())
+        }
+        "PUT" if !parent_exists(&key) => reply(StatusCode::CONFLICT).body(Body::empty()),
         "PUT" => {
             st.files.lock().unwrap().insert(path, bytes.to_vec());
             reply(StatusCode::CREATED).body(Body::empty())
@@ -120,6 +141,7 @@ impl DavStub {
     pub async fn start_with_delay(transfer_delay: Duration) -> Self {
         let state = Arc::new(StubState {
             files: Mutex::new(BTreeMap::new()),
+            collections: Mutex::new(BTreeSet::from(["/dav".to_string()])),
             seen: Mutex::new(Vec::new()),
             transfer_delay,
             in_flight: AtomicUsize::new(0),
