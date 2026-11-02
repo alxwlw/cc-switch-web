@@ -4234,6 +4234,8 @@
     "desktopUnsupported": "このシステムには対応していません",
     "desktopConnected": "接続済み",
     "desktopNotConnected": "未接続",
+    "desktopServerNote": "cc-switch-web サーバー上の Claude Desktop",
+    "desktopNotFoundOnServer": "サーバー上に Claude Desktop が見つかりません。そこにインストールされると設定が反映されます。",
     "newVersion": "新しいバージョン {{version}}",
     "notRunnable": "実行できません",
     "updateNeedsNode": "{{version}} には Node {{required}} が必要ですが、このインストールは Node {{current}} で動いています。先に Node を更新してください。",
@@ -5075,6 +5077,7 @@
       "unsupported": "Webモードではアップデートを利用できません。サーバーの更新は運用者が行います"
     },
     "proxyCaption": "プロキシはサーバー上で動作し、サーバー上の CLI の設定を書き換えます。お使いのマシン上の CLI には影響しません。",
+    "desktopRouteHost": "Claude Desktop は「接続アドレス」とポートでサーバー上のプロキシに接続します。Claude Desktop が別のマシンで動いている場合は、設定 → ローカルルーティングで、そのマシンから到達できるホストを接続アドレス（client host）に設定してください。",
     "proxyListenWarning": "{{address}} で待ち受けると、ネットワーク全体（tailnet を含む）から認証なしでプロキシにアクセスできます。127.0.0.1 を推奨します。",
     "liveUnknownTitle": "プロバイダー（Webモードでは実際の設定状態を読み取れません）",
     "sessionResumeCopied": "再開コマンドをコピーしました。サーバーホスト上のプロジェクトフォルダーで、ターミナルに貼り付けて実行してください",

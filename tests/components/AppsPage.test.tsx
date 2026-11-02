@@ -46,6 +46,7 @@ const mocks = vi.hoisted(() => ({
   dragEndHandlers: [] as ((event: DragEndEvent) => void)[],
   desktopStatus: { supported: true, installed: true, configured: true },
   desktopStatusCalls: 0,
+  desktopStatusMode: "ok" as "ok" | "error" | "pending",
 }));
 
 vi.mock("@/lib/api", () => ({ settingsApi: mocks }));
@@ -53,6 +54,12 @@ vi.mock("@/lib/api/providers", () => ({
   providersApi: {
     getClaudeDesktopStatus: async () => {
       mocks.desktopStatusCalls += 1;
+      if (mocks.desktopStatusMode === "error") {
+        throw new Error("status unavailable");
+      }
+      if (mocks.desktopStatusMode === "pending") {
+        return new Promise(() => {});
+      }
       return mocks.desktopStatus;
     },
   },
@@ -245,6 +252,8 @@ describe("AppsPage concurrent CLI upgrades", () => {
       installed: true,
       configured: true,
     };
+    mocks.desktopStatusMode = "ok";
+    mocks.desktopStatusCalls = 0;
     mocks.updateSettings.mockReset();
     mocks.autoSaveSettings.mockReset().mockResolvedValue(null);
     mocks.copyText.mockReset().mockResolvedValue(undefined);
@@ -685,23 +694,100 @@ describe("AppsPage concurrent CLI upgrades", () => {
     ).toBeInTheDocument();
   });
 
-  it("web: не опрашивает статус Claude Desktop и не оставляет его вечно в загрузке", async () => {
+  it("web: опрашивает статус Claude Desktop на сервере и группирует по installed", async () => {
     setWeb(true);
-    mocks.desktopStatusCalls = 0;
+    mocks.desktopStatus = {
+      supported: true,
+      installed: true,
+      configured: false,
+    };
     await renderApps();
-    expect(mocks.desktopStatusCalls).toBe(0);
-    // WEB-25: установки грузятся на mount и в web (сервер зондирует свои CLI)
-    await waitFor(() => expect(mocks.listToolInstallations).toHaveBeenCalled());
-    // статус неизвестен: плоский список без групп, Desktop не объявлен «не установленным»
+    await waitFor(() => expect(mocks.desktopStatusCalls).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(rowApps("appsPage.sectionInstalled")).toContain("claude-desktop"),
+    );
     expect(
-      screen.queryByRole("region", { name: "appsPage.sectionNotInstalled" }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("region", { name: "appsPage.sectionInstalled" }),
-    ).toBeNull();
-    expect(
-      card("Claude Desktop").getByText("Claude Desktop"),
+      card("Claude Desktop").getByText("appsPage.desktopNotConnected"),
     ).toBeInTheDocument();
+    expect(screen.getByTestId("apps-web-desktop-note")).toHaveTextContent(
+      "appsPage.desktopServerNote",
+    );
+    // установлен на сервере: тревожной подписи «не найден» нет
+    expect(screen.queryByTestId("apps-web-desktop-not-found")).toBeNull();
+  });
+
+  it("web: installed:false — подпись «не найден на сервере» и группа «не установлены», без ошибки", async () => {
+    setWeb(true);
+    mocks.desktopStatus = {
+      supported: true,
+      installed: false,
+      configured: false,
+    };
+    await renderApps();
+    await waitFor(() =>
+      expect(rowApps("appsPage.sectionNotInstalled")).toContain(
+        "claude-desktop",
+      ),
+    );
+    const note = screen.getByTestId("apps-web-desktop-note");
+    expect(note).toHaveTextContent("appsPage.desktopServerNote");
+    expect(screen.getByTestId("apps-web-desktop-not-found")).toHaveTextContent(
+      "appsPage.desktopNotFoundOnServer",
+    );
+    // нейтральный вид: не role=alert и без danger-цвета
+    expect(note.closest("[role=alert]")).toBeNull();
+    expect(note.className).not.toMatch(/danger/);
+  });
+
+  it.each(["pending", "error"] as const)(
+    "web: статус Claude Desktop %s — нейтральное состояние, плоский список, без «не установлен»",
+    async (mode) => {
+      setWeb(true);
+      mocks.desktopStatusMode = mode;
+      const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        await renderApps();
+        await waitFor(() =>
+          expect(mocks.desktopStatusCalls).toBeGreaterThan(0),
+        );
+        // WEB-25: установки грузятся на mount и в web (сервер зондирует свои CLI)
+        await waitFor(() =>
+          expect(mocks.listToolInstallations).toHaveBeenCalled(),
+        );
+        // статус неизвестен: плоский список без групп, Desktop не объявлен «не установленным»
+        expect(
+          screen.queryByRole("region", {
+            name: "appsPage.sectionNotInstalled",
+          }),
+        ).toBeNull();
+        expect(
+          screen.queryByRole("region", { name: "appsPage.sectionInstalled" }),
+        ).toBeNull();
+        const desktop = card("Claude Desktop");
+        expect(desktop.getByText("Claude Desktop")).toBeInTheDocument();
+        expect(desktop.queryByText("appsPage.desktopNotConnected")).toBeNull();
+        expect(desktop.queryByText("appsPage.desktopConnected")).toBeNull();
+        expect(screen.getByTestId("apps-web-desktop-note")).toHaveTextContent(
+          "appsPage.desktopServerNote",
+        );
+        expect(screen.queryByTestId("apps-web-desktop-not-found")).toBeNull();
+        expect(screen.queryByRole("alert")).toBeNull();
+      } finally {
+        errorLog.mockRestore();
+      }
+    },
+  );
+
+  it("desktop: подписи про сервер не показываются", async () => {
+    mocks.desktopStatus = {
+      supported: true,
+      installed: false,
+      configured: false,
+    };
+    await renderApps();
+    expect(rowApps("appsPage.sectionNotInstalled")).toEqual(["claude-desktop"]);
+    expect(screen.queryByTestId("apps-web-desktop-note")).toBeNull();
+    expect(screen.queryByTestId("apps-web-desktop-not-found")).toBeNull();
   });
 
   it.each([true, false])(

@@ -131,19 +131,16 @@ describe("ProviderCardActions — web", () => {
 });
 
 describe("ProviderEmptyState — import from live config", () => {
-  it("disables the import button when the import reads the live config (claude-desktop stays gated, WEB-19)", () => {
+  it("claude-desktop import works in web (WEB-19): enabled and calls onImport", async () => {
     setWeb(true);
     const onImport = vi.fn();
-    render(
-      <ProviderEmptyState
-        appId="claude-desktop"
-        onImport={onImport}
-        importUnavailable
-      />,
-    );
-    expect(
-      screen.getByRole("button", { name: "provider.importFromClaude" }),
-    ).toBeDisabled();
+    render(<ProviderEmptyState appId="claude-desktop" onImport={onImport} />);
+    const button = screen.getByRole("button", {
+      name: "provider.importFromClaude",
+    });
+    expect(button).toBeEnabled();
+    await userEvent.click(button);
+    expect(onImport).toHaveBeenCalledTimes(1);
   });
 
   it("leaves import enabled when it is available", () => {
@@ -408,12 +405,16 @@ describe("SwitchModePanel — web", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  function renderPanel(providers: Record<string, Provider>, current: string) {
+  function renderPanel(
+    providers: Record<string, Provider>,
+    current: string,
+    app: "claude" | "claude-desktop" = "claude",
+  ) {
     const onSwitch = vi.fn();
     render(
       <QueryClientProvider client={createTestQueryClient()}>
         <SwitchModePanel
-          app="claude"
+          app={app}
           providers={providers}
           currentProviderId={current}
           isLoading={false}
@@ -457,6 +458,27 @@ describe("SwitchModePanel — web", () => {
     expect(button).toBeEnabled();
     expect(button).toHaveAttribute("data-reason", "");
     expect(onSwitch).not.toHaveBeenCalled();
+  });
+
+  it("tells where the client host is set for Claude Desktop, only in web (WEB-19)", async () => {
+    setWeb(true);
+    renderPanel({ a: provider("a") }, "a", "claude-desktop");
+    expect(
+      await screen.findByTestId("web-desktop-route-host"),
+    ).toHaveTextContent("web.desktopRouteHost");
+  });
+
+  it("has no Claude Desktop host note for other apps in web (WEB-19)", async () => {
+    setWeb(true);
+    renderPanel({ a: provider("a") }, "a");
+    await screen.findByTestId("web-proxy-caption");
+    expect(screen.queryByTestId("web-desktop-route-host")).toBeNull();
+  });
+
+  it("has no Claude Desktop host note on desktop (WEB-19)", async () => {
+    renderPanel({ a: provider("a") }, "a", "claude-desktop");
+    await screen.findByRole("group", { name: "mode.tabsLabel" });
+    expect(screen.queryByTestId("web-desktop-route-host")).toBeNull();
   });
 
   it("still shows the mode tabs on desktop", async () => {

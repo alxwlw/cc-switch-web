@@ -50,19 +50,22 @@ describe("GrokBuildProviderForm", () => {
   it.each([
     ["web", true],
     ["desktop", false],
-  ])("official preset visible in %s: %s", (_label, web) => {
-    setWeb(web);
-    render(
-      <GrokBuildProviderForm
-        submitLabel="Save"
-        onSubmit={() => {}}
-        onCancel={() => {}}
-      />,
-    );
-    const official = screen.queryByRole("button", { name: /Grok Official/ });
-    if (web) expect(official).toBeNull();
-    else expect(official).not.toBeNull();
-  });
+  ])(
+    "official preset is offered in %s (seeded via ensure_grokbuild)",
+    (_label, web) => {
+      setWeb(web);
+      render(
+        <GrokBuildProviderForm
+          submitLabel="Save"
+          onSubmit={() => {}}
+          onCancel={() => {}}
+        />,
+      );
+      expect(
+        screen.getByRole("button", { name: /Grok Official/ }),
+      ).toBeInTheDocument();
+    },
+  );
 
   it("points the get-API-key link at the preset's apiKeyUrl", async () => {
     const user = userEvent.setup();

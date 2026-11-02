@@ -613,6 +613,14 @@ export function SwitchModePanel({
         className="min-h-0 flex-1 overflow-y-auto scroll-stable overflow-x-hidden px-6 pb-12 pt-3"
       >
         {isWeb && <WebProxyCaption className="mb-3" />}
+        {isWeb && app === "claude-desktop" && (
+          <p
+            data-testid="web-desktop-route-host"
+            className="m-0 mb-3 text-caption text-fg-2"
+          >
+            {t("web.desktopRouteHost")}
+          </p>
+        )}
         {notices.length > 0 && (
           <div role="status" className="mb-3 flex flex-col gap-2">
             {notices}

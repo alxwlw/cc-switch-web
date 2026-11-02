@@ -1275,6 +1275,22 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: "/api/proxy/client-host",
         body: { host: a.host },
       };
+    // ---------- Claude Desktop on the server host + official seeds (WEB-19) ----------
+    case "get_claude_desktop_status":
+      return { method: "GET", url: "/api/claude-desktop/status" };
+    case "get_claude_desktop_default_routes":
+      return { method: "GET", url: "/api/claude-desktop/default-routes" };
+    case "import_claude_desktop_providers_from_claude":
+      return { method: "POST", url: "/api/claude-desktop/import-from-claude" };
+    case "ensure_claude_desktop_official_provider":
+      return {
+        method: "POST",
+        url: "/api/official-seeds/claude-desktop/ensure",
+      };
+    case "ensure_codex_official_provider":
+      return { method: "POST", url: "/api/official-seeds/codex/ensure" };
+    case "ensure_grokbuild_official_provider":
+      return { method: "POST", url: "/api/official-seeds/grokbuild/ensure" };
     case "get_proxy_config_for_app":
       return { method: "GET", url: `/api/proxy/config/${enc(a.appType)}` };
     case "update_proxy_config_for_app":

@@ -178,20 +178,25 @@ export function AppsPage() {
   const tools = useToolManagement();
   const { settings, updateSettings, autoSaveSettings } = useSettings();
   const tableRef = useRef<HTMLDivElement>(null);
-  const { data: desktopStatus, isPending: isDesktopStatusPending } = useQuery({
+  const {
+    data: desktopStatus,
+    isPending: isDesktopStatusPending,
+    isError: isDesktopStatusError,
+  } = useQuery({
     queryKey: ["claude-desktop-status"],
     queryFn: () => providersApi.getClaudeDesktopStatus(),
     staleTime: 30_000,
-    // WEB-00: get_claude_desktop_status не поддержан — снимет WEB-19
-    enabled: !isWeb,
   });
 
   // 按「已安装 / 未安装」分两组。Claude Desktop 没有命令可探，用后端按数据目录 / 应用包推断的结果。
   // 首次探测还没出结果时不分组，免得各行探完一个跳一个；之后重新检查时沿用上次结果，位置不动。
   const rowInstalled = (row: Row): boolean | null => {
     if (row.kind === "desktop") {
-      // WEB-00: в web запрос выключен и остаётся pending => null, список без групп — снимет WEB-19
-      return isDesktopStatusPending ? null : Boolean(desktopStatus?.installed);
+      // Статус ещё не пришёл или запрос упал: Desktop не объявляем «не установленным» —
+      // плоский список без групп, пока не будет ответа.
+      return isDesktopStatusPending || isDesktopStatusError
+        ? null
+        : Boolean(desktopStatus?.installed);
     }
     const info = tools.toolVersionByName.get(row.tool);
     if (!info && tools.isLoadingTools) return null;
@@ -347,13 +352,31 @@ export function AppsPage() {
         name={
           <span className="truncate">{APP_DISPLAY_NAME["claude-desktop"]}</span>
         }
+        meta={
+          isWeb ? (
+            // Файлы Claude Desktop правятся на сервере, а не на машине пользователя
+            <span className="min-w-0" data-testid="apps-web-desktop-note">
+              {t("appsPage.desktopServerNote")}
+              {desktopStatus?.installed === false && (
+                <>
+                  {" · "}
+                  <span data-testid="apps-web-desktop-not-found">
+                    {t("appsPage.desktopNotFoundOnServer")}
+                  </span>
+                </>
+              )}
+            </span>
+          ) : undefined
+        }
         version={
           <span className="inline-flex items-center gap-1 text-caption text-fg-2">
-            {desktopStatus?.supported === false
-              ? t("appsPage.desktopUnsupported")
-              : desktopStatus?.configured
-                ? t("appsPage.desktopConnected")
-                : t("appsPage.desktopNotConnected")}
+            {!desktopStatus
+              ? null
+              : desktopStatus.supported === false
+                ? t("appsPage.desktopUnsupported")
+                : desktopStatus.configured
+                  ? t("appsPage.desktopConnected")
+                  : t("appsPage.desktopNotConnected")}
             <HelpTip title={APP_DISPLAY_NAME["claude-desktop"]} align="end">
               {t("appsPage.desktopHelp")}
             </HelpTip>

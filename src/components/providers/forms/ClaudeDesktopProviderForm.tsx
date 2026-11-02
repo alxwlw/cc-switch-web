@@ -64,7 +64,6 @@ import {
 } from "@/lib/api/providers";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import type { ManagedAuthProvider } from "@/lib/api";
-import { isWeb } from "@/lib/api/adapter";
 import { useCopilotAuth, useCodexOauth, useXaiOauth } from "./hooks";
 import { isOAuthProviderType } from "@/config/constants";
 
@@ -321,8 +320,6 @@ export function ClaudeDesktopProviderForm({
   const { data: defaultRoutes = [] } = useQuery({
     queryKey: ["claudeDesktopDefaultRoutes"],
     queryFn: () => providersApi.getClaudeDesktopDefaultRoutes(),
-    // WEB-00: get_claude_desktop_default_routes не поддержан — снимет WEB-19
-    enabled: !isWeb,
   });
   const defaultProxyRouteRows = useMemo(
     () =>
@@ -367,10 +364,7 @@ export function ClaudeDesktopProviderForm({
           id: `claude-desktop-${index}`,
           preset,
         }))
-        .filter((entry) => !entry.preset.hidden)
-        // WEB-00: официальный пресет сеется ensure_claude_desktop_official_provider (вне mapCommand,
-        // фиксированный id) — обычным add его не воспроизвести, в web не предлагается — снимет WEB-19
-        .filter((entry) => !(isWeb && entry.preset.category === "official")),
+        .filter((entry) => !entry.preset.hidden),
     [],
   );
 
@@ -1104,15 +1098,11 @@ export function ClaudeDesktopProviderForm({
                           defaultValue: "直连",
                         })}
                       </SelectItem>
-                      {/* WEB-00: «модель-маппинг» идёт через прокси/роутинг и get_claude_desktop_default_routes
-                          (вне mapCommand) — новый выбрать нельзя; у уже сохранённого proxy-провайдера пункт остаётся — снимет WEB-19 */}
-                      {(!isWeb || effectiveMode === "proxy") && (
-                        <SelectItem value="proxy">
-                          {t("claudeDesktop.modelModeProxy", {
-                            defaultValue: "模型映射",
-                          })}
-                        </SelectItem>
-                      )}
+                      <SelectItem value="proxy">
+                        {t("claudeDesktop.modelModeProxy", {
+                          defaultValue: "模型映射",
+                        })}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
