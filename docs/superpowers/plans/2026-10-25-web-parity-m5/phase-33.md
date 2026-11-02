@@ -29,6 +29,7 @@ Scope: `src-tauri/src/web_api.rs` (10 роутов), `src-tauri/tests/web_api_sy
 
 ### Task 4: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server`.
+- [ ] Ручная проверка S3 SigV4 happy path на agentbox (Task 2 оставил её на этот шаг: тесты покрывают только error-path и разрешение секрета в `test`); результат записать в Notes.
 - [ ] Ветка `web-parity/web-11-sync-manual`, PR; DX-69 остаётся In Progress, комментарий со ссылкой на PR «этап 1 из 2». Закрыть чекбоксы, Notes.
 
 Риски для ревью:
