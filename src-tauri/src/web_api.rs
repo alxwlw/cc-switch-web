@@ -4644,8 +4644,11 @@ fn parse_sync_backend(backend: &str) -> Result<SyncBackend, ApiResult> {
 /// The body routes parse by hand (the backend decides the settings type), which drops the
 /// `application/json` requirement of the `Json` extractor. Without it a page in the owner's
 /// browser could send a CORS-simple `text/plain` POST and steer the stored credentials to a URL
-/// of its choosing. Same rule as axum's `Json`: `application/json` or `application/*+json`,
-/// parameters (`; charset=utf-8`) ignored, case-insensitive; anything else, or no header, is 415.
+/// of its choosing. Accepts `application/json` or `application/*+json`, parameters
+/// (`; charset=utf-8`) ignored, case-insensitive; anything else, or no header, is 415. Looser
+/// than axum's `Json`, which parses the whole value: a malformed one with an `application/...`
+/// essence (`application/+json`, `application/json;charset`) passes here. Nothing `Json`
+/// accepts is refused, and every such value still needs a CORS preflight.
 fn require_json_content_type(headers: &HeaderMap) -> Result<(), ApiResult> {
     let is_json = headers
         .get(header::CONTENT_TYPE)
