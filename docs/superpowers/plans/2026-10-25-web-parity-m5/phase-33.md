@@ -23,9 +23,9 @@ Scope: `src-tauri/src/web_api.rs` (10 роутов), `src-tauri/tests/web_api_sy
 - [x] S3: только error-path (недоступный endpoint → `{ok:false}`, save/get round-trip). Happy path S3 (SigV4) проверить вручную на agentbox и записать результат в Notes.
 
 ### Task 3: frontend
-- [ ] 10 case в `mapCommand` с теми же camelCase-полями body.
-- [ ] Снять WEB-00-гейт с `WebdavSyncSection` (строка таблицы инвентаризации фазы 6). Переключатель auto-sync до фазы 34 оставить disabled с подписью «автосинхронизация в web — в следующем релизе».
-- [ ] `tests/lib/syncApi.test.ts`: URL/метод/body для каждой из 10 функций; ошибка `{ok:false}` → throw. `pnpm typecheck && pnpm test:unit` зелёные.
+- [x] 10 case в `mapCommand` с теми же camelCase-полями body.
+- [x] Снять WEB-00-гейт с `WebdavSyncSection` (строка таблицы инвентаризации фазы 6). Переключатель auto-sync до фазы 34 оставить disabled с подписью «автосинхронизация в web — в следующем релизе».
+- [x] `tests/lib/syncApi.test.ts`: URL/метод/body для каждой из 10 функций; ошибка `{ok:false}` → throw. `pnpm typecheck && pnpm test:unit` зелёные.
 
 ### Task 4: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server`.
