@@ -414,7 +414,7 @@ export function SettingsPage({
       case "data":
         return (
           <>
-            {/* WEB-00: location/sync are desktop-only until WEB-26/11; backups (WEB-10) and import/export (WEB-09) work in web. */}
+            {/* WEB-00: only location is desktop-only until WEB-26; cloud sync works in web since WEB-11, backups (WEB-10) and import/export (WEB-09) too. */}
             {!isWeb && (
               <SettingsBlock
                 title={t("settings.data.location")}
