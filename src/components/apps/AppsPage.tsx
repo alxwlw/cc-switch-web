@@ -192,9 +192,11 @@ export function AppsPage() {
   // 首次探测还没出结果时不分组，免得各行探完一个跳一个；之后重新检查时沿用上次结果，位置不动。
   const rowInstalled = (row: Row): boolean | null => {
     if (row.kind === "desktop") {
-      // Статус ещё не пришёл или запрос упал: Desktop не объявляем «не установленным» —
-      // плоский список без групп, пока не будет ответа.
-      return isDesktopStatusPending || isDesktopStatusError
+      // Ответа ещё не было: Desktop не объявляем «не установленным», список плоский.
+      // В web упавший запрос без данных — тоже «неизвестно»; в desktop он, как раньше,
+      // даёт «не установлен». Упавшее повторное чтение данные не стирает: группы остаются.
+      return desktopStatus === undefined &&
+        (isDesktopStatusPending || (isWeb && isDesktopStatusError))
         ? null
         : Boolean(desktopStatus?.installed);
     }
@@ -370,11 +372,11 @@ export function AppsPage() {
         }
         version={
           <span className="inline-flex items-center gap-1 text-caption text-fg-2">
-            {!desktopStatus
+            {isWeb && !desktopStatus
               ? null
-              : desktopStatus.supported === false
+              : desktopStatus?.supported === false
                 ? t("appsPage.desktopUnsupported")
-                : desktopStatus.configured
+                : desktopStatus?.configured
                   ? t("appsPage.desktopConnected")
                   : t("appsPage.desktopNotConnected")}
             <HelpTip title={APP_DISPLAY_NAME["claude-desktop"]} align="end">

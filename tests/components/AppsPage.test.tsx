@@ -778,6 +778,94 @@ describe("AppsPage concurrent CLI upgrades", () => {
     },
   );
 
+  it.each([true, false])(
+    "упавшее повторное чтение статуса Desktop (web=%s) не стирает группы: данные первого ответа остаются",
+    async (web) => {
+      setWeb(web);
+      const { AppsPage } = await import("@/components/apps/AppsPage");
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      render(
+        <QueryClientProvider client={client}>
+          <AppsPage />
+        </QueryClientProvider>,
+      );
+      await waitFor(() =>
+        expect(rowApps("appsPage.sectionInstalled")).toContain(
+          "claude-desktop",
+        ),
+      );
+      const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        mocks.desktopStatusMode = "error";
+        const callsBefore = mocks.desktopStatusCalls;
+        await client.refetchQueries({ queryKey: ["claude-desktop-status"] });
+        await waitFor(() =>
+          expect(client.getQueryState(["claude-desktop-status"])?.status).toBe(
+            "error",
+          ),
+        );
+        expect(mocks.desktopStatusCalls).toBe(callsBefore + 1);
+        // данные прежнего ответа сохранены, строки не сдвинулись
+        expect(client.getQueryData(["claude-desktop-status"])).toEqual({
+          supported: true,
+          installed: true,
+          configured: true,
+        });
+        expect(rowApps("appsPage.sectionInstalled")).toContain(
+          "claude-desktop",
+        );
+        expect(
+          screen.getByRole("region", { name: "appsPage.sectionInstalled" }),
+        ).toBeInTheDocument();
+        expect(
+          card("Claude Desktop").getByText("appsPage.desktopConnected"),
+        ).toBeInTheDocument();
+      } finally {
+        errorLog.mockRestore();
+      }
+    },
+  );
+
+  it("desktop: статус Claude Desktop error — «не установлен» и «не подключён», как до WEB-19", async () => {
+    mocks.desktopStatusMode = "error";
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await renderApps();
+      await waitFor(() => expect(mocks.desktopStatusCalls).toBeGreaterThan(0));
+      await waitFor(() =>
+        expect(rowApps("appsPage.sectionNotInstalled")).toContain(
+          "claude-desktop",
+        ),
+      );
+      expect(rowApps("appsPage.sectionInstalled")).not.toContain(
+        "claude-desktop",
+      );
+      expect(
+        card("Claude Desktop").getByText("appsPage.desktopNotConnected"),
+      ).toBeInTheDocument();
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
+  it("desktop: статус Claude Desktop pending — плоский список, подпись «не подключён», как до WEB-19", async () => {
+    mocks.desktopStatusMode = "pending";
+    await renderApps();
+    await waitFor(() => expect(mocks.desktopStatusCalls).toBeGreaterThan(0));
+    await waitFor(() => expect(mocks.listToolInstallations).toHaveBeenCalled());
+    expect(
+      screen.queryByRole("region", { name: "appsPage.sectionNotInstalled" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "appsPage.sectionInstalled" }),
+    ).toBeNull();
+    expect(
+      card("Claude Desktop").getByText("appsPage.desktopNotConnected"),
+    ).toBeInTheDocument();
+  });
+
   it("desktop: подписи про сервер не показываются", async () => {
     mocks.desktopStatus = {
       supported: true,
