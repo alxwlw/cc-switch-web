@@ -1,81 +1,24 @@
 //! `/api/sync/:backend/*` (WEB-11): manual WebDAV / S3 sync through the HTTP layer. Route-shape
 //! tests (backend dispatch, 400 for an unknown backend with no side effect, errors passed
 //! through verbatim, the Content-Type guard) sit beside a stub-backed matrix: an in-memory WebDAV
-//! server on loopback stands in for the remote. S3 is covered on its error path and on how
-//! `test` resolves the secret; the SigV4 happy path is a manual check (phase 33 Task 4).
-//! Settings live in the temp HOME's `.cc-switch/settings.json`.
+//! server on loopback (`support/dav_stub.rs`) stands in for the remote. S3 is covered on its
+//! error path and on how `test` resolves the secret; the SigV4 happy path is a manual check
+//! (phase 33 Task 4). Settings live in the temp HOME's `.cc-switch/settings.json`.
 #![cfg(not(target_os = "windows"))]
 
+#[path = "support/dav_stub.rs"]
+mod dav_stub;
 mod support;
+#[path = "support/sync_fixtures.rs"]
+mod sync_fixtures;
 
-use std::collections::BTreeMap;
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc, Mutex,
-};
-use std::time::{Duration, Instant};
-
-use axum::body::Body;
-use axum::extract::State;
-use axum::http::{Request, Response, StatusCode};
-use cc_switch_lib::{AppType, MultiAppConfig, Provider};
+use axum::http::StatusCode;
+use dav_stub::DavStub;
 use serde_json::{json, Value};
 use serial_test::serial;
-use support::{
-    create_test_state, create_test_state_with_config, ensure_test_home, reset_test_fs, web_call,
-    web_router_with,
-};
-
-fn router() -> axum::Router {
-    reset_test_fs();
-    ensure_test_home();
-    web_router_with(std::sync::Arc::new(create_test_state().unwrap()))
-}
-
-/// A localhost port that nothing listens on.
-fn closed_port() -> u16 {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    listener.local_addr().unwrap().port()
-}
-
-fn webdav_settings(base_url: &str) -> Value {
-    json!({
-        "enabled": true,
-        "baseUrl": base_url,
-        "username": "alice",
-        "password": "webdav-secret-1",
-    })
-}
-
-fn s3_settings() -> Value {
-    json!({
-        "enabled": true,
-        "bucket": "bucket",
-        "region": "us-east-1",
-        "accessKeyId": "AKIAEXAMPLE",
-        "secretAccessKey": "s3-secret-1",
-    })
-}
-
-/// One request per route with its own verb, with a body that would be valid for a real backend.
-fn routes(backend: &str) -> Vec<(&'static str, String, Option<Value>)> {
-    let settings = json!({ "settings": webdav_settings("http://127.0.0.1:1/dav") });
-    vec![
-        (
-            "POST",
-            format!("/api/sync/{backend}/test"),
-            Some(settings.clone()),
-        ),
-        ("POST", format!("/api/sync/{backend}/upload"), None),
-        ("POST", format!("/api/sync/{backend}/download"), None),
-        (
-            "PUT",
-            format!("/api/sync/{backend}/settings"),
-            Some(settings),
-        ),
-        ("GET", format!("/api/sync/{backend}/remote-info"), None),
-    ]
-}
+use std::time::{Duration, Instant};
+use support::web_call;
+use sync_fixtures::*;
 
 #[tokio::test]
 #[serial]
@@ -262,244 +205,6 @@ async fn malformed_settings_body_is_400() {
 
 // ---- Content-Type guard (DP-518) -------------------------------------------------------------
 
-/// `web_call` always sends JSON; this one sends the given Content-Type (or none) and extra
-/// headers, so a CORS-simple request can be replayed.
-async fn raw_call(
-    router: &axum::Router,
-    method: &str,
-    uri: &str,
-    content_type: Option<&str>,
-    extra_headers: &[(&str, &str)],
-    body: &Value,
-) -> (StatusCode, Value) {
-    use axum::body::Body;
-    use axum::http::{header, Request};
-    use http_body_util::BodyExt;
-    use tower::ServiceExt;
-
-    let mut req = Request::builder().method(method).uri(uri);
-    if let Some(ct) = content_type {
-        req = req.header(header::CONTENT_TYPE, ct);
-    }
-    for (k, v) in extra_headers {
-        req = req.header(*k, *v);
-    }
-    let resp = router
-        .clone()
-        .oneshot(req.body(Body::from(body.to_string())).unwrap())
-        .await
-        .expect("router is infallible");
-    let status = resp.status();
-    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
-    (status, serde_json::from_slice(&bytes).expect("json body"))
-}
-
-/// One request the stub received.
-#[derive(Clone, Debug)]
-struct Seen {
-    method: String,
-    path: String,
-    /// `Authorization` header, empty when absent.
-    auth: String,
-    /// `x-amz-date` header (S3), empty when absent.
-    amz_date: String,
-}
-
-struct StubState {
-    /// In-memory remote: request path -> stored body (PUT writes it, GET / HEAD read it).
-    files: Mutex<BTreeMap<String, Vec<u8>>>,
-    seen: Mutex<Vec<Seen>>,
-    /// Held by every PUT / GET / HEAD before it answers; widens the window in which two
-    /// unserialised operations would overlap. No assertion depends on it elapsing.
-    transfer_delay: Duration,
-    in_flight: AtomicUsize,
-    max_in_flight: AtomicUsize,
-}
-
-struct InFlight<'a>(&'a StubState);
-
-impl Drop for InFlight<'_> {
-    fn drop(&mut self) {
-        self.0.in_flight.fetch_sub(1, Ordering::SeqCst);
-    }
-}
-
-/// Path-style S3 bucket URL of `s3_settings()` against a custom endpoint: `HEAD /bucket/`.
-const S3_BUCKET_PATH: &str = "/bucket/";
-
-/// The moshi-hook probes loopback listeners with `GET /` about every 16 s: that request is
-/// answered 404 and never recorded. Everything else is, and the assertions filter by method
-/// and path.
-async fn stub_handler(State(st): State<Arc<StubState>>, req: Request<Body>) -> Response<Body> {
-    let (parts, body) = req.into_parts();
-    let method = parts.method.as_str().to_string();
-    let path = parts.uri.path().to_string();
-    let reply = |status: StatusCode| Response::builder().status(status);
-    if method == "GET" && path == "/" {
-        return reply(StatusCode::NOT_FOUND).body(Body::empty()).unwrap();
-    }
-    let header_of = |name: &str| {
-        parts
-            .headers
-            .get(name)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or_default()
-            .to_string()
-    };
-    let bytes = axum::body::to_bytes(body, usize::MAX)
-        .await
-        .unwrap_or_default();
-    st.seen.lock().unwrap().push(Seen {
-        method: method.clone(),
-        path: path.clone(),
-        auth: header_of("authorization"),
-        amz_date: header_of("x-amz-date"),
-    });
-
-    let now = st.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
-    st.max_in_flight.fetch_max(now, Ordering::SeqCst);
-    let _in_flight = InFlight(&st);
-    if matches!(method.as_str(), "PUT" | "GET" | "HEAD") && !st.transfer_delay.is_zero() {
-        tokio::time::sleep(st.transfer_delay).await;
-    }
-
-    let stored = st.files.lock().unwrap().get(&path).cloned();
-    match method.as_str() {
-        "PROPFIND" => reply(StatusCode::MULTI_STATUS).body(Body::empty()),
-        "MKCOL" => reply(StatusCode::CREATED).body(Body::empty()),
-        "PUT" => {
-            st.files.lock().unwrap().insert(path, bytes.to_vec());
-            reply(StatusCode::CREATED).body(Body::empty())
-        }
-        "GET" => match stored {
-            Some(b) => reply(StatusCode::OK)
-                .header("etag", "\"stub-etag\"")
-                .body(Body::from(b)),
-            None => reply(StatusCode::NOT_FOUND).body(Body::empty()),
-        },
-        "HEAD" if stored.is_some() || path == S3_BUCKET_PATH => reply(StatusCode::OK)
-            .header("etag", "\"stub-etag\"")
-            .body(Body::empty()),
-        "HEAD" => reply(StatusCode::NOT_FOUND).body(Body::empty()),
-        _ => reply(StatusCode::METHOD_NOT_ALLOWED).body(Body::empty()),
-    }
-    .unwrap()
-}
-
-/// In-memory WebDAV server on loopback (also answers an S3 `HEAD /bucket/`), speaking the
-/// methods `services/webdav.rs` uses: PROPFIND, MKCOL, PUT, GET, HEAD.
-struct DavStub {
-    port: u16,
-    state: Arc<StubState>,
-    task: tokio::task::JoinHandle<()>,
-}
-
-impl DavStub {
-    async fn start() -> Self {
-        Self::start_with_delay(Duration::ZERO).await
-    }
-
-    async fn start_with_delay(transfer_delay: Duration) -> Self {
-        let state = Arc::new(StubState {
-            files: Mutex::new(BTreeMap::new()),
-            seen: Mutex::new(Vec::new()),
-            transfer_delay,
-            in_flight: AtomicUsize::new(0),
-            max_in_flight: AtomicUsize::new(0),
-        });
-        let app = axum::Router::new()
-            .fallback(stub_handler)
-            .with_state(state.clone());
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let task = tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
-        Self { port, state, task }
-    }
-
-    fn base_url(&self) -> String {
-        format!("http://127.0.0.1:{}/dav", self.port)
-    }
-
-    /// S3 `endpoint` value pointing at the stub (path style, plain http).
-    fn endpoint(&self) -> String {
-        format!("http://127.0.0.1:{}", self.port)
-    }
-
-    fn requests(&self, method: &str) -> Vec<Seen> {
-        self.state
-            .seen
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|r| r.method == method)
-            .cloned()
-            .collect()
-    }
-
-    /// Authorization headers of the `PROPFIND /dav` requests received so far.
-    fn propfind_auth(&self) -> Vec<String> {
-        self.requests("PROPFIND")
-            .into_iter()
-            .filter(|r| r.path == "/dav")
-            .map(|r| r.auth)
-            .collect()
-    }
-
-    /// `(method, path)` of everything under `/dav`, in arrival order.
-    fn dav_log(&self) -> Vec<(String, String)> {
-        self.state
-            .seen
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|r| r.path == "/dav" || r.path.starts_with("/dav/"))
-            .map(|r| (r.method.clone(), r.path.clone()))
-            .collect()
-    }
-
-    fn file(&self, path: &str) -> Option<Vec<u8>> {
-        self.state.files.lock().unwrap().get(path).cloned()
-    }
-
-    fn forget_requests(&self) {
-        self.state.seen.lock().unwrap().clear();
-        self.state.max_in_flight.store(0, Ordering::SeqCst);
-    }
-
-    fn max_in_flight(&self) -> usize {
-        self.state.max_in_flight.load(Ordering::SeqCst)
-    }
-}
-
-impl Drop for DavStub {
-    fn drop(&mut self) {
-        self.task.abort();
-    }
-}
-
-/// `Basic base64("alice:webdav-secret-1")`: the stored credential from `webdav_settings`.
-const STORED_BASIC: &str = "Basic YWxpY2U6d2ViZGF2LXNlY3JldC0x";
-
-/// Stores WebDAV settings (with the password) through the save route.
-async fn store_webdav(router: &axum::Router, base_url: &str) {
-    let (status, json) = web_call(
-        router,
-        "PUT",
-        "/api/sync/webdav/settings",
-        Some(json!({ "settings": webdav_settings(base_url), "passwordTouched": true })),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{json}");
-}
-
-async fn stored_base_url(router: &axum::Router) -> Value {
-    let (status, json) = web_call(router, "GET", "/api/settings", None).await;
-    assert_eq!(status, StatusCode::OK);
-    json["data"]["webdavSync"]["baseUrl"].clone()
-}
-
 #[tokio::test]
 #[serial]
 async fn text_plain_test_request_is_415_and_never_reaches_the_attacker_url() {
@@ -634,100 +339,6 @@ async fn json_content_types_with_parameters_or_a_json_suffix_pass_on_both_routes
 }
 
 // ---- Stub-backed matrix (WEB-11 Task 2) ---------------------------------------------------------
-
-/// `Basic base64("alice:")`: the credential when the password is empty and not filled in.
-const EMPTY_PASSWORD_BASIC: &str = "Basic YWxpY2U6";
-
-/// Where `webdav_settings` (default root and profile) keeps its files on the stub.
-const REMOTE_DIR: &str = "/dav/cc-switch-sync/v2/db-v6/default";
-
-/// The request settled with `200 {ok:true,data}`; returns `data`.
-async fn data(router: &axum::Router, method: &str, uri: &str, body: Option<Value>) -> Value {
-    let (status, json) = web_call(router, method, uri, body).await;
-    assert_eq!(status, StatusCode::OK, "{method} {uri}: {json}");
-    assert_eq!(json["ok"], json!(true), "{method} {uri}: {json}");
-    json["data"].clone()
-}
-
-/// What the save route persisted, unmasked (`GET /api/settings` clears the secrets).
-fn stored_settings() -> Value {
-    let path = ensure_test_home().join(".cc-switch").join("settings.json");
-    serde_json::from_str(&std::fs::read_to_string(path).expect("settings.json")).expect("json")
-}
-
-struct Fixture {
-    router: axum::Router,
-    state: Arc<cc_switch_lib::AppState>,
-}
-
-/// Fresh HOME with two Claude providers, `old-provider` current.
-fn fixture_with_providers() -> Fixture {
-    reset_test_fs();
-    ensure_test_home();
-    let mut config = MultiAppConfig::default();
-    let manager = config.get_manager_mut(&AppType::Claude).unwrap();
-    manager.current = "old-provider".to_string();
-    for (id, key) in [("old-provider", "k-old"), ("new-provider", "k-new")] {
-        manager.providers.insert(
-            id.to_string(),
-            Provider::with_id(
-                id.to_string(),
-                id.to_string(),
-                json!({ "env": { "ANTHROPIC_API_KEY": key } }),
-                None,
-            ),
-        );
-    }
-    let state = Arc::new(create_test_state_with_config(&config).expect("state"));
-    Fixture {
-        router: web_router_with(state.clone()),
-        state,
-    }
-}
-
-fn db_key(fx: &Fixture, id: &str) -> Option<String> {
-    fx.state
-        .db
-        .get_provider_by_id(id, "claude")
-        .expect("db read")
-        .map(|p| {
-            p.settings_config["env"]["ANTHROPIC_API_KEY"]
-                .as_str()
-                .expect("key")
-                .to_string()
-        })
-}
-
-fn live_claude_path() -> std::path::PathBuf {
-    ensure_test_home().join(".claude").join("settings.json")
-}
-
-fn write_live_claude_key(key: &str) {
-    let path = live_claude_path();
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(
-        path,
-        json!({ "env": { "ANTHROPIC_API_KEY": key } }).to_string(),
-    )
-    .unwrap();
-}
-
-fn live_claude_key() -> String {
-    let v: Value =
-        serde_json::from_str(&std::fs::read_to_string(live_claude_path()).expect("live settings"))
-            .expect("live settings json");
-    v["env"]["ANTHROPIC_API_KEY"]
-        .as_str()
-        .expect("live key")
-        .to_string()
-}
-
-fn s3_settings_for(stub: &DavStub) -> Value {
-    let mut settings = s3_settings();
-    settings["endpoint"] = json!(stub.endpoint());
-    settings
-}
-
 #[tokio::test]
 #[serial]
 async fn test_against_the_stub_is_ok_and_creates_the_remote_directories() {
@@ -922,32 +533,6 @@ async fn s3_save_masks_the_secret_and_password_touched_controls_the_overwrite() 
         stored_settings()["s3Sync"]["secretAccessKey"],
         json!("s3-secret-2")
     );
-}
-
-/// One `POST /api/sync/s3/test` against the stub; returns the `(x-amz-date, Authorization)`
-/// of the single `HEAD /bucket/` it sent.
-async fn s3_test_signature(
-    router: &axum::Router,
-    stub: &DavStub,
-    secret: &str,
-    preserve: Option<bool>,
-) -> (String, String) {
-    let mut settings = s3_settings_for(stub);
-    settings["secretAccessKey"] = json!(secret);
-    let mut body = json!({ "settings": settings });
-    if let Some(preserve) = preserve {
-        body["preserveEmptyPassword"] = json!(preserve);
-    }
-    stub.forget_requests();
-    let resp = data(router, "POST", "/api/sync/s3/test", Some(body)).await;
-    assert_eq!(
-        resp,
-        json!({ "success": true, "message": "S3 connection ok" })
-    );
-    let heads = stub.requests("HEAD");
-    assert_eq!(heads.len(), 1, "{heads:?}");
-    assert_eq!(heads[0].path, S3_BUCKET_PATH);
-    (heads[0].amz_date.clone(), heads[0].auth.clone())
 }
 
 #[tokio::test]
@@ -1177,23 +762,6 @@ async fn remote_info_describes_the_uploaded_snapshot() {
             .unwrap();
     assert_eq!(info["snapshotId"], manifest["snapshotId"]);
     assert!(!info["deviceName"].as_str().unwrap_or_default().is_empty());
-}
-
-/// Collapses a request log to its transfer direction: `W` for what an upload sends (MKCOL, PUT,
-/// HEAD), `R` for what a download sends (GET), runs merged, PROPFIND ignored.
-fn directions(log: &[(String, String)]) -> String {
-    let mut out = String::new();
-    for (method, _) in log {
-        let d = match method.as_str() {
-            "MKCOL" | "PUT" | "HEAD" => 'W',
-            "GET" => 'R',
-            _ => continue,
-        };
-        if !out.ends_with(d) {
-            out.push(d);
-        }
-    }
-    out
 }
 
 #[tokio::test]
