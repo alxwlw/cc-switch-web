@@ -40,6 +40,9 @@ Scope: `src-tauri/src/commands/{provider,subscription,codex_oauth,xai_oauth,agy_
 
 ## Notes for next phase
 
+- **Закрыта 2026-10-30**: PR #32 merged `f9c95288` → main; live на `cc-switch-web.service` с 18:39; DX-62 Done.
+  - Server и `dist-web` пересобраны из main. БД забэкаплена в `~/.cc-switch-web/backups-predeploy-p31-20261030-183907/`. Миграций нет.
+  - Smoke: консоль 200; `codex-oauth/default/quota` → внятный not_found (аккаунта нет, путь default-резолва из T3 работает); web-проверки — ок; паник в журнале нет.
 - **Статус до merge (2026-10-30)**: ветка `web-parity/web-04-usage-subscriptions` (worktree `.worktrees/web-04-usage`), PR → main (открывается в T4 STEP 4; URL — в T4-отчёте и комментарии DX-62); DX-62 → In Review + ссылка. Чекбоксы Т1–Т4 закрыты, Notes заполнены (`docs(plans)` — WEB-04 T4).
   - Финальные гейты на `e24f02a7` (код; docs-коммит T4 сверху):
     - `cargo fmt --check --manifest-path src-tauri/Cargo.toml` — чисто (RC=0);
