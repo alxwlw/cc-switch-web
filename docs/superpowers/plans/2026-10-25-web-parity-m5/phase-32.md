@@ -36,6 +36,9 @@ Scope: `src-tauri/src/web_api.rs` (6 роутов), `src-tauri/tests/web_api_cla
 
 ## Notes for next phase
 
+- **Закрыта 2026-11-02**: PR #33 merged `a3e77441` → main; live на `cc-switch-web.service` с 21:25; DX-77 Done.
+  - Server и `dist-web` пересобраны из main. БД забэкаплена в `~/.cc-switch-web/backups-predeploy-p32-20261102-212547/`. Миграций нет, `user_version` 23.
+  - Smoke: консоль 200; `claude-desktop/status` → `supported:true, installed:false`; `default-routes` → 4; `official-seeds/nope/ensure` → 400; Apps page показывает подпись «Claude Desktop on the cc-switch-web server» и строку not found; паник в журнале нет. Import и ensure на живой БД не запускались, takeover Claude Desktop вживую не проверялся.
 - **Статус до merge (2026-11-02)**: ветка `web-parity/web-19-claude-desktop` (worktree `.worktrees/web-19-claude-desktop`), PR → main (URL — в T3-отчёте и комментарии DX-77); DX-77 → In Review + ссылка (контроллер). Чекбоксы Т1–Т3 закрыты, Notes заполнены (`docs(plans)` — WEB-19 T3). Merge делает владелец.
   - Финальные гейты на `2f5d8171` (код; docs-коммит T3 сверху):
     - `cargo fmt --check --manifest-path src-tauri/Cargo.toml` — чисто (RC=0);

@@ -49,7 +49,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 29 — WEB-03 / DX-61: списки моделей от провайдера и CLI](2026-10-25-web-parity-m5/phase-29.md) — PR #30, merged `68f03f92` → main 2026-10-30, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-61 Done.
 - [x] [Phase 30 — WEB-14 / DX-72: OpenCode live import и default model](2026-10-25-web-parity-m5/phase-30.md) — PR #31, merged `cb02afbb` → main 2026-10-30, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-72 Done.
 - [x] [Phase 31 — WEB-04 / DX-62: provider usage, подписки, баланс и connectivity](2026-10-25-web-parity-m5/phase-31.md) — PR #32, merged `f9c95288` → main 2026-10-30, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-62 Done.
-- [ ] [Phase 32 — WEB-19 / DX-77: Claude Desktop integration и official cards](2026-10-25-web-parity-m5/phase-32.md)
+- [x] [Phase 32 — WEB-19 / DX-77: Claude Desktop integration и official cards](2026-10-25-web-parity-m5/phase-32.md) — PR #33, merged `a3e77441` → main 2026-11-02, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-77 Done.
 
 Эпик cloud autosync:
 - [ ] [Phase 33 — WEB-11 / DX-69 (этап 1): WebDAV/S3 ручной режим](2026-10-25-web-parity-m5/phase-33.md)
