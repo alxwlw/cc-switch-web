@@ -14,8 +14,8 @@ Scope: `src-tauri/src/web_api.rs` (10 роутов), `src-tauri/tests/web_api_sy
 - Тесты: inline `#[cfg(test)]` в `commands/webdav_sync.rs` (~:208) и `commands/s3_sync.rs` (:192); в `src-tauri/tests/` по sync ничего нет.
 
 ### Task 1: backend — 10 роутов
-- [ ] Роуты `POST /api/sync/:backend/test` (body `{settings, preserveEmptyPassword}`), `POST /api/sync/:backend/upload`, `POST /api/sync/:backend/download`, `PUT /api/sync/:backend/settings` (body `{settings, passwordTouched}`), `GET /api/sync/:backend/remote-info`; `backend ∈ {webdav, s3}`, иначе 400. Хендлеры вызывают те же функции, что и команды (вынести общее тело команды в `pub(crate) fn`, если оно сейчас inline в `#[tauri::command]`); download — с тем же `run_post_import_sync`.
-- [ ] Ответ хендлера = значение, которое возвращает команда, через `ok(...)`; ошибка команды (`Err(String)`) → `fail`.
+- [x] Роуты `POST /api/sync/:backend/test` (body `{settings, preserveEmptyPassword}`), `POST /api/sync/:backend/upload`, `POST /api/sync/:backend/download`, `PUT /api/sync/:backend/settings` (body `{settings, passwordTouched}`), `GET /api/sync/:backend/remote-info`; `backend ∈ {webdav, s3}`, иначе 400. Хендлеры вызывают те же функции, что и команды (вынести общее тело команды в `pub(crate) fn`, если оно сейчас inline в `#[tauri::command]`); download — с тем же `run_post_import_sync`.
+- [x] Ответ хендлера = значение, которое возвращает команда, через `ok(...)`; ошибка команды (`Err(String)`) → `fail`.
 
 ### Task 2: тесты backend
 - [ ] `src-tauri/tests/web_api_sync.rs`: заглушка WebDAV на axum в том же тесте, отвечающая на методы, которые реально вызывает `services/webdav_sync.rs` (посмотреть по коду: PUT/GET/PROPFIND/MKCOL), с хранением в памяти.
