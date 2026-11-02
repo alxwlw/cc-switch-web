@@ -4641,6 +4641,36 @@ fn parse_sync_backend(backend: &str) -> Result<SyncBackend, ApiResult> {
     }
 }
 
+/// The body routes parse by hand (the backend decides the settings type), which drops the
+/// `application/json` requirement of the `Json` extractor. Without it a page in the owner's
+/// browser could send a CORS-simple `text/plain` POST and steer the stored credentials to a URL
+/// of its choosing. Same rule as axum's `Json`: `application/json` or `application/*+json`,
+/// parameters (`; charset=utf-8`) ignored, case-insensitive; anything else, or no header, is 415.
+fn require_json_content_type(headers: &HeaderMap) -> Result<(), ApiResult> {
+    let is_json = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(';').next())
+        .map(|essence| essence.trim().to_ascii_lowercase())
+        .and_then(|essence| {
+            essence
+                .split_once('/')
+                .map(|(t, sub)| (t.to_owned(), sub.to_owned()))
+        })
+        .is_some_and(|(t, sub)| t == "application" && (sub == "json" || sub.ends_with("+json")));
+    if is_json {
+        Ok(())
+    } else {
+        Err((
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Json(json!({
+                "ok": false,
+                "error": "expected Content-Type: application/json"
+            })),
+        ))
+    }
+}
+
 /// Body of `POST .../test` and `PUT .../settings`: the desktop command arguments.
 /// `settings` is parsed per backend, so a bad backend never reaches it.
 #[derive(Deserialize)]
@@ -4671,11 +4701,18 @@ fn sync_result(result: Result<Value, String>) -> ApiResult {
     }
 }
 
-async fn sync_test(Path(backend): Path<String>, body: axum::body::Bytes) -> ApiResult {
+async fn sync_test(
+    Path(backend): Path<String>,
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> ApiResult {
     let backend = match parse_sync_backend(&backend) {
         Ok(b) => b,
         Err(r) => return r,
     };
+    if let Err(r) = require_json_content_type(&headers) {
+        return r;
+    }
     match backend {
         SyncBackend::Webdav => match parse_sync_settings_body(&body) {
             Ok((settings, b)) => sync_result(
@@ -4692,11 +4729,18 @@ async fn sync_test(Path(backend): Path<String>, body: axum::body::Bytes) -> ApiR
     }
 }
 
-async fn sync_save_settings(Path(backend): Path<String>, body: axum::body::Bytes) -> ApiResult {
+async fn sync_save_settings(
+    Path(backend): Path<String>,
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> ApiResult {
     let backend = match parse_sync_backend(&backend) {
         Ok(b) => b,
         Err(r) => return r,
     };
+    if let Err(r) = require_json_content_type(&headers) {
+        return r;
+    }
     match backend {
         SyncBackend::Webdav => match parse_sync_settings_body(&body) {
             Ok((settings, b)) => sync_result(
