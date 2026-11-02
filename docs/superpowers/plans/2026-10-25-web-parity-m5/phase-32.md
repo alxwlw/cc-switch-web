@@ -18,8 +18,8 @@ Scope: `src-tauri/src/web_api.rs` (6 роутов), `src-tauri/tests/web_api_cla
 - Тесты: in-file `mod tests` claude_desktop_config.rs (:1629+, включая `detect_installed_reads_data_dir_or_app_bundle` и linux config dir).
 
 ### Task 1: backend — роуты + тесты
-- [ ] `GET /api/claude-desktop/status`, `GET /api/claude-desktop/default-routes`, `POST /api/claude-desktop/import-from-claude`, `POST /api/official-seeds/:app/ensure` (`app ∈ {claude-desktop, codex, grokbuild}`, иначе 400).
-- [ ] `src-tauri/tests/web_api_claude_desktop.rs` (temp HOME, `XDG_CONFIG_HOME` → temp): без каталога Claude → `installed:false`, `supported:true`; с каталогом → `installed:true`; status при запущенном proxy (фаза 27) → `proxyRunning:true`; import копирует N Claude-провайдеров и создаёт официальный seed; ensure — идемпотентен (`true`, затем `false`); takeover Claude Desktop в route mode через роуты фазы 27 → профиль `configLibrary/…157210.json` создан с proxy URL и префиксом `/claude-desktop`, выход из takeover → файлы восстановлены.
+- [x] `GET /api/claude-desktop/status`, `GET /api/claude-desktop/default-routes`, `POST /api/claude-desktop/import-from-claude`, `POST /api/official-seeds/:app/ensure` (`app ∈ {claude-desktop, codex, grokbuild}`, иначе 400).
+- [x] `src-tauri/tests/web_api_claude_desktop.rs` (temp HOME, `XDG_CONFIG_HOME` → temp): без каталога Claude → `installed:false`, `supported:true`; с каталогом → `installed:true`; status при запущенном proxy (фаза 27) → `proxyRunning:true`; import копирует N Claude-провайдеров и создаёт официальный seed; ensure — идемпотентен (`true`, затем `false`); takeover Claude Desktop в route mode через роуты фазы 27 → профиль `configLibrary/…157210.json` создан с proxy URL и префиксом `/claude-desktop`, выход из takeover → файлы восстановлены.
 
 ### Task 2: frontend
 - [ ] 6 case в `mapCommand`.
