@@ -570,6 +570,12 @@ pub fn router(state: SharedState) -> Router {
             "/api/proxy/codex/ack-stale-clients",
             post(proxy_codex_ack_stale_clients),
         )
+        // Manual WebDAV / S3 sync: one path per verb, backend in the path (WEB-11)
+        .route("/api/sync/:backend/test", post(sync_test))
+        .route("/api/sync/:backend/upload", post(sync_upload))
+        .route("/api/sync/:backend/download", post(sync_download))
+        .route("/api/sync/:backend/settings", put(sync_save_settings))
+        .route("/api/sync/:backend/remote-info", get(sync_remote_info))
         // Failover queue, breaker, health (WEB-01 stage 2)
         .route(
             "/api/failover/breaker-config",
@@ -4612,6 +4618,131 @@ async fn proxy_codex_restart_daemon() -> ApiResult {
 
 async fn proxy_codex_ack_stale_clients() -> ApiResult {
     unit_result(crate::commands::acknowledge_codex_stale_clients_inner().await)
+}
+
+// ---------- Manual WebDAV / S3 sync (WEB-11) ----------
+
+/// The `:backend` path segment of `/api/sync/:backend/*`.
+#[derive(Clone, Copy)]
+enum SyncBackend {
+    Webdav,
+    S3,
+}
+
+/// Anything but `webdav` / `s3` is a 400, checked before the body is read or any
+/// setting is touched.
+fn parse_sync_backend(backend: &str) -> Result<SyncBackend, ApiResult> {
+    match backend {
+        "webdav" => Ok(SyncBackend::Webdav),
+        "s3" => Ok(SyncBackend::S3),
+        other => Err(bad_request(format!(
+            "unknown sync backend: {other} (expected webdav or s3)"
+        ))),
+    }
+}
+
+/// Body of `POST .../test` and `PUT .../settings`: the desktop command arguments.
+/// `settings` is parsed per backend, so a bad backend never reaches it.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncSettingsBody {
+    settings: Value,
+    #[serde(default)]
+    preserve_empty_password: Option<bool>,
+    #[serde(default)]
+    password_touched: Option<bool>,
+}
+
+fn parse_sync_settings_body<T: serde::de::DeserializeOwned>(
+    body: &[u8],
+) -> Result<(T, SyncSettingsBody), ApiResult> {
+    let mut parsed: SyncSettingsBody = serde_json::from_slice(body)
+        .map_err(|e| bad_request(format!("invalid sync request body: {e}")))?;
+    let settings = serde_json::from_value(std::mem::take(&mut parsed.settings))
+        .map_err(|e| bad_request(format!("invalid sync settings: {e}")))?;
+    Ok((settings, parsed))
+}
+
+/// The command's `Result<Value, String>`: the value as is, the error text verbatim.
+fn sync_result(result: Result<Value, String>) -> ApiResult {
+    match result {
+        Ok(value) => ok(value),
+        Err(message) => fail(message),
+    }
+}
+
+async fn sync_test(Path(backend): Path<String>, body: axum::body::Bytes) -> ApiResult {
+    let backend = match parse_sync_backend(&backend) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    match backend {
+        SyncBackend::Webdav => match parse_sync_settings_body(&body) {
+            Ok((settings, b)) => sync_result(
+                crate::commands::webdav_test_connection(settings, b.preserve_empty_password).await,
+            ),
+            Err(r) => r,
+        },
+        SyncBackend::S3 => match parse_sync_settings_body(&body) {
+            Ok((settings, b)) => sync_result(
+                crate::commands::s3_test_connection(settings, b.preserve_empty_password).await,
+            ),
+            Err(r) => r,
+        },
+    }
+}
+
+async fn sync_save_settings(Path(backend): Path<String>, body: axum::body::Bytes) -> ApiResult {
+    let backend = match parse_sync_backend(&backend) {
+        Ok(b) => b,
+        Err(r) => return r,
+    };
+    match backend {
+        SyncBackend::Webdav => match parse_sync_settings_body(&body) {
+            Ok((settings, b)) => sync_result(
+                crate::commands::webdav_sync_save_settings(settings, b.password_touched).await,
+            ),
+            Err(r) => r,
+        },
+        SyncBackend::S3 => match parse_sync_settings_body(&body) {
+            Ok((settings, b)) => sync_result(
+                crate::commands::s3_sync_save_settings(settings, b.password_touched).await,
+            ),
+            Err(r) => r,
+        },
+    }
+}
+
+async fn sync_upload(State(state): State<SharedState>, Path(backend): Path<String>) -> ApiResult {
+    match parse_sync_backend(&backend) {
+        Ok(SyncBackend::Webdav) => {
+            sync_result(crate::commands::webdav_sync_upload_impl(&state).await)
+        }
+        Ok(SyncBackend::S3) => sync_result(crate::commands::s3_sync_upload_impl(&state).await),
+        Err(r) => r,
+    }
+}
+
+/// Same body as the desktop command, including `run_post_import_sync` and the
+/// `warning` it may attach to the result.
+async fn sync_download(State(state): State<SharedState>, Path(backend): Path<String>) -> ApiResult {
+    match parse_sync_backend(&backend) {
+        Ok(SyncBackend::Webdav) => {
+            sync_result(crate::commands::webdav_sync_download_impl(&state).await)
+        }
+        Ok(SyncBackend::S3) => sync_result(crate::commands::s3_sync_download_impl(&state).await),
+        Err(r) => r,
+    }
+}
+
+async fn sync_remote_info(Path(backend): Path<String>) -> ApiResult {
+    match parse_sync_backend(&backend) {
+        Ok(SyncBackend::Webdav) => {
+            sync_result(crate::commands::webdav_sync_fetch_remote_info().await)
+        }
+        Ok(SyncBackend::S3) => sync_result(crate::commands::s3_sync_fetch_remote_info().await),
+        Err(r) => r,
+    }
 }
 
 // ---------- Failover queue, breaker, health (WEB-01 stage 2) ----------

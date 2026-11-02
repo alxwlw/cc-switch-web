@@ -123,6 +123,11 @@ pub async fn webdav_test_connection(
 
 #[tauri::command]
 pub async fn webdav_sync_upload(state: State<'_, AppState>) -> Result<Value, String> {
+    webdav_sync_upload_impl(state.inner()).await
+}
+
+/// Body of `webdav_sync_upload`, shared with the web API handler (WEB-11).
+pub(crate) async fn webdav_sync_upload_impl(state: &AppState) -> Result<Value, String> {
     let db = state.db.clone();
     let mut settings = require_enabled_webdav_settings()?;
 
@@ -134,8 +139,13 @@ pub async fn webdav_sync_upload(state: State<'_, AppState>) -> Result<Value, Str
 
 #[tauri::command]
 pub async fn webdav_sync_download(state: State<'_, AppState>) -> Result<Value, String> {
+    webdav_sync_download_impl(state.inner()).await
+}
+
+/// Body of `webdav_sync_download`, shared with the web API handler (WEB-11).
+pub(crate) async fn webdav_sync_download_impl(state: &AppState) -> Result<Value, String> {
     let db = state.db.clone();
-    let app_state_for_sync = state.inner().clone();
+    let app_state_for_sync = state.clone();
     let mut settings = require_enabled_webdav_settings()?;
 
     // Keep the derived live configuration refresh in the same global sync
