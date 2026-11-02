@@ -548,6 +548,20 @@ pub fn router(state: SharedState) -> Router {
             "/api/proxy/config/:app",
             get(proxy_app_config).put(proxy_update_app_config),
         )
+        // Claude Desktop on the server host + official seed cards (WEB-19)
+        .route("/api/claude-desktop/status", get(claude_desktop_status))
+        .route(
+            "/api/claude-desktop/default-routes",
+            get(claude_desktop_default_routes),
+        )
+        .route(
+            "/api/claude-desktop/import-from-claude",
+            post(claude_desktop_import_from_claude),
+        )
+        .route(
+            "/api/official-seeds/:app/ensure",
+            post(ensure_official_seed),
+        )
         .route(
             "/api/proxy/codex/restart-daemon",
             post(proxy_codex_restart_daemon),
@@ -4511,6 +4525,60 @@ async fn proxy_set_client_host(
         Err(e) => return e,
     };
     unit_result(crate::commands::save_proxy_client_host(&state, &host).await)
+}
+
+// ---------- Claude Desktop + official seeds (WEB-19) ----------
+
+/// Status of the Claude Desktop install on the server host (files live there, not on the
+/// browser's machine).
+async fn claude_desktop_status(State(state): State<SharedState>) -> ApiResult {
+    let proxy_running = state.proxy_service.is_running().await;
+    let db = state.db.clone();
+    blocking_api("claude desktop status", move || {
+        crate::claude_desktop_config::get_status(db.as_ref(), proxy_running)
+    })
+    .await
+}
+
+async fn claude_desktop_default_routes() -> ApiResult {
+    ok(crate::claude_desktop_config::default_proxy_routes())
+}
+
+async fn claude_desktop_import_from_claude(State(state): State<SharedState>) -> ApiResult {
+    let db = state.db.clone();
+    blocking_api("claude desktop import", move || {
+        crate::commands::import_claude_desktop_providers_from_claude_db(db.as_ref())
+    })
+    .await
+}
+
+/// `app` is `claude-desktop`, `codex` or `grokbuild`; anything else is a 400.
+/// Returns `true` when the seed was inserted, `false` when it already existed.
+async fn ensure_official_seed(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+) -> ApiResult {
+    let (seed_id, app_type) = match app.as_str() {
+        "claude-desktop" => (
+            crate::database::CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID,
+            AppType::ClaudeDesktop,
+        ),
+        "codex" => (crate::database::CODEX_OFFICIAL_PROVIDER_ID, AppType::Codex),
+        "grokbuild" => (
+            crate::database::GROKBUILD_OFFICIAL_PROVIDER_ID,
+            AppType::GrokBuild,
+        ),
+        other => {
+            return bad_request(format!(
+                "official seed is only available for claude-desktop, codex, grokbuild: {other}"
+            ))
+        }
+    };
+    let db = state.db.clone();
+    blocking_api("ensure official seed", move || {
+        db.ensure_official_seed_by_id(seed_id, app_type)
+    })
+    .await
 }
 
 async fn proxy_app_config(State(state): State<SharedState>, Path(app): Path<String>) -> ApiResult {
