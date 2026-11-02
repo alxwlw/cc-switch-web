@@ -659,6 +659,28 @@ describe("WebdavSyncSection", () => {
       });
     });
 
+    it("desktop, WebDAV: switch is locked while a save is running", async () => {
+      settingsApiMock.webdavSyncSaveSettings.mockReturnValue(
+        new Promise(() => {}),
+      );
+      renderSection(baseConfig);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.webdavSync.save" }),
+      );
+      await waitFor(() => expect(webdavSwitch()).toBeDisabled());
+    });
+
+    it("desktop, S3: switch is locked while a save is running", async () => {
+      settingsApiMock.s3SyncSaveSettings.mockReturnValue(new Promise(() => {}));
+      renderSection(baseConfig, s3Config);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.s3Sync.save" }),
+      );
+      await waitFor(() => expect(s3Switch()).toBeDisabled());
+    });
+
     it("desktop, S3: switch is enabled, no caption, and toggling it off is saved", async () => {
       renderSection(baseConfig, s3Config);
 
