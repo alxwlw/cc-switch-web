@@ -1682,7 +1682,11 @@ export function WebdavSyncSection({
                   </p>
                 )}
                 <p className="text-destructive font-medium">
-                  {t("settings.webdavSync.confirmDownload.warning")}
+                  {t(
+                    isWeb
+                      ? "web.syncDownloadWarning"
+                      : "settings.webdavSync.confirmDownload.warning",
+                  )}
                 </p>
               </div>
             </DialogDescription>
@@ -1801,7 +1805,11 @@ export function WebdavSyncSection({
                   </dl>
                 )}
                 <p className="text-destructive font-medium">
-                  {t("settings.s3Sync.confirmDownload.warning")}
+                  {t(
+                    isWeb
+                      ? "web.syncDownloadWarning"
+                      : "settings.s3Sync.confirmDownload.warning",
+                  )}
                 </p>
               </div>
             </DialogDescription>

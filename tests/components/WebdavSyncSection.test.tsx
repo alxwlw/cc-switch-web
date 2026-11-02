@@ -712,6 +712,54 @@ describe("WebdavSyncSection", () => {
     });
   });
 
+  describe("download confirm names the server in web (WEB-11)", () => {
+    const DESKTOP_WEBDAV = "settings.webdavSync.confirmDownload.warning";
+    const DESKTOP_S3 = "settings.s3Sync.confirmDownload.warning";
+    const WEB = "web.syncDownloadWarning";
+
+    it("web, WebDAV: the confirm names the server instead of 'local data'", async () => {
+      setWeb(true);
+      renderSection(baseConfig);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.webdavSync.download" }),
+      );
+      await screen.findByText(WEB);
+      expect(screen.queryByText(DESKTOP_WEBDAV)).toBeNull();
+    });
+
+    it("desktop, WebDAV: the confirm keeps the desktop text", async () => {
+      renderSection(baseConfig);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.webdavSync.download" }),
+      );
+      await screen.findByText(DESKTOP_WEBDAV);
+      expect(screen.queryByText(WEB)).toBeNull();
+    });
+
+    it("web, S3: the confirm names the server instead of 'local data'", async () => {
+      setWeb(true);
+      renderSection(baseConfig, s3Config);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.s3Sync.download" }),
+      );
+      await screen.findByText(WEB);
+      expect(screen.queryByText(DESKTOP_S3)).toBeNull();
+    });
+
+    it("desktop, S3: the confirm keeps the desktop text", async () => {
+      renderSection(baseConfig, s3Config);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.s3Sync.download" }),
+      );
+      await screen.findByText(DESKTOP_S3);
+      expect(screen.queryByText(WEB)).toBeNull();
+    });
+  });
+
   describe("form rows at phone width (WEB-11)", () => {
     // jsdom has no layout: this pins the classes, the widths were measured in a browser.
     const rowLabels = () =>
