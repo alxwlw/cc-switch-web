@@ -1,5 +1,7 @@
 # План: web-parity M5 — все 33 задачи модуля
 
+**Status:** active
+
 Спека: `docs/research/web-feature-gaps-2026-10-25-plane-backlog.md` (аудит `main@4e2914de`).
 Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c2c8690c-443f-4dd4-8ad5-cab9a00f6a00`). WEB-N = DX-(58+N).
 
@@ -46,7 +48,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 28 — WEB-01 / DX-59 (этап 2): failover, circuit breaker, health, OAuth data plane](2026-10-25-web-parity-m5/phase-28.md) — PR #29, merged `12fc922e` → main 2026-10-30, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-59 Done (этап 2 из 2).
 - [x] [Phase 29 — WEB-03 / DX-61: списки моделей от провайдера и CLI](2026-10-25-web-parity-m5/phase-29.md) — PR #30, merged `68f03f92` → main 2026-10-30, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-61 Done.
 - [x] [Phase 30 — WEB-14 / DX-72: OpenCode live import и default model](2026-10-25-web-parity-m5/phase-30.md) — PR #31, merged `cb02afbb` → main 2026-10-30, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-72 Done.
-- [ ] [Phase 31 — WEB-04 / DX-62: provider usage, подписки, баланс и connectivity](2026-10-25-web-parity-m5/phase-31.md)
+- [x] [Phase 31 — WEB-04 / DX-62: provider usage, подписки, баланс и connectivity](2026-10-25-web-parity-m5/phase-31.md) — PR #32, merged `f9c95288` → main 2026-10-30, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-62 Done.
 - [ ] [Phase 32 — WEB-19 / DX-77: Claude Desktop integration и official cards](2026-10-25-web-parity-m5/phase-32.md)
 
 Эпик cloud autosync:

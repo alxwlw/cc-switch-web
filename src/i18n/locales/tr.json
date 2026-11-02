@@ -4224,6 +4224,8 @@
     "desktopUnsupported": "Bu sistemde desteklenmiyor",
     "desktopConnected": "Bağlı",
     "desktopNotConnected": "Bağlı değil",
+    "desktopServerNote": "cc-switch-web sunucusundaki Claude Desktop",
+    "desktopNotFoundOnServer": "Claude Desktop sunucuda bulunamadı; orada kurulduğunda ayarlar uygulanacak.",
     "newVersion": "{{version}} mevcut",
     "notRunnable": "Çalıştırılamıyor",
     "updateNeedsNode": "{{version}} sürümü Node {{required}} gerektiriyor; bu kurulumda Node {{current}} çalışıyor. Önce Node'u yükseltin.",
@@ -5053,6 +5055,7 @@
       "unsupported": "Web modunda güncellemeler kullanılamaz: sunucuyu operatör günceller"
     },
     "proxyCaption": "Proxy sunucuda çalışır ve sunucudaki CLI'ları yeniden yapılandırır; sizin makinenizdeki CLI'lara dokunmaz.",
+    "desktopRouteHost": "Claude Desktop, sunucudaki proxy'ye bağlantı adresi ve bağlantı noktası üzerinden bağlanır. Claude Desktop başka bir makinede çalışıyorsa, Ayarlar → Yerel yönlendirme bölümünde bağlantı adresini (client host) o makinenin erişebildiği bir ana bilgisayara ayarlayın.",
     "proxyListenWarning": "{{address}} üzerinde dinlemek, proxy'yi kimlik doğrulaması olmadan tüm ağdan (tailnet dahil) erişilebilir yapar. 127.0.0.1 tercih edin.",
     "liveUnknownTitle": "Sağlayıcılar (Web modunda canlı yapılandırma durumu bilinmiyor)",
     "sessionResumeCopied": "Devam komutu kopyalandı. Sunucu ana makinesinde, proje klasöründe bir terminale yapıştırıp çalıştırın",

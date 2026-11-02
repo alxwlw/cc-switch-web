@@ -4234,6 +4234,8 @@
     "desktopUnsupported": "Not supported on this system",
     "desktopConnected": "Connected",
     "desktopNotConnected": "Not connected",
+    "desktopServerNote": "Claude Desktop on the cc-switch-web server",
+    "desktopNotFoundOnServer": "Claude Desktop was not found on the server; settings will apply once it appears there.",
     "newVersion": "{{version}} available",
     "notRunnable": "Can't run",
     "updateNeedsNode": "{{version}} requires Node {{required}}, but this installation runs on Node {{current}}. Upgrade Node first.",
@@ -5075,6 +5077,7 @@
       "unsupported": "Updates are unavailable in web mode: the server operator updates the app"
     },
     "proxyCaption": "The proxy runs on the server and reconfigures the CLIs on the server; it does not touch CLIs on your machine.",
+    "desktopRouteHost": "Claude Desktop connects to the proxy on the server at the connection address and port. If Claude Desktop runs on another machine, set the connection address (client host) to a host that machine can reach in Settings → Local routing.",
     "proxyListenWarning": "Listening on {{address}} makes the proxy reachable from the whole network (including the tailnet) without authentication. Prefer 127.0.0.1.",
     "liveUnknownTitle": "Providers (live config state is unknown in web mode)",
     "sessionResumeCopied": "Resume command copied. Run it in a terminal on the server host, in the project folder.",

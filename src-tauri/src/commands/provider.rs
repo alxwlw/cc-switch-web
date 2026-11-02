@@ -294,12 +294,18 @@ pub fn get_claude_desktop_default_routes(
 pub fn import_claude_desktop_providers_from_claude(
     state: State<'_, AppState>,
 ) -> Result<usize, String> {
-    let claude_providers = state
-        .db
+    import_claude_desktop_providers_from_claude_db(state.db.as_ref())
+}
+
+/// Handle-free body of `import_claude_desktop_providers_from_claude`, shared
+/// with the web API (`POST /api/claude-desktop/import-from-claude`).
+pub fn import_claude_desktop_providers_from_claude_db(
+    db: &crate::database::Database,
+) -> Result<usize, String> {
+    let claude_providers = db
         .get_all_providers(AppType::Claude.as_str())
         .map_err(|e| e.to_string())?;
-    let existing_ids = state
-        .db
+    let existing_ids = db
         .get_provider_ids(AppType::ClaudeDesktop.as_str())
         .map_err(|e| e.to_string())?;
 
@@ -324,9 +330,7 @@ pub fn import_claude_desktop_providers_from_claude(
             continue;
         }
 
-        state
-            .db
-            .save_provider(AppType::ClaudeDesktop.as_str(), &desktop_provider)
+        db.save_provider(AppType::ClaudeDesktop.as_str(), &desktop_provider)
             .map_err(|e| e.to_string())?;
         imported += 1;
     }
@@ -334,7 +338,7 @@ pub fn import_claude_desktop_providers_from_claude(
     // Safety net: 用户可能手动删除过 claude-desktop-official seed。
     // 用户主动点 import 是"重新整理 ClaudeDesktop 表"的隐式信号，把官方入口补回来。
     // 失败只 warn，不影响 imported 主流程；imported 计数语义保持纯净。
-    if let Err(e) = state.db.ensure_official_seed_by_id(
+    if let Err(e) = db.ensure_official_seed_by_id(
         crate::database::CLAUDE_DESKTOP_OFFICIAL_PROVIDER_ID,
         AppType::ClaudeDesktop,
     ) {

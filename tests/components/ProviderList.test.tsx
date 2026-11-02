@@ -750,12 +750,22 @@ describe("ProviderList Component", () => {
   });
 
   it.each([
-    ["web", true, true],
-    ["desktop", false, false],
+    ["web", true],
+    ["desktop", false],
   ])(
-    "empty claude-desktop list: import-from-live disabled=%s (%s)",
-    (_label, web, disabled) => {
+    "empty claude-desktop list (%s): import-from-claude is enabled and calls the import command",
+    async (_label, web) => {
       setWeb(web);
+      let imports = 0;
+      server.use(
+        http.post(
+          `${TAURI_ENDPOINT}/import_claude_desktop_providers_from_claude`,
+          () => {
+            imports += 1;
+            return HttpResponse.json(0);
+          },
+        ),
+      );
       useDragSortMock.mockReturnValue({
         sortedProviders: [],
         sensors: [],
@@ -769,8 +779,9 @@ describe("ProviderList Component", () => {
       const button = screen.getByRole("button", {
         name: "provider.importFromClaude",
       });
-      if (disabled) expect(button).toBeDisabled();
-      else expect(button).toBeEnabled();
+      expect(button).toBeEnabled();
+      fireEvent.click(button);
+      await waitFor(() => expect(imports).toBe(1));
     },
   );
 

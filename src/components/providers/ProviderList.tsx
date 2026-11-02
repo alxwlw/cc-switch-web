@@ -69,9 +69,6 @@ export type SwitchModeProps = Omit<SwitchModeInput, "app" | "t" | "providers">;
 /** Приложения, у которых «в конфиге ли» берётся из живого конфига, недоступного в web. Сейчас таких нет: opencode открыт WEB-14 (openclaw/hermes — своими хуками). */
 const WEB_LIVE_MEMBERSHIP_APPS: AppId[] = [];
 
-/** Приложения, у которых «импорт текущего» читает живой конфиг (import_*_from_live вне mapCommand). opencode открыт WEB-14, остался claude-desktop (WEB-19). */
-const WEB_LIVE_IMPORT_APPS: AppId[] = ["claude-desktop"];
-
 const verticalDragModifiers: Modifier[] = [
   ({ transform }) => ({ ...transform, x: 0 }),
 ];
@@ -472,8 +469,6 @@ export function ProviderList({
               ? undefined
               : () => importMutation.mutate()
           }
-          // import_*_from_live не поддержан (import_default_config — работает); opencode открыт WEB-14, остался claude-desktop (WEB-19); openclaw/hermes открыты WEB-15/16
-          importUnavailable={isWeb && WEB_LIVE_IMPORT_APPS.includes(appId)}
         />
       </div>
     );

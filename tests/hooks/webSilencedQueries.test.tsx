@@ -61,13 +61,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 // Каждый кейс: хук и команда, которую он обязан звать на desktop и не звать в web.
 // WEB-04 снял гейты с usage/quota (ниже — WEB-04-кейсы зовут и в web); здесь остаются
-// только desktop-only (desktop config) и copilot (OUT of scope WEB-04).
+// только copilot (OUT of scope WEB-04). Desktop config открыт WEB-19 (ниже).
 const CASES: Array<[string, string, () => unknown]> = [
-  [
-    "useDesktopConfigMessages",
-    "get_claude_desktop_status",
-    () => useDesktopConfigMessages(true),
-  ],
   [
     "useCopilotQuota",
     "copilot_get_usage",
@@ -337,6 +332,39 @@ describe("WEB-00: фоновые query молчат в web", () => {
       expect(calledCommands()).toContain(command);
     },
   );
+
+  it("useDesktopConfigMessages: WEB-19 открыт в web — зовёт get_claude_desktop_status и продолжает опрос", async () => {
+    for (const web of [false, true]) {
+      invokeMock.mockClear();
+      setWeb(web);
+      const { wrapper } = wrapperFor();
+      renderHook(() => useDesktopConfigMessages(true), { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const polls = () =>
+        calledCommands().filter((c) => c === "get_claude_desktop_status")
+          .length;
+      expect(polls()).toBe(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(polls()).toBeGreaterThan(1);
+    }
+  });
+
+  it("useDesktopConfigMessages(false): не опрашивает ни на desktop, ни в web", async () => {
+    for (const web of [false, true]) {
+      invokeMock.mockClear();
+      setWeb(web);
+      const { wrapper } = wrapperFor();
+      renderHook(() => useDesktopConfigMessages(false), { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(6000);
+      });
+      expect(calledCommands()).not.toContain("get_claude_desktop_status");
+    }
+  });
 
   it("useStreamCheck: гейта нет (no isWeb) — зовёт stream_check_provider и в web", async () => {
     const { useStreamCheck } = await import("@/hooks/useStreamCheck");

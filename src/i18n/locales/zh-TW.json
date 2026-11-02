@@ -4235,6 +4235,8 @@
     "desktopUnsupported": "目前系統不支援",
     "desktopConnected": "已接入",
     "desktopNotConnected": "未接入",
+    "desktopServerNote": "cc-switch-web 伺服器上的 Claude Desktop",
+    "desktopNotFoundOnServer": "伺服器上未找到 Claude Desktop；它出現後，設定會自動生效。",
     "newVersion": "有新版本 {{version}}",
     "notRunnable": "無法執行",
     "updateNeedsNode": "新版本 {{version}} 需要 Node {{required}}，這處安裝用的是 Node {{current}}，需要先升級 Node。",
@@ -5076,6 +5078,7 @@
       "unsupported": "Web 模式下無法檢查更新：伺服器由維運人員負責升級"
     },
     "proxyCaption": "代理運行在伺服器上，並重新設定伺服器上的 CLI；不會影響你本機上的 CLI。",
+    "desktopRouteHost": "Claude Desktop 會依「連線位址」和連接埠連到伺服器上的代理。如果 Claude Desktop 裝在另一台機器上，請在 設定 → 本地路由 中把連線位址（client host）改成那台機器能連到的主機。",
     "proxyListenWarning": "監聽 {{address}} 會讓整個網路（包括 tailnet）無需驗證即可存取該代理。建議使用 127.0.0.1。",
     "liveUnknownTitle": "供應商（Web 模式下無法讀取實際設定狀態）",
     "sessionResumeCopied": "已複製恢復指令。請在伺服器主機上的專案目錄下，貼到終端機執行",

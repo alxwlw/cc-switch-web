@@ -106,19 +106,21 @@ describe("ClaudeDesktopProviderForm", () => {
     defaultRoutesMock.mockReset().mockResolvedValue([]);
   });
 
-  it("web: не запрашивает get_claude_desktop_default_routes", async () => {
-    setWeb(true);
+  it.each([
+    ["web", true],
+    ["desktop", false],
+  ])("%s: запрашивает get_claude_desktop_default_routes", async (_l, web) => {
+    setWeb(web);
     renderForm(undefined);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(defaultRoutesMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(defaultRoutesMock).toHaveBeenCalledTimes(1));
   });
 
   it.each([
-    ["web", true, ["直连"]],
-    ["desktop", false, ["直连", "模型映射"]],
+    ["web", true],
+    ["desktop", false],
   ])(
-    "новый провайдер (%s): режим «модель-маппинг» предлагается только где есть прокси",
-    async (_label, web, expected) => {
+    "новый провайдер (%s): режим «модель-маппинг» предлагается",
+    async (_label, web) => {
       setWeb(web);
       // jsdom 没有 scrollIntoView，Radix Select 打开时会调
       Element.prototype.scrollIntoView = vi.fn();
@@ -126,7 +128,10 @@ describe("ClaudeDesktopProviderForm", () => {
       await userEvent.click(screen.getByRole("combobox", { name: "接入方式" }));
 
       const options = await screen.findAllByRole("option");
-      expect(options.map((option) => option.textContent)).toEqual(expected);
+      expect(options.map((option) => option.textContent)).toEqual([
+        "直连",
+        "模型映射",
+      ]);
     },
   );
 
@@ -158,15 +163,11 @@ describe("ClaudeDesktopProviderForm", () => {
     },
   );
 
-  it("web: official preset is not offered (needs the ensure_* seed)", () => {
-    setWeb(true);
-    renderForm(undefined);
-    expect(
-      screen.queryByRole("button", { name: /Claude Desktop Official/ }),
-    ).toBeNull();
-  });
-
-  it("desktop: official preset is offered", () => {
+  it.each([
+    ["web", true],
+    ["desktop", false],
+  ])("%s: official preset is offered", (_label, web) => {
+    setWeb(web);
     renderForm(undefined);
     expect(
       screen.getByRole("button", { name: /Claude Desktop Official/ }),
@@ -184,11 +185,6 @@ describe("ClaudeDesktopProviderForm", () => {
     expect(
       screen.getByRole("combobox", { name: "接入方式" }),
     ).toHaveTextContent("模型映射");
-  });
-
-  it("desktop: запрашивает get_claude_desktop_default_routes", async () => {
-    renderForm(undefined);
-    await waitFor(() => expect(defaultRoutesMock).toHaveBeenCalledTimes(1));
   });
 
   it("托管 OAuth 供应商也能获取模型并在映射行里选择（#8426）", async () => {

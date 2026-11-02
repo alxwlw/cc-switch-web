@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
 import type { Provider } from "@/types";
 import { ModeDialog } from "@/components/providers/mode/ModeDialog";
+import { setWeb } from "../helpers/web";
 
 vi.mock("@/lib/frontendLogger", () => ({ logFrontendInfo: vi.fn() }));
 
@@ -55,9 +56,7 @@ describe("ModeDialog exit", () => {
       screen.getByRole("button", { name: "mode.dialog.confirmDirect" }),
     );
 
-    await waitFor(() =>
-      expect(props.onExit).toHaveBeenCalledWith("deepseek"),
-    );
+    await waitFor(() => expect(props.onExit).toHaveBeenCalledWith("deepseek"));
   });
 
   it("keeps the dialog open and shows the error when leaving fails", async () => {
@@ -108,5 +107,48 @@ describe("ModeDialog exit", () => {
 
     expect(props.onClose).toHaveBeenCalled();
     expect(props.onExit).not.toHaveBeenCalled();
+  });
+});
+
+describe("ModeDialog enter — Claude Desktop reaches the server's proxy (WEB-19)", () => {
+  const renderEnter = (
+    app: ComponentProps<typeof ModeDialog>["app"],
+    target: "route" | "stack" = "route",
+  ) =>
+    render(
+      <ModeDialog
+        app={app}
+        state={{ kind: "enter", target }}
+        active="direct"
+        providers={[provider("kimi", "Kimi")]}
+        directId="kimi"
+        eligibleIds={["kimi"]}
+        defaultPick="kimi"
+        stackMembers={[]}
+        onClose={vi.fn()}
+        onEnter={vi.fn()}
+        onExit={vi.fn()}
+        onSwitchDirect={vi.fn()}
+      />,
+    );
+
+  it.each(["route", "stack"] as const)(
+    "web: %s mode for Claude Desktop says the client host is set in Settings → Local routing",
+    (target) => {
+      setWeb(true);
+      renderEnter("claude-desktop", target);
+      expect(screen.getByText("web.desktopRouteHost")).toBeInTheDocument();
+    },
+  );
+
+  it("desktop: no server-host note", () => {
+    renderEnter("claude-desktop");
+    expect(screen.queryByText("web.desktopRouteHost")).toBeNull();
+  });
+
+  it("web: other apps do not get the Claude Desktop note", () => {
+    setWeb(true);
+    renderEnter("claude");
+    expect(screen.queryByText("web.desktopRouteHost")).toBeNull();
   });
 });
