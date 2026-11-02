@@ -22,10 +22,10 @@ Scope: `src-tauri/src/web_api.rs` (6 роутов), `src-tauri/tests/web_api_cla
 - [x] `src-tauri/tests/web_api_claude_desktop.rs` (temp HOME, `XDG_CONFIG_HOME` → temp): без каталога Claude → `installed:false`, `supported:true`; с каталогом → `installed:true`; status при запущенном proxy (фаза 27) → `proxyRunning:true`; import копирует N Claude-провайдеров и создаёт официальный seed; ensure — идемпотентен (`true`, затем `false`); takeover Claude Desktop в route mode через роуты фазы 27 → профиль `configLibrary/…157210.json` создан с proxy URL и префиксом `/claude-desktop`, выход из takeover → файлы восстановлены.
 
 ### Task 2: frontend
-- [ ] 6 case в `mapCommand`.
-- [ ] `AppsPage`/карточки Claude Desktop в web: подпись «Claude Desktop на сервере cc-switch-web»; при `installed:false` — «Claude Desktop не найден на сервере; настройки применятся, когда он появится там», без тревожного вида.
-- [ ] Тесты: `tests/lib/claudeDesktopApi.test.ts`; `AppsPage` в web показывает server-host подпись и состояние `installed:false`.
-- [ ] Снять WEB-00-гейты Claude Desktop (таблица фазы 6).
+- [x] 6 case в `mapCommand`.
+- [x] `AppsPage`/карточки Claude Desktop в web: подпись «Claude Desktop на сервере cc-switch-web»; при `installed:false` — «Claude Desktop не найден на сервере; настройки применятся, когда он появится там», без тревожного вида.
+- [x] Тесты: `tests/lib/claudeDesktopApi.test.ts`; `AppsPage` в web показывает server-host подпись и состояние `installed:false`.
+- [x] Снять WEB-00-гейты Claude Desktop (таблица фазы 6).
 
 ### Task 3: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server`.
