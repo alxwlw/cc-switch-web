@@ -13,59 +13,22 @@
 
 #![cfg(unix)]
 
-use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
+use std::net::SocketAddr;
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-/// Kills and reaps the child however the test ends (assert, panic, early return).
-struct ChildGuard(Child);
+// Both server-process test binaries pull the helpers in and each uses a part of them: the
+// allow sits on this side.
+#[allow(dead_code)]
+#[path = "support/server_process.rs"]
+mod server_process;
 
-impl Drop for ChildGuard {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
+use server_process::{free_port, http, server_example, ChildGuard};
 
-/// `target/<profile>/examples/server`, built on demand: `cargo test --test <name>`
-/// does not build examples.
-fn server_example() -> PathBuf {
-    let exe = std::env::current_exe().expect("current_exe");
-    let profile_dir = exe
-        .parent()
-        .and_then(Path::parent)
-        .expect("target/<profile>/deps/<test>");
-    let mut build = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
-    build
-        .args(["build", "--example", "server", "--manifest-path"])
-        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
-    if profile_dir.file_name().is_some_and(|n| n == "release") {
-        build.arg("--release");
-    }
-    let status = build.status().expect("run cargo build --example server");
-    assert!(status.success(), "cargo build --example server failed");
-    let path = profile_dir.join("examples").join("server");
-    assert!(path.exists(), "{} was not built", path.display());
-    path
-}
-
-fn free_port() -> u16 {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("bind port 0");
-    listener.local_addr().expect("local addr").port()
-}
-
-/// `GET path` over HTTP/1.0 (no chunking): status line and the body.
+/// `GET path`: status line and the body.
 fn http_get(addr: SocketAddr, path: &str) -> std::io::Result<(String, String)> {
-    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(2))?;
-    stream.set_read_timeout(Some(Duration::from_secs(10)))?;
-    write!(stream, "GET {path} HTTP/1.0\r\nHost: {addr}\r\n\r\n")?;
-    let mut raw = String::new();
-    stream.read_to_string(&mut raw)?;
-    let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((raw.as_str(), ""));
-    let status = head.lines().next().unwrap_or_default().to_string();
-    Ok((status, body.to_string()))
+    http(addr, "GET", path, None)
 }
 
 fn wait_until_serving(addr: SocketAddr, child: &mut Child, stderr_file: &Path) {

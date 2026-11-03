@@ -10,7 +10,7 @@
 mod support;
 
 use std::ffi::OsString;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, Once};
 use std::time::Duration;
 
 use axum::body::Body;
@@ -64,14 +64,44 @@ impl Drop for Fixture {
     }
 }
 
+/// Panics seen by the process since [`PanicWatch::start`]. The signal is raised in a task
+/// spawned by the route whose `JoinHandle` nobody holds, so a panic there never reaches the
+/// test; the panic hook does see it.
+static PANICS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+struct PanicWatch;
+
+impl PanicWatch {
+    /// Chains a recording hook in front of the current one (once per process) and clears the
+    /// record. Every test of this binary is `#[serial]`, so no other test panics meanwhile.
+    fn start() -> Self {
+        static HOOK: Once = Once::new();
+        HOOK.call_once(|| {
+            let previous = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                PANICS.lock().unwrap().push(info.to_string());
+                previous(info);
+            }));
+        });
+        PANICS.lock().unwrap().clear();
+        Self
+    }
+
+    fn assert_none(&self) {
+        // Copied out first: the hook locks `PANICS` too, and a failing assert runs it.
+        let seen = PANICS.lock().unwrap().clone();
+        assert!(seen.is_empty(), "panics while the test ran: {seen:?}");
+    }
+}
+
 async fn restart(router: &axum::Router) -> (StatusCode, Value) {
     web_call(router, "POST", "/api/restart", Some(json!({}))).await
 }
 
-/// Steps the paused clock past the signal delay and lets the spawned task run.
+/// Sleeps on the paused clock past the signal delay (the runtime steps it once every task is
+/// idle), so every signal task spawned before has run when this returns.
 async fn after_the_signal_delay() {
-    tokio::time::advance(RESTART_SIGNAL_DELAY * 2).await;
-    tokio::task::yield_now().await;
+    tokio::time::sleep(RESTART_SIGNAL_DELAY * 2).await;
 }
 
 async fn health(router: &axum::Router) -> Value {
@@ -240,6 +270,7 @@ async fn the_content_type_check_comes_before_the_supervisor_check() {
 #[serial]
 async fn a_second_restart_during_the_shutdown_is_202_again_and_does_not_panic() {
     let fx = Fixture::new();
+    let panics = PanicWatch::start();
     std::env::set_var(SUPERVISED_ENV, "1");
     let (router, handle) = fx.router();
 
@@ -257,6 +288,9 @@ async fn a_second_restart_during_the_shutdown_is_202_again_and_does_not_panic() 
     assert_eq!(third, StatusCode::ACCEPTED);
     assert_eq!(body["data"]["instanceId"], json!(instance_id()));
     assert!(handle.is_requested());
+    // The second and third requests spawned their own signal tasks, which have run by now
+    // (the clock was stepped past the delay): raising the latch again must not panic.
+    panics.assert_none();
 }
 
 #[tokio::test(start_paused = true)]

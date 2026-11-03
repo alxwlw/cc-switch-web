@@ -7,83 +7,29 @@
 //! an `/api/events` stream is open (the drain timer branch of `main`); SIGTERM still exits with
 //! 0; without a supervisor the answer is 409 and the process keeps serving.
 //!
-//! Not covered here: a second restart request during the shutdown. The listener is closed by
-//! then and the connection is refused, so the double-request case is pinned on the handle
-//! (`web_api_restart.rs`).
+//! A second restart request is reachable on the real process: the route raises the signal
+//! 100 ms after the 202, and axum stops accepting connections only when the graceful-shutdown
+//! future (the signal, then the exit cleanup) is done. `a_restart_request_hammered_...` keeps
+//! posting until the connection goes away and checks that every answer is 202, that the exit
+//! cleanup ran once, that nothing panicked and that the exit code is still 75.
 
 #![cfg(unix)]
 
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::net::{SocketAddr, TcpStream};
+use std::path::PathBuf;
+use std::process::{Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-/// Kills and reaps the child however the test ends (assert, panic, early return).
-struct ChildGuard(Child);
+// Both server-process test binaries pull the helpers in and each uses a part of them: the
+// allow sits on this side.
+#[allow(dead_code)]
+#[path = "support/server_process.rs"]
+mod server_process;
 
-impl Drop for ChildGuard {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
-
-/// `target/<profile>/examples/server`, built on demand: `cargo test --test <name>`
-/// does not build examples.
-fn server_example() -> PathBuf {
-    let exe = std::env::current_exe().expect("current_exe");
-    let profile_dir = exe
-        .parent()
-        .and_then(Path::parent)
-        .expect("target/<profile>/deps/<test>");
-    let mut build = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
-    build
-        .args(["build", "--example", "server", "--manifest-path"])
-        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
-    if profile_dir.file_name().is_some_and(|n| n == "release") {
-        build.arg("--release");
-    }
-    let status = build.status().expect("run cargo build --example server");
-    assert!(status.success(), "cargo build --example server failed");
-    let path = profile_dir.join("examples").join("server");
-    assert!(path.exists(), "{} was not built", path.display());
-    path
-}
-
-fn free_port() -> u16 {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("bind port 0");
-    listener.local_addr().expect("local addr").port()
-}
-
-/// One request over HTTP/1.0 (no chunking, the server closes after the response): status line
-/// and body. `body` is sent as JSON with a Content-Length.
-fn http(
-    addr: SocketAddr,
-    method: &str,
-    path: &str,
-    body: Option<&str>,
-) -> std::io::Result<(String, String)> {
-    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(2))?;
-    stream.set_read_timeout(Some(Duration::from_secs(10)))?;
-    match body {
-        Some(body) => write!(
-            stream,
-            "{method} {path} HTTP/1.0\r\nHost: {addr}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
-            body.len()
-        )?,
-        None => write!(stream, "{method} {path} HTTP/1.0\r\nHost: {addr}\r\n\r\n")?,
-    }
-    let mut raw = String::new();
-    stream.read_to_string(&mut raw)?;
-    let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((raw.as_str(), ""));
-    Ok((
-        head.lines().next().unwrap_or_default().to_string(),
-        body.to_string(),
-    ))
-}
+use server_process::{free_port, http, server_example, ChildGuard};
 
 struct Server {
     child: ChildGuard,
@@ -217,6 +163,73 @@ fn restart_under_a_supervisor_answers_202_with_the_instance_id_and_exits_75() {
         !log.contains("Open connections did not drain"),
         "no stream was open, the serve future must end by itself: {log}"
     );
+}
+
+/// Writes a `POST /api/restart` on a fresh connection and leaves the answer unread.
+fn send_restart(addr: SocketAddr) -> std::io::Result<TcpStream> {
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(2))?;
+    stream.set_read_timeout(Some(Duration::from_secs(10)))?;
+    write!(
+        stream,
+        "POST /api/restart HTTP/1.0\r\nHost: {addr}\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{{}}"
+    )?;
+    Ok(stream)
+}
+
+/// The status line of an answer read to its end; empty when the connection closed without one.
+fn read_status(mut stream: TcpStream) -> std::io::Result<String> {
+    let mut raw = String::new();
+    stream.read_to_string(&mut raw)?;
+    Ok(raw.lines().next().unwrap_or_default().to_string())
+}
+
+#[test]
+fn a_restart_request_repeated_through_the_whole_shutdown_gets_202_each_time_and_one_cleanup() {
+    let mut server = Server::start(true);
+
+    // Two clicks at once: both requests are on the wire before the first answer is read, so
+    // both reach the route inside the 100 ms between the 202 and the signal.
+    let a = send_restart(server.addr).expect("first request");
+    let b = send_restart(server.addr).expect("second request");
+    let mut statuses = vec![read_status(a).expect("first answer")];
+    statuses.push(read_status(b).expect("second answer"));
+    // Then keep clicking until the listener goes away: the signal, the exit cleanup (axum
+    // still accepts here) and the end of the process are all crossed by requests.
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while server.child.0.try_wait().expect("try_wait").is_none() {
+        assert!(
+            Instant::now() < deadline,
+            "still answering a minute later; stderr:\n{}",
+            server.diagnostics()
+        );
+        match send_restart(server.addr).and_then(read_status) {
+            // Refused or reset: the listener is gone. Empty: accepted, then closed by the
+            // graceful shutdown before the request was read. Neither is an answer.
+            Err(_) => break,
+            Ok(status) if status.is_empty() => break,
+            Ok(status) => statuses.push(status),
+        }
+        std::thread::sleep(Duration::from_millis(3));
+    }
+
+    let (exit, _) = server.wait_for_exit(Duration::from_secs(40));
+    let log = server.diagnostics();
+    assert!(
+        statuses.iter().all(|s| s.contains("202")),
+        "{statuses:?}; stderr:\n{log}"
+    );
+    assert!(statuses.len() >= 2, "{statuses:?}");
+    assert_eq!(exit.code(), Some(75), "{exit}; stderr:\n{log}");
+    // The line is logged at info and the child has no RUST_LOG (env_clear): the same level as
+    // "Restart requested", which the other tests read from stderr. 0 here would mean the cleanup
+    // did not run or did not log; 2 that a repeated request started a second shutdown.
+    assert_eq!(
+        log.matches("退出清理完成").count(),
+        1,
+        "exit cleanup must run once; stderr:\n{log}"
+    );
+    assert!(!log.contains("panicked"), "{log}");
+    assert!(!log.contains("Shutdown cleanup did not finish"), "{log}");
 }
 
 #[test]
