@@ -31,9 +31,9 @@ Scope: `src-tauri/src/app_store.rs` (headless-бэкенд override), `src-tauri
 - **T5, живая проверка.** Боевой `cc-switch-web.service` не трогаем: в нём ещё нет этого кода. Проверка — на сборке ветки во временном user-unit (`systemd-run --user`, `Restart=always`) на копии БД, временном HOME и порту 18799: код выхода 75 и подъём сервиса, повторный клик, активный takeover с побайтовым возвратом live-файлов, смена override с применением после restart. Restart из UI на боевом сервисе — smoke после merge.
 
 ### Task 1: headless override
-- [ ] `app_store`: headless-бэкенд — JSON-файл `app_paths.json` в `dirs::config_dir()/cc-switch-web/` с тем же ключом `app_config_dir_override`; `pub fn load_headless_override() -> Option<PathBuf>` заполняет тот же OnceLock-кэш, что читает резолвер. Запись атомарная (tmp + rename). Порядок резолвера не меняется: env > override > default.
-- [ ] `bootstrap.rs`: `load_headless_override()` — первым шагом, до `Database::init`.
-- [ ] Тест: без env и с файлом override → `get_app_config_dir()` указывает на override; с env → env.
+- [x] `app_store`: headless-бэкенд — JSON-файл `app_paths.json` в `dirs::config_dir()/cc-switch-web/` с тем же ключом `app_config_dir_override`; `pub fn load_headless_override() -> Option<PathBuf>` заполняет тот же OnceLock-кэш, что читает резолвер. Запись атомарная (tmp + rename). Порядок резолвера не меняется: env > override > default.
+- [x] `bootstrap.rs`: `load_headless_override()` — первым шагом, до `Database::init`.
+- [x] Тест: без env и с файлом override → `get_app_config_dir()` указывает на override; с env → env.
 
 ### Task 2: роуты data dir
 - [ ] `GET /api/app-config-dir` → `{effective, source: "env"|"override"|"default", override: string|null, envLocked: bool}`.
