@@ -45,6 +45,8 @@ state of upstream, not moved on purpose):
 - `live-state.json` (the mode / takeover state of each client)
 - device backups: `backups/live-first-write/`, `backups/proxy-live-backup/` and the
   environment-variable backups of the env manager, all under `~/.cc-switch/backups/`
+- the Codex device files `codex-*.json` (catalog and login history, client
+  acknowledgements, the official-models cache and the login stash)
 
 So `~/.cc-switch` can appear on a host that runs only the fork, and a desktop cc-switch
 on the same account shares those files with it.
@@ -122,9 +124,14 @@ console has no restart button in this mode); the server returns to `~/.cc-switch
 1. Every client in takeover mode (Claude Code, Codex, …) is pointed back at its direct
    provider config and the local proxy stops (bounded to 8 s). The mode itself is kept in
    `~/.cc-switch/live-state.json`, so the new process attaches the clients to the proxy
-   again at start. The restored file has the same content as before the takeover but is
-   not guaranteed to be byte-identical: a key may move (seen: `ANTHROPIC_MODEL` of
-   `~/.claude/settings.json` ends up last).
+   again at start. The restored file is rebuilt from the direct provider, not copied back
+   from a snapshot taken before the takeover: keys the file has besides the provider's are
+   kept, keys the takeover removed come back at the end (seen:
+   `ANTHROPIC_MODEL` of `~/.claude/settings.json` ends up last), and a value that differs
+   from the provider's (a hand edit included) is replaced by the provider's. This state
+   lasts only while the server is down: after a restart the new process attaches the
+   clients again; after a plain stop (`SIGTERM`, `systemctl stop`) it stays. Restart and
+   `SIGTERM` behave the same, and this is not new: `main` does the same.
 2. Open connections get up to 5 s to drain. A console tab keeps its event stream open, so
    with a browser open the process exits about 5 s after the click, then `RestartSec=3`
    of the unit: expect about 8-10 s.

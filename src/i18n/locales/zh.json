@@ -5081,7 +5081,7 @@
         "default": "默认目录"
       },
       "envLocked": "目录由服务器 unit 中的 CC_SWITCH_CONFIG_DIR 固定，无法在此页面修改。需由服务器运维人员修改 unit（见 docs/deploy.md）。",
-      "scope": "新目录会有自己的数据库、日志、技能、数据库备份、模型价格和其他应用文件，现有数据库不会被复制。settings.json、live-state.json 和设备备份仍保存在服务器的 ~/.cc-switch 中。更改在服务器重启后生效。",
+      "scope": "新目录会有自己的数据库、日志、技能、数据库备份、模型价格和其他应用文件，现有数据库不会被复制。settings.json、live-state.json、设备备份和其他设备文件仍保存在服务器的 ~/.cc-switch 中。更改在服务器重启后生效。",
       "applyFailed": "其他设置已保存，但数据目录没有更改：{{error}}",
       "restartRequiredMessage": "新的数据目录在服务器重启后生效。控制台会有几秒钟不可用，服务器恢复后自动刷新。是否立即重启？",
       "restarting": "正在重启…",
