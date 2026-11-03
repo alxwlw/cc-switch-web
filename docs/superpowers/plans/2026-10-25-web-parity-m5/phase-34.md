@@ -15,9 +15,10 @@ Scope: `src-tauri/src/services/webdav_auto_sync.rs`, `src-tauri/src/services/s3_
 - Inline-тесты сервисов: debounce, suppression guard, `should_run_auto_sync`, source-grep «сервисный слой не зависит от commands».
 
 ### Task 1: воркеры без AppHandle
-- [ ] `start_worker(db: Arc<Database>, events: <тип event bus из фазы 8>)` для обоих сервисов; `app.emit(name, payload)` → `events.emit(name, payload)` с теми же именами и payload. В `lib.rs:1262-1270` передать bus; desktop получает события через мост bus→`app.emit` из фазы 8.
-- [ ] Spawn: в server.rs до bootstrap вызвать `tauri::async_runtime::set(tokio::runtime::Handle::current())`, чтобы воркеры жили в runtime сервера; `tauri::async_runtime::spawn` в воркерах оставить (на desktop поведение не меняется).
-- [ ] Существующие inline-тесты зелёные; source-grep тест дополнить запретом `tauri::AppHandle` в `*_auto_sync.rs`.
+- [x] (`2a4e38cb`, фаза 8; вызов `lib.rs:849-857`) `start_worker(db: Arc<Database>, events: <тип event bus из фазы 8>)` для обоих сервисов; `app.emit(name, payload)` → `events.emit(name, payload)` с теми же именами и payload. В `lib.rs:1262-1270` передать bus; desktop получает события через мост bus→`app.emit` из фазы 8.
+- [x] Spawn: в server.rs до bootstrap вызвать `tauri::async_runtime::set(tokio::runtime::Handle::current())`, чтобы воркеры жили в runtime сервера; `tauri::async_runtime::spawn` в воркерах оставить (на desktop поведение не меняется). `set` — первым делом в `main`, до `server_log::init`; тест `tests/server_runtime_bootstrap.rs` (свой процесс: `set` + bootstrap через `spawn_blocking`, плюс source-проверка порядка).
+- [x] Существующие inline-тесты зелёные; source-grep тест дополнить запретом `tauri::AppHandle` в `*_auto_sync.rs` (`worker_does_not_depend_on_the_tauri_app_handle`, запрещён `AppHandle` вообще).
+- [x] Notes фазы 33, пункт a: `run_auto_sync_upload` читает настройки и проверяет `should_run_auto_sync` внутри `run_with_sync_lock` (оба воркера); тесты `lock_order_tests`.
 
 ### Task 2: запуск в headless bootstrap
 - [ ] `bootstrap.rs`: шаг `start_auto_sync_workers(db, events)` после `Database::init`, идемпотентный (OnceLock). Ошибка старта не фатальна — пишется в `BootstrapReport`.
