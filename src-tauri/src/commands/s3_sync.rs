@@ -115,6 +115,11 @@ pub async fn s3_test_connection(
 
 #[tauri::command]
 pub async fn s3_sync_upload(state: State<'_, AppState>) -> Result<Value, String> {
+    s3_sync_upload_impl(state.inner()).await
+}
+
+/// Body of `s3_sync_upload`, shared with the web API handler (WEB-11).
+pub(crate) async fn s3_sync_upload_impl(state: &AppState) -> Result<Value, String> {
     let db = state.db.clone();
     let mut settings = require_enabled_s3_settings()?;
 
@@ -126,8 +131,13 @@ pub async fn s3_sync_upload(state: State<'_, AppState>) -> Result<Value, String>
 
 #[tauri::command]
 pub async fn s3_sync_download(state: State<'_, AppState>) -> Result<Value, String> {
+    s3_sync_download_impl(state.inner()).await
+}
+
+/// Body of `s3_sync_download`, shared with the web API handler (WEB-11).
+pub(crate) async fn s3_sync_download_impl(state: &AppState) -> Result<Value, String> {
     let db = state.db.clone();
-    let app_state_for_sync = state.inner().clone();
+    let app_state_for_sync = state.clone();
     let mut settings = require_enabled_s3_settings()?;
 
     // Keep the derived live configuration refresh in the same global sync

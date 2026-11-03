@@ -4,7 +4,8 @@ import "@testing-library/jest-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { WebdavSyncSection } from "@/components/settings/WebdavSyncSection";
-import type { WebDavSyncSettings } from "@/types";
+import type { S3SyncSettings, WebDavSyncSettings } from "@/types";
+import { setWeb } from "../helpers/web";
 
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -79,6 +80,10 @@ const { settingsApiMock } = vi.hoisted(() => ({
     webdavSyncFetchRemoteInfo: vi.fn(),
     webdavSyncUpload: vi.fn(),
     webdavSyncDownload: vi.fn(),
+    s3SyncSaveSettings: vi.fn(),
+    s3TestConnection: vi.fn(),
+    s3SyncFetchRemoteInfo: vi.fn(),
+    s3SyncDownload: vi.fn(),
   },
 }));
 
@@ -97,7 +102,19 @@ const baseConfig: WebDavSyncSettings = {
   status: {},
 };
 
-function renderSection(config?: WebDavSyncSettings) {
+const s3Config: S3SyncSettings = {
+  enabled: true,
+  autoSync: true,
+  region: "eu-west-1",
+  bucket: "my-bucket",
+  accessKeyId: "AKIAEXAMPLE",
+  secretAccessKey: "s3-secret",
+  remoteRoot: "cc-switch-sync",
+  profile: "default",
+  status: {},
+};
+
+function renderSection(config?: WebDavSyncSettings, s3?: S3SyncSettings) {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -106,7 +123,7 @@ function renderSection(config?: WebDavSyncSettings) {
   });
   const view = render(
     <QueryClientProvider client={client}>
-      <WebdavSyncSection config={config} />
+      <WebdavSyncSection config={config} s3Config={s3} />
     </QueryClientProvider>,
   );
   return { ...view, client };
@@ -123,7 +140,13 @@ describe("WebdavSyncSection", () => {
     settingsApiMock.webdavSyncFetchRemoteInfo.mockReset();
     settingsApiMock.webdavSyncUpload.mockReset();
     settingsApiMock.webdavSyncDownload.mockReset();
+    settingsApiMock.s3SyncSaveSettings.mockReset();
+    settingsApiMock.s3TestConnection.mockReset();
+    settingsApiMock.s3SyncFetchRemoteInfo.mockReset();
+    settingsApiMock.s3SyncDownload.mockReset();
 
+    settingsApiMock.s3SyncSaveSettings.mockResolvedValue({ success: true });
+    settingsApiMock.s3TestConnection.mockResolvedValue({ success: true });
     settingsApiMock.webdavSyncSaveSettings.mockResolvedValue({ success: true });
     settingsApiMock.webdavTestConnection.mockResolvedValue({
       success: true,
@@ -139,6 +162,15 @@ describe("WebdavSyncSection", () => {
     });
     settingsApiMock.webdavSyncUpload.mockResolvedValue({ status: "uploaded" });
     settingsApiMock.webdavSyncDownload.mockResolvedValue({ status: "downloaded" });
+    settingsApiMock.s3SyncFetchRemoteInfo.mockResolvedValue({
+      deviceName: "My MacBook",
+      createdAt: "2026-02-01T10:00:00Z",
+      snapshotId: "snapshot-1",
+      version: 2,
+      compatible: true,
+      artifacts: ["db.sql", "skills.zip"],
+    });
+    settingsApiMock.s3SyncDownload.mockResolvedValue({ status: "downloaded" });
   });
 
   it("shows auto sync error callout when last auto sync failed", () => {
@@ -554,5 +586,240 @@ describe("WebdavSyncSection", () => {
         "settings.webdavSync.downloadFailed",
       );
     });
+  });
+
+  describe("auto-sync switch until the web auto-sync phase (WEB-11)", () => {
+    const webdavSwitch = () =>
+      screen.getByRole("switch", { name: "settings.webdavSync.autoSync" });
+    const s3Switch = () =>
+      screen.getByRole("switch", { name: "settings.s3Sync.autoSync" });
+
+    it("web, WebDAV: switch is disabled with the caption, server-host note shown", () => {
+      setWeb(true);
+      renderSection({ ...baseConfig, autoSync: false });
+
+      expect(webdavSwitch()).toBeDisabled();
+      expect(screen.getAllByText("web.syncAutoLater")).toHaveLength(1);
+      expect(screen.getByText("web.syncHost")).toBeInTheDocument();
+    });
+
+    it("desktop, WebDAV: switch is enabled, no web captions", () => {
+      renderSection({ ...baseConfig, autoSync: false });
+
+      expect(webdavSwitch()).toBeEnabled();
+      expect(screen.queryByText("web.syncAutoLater")).toBeNull();
+      expect(screen.queryByText("web.syncHost")).toBeNull();
+    });
+
+    it("web, WebDAV: a stored autoSync:true is shown and a save sends it back unchanged", async () => {
+      setWeb(true);
+      renderSection({ ...baseConfig, autoSync: true });
+
+      expect(webdavSwitch()).toHaveAttribute("aria-checked", "true");
+      expect(webdavSwitch()).toBeDisabled();
+      // A click on a disabled switch must not open the confirmation or flip the value.
+      fireEvent.click(webdavSwitch());
+      expect(
+        screen.queryByRole("button", { name: "confirm.autoSync.confirm" }),
+      ).toBeNull();
+      expect(webdavSwitch()).toHaveAttribute("aria-checked", "true");
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.webdavSync.save" }),
+      );
+      await waitFor(() => {
+        expect(settingsApiMock.webdavSyncSaveSettings).toHaveBeenCalledWith(
+          expect.objectContaining({ autoSync: true }),
+          false,
+        );
+      });
+    });
+
+    it("desktop, WebDAV: a stored autoSync:true can be switched off and saved", async () => {
+      renderSection({ ...baseConfig, autoSync: true });
+
+      fireEvent.click(webdavSwitch());
+      expect(webdavSwitch()).toHaveAttribute("aria-checked", "false");
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.webdavSync.save" }),
+      );
+      await waitFor(() => {
+        expect(settingsApiMock.webdavSyncSaveSettings).toHaveBeenCalledWith(
+          expect.objectContaining({ autoSync: false }),
+          false,
+        );
+      });
+    });
+
+    it("web, S3: switch is disabled with the caption and a stored autoSync:true is saved unchanged", async () => {
+      setWeb(true);
+      renderSection(baseConfig, s3Config);
+
+      expect(s3Switch()).toBeDisabled();
+      expect(s3Switch()).toHaveAttribute("aria-checked", "true");
+      expect(screen.getAllByText("web.syncAutoLater")).toHaveLength(1);
+      fireEvent.click(s3Switch());
+      expect(s3Switch()).toHaveAttribute("aria-checked", "true");
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.s3Sync.save" }),
+      );
+      await waitFor(() => {
+        expect(settingsApiMock.s3SyncSaveSettings).toHaveBeenCalledWith(
+          expect.objectContaining({ bucket: "my-bucket", autoSync: true }),
+          false,
+        );
+      });
+    });
+
+    it("desktop, WebDAV: switch is locked while a save is running", async () => {
+      settingsApiMock.webdavSyncSaveSettings.mockReturnValue(
+        new Promise(() => {}),
+      );
+      renderSection(baseConfig);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.webdavSync.save" }),
+      );
+      await waitFor(() => expect(webdavSwitch()).toBeDisabled());
+    });
+
+    it("desktop, S3: switch is locked while a save is running", async () => {
+      settingsApiMock.s3SyncSaveSettings.mockReturnValue(new Promise(() => {}));
+      renderSection(baseConfig, s3Config);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.s3Sync.save" }),
+      );
+      await waitFor(() => expect(s3Switch()).toBeDisabled());
+    });
+
+    it("desktop, S3: switch is enabled, no caption, and toggling it off is saved", async () => {
+      renderSection(baseConfig, s3Config);
+
+      expect(s3Switch()).toBeEnabled();
+      expect(screen.queryByText("web.syncAutoLater")).toBeNull();
+      fireEvent.click(s3Switch());
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.s3Sync.save" }),
+      );
+      await waitFor(() => {
+        expect(settingsApiMock.s3SyncSaveSettings).toHaveBeenCalledWith(
+          expect.objectContaining({ autoSync: false }),
+          false,
+        );
+      });
+    });
+  });
+
+  describe("download confirm names the server in web (WEB-11)", () => {
+    const DESKTOP_WEBDAV = "settings.webdavSync.confirmDownload.warning";
+    const DESKTOP_S3 = "settings.s3Sync.confirmDownload.warning";
+    const WEB = "web.syncDownloadWarning";
+
+    it("web, WebDAV: the confirm names the server instead of 'local data'", async () => {
+      setWeb(true);
+      renderSection(baseConfig);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.webdavSync.download" }),
+      );
+      await screen.findByText(WEB);
+      expect(screen.queryByText(DESKTOP_WEBDAV)).toBeNull();
+    });
+
+    it("desktop, WebDAV: the confirm keeps the desktop text", async () => {
+      renderSection(baseConfig);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.webdavSync.download" }),
+      );
+      await screen.findByText(DESKTOP_WEBDAV);
+      expect(screen.queryByText(WEB)).toBeNull();
+    });
+
+    it("web, S3: the confirm names the server instead of 'local data'", async () => {
+      setWeb(true);
+      renderSection(baseConfig, s3Config);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.s3Sync.download" }),
+      );
+      await screen.findByText(WEB);
+      expect(screen.queryByText(DESKTOP_S3)).toBeNull();
+    });
+
+    it("desktop, S3: the confirm keeps the desktop text", async () => {
+      renderSection(baseConfig, s3Config);
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "settings.s3Sync.download" }),
+      );
+      await screen.findByText(DESKTOP_S3);
+      expect(screen.queryByText(WEB)).toBeNull();
+    });
+  });
+
+  describe("form rows at phone width (WEB-11)", () => {
+    // jsdom has no layout: this pins the classes, the widths were measured in a browser.
+    const rowLabels = () =>
+      screen
+        .getAllByText(/^settings\.(syncType|webdavSync|s3Sync)\./)
+        .filter((el) => el.tagName === "LABEL");
+
+    // From sm up a row is the old one: a label beside the field, items-start only on the
+    // three toggle rows (autoSync, S3 enabled), items-center on every other row.
+    const TOP_ROW =
+      /^settings\.(webdavSync\.autoSync|s3Sync\.(autoSync|enabled))/;
+
+    function expectRowLayout(
+      labels: HTMLElement[],
+      count: number,
+      tops: number,
+    ) {
+      expect(labels).toHaveLength(count);
+      let top = 0;
+      for (const label of labels) {
+        const row = label.parentElement?.className ?? "";
+        const isTop = TOP_ROW.test(label.textContent ?? "");
+        top += isTop ? 1 : 0;
+        expect(label.className).toContain("sm:w-40");
+        expect(label.className).toContain("sm:shrink-0");
+        expect(label.className).not.toMatch(/(^|\s)w-40(\s|$)/);
+        expect(row).toContain("flex-col");
+        expect(row).toContain("sm:flex-row");
+        expect(row).toContain("sm:gap-4");
+        expect(row).toContain(isTop ? "sm:items-start" : "sm:items-center");
+      }
+      expect(top).toBe(tops);
+    }
+
+    it("WebDAV form: the label sits above the field below sm, beside it from sm", () => {
+      renderSection(baseConfig);
+      expectRowLayout(rowLabels(), 8, 1);
+    });
+
+    it("S3 form: the label sits above the field below sm, beside it from sm", () => {
+      renderSection(baseConfig, s3Config);
+      expectRowLayout(rowLabels(), 11, 2);
+    });
+
+    it.each([
+      [
+        "WebDAV",
+        "https://dav.jianguoyun.com/dav/",
+        undefined,
+        "settings.webdavSync.presets.jianguoyunHint",
+      ],
+      ["S3", baseConfig.baseUrl, s3Config, "settings.s3Sync.presets.awsS3Hint"],
+    ])(
+      "%s preset hint is indented under the field only from sm",
+      (_n, baseUrl, s3, key) => {
+        renderSection({ ...baseConfig, baseUrl }, s3);
+        const hint = screen.getByText(key).parentElement?.className ?? "";
+        expect(hint).toContain("sm:pl-44");
+        expect(hint).not.toMatch(/(^|\s)pl-44(\s|$)/);
+      },
+    );
   });
 });

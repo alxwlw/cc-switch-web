@@ -42,6 +42,11 @@ function appBase(app: string): string {
   return `/api/${enc(app)}`;
 }
 
+/** `/api/sync/<backend>` for a `webdav_*` / `s3_*` sync command. */
+function syncBase(cmd: string): string {
+  return `/api/sync/${cmd.startsWith("s3_") ? "s3" : "webdav"}`;
+}
+
 function authBase(provider: string): string {
   return `/api/auth/${enc(provider)}`;
 }
@@ -858,6 +863,35 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       };
     case "sync_current_providers_live":
       return { method: "POST", url: "/api/providers/sync-live" };
+
+    // ---------- WebDAV / S3 manual sync (WEB-11) ----------
+    // Runs on the server host. Auto-sync stays desktop-only until its own phase.
+    case "webdav_test_connection":
+    case "s3_test_connection":
+      return {
+        method: "POST",
+        url: `${syncBase(cmd)}/test`,
+        body: {
+          settings: a.settings,
+          preserveEmptyPassword: a.preserveEmptyPassword,
+        },
+      };
+    case "webdav_sync_upload":
+    case "s3_sync_upload":
+      return { method: "POST", url: `${syncBase(cmd)}/upload` };
+    case "webdav_sync_download":
+    case "s3_sync_download":
+      return { method: "POST", url: `${syncBase(cmd)}/download` };
+    case "webdav_sync_save_settings":
+    case "s3_sync_save_settings":
+      return {
+        method: "PUT",
+        url: `${syncBase(cmd)}/settings`,
+        body: { settings: a.settings, passwordTouched: a.passwordTouched },
+      };
+    case "webdav_sync_fetch_remote_info":
+    case "s3_sync_fetch_remote_info":
+      return { method: "GET", url: `${syncBase(cmd)}/remote-info` };
 
     // ---------- Deep-link import via paste/upload (WEB-27) ----------
     // OS registration of ccswitch:// and the pending queue stay desktop-only (peek/ack are silent no-ops below).

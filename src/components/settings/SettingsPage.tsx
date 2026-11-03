@@ -414,7 +414,7 @@ export function SettingsPage({
       case "data":
         return (
           <>
-            {/* WEB-00: location/sync are desktop-only until WEB-26/11; backups (WEB-10) and import/export (WEB-09) work in web. */}
+            {/* WEB-00: only location is desktop-only until WEB-26; cloud sync works in web since WEB-11, backups (WEB-10) and import/export (WEB-09) too. */}
             {!isWeb && (
               <SettingsBlock
                 title={t("settings.data.location")}
@@ -496,24 +496,22 @@ export function SettingsPage({
                 />
               </div>
             </SettingsBlock>
-            {!isWeb && (
-              <SettingsBlock
-                title={t("settings.advanced.cloudSync.title")}
-                help={{
-                  title: t("settings.advanced.cloudSync.title"),
-                  body: t("settings.advanced.cloudSync.description"),
-                }}
-              >
-                <div className="rounded-panel border border-border bg-surface p-5">
-                  <WebdavSyncSection
-                    config={settings.webdavSync}
-                    s3Config={settings.s3Sync}
-                    settings={settings}
-                    onAutoSave={handleAutoSave}
-                  />
-                </div>
-              </SettingsBlock>
-            )}
+            <SettingsBlock
+              title={t("settings.advanced.cloudSync.title")}
+              help={{
+                title: t("settings.advanced.cloudSync.title"),
+                body: t("settings.advanced.cloudSync.description"),
+              }}
+            >
+              <div className="rounded-panel border border-border bg-surface p-5">
+                <WebdavSyncSection
+                  config={settings.webdavSync}
+                  s3Config={settings.s3Sync}
+                  settings={settings}
+                  onAutoSave={handleAutoSave}
+                />
+              </div>
+            </SettingsBlock>
             <SettingsBlock
               title={t("settings.advanced.logConfig.title")}
               help={{
