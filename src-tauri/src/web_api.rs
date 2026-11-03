@@ -2968,7 +2968,7 @@ fn validate_app_config_dir(raw: &str) -> Result<std::path::PathBuf, String> {
 
     let expanded = if raw == "~" {
         crate::config::get_home_dir()
-    } else if let Some(rest) = raw.strip_prefix("~/").or_else(|| raw.strip_prefix("~\\")) {
+    } else if let Some(rest) = raw.strip_prefix("~/") {
         crate::config::get_home_dir().join(rest)
     } else if raw.starts_with('~') {
         return Err(format!(

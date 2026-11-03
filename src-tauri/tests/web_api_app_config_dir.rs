@@ -283,6 +283,8 @@ async fn put_refuses_paths_that_are_not_absolute_or_not_a_directory() {
         ("relative/dir", "не абсолютный"),
         ("./dir", "не абсолютный"),
         ("~someone/dir", "не поддерживается"),
+        // The server ships on Linux only: a backslash is a file name character there.
+        ("~\\dir", "не поддерживается"),
         (s(&a_file), "файл"),
     ] {
         let (status, body) = put(&router, json!(path)).await;
@@ -318,6 +320,12 @@ async fn put_refuses_a_directory_without_write_access() {
     let router = web_router();
     let target = fx.dir("read-only");
     std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o555)).unwrap();
+    // root ignores the mode bits, so the failure cannot be injected: skip instead of lying.
+    if tempfile::tempfile_in(&target).is_ok() {
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
+        eprintln!("skipped: a 0o555 directory is still writable (running as root?)");
+        return;
+    }
 
     let (status, body) = put(&router, json!(s(&target))).await;
 
