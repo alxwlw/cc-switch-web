@@ -31,8 +31,8 @@ Scope: `src-tauri/src/services/webdav_auto_sync.rs`, `src-tauri/src/services/s3_
 - [x] `DB_CHANGE_TX` глобальный: вместо `test_mutex` (отклонение) один общий `Fixture` на бинарь, воркеры запускаются один раз через `bootstrap::start_auto_sync_workers`, тесты `#[serial]`, каждый начинается со сброса настроек и ожидания затишья на hub.
 
 ### Task 4: frontend
-- [ ] `WebdavSyncSection`: снять disabled с переключателя auto-sync, поставленный в фазе 33.
-- [ ] Тест: SSE-событие `webdav-sync-status-updated {source:"auto", status:"error"}` → toast + инвалидация `["settings"]` (mock EventSource из фазы 8).
+- [x] `WebdavSyncSection`: снять disabled с переключателя auto-sync, поставленный в фазе 33. (оба переключателя, WebDAV и S3; подпись и ключ `web.syncAutoLater` удалены из 5 локалей)
+- [x] Тест: SSE-событие `webdav-sync-status-updated {source:"auto", status:"error"}` → toast + инвалидация `["settings"]` (mock EventSource из фазы 8). (`tests/hooks/useSyncStatusEvents.test.tsx`: два слушателя вынесены из `App.tsx` в хук `useSyncStatusEvents`, тест идёт через настоящий web-shim `listen` + FakeES, не через `emitTauriEvent`; проводку в `App` держит `tests/integration/App.test.tsx`)
 
 ### Task 5: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server`; ручная проверка на agentbox: изменить провайдер в web → файл появился на реальном WebDAV.
