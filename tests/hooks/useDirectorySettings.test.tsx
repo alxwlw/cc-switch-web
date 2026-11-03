@@ -532,6 +532,13 @@ describe("useDirectorySettings", () => {
     expect(result.current.resolvedDirs.claude).toBe("/remote/claude");
     expect(result.current.resolvedDirs.codex).toBe("/remote/codex");
     expect(consoleError).toHaveBeenCalled();
+
+    // resetting has nowhere server-side to go back to: it must not invent the shim's home
+    homeDirMock.mockResolvedValue("/browser/home");
+    await act(async () => {
+      await result.current.resetAppConfigDir();
+    });
+    expect(result.current.resolvedDirs.appConfig).toBe("");
     consoleError.mockRestore();
   });
 

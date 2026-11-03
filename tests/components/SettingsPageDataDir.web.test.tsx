@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -280,6 +280,11 @@ describe("SettingsPage data directory · WEB-26", () => {
       expect(
         screen.getByRole("button", { name: "settings.restartLater" }),
       ).toBeDisabled();
+      expect(page.acknowledgeRestart).not.toHaveBeenCalled();
+      // Escape does not dismiss the dialog while the server is going down
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      await tick(0);
+      expect(busy).toBeVisible();
       expect(page.acknowledgeRestart).not.toHaveBeenCalled();
 
       await tick(RESTART_POLL_INTERVAL_MS);

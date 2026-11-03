@@ -46,10 +46,10 @@ Scope: `src-tauri/src/app_store.rs` (headless-бэкенд override), `src-tauri
 - [x] Тесты: 409 без supervisor; с `CC_SWITCH_WEB_SUPERVISED=1` сигнал shutdown отправлен после ответа 202; PUT: env-locked → 409, путь без прав на запись → 400, DB с будущей schema → 400, валидный путь → override записан. Тесты restart — `src-tauri/tests/web_api_restart.rs` (handle) и `src-tauri/tests/server_example_restart.rs` (настоящий `examples/server`: 202 и код 75, то же при открытом `/api/events`, SIGTERM → 0, без supervisor 409); тесты PUT уже в `src-tauri/tests/web_api_app_config_dir.rs` (T2). Двойной запрос проверен и на настоящем процессе: запросы идут подряд, пока соединение не откажет (axum перестаёт принимать соединения только после завершения graceful-future, куда входит cleanup, поэтому повторный POST доходит до обработчика) — все ответы 202, `退出清理完成` в stderr ровно один раз, паники нет, код 75; на handle (`web_api_restart.rs`) то же закреплено хуком паник, так как сигнал поднимает порождённая задача.
 
 ### Task 4: frontend
-- [ ] adapter: `get_app_config_dir_override` → GET (`pick: "override"`), `set_app_config_dir_override` → PUT, `restart_app` → POST restart.
-- [ ] `SettingsPage`/`DirectoryInput` в web: кнопка browse скрыта (native picker), текстовый ввод работает; при `envLocked` поле read-only с пояснением и значением env; показывать `source`.
-- [ ] `handleRestartNow` в web: после 202 опрашивать `/api/health` (интервал 1 с, до 60 с), затем `location.reload()`; 409 → toast с текстом сервера.
-- [ ] Тесты компонента: env-locked read-only, browse скрыт, restart-поток (mock fetch).
+- [x] adapter: `get_app_config_dir_override` → GET (`pick: "override"`), `set_app_config_dir_override` → PUT (ответ — полный статус, адаптер отдаёт `true` как desktop-команда), `restart_app` → POST restart (`true`), плюс web-команды `get_app_config_dir_status` (полный ответ GET) и `restart_server` (`{instanceId}` для опроса).
+- [x] `SettingsPage`/`DirectoryInput` в web: кнопка browse скрыта (native picker), текстовый ввод работает; при `envLocked` поле read-only с пояснением и значением env; показывать `source`.
+- [x] `handleRestartNow` в web: после 202 опрашивать `/api/health` (интервал 1 с, до 60 с), затем `location.reload()`; 409 → toast с текстом сервера.
+- [x] Тесты компонента: env-locked read-only, browse скрыт, restart-поток (mock fetch).
 
 ### Task 5: документация, гейты, PR, Plane
 - [ ] `docs/deploy.md`: env-locked режим (по умолчанию) и режим override (убрать `CC_SWITCH_CONFIG_DIR` из unit); почему exit 75.
