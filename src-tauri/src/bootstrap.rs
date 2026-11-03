@@ -806,8 +806,28 @@ pub fn install_rustls_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
+/// Starts the WebDAV and S3 auto-sync workers (WEB-11). They are triggered by
+/// the SQLite change hook that `Database::init` installs, and upload only
+/// when the saved settings have `enabled && auto_sync`.
+///
+/// Must run after [`run_post_db_bootstrap`] (as `lib.rs` does on the desktop):
+/// the bootstrap's own writes to the config tables would otherwise fire an
+/// upload on every server start. Idempotent: each worker's `DB_CHANGE_TX`
+/// `OnceLock` turns a repeated start into a no-op, so the first caller's `db`
+/// and `events` serve the whole process. `start_worker` cannot fail, so the
+/// step is always [`StepOutcome::Done`].
+pub fn start_auto_sync_workers(
+    db: &Arc<Database>,
+    events: &crate::events::EventHub,
+) -> StepOutcome {
+    crate::services::webdav_auto_sync::start_worker(db.clone(), events.clone());
+    crate::services::s3_auto_sync::start_worker(db.clone(), events.clone());
+    StepOutcome::Done
+}
+
 /// Full headless startup: paths, legacy config, version precheck, DB open,
-/// log level, legacy migration, `AppState`, post-DB steps. No dialogs, no
+/// log level, legacy migration, `AppState`, post-DB steps, auto-sync workers
+/// (last, see [`start_auto_sync_workers`]). No dialogs, no
 /// Tauri runtime. `codex_history` decides where the (slow) Codex history
 /// migrations run, see [`CodexHistory`].
 ///
@@ -856,6 +876,10 @@ pub fn run_headless_bootstrap_with(
     state.proxy_service.bind_app_state(state.clone());
     crate::usage_events::init(state.events.clone());
     run_post_db_bootstrap(&state, codex_history, &mut report);
+    report.push(
+        "auto_sync_workers",
+        start_auto_sync_workers(&state.db, &state.events),
+    );
     Ok(Bootstrapped { state, report })
 }
 

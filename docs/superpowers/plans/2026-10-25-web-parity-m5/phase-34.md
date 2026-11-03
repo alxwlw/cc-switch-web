@@ -21,8 +21,8 @@ Scope: `src-tauri/src/services/webdav_auto_sync.rs`, `src-tauri/src/services/s3_
 - [x] Notes фазы 33, пункт a: `run_auto_sync_upload` читает настройки и проверяет `should_run_auto_sync` внутри `run_with_sync_lock` (оба воркера); тесты `lock_order_tests`.
 
 ### Task 2: запуск в headless bootstrap
-- [ ] `bootstrap.rs`: шаг `start_auto_sync_workers(db, events)` после `Database::init`, идемпотентный (OnceLock). Ошибка старта не фатальна — пишется в `BootstrapReport`.
-- [ ] Удалить из Notes фазы 7 пометку «webdav/s3 workers → WEB-11», если она там есть.
+- [x] `bootstrap.rs`: шаг `start_auto_sync_workers(db, events)` идемпотентный (OnceLock), шаг отчёта `auto_sync_workers`. Отклонение от плана (решение контроллера): запуск ПОСЛЕ `run_post_db_bootstrap`, не сразу после `Database::init` — как `lib.rs:849` на desktop; иначе записи bootstrap в БД запускали бы upload при каждом старте. `start_worker` возвращает `()`, шаг всегда `Done`; тест `auto_sync_workers_start_after_every_post_db_step` (`tests/bootstrap.rs`). `examples/server.rs` уже логирует все failed-шаги отчёта — не менялся.
+- [x] Notes фазы 7: пометки «webdav/s3 workers → WEB-11» там нет; `phase-7.md:11` — исторический список «НЕ трогаем» в scope той фазы, не меняется (Ruling T2 в журнале plan-state).
 
 ### Task 3: интеграционные тесты
 - [ ] `tests/web_api_sync.rs` (заглушка WebDAV из фазы 33): auto-sync включён, изменение провайдера в DB → в пределах `MAX_AUTO_SYNC_WAIT_MS` заглушка получает upload, bus выдаёт `webdav-sync-status-updated {source:"auto", status:"success"}`. Заглушка отвечает 500 → событие со `status:"error"`, `update_webdav_sync_status` записал ошибку. Auto-sync выключен → upload не происходит.
