@@ -90,4 +90,19 @@ fn server_example_sets_the_tauri_runtime_before_logging_and_bootstrap() {
         1,
         "set panics on a second call"
     );
+
+    // Any earlier use of `tauri::async_runtime` (a spawn, a block_on, a handle)
+    // initialises the global runtime and makes `set` panic at startup, so `set`
+    // must be the first statement of `main`: only blank lines and comments
+    // may sit between the opening brace and it.
+    let main = at("async fn main(");
+    let body = main + source[main..].find('{').expect("main has a body") + 1;
+    assert!(body < set, "`set` must be called inside `main`");
+    for line in source[body..set].lines() {
+        let line = line.trim();
+        assert!(
+            line.is_empty() || line.starts_with("//"),
+            "`tauri::async_runtime::set` must be the first statement of `main`, found `{line}` before it"
+        );
+    }
 }
