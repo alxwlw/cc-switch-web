@@ -7,6 +7,9 @@
 //! twice: the runtime test repeats the example's sequence (`set`, then the
 //! bootstrap through `spawn_blocking`), and the source test checks that the
 //! example calls `set` before `server_log::init` and the bootstrap.
+//!
+//! The runtime test also proves that this first bootstrap of the process
+//! started the WebDAV and S3 auto-sync workers (they keep its database and hub).
 
 mod support;
 
@@ -66,6 +69,73 @@ async fn bootstrap_runs_after_the_server_runtime_is_set_as_the_tauri_runtime() {
         .get_all_providers("claude")
         .expect("claude providers");
     assert!(!claude.is_empty(), "claude live config must be imported");
+
+    // WEB-11: the bootstrap started both auto-sync workers, and they hold this
+    // bootstrap's database and hub (this is the first bootstrap of the
+    // process; the workers are process-wide). Auto-sync is switched on after
+    // the bootstrap, so its own writes did not trigger anything; one write to
+    // a config table must now reach each worker, whose upload fails and says
+    // so on the hub. The settings are incomplete on purpose (WebDAV without a
+    // username, S3 without a bucket): the upload stops at `validate()`, with
+    // no network involved.
+    let mut events = boot.state.events.subscribe();
+    let mut app_settings = cc_switch_lib::AppSettings::default();
+    app_settings.webdav_sync = Some(
+        serde_json::from_value(serde_json::json!({
+            "enabled": true,
+            "autoSync": true,
+            "baseUrl": "http://127.0.0.1:1",
+        }))
+        .expect("webdav settings"),
+    );
+    app_settings.s3_sync = Some(
+        serde_json::from_value(serde_json::json!({
+            "enabled": true,
+            "autoSync": true,
+            "region": "us-east-1",
+        }))
+        .expect("s3 settings"),
+    );
+    cc_switch_lib::update_settings(app_settings).expect("enable auto-sync");
+    boot.state
+        .db
+        .set_setting("auto_sync_probe", "1")
+        .expect("write to a config table");
+
+    // `MAX_AUTO_SYNC_WAIT_MS` (10 s) is the upper bound of the debounce; the
+    // rest is margin for a loaded machine.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
+    let mut seen = std::collections::BTreeSet::new();
+    while seen.len() < 2 {
+        match tokio::time::timeout_at(deadline, events.recv()).await {
+            Ok(Ok(event))
+                if event.payload["source"] == "auto" && event.payload["status"] == "error" =>
+            {
+                assert!(
+                    event.payload["error"]
+                        .as_str()
+                        .is_some_and(|e| !e.is_empty()),
+                    "{event:?}"
+                );
+                seen.insert(event.name);
+            }
+            Ok(Ok(_)) | Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => {}
+            Ok(Err(e)) => panic!("event hub closed: {e}"),
+            Err(_) => break,
+        }
+    }
+    let expected: std::collections::BTreeSet<String> = [
+        "s3-sync-status-updated".to_string(),
+        "webdav-sync-status-updated".to_string(),
+    ]
+    .into();
+    assert_eq!(
+        seen, expected,
+        "each worker must report its failed auto upload on the hub within the wait bound"
+    );
+
+    // The settings store is process-global: leave it as found.
+    cc_switch_lib::update_settings(cc_switch_lib::AppSettings::default()).expect("reset settings");
 }
 
 #[test]
