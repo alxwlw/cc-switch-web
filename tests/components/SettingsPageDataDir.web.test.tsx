@@ -204,6 +204,19 @@ describe("SettingsPage data directory · WEB-26", () => {
     expect(screen.queryByRole("button", { name: "common.save" })).toBeNull();
   });
 
+  it("desktop: the same block keeps Browse and shows no server notes", () => {
+    setWeb(false);
+    page.appConfigDir = "/mac/data";
+    page.initialAppConfigDir = "/mac/data";
+    page.status = null;
+    renderPage();
+    expect(
+      screen.getByRole("button", { name: "settings.browseDirectory" }),
+    ).toBeEnabled();
+    expect(screen.queryByTestId("app-config-dir-scope")).toBeNull();
+    expect(screen.queryByTestId("app-config-dir-current")).toBeNull();
+  });
+
   it("offers save only for a changed directory", () => {
     page.appConfigDir = "/srv/elsewhere";
     renderPage();

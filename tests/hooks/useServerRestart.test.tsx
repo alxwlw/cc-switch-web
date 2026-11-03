@@ -74,6 +74,11 @@ describe("useServerRestart (WEB-26)", () => {
     return { ...hook, done };
   };
 
+  it("polls every second and gives up after a minute, as the console promises", () => {
+    expect(RESTART_POLL_INTERVAL_MS).toBe(1000);
+    expect(RESTART_WAIT_MS).toBe(60000);
+  });
+
   it("posts JSON to /api/restart, keeps polling on the same id and on network errors, reloads once the id changes", async () => {
     const { result, done } = await start();
 
