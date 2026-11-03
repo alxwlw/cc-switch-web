@@ -241,3 +241,59 @@ fn headless_bootstrap_opens_the_database_under_the_override() {
         "default dir must stay untouched"
     );
 }
+
+#[test]
+#[serial]
+fn blank_value_reads_as_none_and_padding_is_trimmed() {
+    let fx = Fixture::new();
+    for blank in ["", "  ", " \t "] {
+        fx.write_file(&format!(r#"{{"{KEY}": "{blank}"}}"#));
+        assert_eq!(read_headless_override_file(), None, "{blank:?}");
+    }
+
+    let target = fx.target_dir("padded");
+    fx.write_file(&format!(
+        r#"{{"{KEY}": {}}}"#,
+        serde_json::to_string(&format!("  {}  ", target.to_str().unwrap())).unwrap()
+    ));
+    assert_eq!(read_headless_override_file(), Some(target));
+}
+
+const LEGACY_CONFIG: &str = r#"{
+  "version": 2,
+  "claude": {
+    "providers": {
+      "legacy-a": {"id": "legacy-a", "name": "Legacy A", "settingsConfig": {"env": {"ANTHROPIC_AUTH_TOKEN": "sk-a", "ANTHROPIC_BASE_URL": "https://a.invalid"}}}
+    },
+    "current": "legacy-a"
+  },
+  "codex": {"providers": {}, "current": ""}
+}"#;
+
+/// `BootstrapPaths::resolve()` decides on the legacy migration from the config
+/// dir it sees: the override must already be loaded then, or the `config.json`
+/// that sits in the override directory is never found.
+#[test]
+#[serial]
+fn headless_bootstrap_loads_the_override_before_it_resolves_the_legacy_paths() {
+    let fx = Fixture::new();
+    let target = fx.target_dir("legacy-home");
+    std::fs::write(target.join("config.json"), LEGACY_CONFIG).unwrap();
+    fx.write_file(&json_body(&target));
+
+    let boot = run_headless_bootstrap().expect("bootstrap");
+
+    assert!(
+        boot.report.legacy_config_migrated,
+        "legacy config.json under the override must be migrated: {:?}",
+        boot.report
+    );
+    let providers = boot
+        .state
+        .db
+        .get_all_providers("claude")
+        .expect("providers");
+    assert_eq!(providers["legacy-a"].name, "Legacy A");
+    assert!(target.join("config.json.migrated").exists());
+    assert!(!fx.home.join(".cc-switch").join("cc-switch.db").exists());
+}

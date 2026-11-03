@@ -103,6 +103,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // and `tests/server_runtime_bootstrap.rs` pins this order.
     tauri::async_runtime::set(tokio::runtime::Handle::current());
 
+    // The logger opens `<config dir>/logs/cc-switch-web.log`, so the headless
+    // override of the config dir must be in the resolver's cache before it runs
+    // (the bootstrap loads it again: loading is idempotent, and its warnings
+    // reach the log there, which does not exist yet here).
+    cc_switch_lib::app_store::load_headless_override();
+
     cc_switch_lib::server_log::init();
 
     let port: u16 = env::var("PORT")
