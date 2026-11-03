@@ -9,7 +9,7 @@
 //!
 //! A second restart request is reachable on the real process: the route raises the signal
 //! 100 ms after the 202, and axum stops accepting connections only when the graceful-shutdown
-//! future (the signal, then the exit cleanup) is done. `a_restart_request_hammered_...` keeps
+//! future (the signal, then the exit cleanup) is done. `a_restart_request_repeated_through_the_whole_shutdown_gets_202_each_time_and_one_cleanup...` keeps
 //! posting until the connection goes away and checks that every answer is 202, that the exit
 //! cleanup ran once, that nothing panicked and that the exit code is still 75.
 
