@@ -19,6 +19,19 @@ export interface ConfigExportPayload {
   content: string;
 }
 
+/** `GET /api/app-config-dir` (web only): which data directory the server process uses. */
+export interface AppConfigDirStatus {
+  /** What this process uses now. */
+  effective: string;
+  source: "env" | "override" | "default";
+  /** The stored override: what applies after the next restart. */
+  override: string | null;
+  /** The directory is fixed by `CC_SWITCH_CONFIG_DIR` in the server's unit. */
+  envLocked: boolean;
+  /** The server's own `~/.cc-switch`. */
+  default: string;
+}
+
 export interface WebDavTestResult {
   success: boolean;
   message?: string;
@@ -78,6 +91,11 @@ export const settingsApi = {
     return await invoke("restart_app");
   },
 
+  /** Web: `POST /api/restart`; resolves with the id of the process that accepted it. */
+  async restartServer(): Promise<{ instanceId: string }> {
+    return await invoke("restart_server");
+  },
+
   async installUpdateAndRestart(): Promise<boolean> {
     return await invoke("install_update_and_restart");
   },
@@ -132,6 +150,11 @@ export const settingsApi = {
 
   async setAppConfigDirOverride(path: string | null): Promise<boolean> {
     return await invoke("set_app_config_dir_override", { path });
+  },
+
+  /** Web only: the server's data directory, where it comes from and whether the env fixes it. */
+  async getAppConfigDirStatus(): Promise<AppConfigDirStatus> {
+    return await invoke("get_app_config_dir_status");
   },
 
   async applyClaudePluginConfig(options: {

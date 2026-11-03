@@ -23,6 +23,8 @@ interface Endpoint {
   body?: unknown;
   /** When set, resolve with `data[pick]` instead of the whole payload. */
   pick?: string;
+  /** Maps the unwrapped `data` to what the desktop command resolves with (`pick` is skipped). */
+  transform?: (data: unknown) => unknown;
   /** `arrayBuffer`: success is a raw body (no `{ok,data}` envelope); errors stay JSON. */
   responseType?: "json" | "arrayBuffer";
 }
@@ -1036,6 +1038,26 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       };
     case "get_app_config_path":
       return { method: "GET", url: "/api/paths", pick: "configPath" };
+    // WEB-26: data directory. `override` is the stored value (applies after a restart); the
+    // full status adds `effective`, `source`, `envLocked` and the server's own `default`.
+    case "get_app_config_dir_status":
+      return { method: "GET", url: "/api/app-config-dir" };
+    case "get_app_config_dir_override":
+      return { method: "GET", url: "/api/app-config-dir", pick: "override" };
+    case "set_app_config_dir_override":
+      return {
+        method: "PUT",
+        url: "/api/app-config-dir",
+        body: { path: a.path ?? null },
+        // The route answers with the full status; the desktop command resolves with a bool.
+        transform: () => true,
+      };
+    // WEB-26: 202 + `{instanceId}`; 409 without a supervisor. `restart_server` keeps the id the
+    // console polls /api/health against, `restart_app` is the desktop-shaped bool.
+    case "restart_server":
+      return { method: "POST", url: "/api/restart" };
+    case "restart_app":
+      return { method: "POST", url: "/api/restart", transform: () => true };
     case "get_config_dir":
       return { method: "GET", url: "/api/paths", pick: "configDir" };
     case "get_tool_versions":
@@ -1594,6 +1616,7 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
     throw new Error(payload?.error ?? `Web API ошибка (${cmd})`);
   }
   const data = payload.data;
+  if (mapped.transform) return mapped.transform(data) as T;
   if (mapped.pick && data && typeof data === "object")
     return data[mapped.pick] as T;
   return data as T;

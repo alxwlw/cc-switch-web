@@ -5051,6 +5051,19 @@
   "web": {
     "unavailable": "Web modunda kullanılamaz",
     "serverPath": "Yollar elle girilir ve bu cihazı değil sunucu ana makinesini gösterir",
+    "dataDir": {
+      "current": "Şu anda kullanılan: {{path}} ({{source}})",
+      "source": {
+        "env": "CC_SWITCH_CONFIG_DIR ortam değişkeniyle belirlenmiş",
+        "override": "bu konsolda kaydedilen dizin",
+        "default": "varsayılan dizin"
+      },
+      "envLocked": "Dizin, sunucunun unit dosyasındaki CC_SWITCH_CONFIG_DIR ile sabitlenmiştir ve bu sayfadan değiştirilemez. Sunucu operatörü unit dosyasını düzenleyerek değiştirir (bkz. docs/deploy.md).",
+      "scope": "Yeni dizin kendi veritabanına ve günlüklerine sahip olur. Mevcut veritabanı kopyalanmaz. settings.json, live-state.json ve cihaz yedekleri sunucudaki ~/.cc-switch içinde kalır. Değişiklik sunucu yeniden başlatıldıktan sonra geçerli olur.",
+      "restartRequiredMessage": "Yeni veri dizini sunucu yeniden başlatıldıktan sonra geçerli olur. Bu konsol birkaç saniye erişilemez olur ve sunucu geri döndüğünde sayfa yeniden yüklenir. Şimdi yeniden başlatılsın mı?",
+      "restarting": "Yeniden başlatılıyor…",
+      "restartTimeout": "Sunucu bir dakika içinde geri dönmedi. Durumunu ana makinede kontrol edin (örneğin systemctl --user status cc-switch-web), ardından bu sayfayı yeniden yükleyin."
+    },
     "update": {
       "unsupported": "Web modunda güncellemeler kullanılamaz: sunucuyu operatör günceller"
     },

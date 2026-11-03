@@ -2,9 +2,11 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useDirectorySettings } from "@/hooks/useDirectorySettings";
 import type { SettingsFormState } from "@/hooks/useSettingsForm";
+import type { AppConfigDirStatus } from "@/lib/api/settings";
 import { setWeb } from "../helpers/web";
 
 const getAppConfigDirOverrideMock = vi.hoisted(() => vi.fn());
+const getAppConfigDirStatusMock = vi.hoisted(() => vi.fn());
 const getConfigDirMock = vi.hoisted(() => vi.fn());
 const selectConfigDirectoryMock = vi.hoisted(() => vi.fn());
 const setAppConfigDirOverrideMock = vi.hoisted(() => vi.fn());
@@ -17,6 +19,7 @@ const toastErrorMock = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api", () => ({
   settingsApi: {
     getAppConfigDirOverride: getAppConfigDirOverrideMock,
+    getAppConfigDirStatus: getAppConfigDirStatusMock,
     getConfigDir: getConfigDirMock,
     selectConfigDirectory: selectConfigDirectoryMock,
     setAppConfigDirOverride: setAppConfigDirOverrideMock,
@@ -426,19 +429,120 @@ describe("useDirectorySettings", () => {
     expect(result.current.resolvedDirs.openclaw).toBe("/server/openclaw");
   });
 
-  it("web: skips get_app_config_dir_override but still resolves directories via get_config_dir", async () => {
+  const serverStatus = (
+    overrides: Partial<AppConfigDirStatus> = {},
+  ): AppConfigDirStatus => ({
+    effective: "/srv/data/.cc-switch",
+    source: "default",
+    override: null,
+    envLocked: false,
+    default: "/srv/data/.cc-switch",
+    ...overrides,
+  });
+
+  it("web: reads the status from the server, not get_app_config_dir_override, and shows its stored override", async () => {
     setWeb(true);
     getAppConfigDirOverrideMock.mockRejectedValue(new Error("unsupported"));
+    getAppConfigDirStatusMock.mockResolvedValue(
+      serverStatus({
+        source: "override",
+        effective: "/old/dir",
+        override: "  /new/dir  ",
+      }),
+    );
 
     const { result } = renderHook(() =>
       useDirectorySettings({ settings: createSettings(), onUpdateSettings }),
     );
-
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(getAppConfigDirOverrideMock).not.toHaveBeenCalled();
+    // what applies after the restart is the stored value, the status line says what runs now
+    expect(result.current.appConfigDir).toBe("/new/dir");
+    expect(result.current.initialAppConfigDir).toBe("/new/dir");
+    expect(result.current.resolvedDirs.appConfig).toBe("/new/dir");
+    expect(result.current.appConfigDirStatus?.effective).toBe("/old/dir");
+    expect(result.current.resolvedDirs.claude).toBe("/remote/claude");
+  });
+
+  it("web: the default and the reset target are the server's, not the shim's homeDir", async () => {
+    setWeb(true);
+    homeDirMock.mockResolvedValue("/browser/home");
+    getAppConfigDirStatusMock.mockResolvedValue(
+      serverStatus({ default: "/srv/home/.cc-switch" }),
+    );
+
+    const { result } = renderHook(() =>
+      useDirectorySettings({ settings: createSettings(), onUpdateSettings }),
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.appConfigDir).toBeUndefined();
+    expect(result.current.resolvedDirs.appConfig).toBe("/srv/home/.cc-switch");
+
+    act(() => result.current.updateAppConfigDir("/somewhere/else"));
+    expect(result.current.resolvedDirs.appConfig).toBe("/somewhere/else");
+    await act(async () => {
+      await result.current.resetAppConfigDir();
+    });
+    expect(result.current.appConfigDir).toBeUndefined();
+    expect(result.current.resolvedDirs.appConfig).toBe("/srv/home/.cc-switch");
+  });
+
+  it("web: a directory fixed by the env shows the env value and has no override or draft", async () => {
+    setWeb(true);
+    getAppConfigDirStatusMock.mockResolvedValue(
+      serverStatus({
+        source: "env",
+        envLocked: true,
+        effective: "/srv/.cc-switch-web",
+        override: "/stale/file/value",
+      }),
+    );
+
+    const { result } = renderHook(() =>
+      useDirectorySettings({ settings: createSettings(), onUpdateSettings }),
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.appConfigDirStatus?.envLocked).toBe(true);
+    expect(result.current.appConfigDir).toBeUndefined();
+    expect(result.current.initialAppConfigDir).toBeUndefined();
+    expect(result.current.resolvedDirs.appConfig).toBe("/srv/.cc-switch-web");
+    // discarding drafts keeps showing the env value
+    act(() => result.current.resetAllDirectories());
+    expect(result.current.resolvedDirs.appConfig).toBe("/srv/.cc-switch-web");
+  });
+
+  it("web: a failed status read still resolves the other directories, shows no status and no client-side default", async () => {
+    setWeb(true);
+    getAppConfigDirStatusMock.mockRejectedValue(new Error("404"));
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    const { result } = renderHook(() =>
+      useDirectorySettings({ settings: createSettings(), onUpdateSettings }),
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(getAppConfigDirOverrideMock).not.toHaveBeenCalled();
+    expect(result.current.appConfigDirStatus).toBeNull();
+    expect(result.current.appConfigDir).toBeUndefined();
+    expect(result.current.resolvedDirs.appConfig).toBe("");
     expect(result.current.resolvedDirs.claude).toBe("/remote/claude");
     expect(result.current.resolvedDirs.codex).toBe("/remote/codex");
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it("desktop: never asks for the web status and keeps the client-side default", async () => {
+    getAppConfigDirOverrideMock.mockResolvedValue(null);
+    const { result } = renderHook(() =>
+      useDirectorySettings({ settings: createSettings(), onUpdateSettings }),
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(getAppConfigDirStatusMock).not.toHaveBeenCalled();
+    expect(result.current.appConfigDirStatus).toBeNull();
+    expect(result.current.resolvedDirs.appConfig).toBe("/home/mock/.cc-switch");
   });
 });

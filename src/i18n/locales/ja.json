@@ -5073,6 +5073,19 @@
   "web": {
     "unavailable": "Webモードでは利用できません",
     "serverPath": "パスは手入力で、この端末ではなくサーバーホスト上のパスを指します",
+    "dataDir": {
+      "current": "現在使用中: {{path}}（{{source}}）",
+      "source": {
+        "env": "環境変数 CC_SWITCH_CONFIG_DIR で指定",
+        "override": "このコンソールで保存したディレクトリ",
+        "default": "デフォルトのディレクトリ"
+      },
+      "envLocked": "ディレクトリはサーバーの unit の CC_SWITCH_CONFIG_DIR で固定されているため、このページからは変更できません。サーバーの管理者が unit を編集して変更します（docs/deploy.md を参照）。",
+      "scope": "新しいディレクトリには専用のデータベースとログが作られ、既存のデータベースはコピーされません。settings.json、live-state.json、デバイスのバックアップはサーバーの ~/.cc-switch に残ります。変更はサーバーの再起動後に反映されます。",
+      "restartRequiredMessage": "新しいデータディレクトリはサーバーの再起動後に反映されます。コンソールは数秒間使えなくなり、サーバーが戻ると自動で再読み込みされます。今すぐ再起動しますか？",
+      "restarting": "再起動中…",
+      "restartTimeout": "サーバーが 1 分以内に戻りませんでした。ホストで状態を確認し（例: systemctl --user status cc-switch-web）、このページを再読み込みしてください。"
+    },
     "update": {
       "unsupported": "Webモードではアップデートを利用できません。サーバーの更新は運用者が行います"
     },

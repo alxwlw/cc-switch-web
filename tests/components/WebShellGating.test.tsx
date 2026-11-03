@@ -298,7 +298,7 @@ describe("SettingsPage · WEB-00", () => {
     expect(screen.getByText("routing-section")).toBeInTheDocument();
   });
 
-  it("web: data shows backups, import/export, cloud sync and the log block; location stays hidden", async () => {
+  it("web: data shows the data directory, backups, import/export, cloud sync and the log block", async () => {
     setWeb(true);
     renderPage("data");
     expect(screen.getByText("log-config-panel")).toBeInTheDocument();
@@ -306,7 +306,7 @@ describe("SettingsPage · WEB-00", () => {
     expect(
       screen.getByText("settings.advanced.backup.title"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("settings.data.location")).toBeNull();
+    expect(screen.getByText("settings.data.location")).toBeInTheDocument();
     expect(screen.getByText("import-export-section")).toBeInTheDocument();
     expect(screen.getByText("webdav-section")).toBeInTheDocument();
     expect(
@@ -427,7 +427,7 @@ describe("SettingsPage · WEB-00", () => {
     );
   });
 
-  it("web: appConfig keeps manual paths, disables Browse, shows Claude toggles and Codex block, says paths are on the server", async () => {
+  it("web: appConfig keeps manual paths, hides Browse, shows Claude toggles and Codex block, says paths are on the server", async () => {
     setWeb(true);
     renderPage("appConfig");
 
@@ -442,11 +442,10 @@ describe("SettingsPage · WEB-00", () => {
     expect(screen.getByText("codex-auth-settings")).toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent("web.serverPath");
 
-    const browse = screen.getAllByRole("button", {
-      name: "settings.browseDirectory",
-    });
-    expect(browse.length).toBeGreaterThan(0);
-    for (const button of browse) expect(button).toBeDisabled();
+    // pick_directory is a native dialog on the server host: the button is gone, not disabled
+    expect(
+      screen.queryAllByRole("button", { name: "settings.browseDirectory" }),
+    ).toHaveLength(0);
 
     // ручной ввод пути работает
     const input = screen.getByDisplayValue("/home/srv/.claude");

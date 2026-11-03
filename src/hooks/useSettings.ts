@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { providersApi, settingsApi } from "@/lib/api";
+import type { AppConfigDirStatus } from "@/lib/api/settings";
 import { isWeb } from "@/lib/api/adapter";
 import { syncCurrentProvidersLiveSafe } from "@/utils/postChangeSync";
 import {
@@ -31,6 +32,8 @@ export interface UseSettingsResult {
   appConfigDir?: string;
   /** 已保存的 CC Switch 数据目录（没覆盖时为空），用来判断有没有改动没保存 */
   initialAppConfigDir?: string;
+  /** Web: the server's data directory status; `envLocked` means it cannot be changed here */
+  appConfigDirStatus?: AppConfigDirStatus | null;
   resolvedDirs: ResolvedDirectories;
   requiresRestart: boolean;
   updateSettings: (updates: Partial<SettingsFormState>) => void;
@@ -100,6 +103,7 @@ export function useSettings(): UseSettingsResult {
     resolvedDirs,
     isLoading: isDirectoryLoading,
     initialAppConfigDir,
+    appConfigDirStatus,
     commitAppConfigDir,
     updateDirectory,
     updateAppConfigDir,
@@ -364,6 +368,12 @@ export function useSettings(): UseSettingsResult {
         const sanitizedPiDir = sanitizeDir(mergedSettings.piConfigDir);
         const sanitizedOmpDir = sanitizeDir(mergedSettings.ompConfigDir);
         const previousAppDir = initialAppConfigDir;
+        // Web: a directory fixed by CC_SWITCH_CONFIG_DIR answers every PUT with 409, so no save
+        // may send one. The server also validates the path on each PUT, so only a changed
+        // directory is sent (a stale stored value must not fail unrelated saves).
+        const appDirLocked = appConfigDirStatus?.envLocked === true;
+        const webAppDirChanged =
+          isWeb && !appDirLocked && sanitizedAppDir !== previousAppDir;
         const previousClaudeDir = sanitizeDir(data?.claudeConfigDir);
         const previousCodexDir = sanitizeDir(data?.codexConfigDir);
         const previousGeminiDir = sanitizeDir(data?.geminiConfigDir);
@@ -397,10 +407,15 @@ export function useSettings(): UseSettingsResult {
           "settings",
         ])?.enableClaudePluginIntegration;
 
+        // Web: the server refuses a bad directory (400 with the reason). It goes first, so a
+        // refusal leaves every other setting unsaved too: the user sees the server's text in
+        // the "save failed" toast and nothing was half applied. Desktop keeps its order.
+        if (webAppDirChanged) {
+          await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
+        }
+
         await saveMutation.mutateAsync(payload);
 
-        // WEB-00: set_app_config_dir_override не поддержан; без пропуска save падает уже после
-        // успешного save_settings (fake failure) — снимет WEB-26
         if (!isWeb) {
           await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
         }
@@ -509,9 +524,8 @@ export function useSettings(): UseSettingsResult {
           await invalidatePiDirectoryCaches(queryClient, "omp");
         }
 
-        // WEB-00: data dir в web не меняется (override не поддержан), restart-prompt недостижим — снимет WEB-26
         const appDirChanged =
-          !isWeb && sanitizedAppDir !== (previousAppDir ?? undefined);
+          !appDirLocked && sanitizedAppDir !== (previousAppDir ?? undefined);
         setRequiresRestart(appDirChanged);
 
         if (!options?.silent) {
@@ -537,6 +551,7 @@ export function useSettings(): UseSettingsResult {
     },
     [
       appConfigDir,
+      appConfigDirStatus,
       commitAppConfigDir,
       data,
       initialAppConfigDir,
@@ -561,6 +576,7 @@ export function useSettings(): UseSettingsResult {
     isPortable,
     appConfigDir,
     initialAppConfigDir,
+    appConfigDirStatus,
     resolvedDirs,
     requiresRestart,
     updateSettings,

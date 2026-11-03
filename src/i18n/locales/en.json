@@ -5073,6 +5073,19 @@
   "web": {
     "unavailable": "Unavailable in web mode",
     "serverPath": "Paths are entered manually and refer to the server host, not this device",
+    "dataDir": {
+      "current": "In use now: {{path}} ({{source}})",
+      "source": {
+        "env": "set by the CC_SWITCH_CONFIG_DIR environment variable",
+        "override": "the directory saved in this console",
+        "default": "the default directory"
+      },
+      "envLocked": "The directory is fixed by CC_SWITCH_CONFIG_DIR in the server's unit, so it cannot be changed from this page. The server operator changes it by editing the unit (see docs/deploy.md).",
+      "scope": "A new directory gets its own database and logs. The existing database is not copied. settings.json, live-state.json and device backups stay in ~/.cc-switch on the server. The change applies after the server restarts.",
+      "restartRequiredMessage": "The new data directory applies after the server restarts. This console is unavailable for a few seconds and reloads when the server is back. Restart now?",
+      "restarting": "Restarting…",
+      "restartTimeout": "The server did not come back within a minute. Check its status on the host (for example systemctl --user status cc-switch-web), then reload this page."
+    },
     "update": {
       "unsupported": "Updates are unavailable in web mode: the server operator updates the app"
     },
