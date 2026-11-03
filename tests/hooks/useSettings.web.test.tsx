@@ -290,6 +290,8 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
     expect(setAppConfigDirOverrideMock).not.toHaveBeenCalled();
     expect(saveResult).toEqual({ requiresRestart: false });
+    // the page reads the lock from useSettings
+    expect(result.current.appConfigDirStatus).toEqual({ envLocked: true });
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
@@ -353,6 +355,11 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     });
     expect(saveResult).toEqual({ requiresRestart: true });
     expect(setAppConfigDirOverrideMock).toHaveBeenCalledWith("/override/app");
+    // once, after save_settings: the web pre-save call is web only
+    expect(setAppConfigDirOverrideMock).toHaveBeenCalledTimes(1);
+    expect(
+      setAppConfigDirOverrideMock.mock.invocationCallOrder[0],
+    ).toBeGreaterThan(mutateAsyncMock.mock.invocationCallOrder[0]);
     expect(setAutoLaunchMock).toHaveBeenCalledWith(true);
     expect(applyClaudeOnboardingSkipMock).toHaveBeenCalledTimes(1);
     expect(applyClaudePluginConfigMock).toHaveBeenCalledWith({

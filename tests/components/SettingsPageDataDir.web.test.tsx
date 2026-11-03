@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "@/components/settings/SettingsPage";
+import { DirectoryInput } from "@/components/settings/DirectorySettings";
 import { RESTART_POLL_INTERVAL_MS } from "@/hooks/useServerRestart";
 import type { AppConfigDirStatus } from "@/lib/api/settings";
 import { createTestQueryClient } from "../utils/testQueryClient";
@@ -217,6 +218,28 @@ describe("SettingsPage data directory · WEB-26", () => {
     expect(screen.queryByTestId("app-config-dir-current")).toBeNull();
   });
 
+  it("a read-only DirectoryInput has neither Browse nor reset, on desktop too", () => {
+    setWeb(false);
+    render(
+      <DirectoryInput
+        label=""
+        value="/fixed"
+        resolvedValue="/fixed"
+        readOnly
+        onChange={vi.fn()}
+        onBrowse={vi.fn()}
+        onReset={vi.fn()}
+      />,
+    );
+    expect(screen.getByDisplayValue("/fixed")).toHaveAttribute("readonly");
+    expect(
+      screen.queryByRole("button", { name: "settings.browseDirectory" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "settings.resetDefault" }),
+    ).toBeNull();
+  });
+
   it("offers save only for a changed directory", () => {
     page.appConfigDir = "/srv/elsewhere";
     renderPage();
@@ -308,6 +331,21 @@ describe("SettingsPage data directory · WEB-26", () => {
       expect(reloadMock).toHaveBeenCalledTimes(1);
       expect(page.acknowledgeRestart).toHaveBeenCalled();
       expect(calls("/api/restart")).toHaveLength(1);
+    });
+
+    it("Escape closes the dialog when no restart is running", async () => {
+      renderPage();
+      await tick(0);
+      expect(
+        screen.getByText("web.dataDir.restartRequiredMessage"),
+      ).toBeVisible();
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      await tick(0);
+      expect(
+        screen.queryByText("web.dataDir.restartRequiredMessage"),
+      ).toBeNull();
+      expect(page.acknowledgeRestart).toHaveBeenCalledTimes(1);
+      expect(calls("/api/restart")).toHaveLength(0);
     });
 
     it("409 shows the server's text and closes the dialog without a reload", async () => {

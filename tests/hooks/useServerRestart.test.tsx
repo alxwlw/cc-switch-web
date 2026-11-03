@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -107,6 +108,8 @@ describe("useServerRestart (WEB-26)", () => {
     expect(reloadMock).toHaveBeenCalledTimes(1);
     expect(toastErrorMock).not.toHaveBeenCalled();
     expect(result.current.restarting).toBe(false);
+    // no timer of the flow outlives it (the 60 s deadline, the poll, the probe limit)
+    expect(vi.getTimerCount()).toBe(0);
     // the poll is over: no probe after the reload
     const probes = calls("/api/health").length;
     await tick(5 * RESTART_POLL_INTERVAL_MS);
@@ -145,6 +148,7 @@ describe("useServerRestart (WEB-26)", () => {
     expect(toastErrorMock.mock.calls[0][0]).toBe("web.dataDir.restartTimeout");
     expect(reloadMock).not.toHaveBeenCalled();
     expect(result.current.restarting).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
     const probes = calls("/api/health").length;
     await tick(5 * RESTART_POLL_INTERVAL_MS);
     expect(calls("/api/health")).toHaveLength(probes);
@@ -231,5 +235,72 @@ describe("useServerRestart (WEB-26)", () => {
     expect(calls("/api/health")).toHaveLength(probes);
     expect(reloadMock).not.toHaveBeenCalled();
     expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+  it("leaving the page aborts the probe in flight and leaves no timer", async () => {
+    let probeSignal: AbortSignal | undefined;
+    fetchSpy.mockImplementation(
+      (url: string, init: { signal?: AbortSignal }) => {
+        if (url === "/api/restart") return Promise.resolve(restartResponse());
+        probeSignal = init.signal;
+        return new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        });
+      },
+    );
+    const { unmount, done } = await start();
+    await tick(RESTART_POLL_INTERVAL_MS);
+    expect(probeSignal?.aborted).toBe(false);
+    unmount();
+    await done;
+    expect(probeSignal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("leaving the page while the POST is in flight starts no poll", async () => {
+    let answer!: (r: unknown) => void;
+    fetchSpy.mockImplementation((url: string) =>
+      url === "/api/restart"
+        ? new Promise((resolve) => {
+            answer = resolve;
+          })
+        : Promise.resolve(health()),
+    );
+    const { unmount, done } = await start();
+    unmount();
+    await act(async () => {
+      answer(restartResponse());
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await done;
+    await tick(3 * RESTART_POLL_INTERVAL_MS);
+    expect(calls("/api/health")).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(reloadMock).not.toHaveBeenCalled();
+  });
+
+  it("survives the double effect of StrictMode (dev builds)", async () => {
+    const hook = renderHook(() => useServerRestart(), { wrapper: StrictMode });
+    let done!: Promise<boolean>;
+    await act(async () => {
+      done = hook.result.current.restart();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    health = () => json(200, { status: "ok", instanceId: NEW });
+    await tick(RESTART_POLL_INTERVAL_MS);
+    await done;
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["a non-Error rejection", { message: "inner" }],
+    ["an empty message", ""],
+  ])("falls back to the generic text on %s", async (_name, error) => {
+    restartResponse = () => json(500, { ok: false, error });
+    const { done } = await start();
+    await done;
+    expect(toastErrorMock).toHaveBeenCalledWith("settings.restartFailed");
+    expect(calls("/api/health")).toHaveLength(0);
   });
 });
