@@ -13,7 +13,7 @@ import { usageKeys } from "./usage";
  *   provider-switched        App.tsx: ["providers", app] (+ pi caches)
  *   universal-provider-synced App.tsx: ["providers"]
  *   profile-applied          App.tsx: profiles, mcp, skills, proxy, claude-desktop
- *   webdav-/s3-sync-status-updated App.tsx: ["settings"] (+ toast)
+ *   webdav-/s3-sync-status-updated useSyncStatusEvents (hooks): ["settings"] (+ toast)
  *   usage-cache-updated      useUsageCacheBridge: setQueryData
  *   deeplink-pending         DeepLinkImportDialog (no config query exists)
  *

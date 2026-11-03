@@ -59,6 +59,49 @@ fn first_run_creates_db_and_seeds_defaults() {
     ));
 }
 
+/// WEB-11: the auto-sync workers start after every post-DB step, as on the
+/// desktop (`lib.rs`). Started earlier, the bootstrap's own writes to the
+/// config tables (seeds, imports) would fire an upload on each server start.
+/// `report.steps` is in execution order, so the position of the step is the
+/// position of the start.
+#[test]
+fn auto_sync_workers_start_after_every_post_db_step() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    ensure_test_home();
+
+    let boot = run_headless_bootstrap().expect("bootstrap on empty HOME");
+
+    let names: Vec<&str> = boot.report.steps.iter().map(|s| s.name).collect();
+    assert_eq!(
+        names.iter().filter(|n| **n == "auto_sync_workers").count(),
+        1,
+        "{names:?}"
+    );
+    assert_eq!(names.last(), Some(&"auto_sync_workers"), "{names:?}");
+    for post_db in ["recover_on_startup", "skill_repos", "official_providers"] {
+        assert!(names.contains(&post_db), "{post_db} missing in {names:?}");
+    }
+    assert_eq!(
+        boot.report.step("auto_sync_workers"),
+        Some(&StepOutcome::Done),
+        "{:?}",
+        boot.report
+    );
+
+    // A second bootstrap in the same process (the workers are process-wide
+    // `OnceLock`s) reports the step again and still does not fail.
+    drop(boot);
+    let again = run_headless_bootstrap().expect("second bootstrap");
+    assert_eq!(
+        again.report.step("auto_sync_workers"),
+        Some(&StepOutcome::Done),
+        "{:?}",
+        again.report
+    );
+    assert!(again.report.failures().is_empty(), "{:?}", again.report);
+}
+
 #[test]
 fn legacy_config_retry_keeps_the_decision_taken_before_the_first_attempt() {
     use cc_switch_lib::bootstrap::{load_legacy_config, needs_legacy_migration, BootstrapPaths};

@@ -97,6 +97,12 @@ fn default_web_dist() -> PathBuf {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // The auto-sync workers (and the other `tauri::async_runtime` users in the
+    // library) must live on this runtime. The call has to be the very first
+    // thing in `main`: it panics once anything has touched the global runtime,
+    // and `tests/server_runtime_bootstrap.rs` pins this order.
+    tauri::async_runtime::set(tokio::runtime::Handle::current());
+
     cc_switch_lib::server_log::init();
 
     let port: u16 = env::var("PORT")

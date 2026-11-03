@@ -39,6 +39,7 @@ Scope: `src-tauri/src/web_api.rs` (10 роутов), `src-tauri/tests/web_api_sy
 
 ## Notes for next phase
 
+- **Закрыта 2026-11-03**: PR #34 merged `b3cc75d2` → main; live на `cc-switch-web.service` с 09:11; DX-69 In Progress (этап 1 из 2, хук при merge перевёл в Done, возвращена в In Progress: auto-sync — фаза 34).
 - **Статус до merge (2026-11-03)**: ветка `web-parity/web-11-sync-manual` (worktree `.worktrees/web-11-sync-manual`), PR → main (URL — в отчёте T4 и комментарии DX-69); DX-69 остаётся In Progress («этап 1 из 2», Plane — контроллер). Чекбоксы Т1–Т4 закрыты, Notes заполнены. Merge делает владелец.
   - Коммиты T4 поверх `052de3dc` (код T1–T3): `5689fb51` (раскладка формы на телефоне) и `864b3473` (confirm скачивания называет сервер); fix round 1 по ревью T4: `158240d0` (тесты закрепляют раскладку от `sm`), `69efae54` (текст предупреждения без «not on this computer»), затем правка этих Notes. Rust после `052de3dc` не менялся (`git diff 052de3dc..864b3473` — только `src/`, локали, `tests/`), поэтому cargo-гейты и проверка S3 относятся к `052de3dc`; фронтовые гейты после фиксов — к содержимому `864b3473` (прогнаны до коммита на тех же файлах).
   - Гейты на `052de3dc` (по одному, логи в scratchpad):

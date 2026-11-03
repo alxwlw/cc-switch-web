@@ -1,9 +1,10 @@
-//! In-memory WebDAV server on loopback for the stub-backed sync tests (`web_api_sync.rs`).
-//! Pulled in with `#[path]` by that test binary alone, so other binaries do not compile it.
+//! In-memory WebDAV server on loopback for the stub-backed sync tests (`web_api_sync.rs`,
+//! `web_api_sync_auto.rs`). Pulled in with `#[path]` by those test binaries alone, so other
+//! binaries do not compile it. The dead-code allow is on the `mod` of `web_api_sync_auto.rs`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicU16, AtomicUsize, Ordering},
     Arc, Mutex,
 };
 use std::time::Duration;
@@ -35,6 +36,8 @@ struct StubState {
     transfer_delay: Duration,
     in_flight: AtomicUsize,
     max_in_flight: AtomicUsize,
+    /// Status every PUT answers with instead of storing the body; 0 = behave normally.
+    put_status: AtomicU16,
 }
 
 struct InFlight<'a>(&'a StubState);
@@ -47,6 +50,10 @@ impl Drop for InFlight<'_> {
 
 /// Path-style S3 bucket URL of `s3_settings()` against a custom endpoint: `HEAD /bucket/`.
 pub const S3_BUCKET_PATH: &str = "/bucket/";
+
+/// Where the objects of that bucket live: S3 has no collections, so a PUT under it needs no
+/// parent (a WebDAV PUT without one is 409).
+const S3_OBJECT_PREFIX: &str = S3_BUCKET_PATH;
 
 /// The moshi-hook probes loopback listeners with `GET /` about every 16 s: that request is
 /// answered 404 and never recorded. Everything else is, and the assertions filter by method
@@ -105,7 +112,13 @@ async fn stub_handler(State(st): State<Arc<StubState>>, req: Request<Body>) -> R
             st.collections.lock().unwrap().insert(key);
             reply(StatusCode::CREATED).body(Body::empty())
         }
-        "PUT" if !parent_exists(&key) => reply(StatusCode::CONFLICT).body(Body::empty()),
+        "PUT" if st.put_status.load(Ordering::SeqCst) != 0 => {
+            let status = st.put_status.load(Ordering::SeqCst);
+            reply(StatusCode::from_u16(status).unwrap()).body(Body::empty())
+        }
+        "PUT" if !parent_exists(&key) && !key.starts_with(S3_OBJECT_PREFIX) => {
+            reply(StatusCode::CONFLICT).body(Body::empty())
+        }
         "PUT" => {
             st.files.lock().unwrap().insert(path, bytes.to_vec());
             reply(StatusCode::CREATED).body(Body::empty())
@@ -146,6 +159,7 @@ impl DavStub {
             transfer_delay,
             in_flight: AtomicUsize::new(0),
             max_in_flight: AtomicUsize::new(0),
+            put_status: AtomicU16::new(0),
         });
         let app = axum::Router::new()
             .fallback(stub_handler)
@@ -201,6 +215,15 @@ impl DavStub {
 
     pub fn file(&self, path: &str) -> Option<Vec<u8>> {
         self.state.files.lock().unwrap().get(path).cloned()
+    }
+
+    /// Every PUT from now on answers `status` (and stores nothing); `None` restores normal
+    /// behaviour. The request is still recorded.
+    #[allow(dead_code)] // used by `web_api_sync_auto.rs` only
+    pub fn fail_puts_with(&self, status: Option<u16>) {
+        self.state
+            .put_status
+            .store(status.unwrap_or(0), Ordering::SeqCst);
     }
 
     pub fn forget_requests(&self) {

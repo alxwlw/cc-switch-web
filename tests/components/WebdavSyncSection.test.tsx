@@ -1,11 +1,15 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import "@testing-library/jest-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 
 import { WebdavSyncSection } from "@/components/settings/WebdavSyncSection";
-import type { S3SyncSettings, WebDavSyncSettings } from "@/types";
 import { setWeb } from "../helpers/web";
+import {
+  baseConfig,
+  renderSection,
+  s3Config,
+} from "../helpers/webdavSyncSection";
 
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -90,44 +94,6 @@ const { settingsApiMock } = vi.hoisted(() => ({
 vi.mock("@/lib/api", () => ({
   settingsApi: settingsApiMock,
 }));
-
-const baseConfig: WebDavSyncSettings = {
-  enabled: true,
-  baseUrl: "https://dav.example.com/dav/",
-  username: "alice",
-  password: "secret",
-  remoteRoot: "cc-switch-sync",
-  profile: "default",
-  autoSync: false,
-  status: {},
-};
-
-const s3Config: S3SyncSettings = {
-  enabled: true,
-  autoSync: true,
-  region: "eu-west-1",
-  bucket: "my-bucket",
-  accessKeyId: "AKIAEXAMPLE",
-  secretAccessKey: "s3-secret",
-  remoteRoot: "cc-switch-sync",
-  profile: "default",
-  status: {},
-};
-
-function renderSection(config?: WebDavSyncSettings, s3?: S3SyncSettings) {
-  const client = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  });
-  const view = render(
-    <QueryClientProvider client={client}>
-      <WebdavSyncSection config={config} s3Config={s3} />
-    </QueryClientProvider>,
-  );
-  return { ...view, client };
-}
 
 describe("WebdavSyncSection", () => {
   beforeEach(() => {
@@ -585,130 +551,6 @@ describe("WebdavSyncSection", () => {
       expect(toastErrorMock).toHaveBeenCalledWith(
         "settings.webdavSync.downloadFailed",
       );
-    });
-  });
-
-  describe("auto-sync switch until the web auto-sync phase (WEB-11)", () => {
-    const webdavSwitch = () =>
-      screen.getByRole("switch", { name: "settings.webdavSync.autoSync" });
-    const s3Switch = () =>
-      screen.getByRole("switch", { name: "settings.s3Sync.autoSync" });
-
-    it("web, WebDAV: switch is disabled with the caption, server-host note shown", () => {
-      setWeb(true);
-      renderSection({ ...baseConfig, autoSync: false });
-
-      expect(webdavSwitch()).toBeDisabled();
-      expect(screen.getAllByText("web.syncAutoLater")).toHaveLength(1);
-      expect(screen.getByText("web.syncHost")).toBeInTheDocument();
-    });
-
-    it("desktop, WebDAV: switch is enabled, no web captions", () => {
-      renderSection({ ...baseConfig, autoSync: false });
-
-      expect(webdavSwitch()).toBeEnabled();
-      expect(screen.queryByText("web.syncAutoLater")).toBeNull();
-      expect(screen.queryByText("web.syncHost")).toBeNull();
-    });
-
-    it("web, WebDAV: a stored autoSync:true is shown and a save sends it back unchanged", async () => {
-      setWeb(true);
-      renderSection({ ...baseConfig, autoSync: true });
-
-      expect(webdavSwitch()).toHaveAttribute("aria-checked", "true");
-      expect(webdavSwitch()).toBeDisabled();
-      // A click on a disabled switch must not open the confirmation or flip the value.
-      fireEvent.click(webdavSwitch());
-      expect(
-        screen.queryByRole("button", { name: "confirm.autoSync.confirm" }),
-      ).toBeNull();
-      expect(webdavSwitch()).toHaveAttribute("aria-checked", "true");
-
-      fireEvent.click(
-        screen.getByRole("button", { name: "settings.webdavSync.save" }),
-      );
-      await waitFor(() => {
-        expect(settingsApiMock.webdavSyncSaveSettings).toHaveBeenCalledWith(
-          expect.objectContaining({ autoSync: true }),
-          false,
-        );
-      });
-    });
-
-    it("desktop, WebDAV: a stored autoSync:true can be switched off and saved", async () => {
-      renderSection({ ...baseConfig, autoSync: true });
-
-      fireEvent.click(webdavSwitch());
-      expect(webdavSwitch()).toHaveAttribute("aria-checked", "false");
-      fireEvent.click(
-        screen.getByRole("button", { name: "settings.webdavSync.save" }),
-      );
-      await waitFor(() => {
-        expect(settingsApiMock.webdavSyncSaveSettings).toHaveBeenCalledWith(
-          expect.objectContaining({ autoSync: false }),
-          false,
-        );
-      });
-    });
-
-    it("web, S3: switch is disabled with the caption and a stored autoSync:true is saved unchanged", async () => {
-      setWeb(true);
-      renderSection(baseConfig, s3Config);
-
-      expect(s3Switch()).toBeDisabled();
-      expect(s3Switch()).toHaveAttribute("aria-checked", "true");
-      expect(screen.getAllByText("web.syncAutoLater")).toHaveLength(1);
-      fireEvent.click(s3Switch());
-      expect(s3Switch()).toHaveAttribute("aria-checked", "true");
-
-      fireEvent.click(
-        screen.getByRole("button", { name: "settings.s3Sync.save" }),
-      );
-      await waitFor(() => {
-        expect(settingsApiMock.s3SyncSaveSettings).toHaveBeenCalledWith(
-          expect.objectContaining({ bucket: "my-bucket", autoSync: true }),
-          false,
-        );
-      });
-    });
-
-    it("desktop, WebDAV: switch is locked while a save is running", async () => {
-      settingsApiMock.webdavSyncSaveSettings.mockReturnValue(
-        new Promise(() => {}),
-      );
-      renderSection(baseConfig);
-
-      fireEvent.click(
-        screen.getByRole("button", { name: "settings.webdavSync.save" }),
-      );
-      await waitFor(() => expect(webdavSwitch()).toBeDisabled());
-    });
-
-    it("desktop, S3: switch is locked while a save is running", async () => {
-      settingsApiMock.s3SyncSaveSettings.mockReturnValue(new Promise(() => {}));
-      renderSection(baseConfig, s3Config);
-
-      fireEvent.click(
-        screen.getByRole("button", { name: "settings.s3Sync.save" }),
-      );
-      await waitFor(() => expect(s3Switch()).toBeDisabled());
-    });
-
-    it("desktop, S3: switch is enabled, no caption, and toggling it off is saved", async () => {
-      renderSection(baseConfig, s3Config);
-
-      expect(s3Switch()).toBeEnabled();
-      expect(screen.queryByText("web.syncAutoLater")).toBeNull();
-      fireEvent.click(s3Switch());
-      fireEvent.click(
-        screen.getByRole("button", { name: "settings.s3Sync.save" }),
-      );
-      await waitFor(() => {
-        expect(settingsApiMock.s3SyncSaveSettings).toHaveBeenCalledWith(
-          expect.objectContaining({ autoSync: false }),
-          false,
-        );
-      });
     });
   });
 

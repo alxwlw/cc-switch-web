@@ -5057,7 +5057,6 @@
     "proxyCaption": "Proxy sunucuda çalışır ve sunucudaki CLI'ları yeniden yapılandırır; sizin makinenizdeki CLI'lara dokunmaz.",
     "desktopRouteHost": "Claude Desktop, sunucudaki proxy'ye bağlantı adresi ve bağlantı noktası üzerinden bağlanır. Claude Desktop başka bir makinede çalışıyorsa, Ayarlar → Yerel yönlendirme bölümünde bağlantı adresini (client host) o makinenin erişebildiği bir ana bilgisayara ayarlayın.",
     "syncHost": "Bağlantı testleri, yüklemeler ve indirmeler bu tarayıcıda değil, cc-switch-web sunucusunda çalışır. Sunucunun WebDAV veya S3 uç noktasına erişebilmesi gerekir; indirme sunucudaki verilerin yerini alır.",
-    "syncAutoLater": "Web modunda otomatik eşitleme bir sonraki sürümde gelecek.",
     "syncDownloadWarning": "Bu işlem cc-switch-web sunucusundaki tüm verilerin ve beceri yapılandırmalarının üzerine yazar",
     "proxyListenWarning": "{{address}} üzerinde dinlemek, proxy'yi kimlik doğrulaması olmadan tüm ağdan (tailnet dahil) erişilebilir yapar. 127.0.0.1 tercih edin.",
     "liveUnknownTitle": "Sağlayıcılar (Web modunda canlı yapılandırma durumu bilinmiyor)",

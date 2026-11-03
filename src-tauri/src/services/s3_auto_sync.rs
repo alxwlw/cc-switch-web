@@ -91,28 +91,34 @@ fn emit_auto_sync_status_updated(events: &EventHub, status: &str, error: Option<
     events.emit("s3-sync-status-updated", payload);
 }
 
+/// The settings are read inside the sync lock, not before waiting for it: a
+/// worker queued behind another sync must see what that sync (or the user)
+/// saved meanwhile. Reading first let it upload after auto-sync was switched
+/// off, and write back a status snapshot that erased a parallel success.
 async fn run_auto_sync_upload(
     db: &crate::database::Database,
     events: &EventHub,
 ) -> Result<(), AppError> {
-    let mut settings = settings::get_s3_sync_settings();
-    if !should_run_auto_sync(settings.as_ref()) {
-        return Ok(());
-    }
-
-    let mut sync_settings = match settings.take() {
-        Some(value) => value,
-        None => return Ok(()),
-    };
-
-    let result = s3_sync::run_with_sync_lock(s3_sync::upload(db, &mut sync_settings)).await;
+    let result = s3_sync::run_with_sync_lock(async {
+        let Some(mut sync_settings) =
+            settings::get_s3_sync_settings().filter(|s| should_run_auto_sync(Some(s)))
+        else {
+            return Ok(false);
+        };
+        let uploaded = s3_sync::upload(db, &mut sync_settings).await;
+        if let Err(err) = &uploaded {
+            persist_auto_sync_error(&mut sync_settings, err);
+        }
+        uploaded.map(|_| true)
+    })
+    .await;
     match result {
-        Ok(_) => {
+        Ok(true) => {
             emit_auto_sync_status_updated(events, "success", None);
             Ok(())
         }
+        Ok(false) => Ok(()),
         Err(err) => {
-            persist_auto_sync_error(&mut sync_settings, &err);
             emit_auto_sync_status_updated(events, "error", Some(&err.to_string()));
             Err(err)
         }
@@ -258,6 +264,17 @@ mod tests {
             "services layer should not depend on commands layer"
         );
     }
+
+    #[test]
+    fn worker_does_not_depend_on_the_tauri_app_handle() {
+        // Built from parts so this test's own text is not what it finds.
+        let needle = ["Ap", "pHandle"].join("");
+        let source = include_str!("s3_auto_sync.rs");
+        assert!(
+            !source.contains(&needle),
+            "the worker talks to the event hub, not to `{needle}`"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -282,5 +299,138 @@ mod status_event_tests {
             second.payload,
             serde_json::json!({ "source": "auto", "status": "error", "error": "boom" })
         );
+    }
+}
+
+#[cfg(test)]
+mod lock_order_tests {
+    use super::*;
+    use crate::database::Database;
+    use crate::services::sync_protocol::sync_mutex;
+    use crate::settings::{
+        get_s3_sync_settings, set_s3_sync_settings, update_s3_sync_status, WebDavSyncStatus,
+    };
+    use serial_test::serial;
+    use tokio::sync::broadcast::error::TryRecvError;
+
+    /// Points the settings file at a temp home and puts `initial` into the
+    /// store; clears the store and restores the env on drop.
+    struct IsolatedSettings {
+        previous_test_home: Option<std::ffi::OsString>,
+        _dir: tempfile::TempDir,
+    }
+
+    impl IsolatedSettings {
+        fn new(initial: S3SyncSettings) -> Self {
+            let dir = tempfile::tempdir().expect("temp home");
+            let previous_test_home = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
+            set_s3_sync_settings(Some(initial)).expect("seed settings");
+            Self {
+                previous_test_home,
+                _dir: dir,
+            }
+        }
+    }
+
+    impl Drop for IsolatedSettings {
+        fn drop(&mut self) {
+            let _ = set_s3_sync_settings(None);
+            match &self.previous_test_home {
+                Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
+
+    /// Enabled with auto-sync on and one credential field set (an all-blank
+    /// block is dropped by the store), with the bucket missing: an upload that reaches
+    /// `upload()` fails at `validate()` without touching the network, so the
+    /// error path is observable and deterministic.
+    fn auto_sync_settings() -> S3SyncSettings {
+        S3SyncSettings {
+            enabled: true,
+            auto_sync: true,
+            region: "us-east-1".to_string(),
+            ..S3SyncSettings::default()
+        }
+    }
+
+    /// Starts `run_auto_sync_upload` while the global sync lock is held by the
+    /// caller and lets it run until it parks on that lock (current-thread
+    /// runtime: one yield is enough).
+    async fn spawn_upload_behind_the_lock(
+        db: Arc<Database>,
+        hub: EventHub,
+    ) -> tokio::task::JoinHandle<Result<(), AppError>> {
+        let worker = tokio::spawn(async move { run_auto_sync_upload(&db, &hub).await });
+        tokio::task::yield_now().await;
+        assert!(!worker.is_finished(), "the worker must wait for the lock");
+        worker
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn upload_queued_behind_the_lock_sees_auto_sync_switched_off_meanwhile() {
+        let _settings = IsolatedSettings::new(auto_sync_settings());
+        let db = Arc::new(Database::memory().expect("memory db"));
+        let hub = EventHub::new();
+        let mut events = hub.subscribe();
+
+        let lock = sync_mutex().lock().await;
+        let worker = spawn_upload_behind_the_lock(db, hub.clone()).await;
+        let mut off = get_s3_sync_settings().expect("seeded");
+        off.auto_sync = false;
+        set_s3_sync_settings(Some(off)).expect("switch auto-sync off");
+        drop(lock);
+
+        worker
+            .await
+            .expect("worker task")
+            .expect("a switched-off auto-sync is not an error");
+        assert!(
+            matches!(events.try_recv(), Err(TryRecvError::Empty)),
+            "no status event when nothing was uploaded"
+        );
+        let status = get_s3_sync_settings().expect("settings").status;
+        assert_eq!(status.last_error, None);
+        assert_eq!(status.last_error_source, None);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn failed_upload_keeps_the_status_a_parallel_sync_saved_while_it_waited() {
+        let _settings = IsolatedSettings::new(auto_sync_settings());
+        let db = Arc::new(Database::memory().expect("memory db"));
+        let hub = EventHub::new();
+        let mut events = hub.subscribe();
+
+        let lock = sync_mutex().lock().await;
+        let worker = spawn_upload_behind_the_lock(db, hub.clone()).await;
+        // A manual sync that held the lock before us finishes and records success.
+        update_s3_sync_status(WebDavSyncStatus {
+            last_sync_at: Some(1_234),
+            last_remote_etag: Some("etag-from-the-parallel-sync".to_string()),
+            ..WebDavSyncStatus::default()
+        })
+        .expect("record the parallel success");
+        drop(lock);
+
+        let err = worker
+            .await
+            .expect("worker task")
+            .expect_err("upload fails validation");
+        let status = get_s3_sync_settings().expect("settings").status;
+        assert_eq!(status.last_sync_at, Some(1_234));
+        assert_eq!(
+            status.last_remote_etag.as_deref(),
+            Some("etag-from-the-parallel-sync")
+        );
+        assert_eq!(status.last_error, Some(err.to_string()));
+        assert_eq!(status.last_error_source.as_deref(), Some("auto"));
+        let event = events.try_recv().expect("error event");
+        assert_eq!(event.name, "s3-sync-status-updated");
+        assert_eq!(event.payload["status"], "error");
+        assert_eq!(event.payload["source"], "auto");
     }
 }
