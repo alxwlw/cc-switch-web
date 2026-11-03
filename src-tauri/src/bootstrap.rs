@@ -839,6 +839,10 @@ pub fn start_auto_sync_workers(
 pub fn run_headless_bootstrap_with(
     codex_history: CodexHistory<'_>,
 ) -> Result<Bootstrapped, BootstrapError> {
+    // First step: every later path (`BootstrapPaths::resolve`, the DB, settings,
+    // OAuth dirs) goes through `get_app_config_dir()`, which reads this cache.
+    // Env `CC_SWITCH_CONFIG_DIR` still wins over it.
+    crate::app_store::load_headless_override();
     install_rustls_provider();
     let paths = BootstrapPaths::resolve();
 

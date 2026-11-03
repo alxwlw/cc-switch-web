@@ -1,5 +1,5 @@
-use serde_json::Value;
-use std::path::PathBuf;
+use serde_json::{Map, Value};
+use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 use tauri_plugin_store::StoreExt;
 
@@ -103,6 +103,124 @@ pub fn set_app_config_dir_to_store(
 
     refresh_app_config_dir_override(app);
     Ok(())
+}
+
+/// Headless（web 服务器）没有 Tauri Store：覆盖值放在同名文件 `app_paths.json` 里，
+/// 键名与桌面端一致（`app_config_dir_override`）。
+const HEADLESS_OVERRIDE_FILE: &str = "app_paths.json";
+
+/// Headless override 文件的路径：`<config_dir>/cc-switch-web/app_paths.json`。
+///
+/// 这个目录不能放在 `get_app_config_dir()` 下面（那正是被覆盖的东西）。
+/// `CC_SWITCH_TEST_HOME` 生效时落在 `<test_home>/.config/` 下：`dirs::config_dir()`
+/// 在 Linux 上读 `XDG_CONFIG_HOME`，测试若不短路就会写进开发者真实的配置目录。
+pub fn headless_override_file_path() -> PathBuf {
+    let base = match crate::config::test_home_override() {
+        Some(home) => home.join(".config"),
+        None => dirs::config_dir().unwrap_or_else(|| crate::config::get_home_dir().join(".config")),
+    };
+    base.join("cc-switch-web").join(HEADLESS_OVERRIDE_FILE)
+}
+
+/// 读 override 文件里存的值（`~` 已展开，不检查目录是否存在），与进程内缓存无关。
+///
+/// 文件不存在 → `None`；JSON 损坏、键类型不对 → warning 并 `None`，服务器照常启动。
+/// 这是“重启后会生效的值”，`GET /api/app-config-dir` 的 `override` 字段读它。
+pub fn read_headless_override_file() -> Option<PathBuf> {
+    let file = headless_override_file_path();
+    let raw = match std::fs::read_to_string(&file) {
+        Ok(raw) => raw,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => {
+            log::warn!("无法读取 {}: {e}，忽略 app_config_dir 覆盖", file.display());
+            return None;
+        }
+    };
+    let doc: Value = match serde_json::from_str(&raw) {
+        Ok(doc) => doc,
+        Err(e) => {
+            log::warn!(
+                "{} 不是合法 JSON: {e}，忽略 app_config_dir 覆盖",
+                file.display()
+            );
+            return None;
+        }
+    };
+    match doc.get(STORE_KEY_APP_CONFIG_DIR) {
+        Some(Value::String(path_str)) => {
+            let path_str = path_str.trim();
+            if path_str.is_empty() {
+                None
+            } else {
+                Some(resolve_path(path_str))
+            }
+        }
+        Some(_) => {
+            log::warn!(
+                "{} 中的 {STORE_KEY_APP_CONFIG_DIR} 类型不正确，应为字符串",
+                file.display()
+            );
+            None
+        }
+        None => None,
+    }
+}
+
+/// 启动时把 override 文件读进缓存（`get_app_config_dir()` 的第二档）。
+///
+/// 必须在任何 `get_app_config_dir()` 调用之前执行。只有这个函数（和桌面端的
+/// `refresh_app_config_dir_override`）写缓存：[`write_headless_override_file`] 不碰缓存，
+/// 所以运行中的进程在重启前一直用旧目录。目录不存在 → warning 并 `None`。
+pub fn load_headless_override() -> Option<PathBuf> {
+    let value = read_headless_override_file().filter(|path| {
+        let exists = path.exists();
+        if !exists {
+            log::warn!("override 文件中的 app_config_dir 不存在: {path:?}，将使用默认路径。");
+        }
+        exists
+    });
+    if let Some(path) = &value {
+        log::info!("使用 override 文件中的 app_config_dir: {path:?}");
+    }
+    update_cached_override(value.clone());
+    value
+}
+
+/// 原子写（临时文件 + rename）headless override 文件；`None` 删掉键，保留其他键。
+///
+/// 只写文件，不更新缓存：新目录在下次启动时才生效。
+pub fn write_headless_override_file(path: Option<&Path>) -> Result<(), AppError> {
+    let file = headless_override_file_path();
+    let mut doc: Map<String, Value> = std::fs::read_to_string(&file)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+        .and_then(|value| match value {
+            Value::Object(map) => Some(map),
+            _ => None,
+        })
+        .unwrap_or_default();
+
+    match path {
+        Some(p) => {
+            let text = p
+                .to_str()
+                .ok_or_else(|| AppError::Message(format!("路径不是合法 UTF-8: {}", p.display())))?;
+            doc.insert(
+                STORE_KEY_APP_CONFIG_DIR.to_string(),
+                Value::String(text.to_string()),
+            );
+        }
+        None => {
+            if !file.exists() {
+                return Ok(());
+            }
+            doc.remove(STORE_KEY_APP_CONFIG_DIR);
+        }
+    }
+
+    let bytes = serde_json::to_vec_pretty(&Value::Object(doc))
+        .map_err(|e| AppError::Message(format!("序列化 {HEADLESS_OVERRIDE_FILE} 失败: {e}")))?;
+    crate::config::atomic_write(&file, &bytes)
 }
 
 /// 解析路径，支持 ~ 开头的相对路径
