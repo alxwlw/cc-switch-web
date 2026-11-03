@@ -283,6 +283,17 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     expect(toastErrorMock.mock.calls[0][0]).not.toContain("保存设置失败");
   });
 
+  it("web: a refusal that is not an Error object still reaches the toast as text", async () => {
+    setWeb(true);
+    setAppConfigDirOverrideMock.mockRejectedValue("plain refusal");
+    const { result } = renderHook(() => useSettings());
+    await act(async () => {
+      await result.current.saveSettings(undefined, { silent: true });
+    });
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+    expect(toastErrorMock.mock.calls[0][0]).toContain("plain refusal");
+  });
+
   it("web: a failed save_settings sends no data dir, leaves the override alone and keeps the save-failed toast", async () => {
     setWeb(true);
     mutateAsyncMock.mockRejectedValue(new Error("save_settings 500"));
