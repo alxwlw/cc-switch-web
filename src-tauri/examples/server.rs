@@ -11,18 +11,30 @@
 //! - `RUST_LOG` — env_logger filter; default `trace` (dependency noise capped),
 //!   effective level = saved `LogConfig`. Logs go to stderr and `<config>/logs/cc-switch-web.log`.
 //! - `TRUSTED_TAILNET=1` — required for any non-loopback bind.
+//! - `CC_SWITCH_WEB_SUPERVISED=1` — tells the server that something restarts it when it
+//!   exits (Docker with a restart policy, a unit not run by systemd). systemd sets
+//!   `INVOCATION_ID` itself. With either, `POST /api/restart` shuts the server down the way
+//!   SIGTERM does and exits with code 75; without, it answers 409.
 //! - `WEB_DIST` — directory with the `pnpm build:web` output (`dist-web`).
 //!   Defaults to `dist-web` next to the repo root, resolved from the
 //!   executable location. When missing, only `/api/*` is served.
 
-use std::{env, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{
+    env,
+    net::SocketAddr,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use cc_switch_lib::{
     bootstrap::{
         run_headless_bootstrap_with, run_headless_startup, shutdown_cleanup, CodexHistory,
     },
     store::AppState,
-    web_api,
+    web_api::{self, ShutdownHandle},
 };
 use std::time::Duration;
 
@@ -34,8 +46,18 @@ const SHUTDOWN_CLEANUP_TIMEOUT: Duration = Duration::from_secs(8);
 /// until systemd's SIGKILL.
 const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Resolves on Ctrl-C or (unix) SIGTERM, which is what `systemctl stop` sends.
-async fn shutdown_signal() {
+/// What ended the server's life.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ShutdownCause {
+    /// Ctrl-C or SIGTERM: a plain stop, exit code 0.
+    Signal,
+    /// `POST /api/restart`: exit with [`web_api::RESTART_EXIT_CODE`] so the supervisor
+    /// starts the server again.
+    Restart,
+}
+
+/// Resolves on Ctrl-C, (unix) SIGTERM — what `systemctl stop` sends — or a restart request.
+async fn shutdown_signal(restart: &ShutdownHandle) -> ShutdownCause {
     let ctrl_c = async {
         if tokio::signal::ctrl_c().await.is_err() {
             std::future::pending::<()>().await;
@@ -53,8 +75,18 @@ async fn shutdown_signal() {
     #[cfg(not(unix))]
     let term = std::future::pending::<()>();
     tokio::select! {
-        _ = ctrl_c => log::info!("Ctrl-C received, shutting down"),
-        _ = term => log::info!("SIGTERM received, shutting down"),
+        _ = ctrl_c => {
+            log::info!("Ctrl-C received, shutting down");
+            ShutdownCause::Signal
+        }
+        _ = term => {
+            log::info!("SIGTERM received, shutting down");
+            ShutdownCause::Signal
+        }
+        _ = restart.requested() => {
+            log::info!("Restart requested, shutting down");
+            ShutdownCause::Restart
+        }
     }
 }
 
@@ -141,6 +173,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     })
     .await?;
     let mut cleanup_state: Option<Arc<AppState>> = None;
+    let restart = ShutdownHandle::new();
     let api = match bootstrapped {
         Ok(boot) => {
             for (step, err) in boot.report.failures() {
@@ -155,7 +188,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // recovery for takeover) before the first request is served.
             run_headless_startup(&state).await;
             cleanup_state = Some(state.clone());
-            web_api::router(state)
+            web_api::router_with_shutdown(state, Some(restart.clone()))
         }
         Err(e) => {
             // init_status already holds the error; keep serving so the console
@@ -204,8 +237,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Starting cc-switch-web server on http://{addr} (tailscale-only, no in-app auth)");
     let listener = tokio::net::TcpListener::bind(addr).await?;
     let (drain_tx, drain_rx) = tokio::sync::oneshot::channel::<()>();
+    // Set before the drain timer can fire, read after `select!` by both of its branches.
+    let exit_for_restart = Arc::new(AtomicBool::new(false));
+    let exit_for_restart_flag = exit_for_restart.clone();
     let serve = axum::serve(listener, app.into_make_service()).with_graceful_shutdown(async move {
-        shutdown_signal().await;
+        if shutdown_signal(&restart).await == ShutdownCause::Restart {
+            exit_for_restart_flag.store(true, Ordering::SeqCst);
+        }
         // Cleanup runs even if the drain below hangs on a long-lived stream.
         bounded_shutdown_cleanup(cleanup_state.as_deref()).await;
         let _ = drain_tx.send(());
@@ -222,6 +260,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Open connections did not drain in {} s, exiting anyway",
             SHUTDOWN_DRAIN_TIMEOUT.as_secs()
         ),
+    }
+    if exit_for_restart.load(Ordering::SeqCst) {
+        log::info!(
+            "Exiting with code {} for the supervisor to restart the server",
+            web_api::RESTART_EXIT_CODE
+        );
+        log::logger().flush();
+        std::process::exit(web_api::RESTART_EXIT_CODE);
     }
     Ok(())
 }

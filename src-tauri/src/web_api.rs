@@ -9,7 +9,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use axum::{
-    extract::{DefaultBodyLimit, Path, Query, State},
+    extract::{DefaultBodyLimit, Extension, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     routing::{any, delete, get, patch, post, put},
     Json, Router,
@@ -32,6 +32,12 @@ use crate::services::usage_stats::LogFilters;
 use crate::services::{McpService, OmoService};
 use crate::session_manager;
 use crate::store::AppState;
+
+mod restart;
+use restart::RestartControl;
+pub use restart::{
+    instance_id, is_supervised, ShutdownHandle, RESTART_EXIT_CODE, RESTART_SIGNAL_DELAY,
+};
 
 pub type SharedState = Arc<AppState>;
 
@@ -83,9 +89,17 @@ macro_rules! app_type {
     };
 }
 
+/// The full API without a way to restart the process: `POST /api/restart` answers 409.
 pub fn router(state: SharedState) -> Router {
+    router_with_shutdown(state, None)
+}
+
+/// [`router`] plus the handle `POST /api/restart` raises (WEB-26). The server example hands
+/// the same handle to its shutdown, which then exits with [`RESTART_EXIT_CODE`].
+pub fn router_with_shutdown(state: SharedState, shutdown: Option<ShutdownHandle>) -> Router {
     Router::new()
         .route("/api/health", get(health))
+        .route("/api/restart", post(restart_server))
         .route("/api/events", get(events_stream))
         .route("/favicon.ico", get(favicon))
         .route("/api/capabilities", get(capabilities))
@@ -608,6 +622,7 @@ pub fn router(state: SharedState) -> Router {
             get(failover_auto).put(failover_set_auto),
         )
         .with_state(state)
+        .layer(Extension(RestartControl(shutdown)))
 }
 
 /// Router served when startup bootstrap failed and there is no `AppState`
@@ -681,8 +696,34 @@ async fn events_stream(
     Sse::new(stream).keep_alive(KeepAlive::new().interval(SSE_KEEP_ALIVE).text("keep-alive"))
 }
 
+/// No `ok` envelope: the probes of `docs/deploy.md` and the console's restart poll read
+/// `status` and `instanceId` at the top level.
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok" }))
+    Json(json!({ "status": "ok", "instanceId": instance_id() }))
+}
+
+const RESTART_NEEDS_SUPERVISOR: &str = "перезапустите сервер вручную: он запущен без supervisor (systemd, Docker с restart policy), который поднял бы его снова";
+
+/// `POST /api/restart` (WEB-26). Checks in this order: the JSON content type (a CORS-simple
+/// POST without a body from another site must not restart the server), a supervisor and a
+/// handle to signal (409), then 202 and the signal shortly after. The process leaves through
+/// the server's shutdown with [`RESTART_EXIT_CODE`], so the supervisor starts it again.
+/// A request that arrives while the shutdown is already under way gets the same 202.
+async fn restart_server(
+    Extension(RestartControl(shutdown)): Extension<RestartControl>,
+    headers: HeaderMap,
+) -> ApiResult {
+    if let Err(rejection) = require_json_content_type(&headers) {
+        return rejection;
+    }
+    let Some(shutdown) = shutdown.filter(|_| is_supervised()) else {
+        return conflict(RESTART_NEEDS_SUPERVISOR);
+    };
+    shutdown.request_after_response();
+    (
+        StatusCode::ACCEPTED,
+        Json(json!({ "ok": true, "data": { "instanceId": instance_id() } })),
+    )
 }
 
 async fn capabilities() -> Json<Value> {
