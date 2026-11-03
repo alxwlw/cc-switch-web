@@ -138,10 +138,22 @@ describe.each(BACKENDS)(
 
     it("a null payload refreshes the cache and does not throw", async () => {
       const { es, handled } = await mount();
+      // The listener calls the handler as `void handler(...)`: a throw inside it is not an
+      // error of `emit` but an unhandled rejection, which only this listener turns into a
+      // failure of the test itself.
+      const rejections: unknown[] = [];
+      const onRejection = (reason: unknown) => rejections.push(reason);
+      process.on("unhandledRejection", onRejection);
+      try {
+        es.emit(event, "null");
+        await handled();
+        // The rejection of a settled promise is reported on the next turn of the loop.
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      } finally {
+        process.off("unhandledRejection", onRejection);
+      }
 
-      es.emit(event, "null");
-      await handled();
-
+      expect(rejections).toEqual([]);
       expect(toastErrorMock).not.toHaveBeenCalled();
     });
   },

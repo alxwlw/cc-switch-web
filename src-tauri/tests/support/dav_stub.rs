@@ -1,7 +1,6 @@
 //! In-memory WebDAV server on loopback for the stub-backed sync tests (`web_api_sync.rs`,
 //! `web_api_sync_auto.rs`). Pulled in with `#[path]` by those test binaries alone, so other
-//! binaries do not compile it. Each binary uses a part of it.
-#![allow(dead_code)]
+//! binaries do not compile it. The dead-code allow is on the `mod` of `web_api_sync_auto.rs`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{
@@ -54,7 +53,7 @@ pub const S3_BUCKET_PATH: &str = "/bucket/";
 
 /// Where the objects of that bucket live: S3 has no collections, so a PUT under it needs no
 /// parent (a WebDAV PUT without one is 409).
-const S3_OBJECT_PREFIX: &str = "/bucket/";
+const S3_OBJECT_PREFIX: &str = S3_BUCKET_PATH;
 
 /// The moshi-hook probes loopback listeners with `GET /` about every 16 s: that request is
 /// answered 404 and never recorded. Everything else is, and the assertions filter by method
@@ -220,6 +219,7 @@ impl DavStub {
 
     /// Every PUT from now on answers `status` (and stores nothing); `None` restores normal
     /// behaviour. The request is still recorded.
+    #[allow(dead_code)] // used by `web_api_sync_auto.rs` only
     pub fn fail_puts_with(&self, status: Option<u16>) {
         self.state
             .put_status

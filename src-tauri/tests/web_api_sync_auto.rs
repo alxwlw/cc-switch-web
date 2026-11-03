@@ -18,9 +18,13 @@
 //! never recorded, and the assertions look at PUT only.
 #![cfg(not(target_os = "windows"))]
 
+// Each of the two binaries that pull the support files in uses a part of them: the allow
+// sits on this side, so `web_api_sync.rs` is still checked for dead code.
+#[allow(dead_code)]
 #[path = "support/dav_stub.rs"]
 mod dav_stub;
 mod support;
+#[allow(dead_code)]
 #[path = "support/sync_fixtures.rs"]
 mod sync_fixtures;
 
@@ -265,7 +269,10 @@ async fn a_failing_remote_reports_error_and_the_settings_show_it_until_the_next_
         assert_eq!(payload["source"], json!("auto"), "{name}");
         assert_eq!(payload["status"], json!("error"), "{name}");
         let error = payload["error"].as_str().expect("error text");
-        assert!(error.contains("500"), "{name}: {error}");
+        assert!(
+            error.contains("500 Internal Server Error"),
+            "{name}: {error}"
+        );
         assert!(
             !puts(&stub, root).is_empty(),
             "{name}: the upload was tried"
