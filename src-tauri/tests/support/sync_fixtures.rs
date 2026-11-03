@@ -1,5 +1,7 @@
-//! Helpers of the sync tests (`web_api_sync.rs`): settings bodies, request helpers, the provider
-//! fixture and the stub-backed assertions' shared pieces.
+//! Helpers of the sync tests (`web_api_sync.rs`, `web_api_sync_auto.rs`): settings bodies,
+//! request helpers, the provider fixture and the stub-backed assertions' shared pieces. Each
+//! binary uses a part of it.
+#![allow(dead_code)]
 
 use std::sync::Arc;
 
