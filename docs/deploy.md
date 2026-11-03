@@ -106,18 +106,30 @@ the container is env-locked. To use the override, drop that variable from your i
 `docker run` and mount `/home/ccswitch/.config/cc-switch-web` as a volume, or the file is
 lost with the container. The image does not set `CC_SWITCH_WEB_SUPERVISED`.
 
-**Bad override.** If the directory the file points to holds a database from a newer
-version, or is otherwise unusable, the server starts in init-error mode: the console
-shows the error screen and `/api/health` answers `503`. The way out is to delete
-`~/.config/cc-switch-web/app_paths.json` (or fix the file) and restart the unit; the
-server returns to `~/.cc-switch` / the env value.
+**Bad override.** The PUT refuses a directory whose database is newer than this build,
+but a hand-edited file, or a database upgraded by another app after the PUT, can still
+point at one. The server then starts in init-error mode: the console shows the error
+screen ("Database version is too new" with the file path) and `/api/health` answers
+`503`. The way out is to delete `~/.config/cc-switch-web/app_paths.json` (or fix the
+file) and restart the unit by hand (`systemctl --user restart cc-switch-web`; the
+console has no restart button in this mode); the server returns to `~/.cc-switch`.
 
 ## Restart from the console
 
 `POST /api/restart` (the "Restart" button) stops the server through the same path as
-`SIGTERM` (the live files of the CLI clients are restored first, bounded to 8 s; then open
-connections get up to 5 s to drain) and exits with code **75** (`EX_TEMPFAIL`). The process cannot start
-itself again, so it only restarts when something supervises it:
+`SIGTERM` and exits with code **75** (`EX_TEMPFAIL`):
+
+1. Every client in takeover mode (Claude Code, Codex, …) is pointed back at its direct
+   provider config and the local proxy stops (bounded to 8 s). The mode itself is kept in
+   `~/.cc-switch/live-state.json`, so the new process attaches the clients to the proxy
+   again at start. The restored file has the same content as before the takeover but is
+   not guaranteed to be byte-identical: a key may move (seen: `ANTHROPIC_MODEL` of
+   `~/.claude/settings.json` ends up last).
+2. Open connections get up to 5 s to drain. A console tab keeps its event stream open, so
+   with a browser open the process exits about 5 s after the click, then `RestartSec=3`
+   of the unit: expect about 8-10 s.
+
+The process cannot start itself again, so it only restarts when something supervises it:
 
 - systemd: detected through `INVOCATION_ID`, which systemd sets for every unit. The unit
   has `Restart=always`; code 75 would also restart under `Restart=on-failure`, which
