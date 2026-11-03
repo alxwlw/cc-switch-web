@@ -53,7 +53,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 
 Эпик cloud autosync:
 - [x] [Phase 33 — WEB-11 / DX-69 (этап 1): WebDAV/S3 ручной режим](2026-10-25-web-parity-m5/phase-33.md) — PR #34, merged `b3cc75d2` → main 2026-11-03, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-69 In Progress (этап 1 из 2).
-- [ ] [Phase 34 — WEB-11 / DX-69 (этап 2): автоматическая синхронизация в headless scheduler](2026-10-25-web-parity-m5/phase-34.md)
+- [x] [Phase 34 — WEB-11 / DX-69 (этап 2): автоматическая синхронизация в headless scheduler](2026-10-25-web-parity-m5/phase-34.md) — PR #35, merged `2054627e` → main 2026-11-03, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-69 Done (этап 2 из 2).
 
 Эпик lifecycle и обновления:
 - [ ] [Phase 35 — WEB-26 / DX-84: смена data directory и restart](2026-10-25-web-parity-m5/phase-35.md)
