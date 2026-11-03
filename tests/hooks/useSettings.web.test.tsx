@@ -251,6 +251,8 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     // WEB-09: sync_current_providers_live is served, the web save runs it like desktop.
     expect(syncCurrentProvidersLiveMock).toHaveBeenCalledTimes(1);
     expect(toastErrorMock).not.toHaveBeenCalled();
+    // silent: no success toast
+    expect(toastSuccessMock).not.toHaveBeenCalled();
   });
 
   it("web: a refused data dir (400) keeps the other settings, names only the directory in the toast and opens no restart", async () => {
