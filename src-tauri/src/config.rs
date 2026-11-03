@@ -309,6 +309,15 @@ pub fn get_claude_settings_path() -> PathBuf {
     settings
 }
 
+/// `CC_SWITCH_CONFIG_DIR` trimmed; `None` when unset, empty or blank. The resolver and
+/// `GET /api/app-config-dir` (`envLocked`, `source`) both read it here, so they cannot disagree
+/// on what counts as "set".
+pub fn config_dir_env_override() -> Option<PathBuf> {
+    let custom = std::env::var("CC_SWITCH_CONFIG_DIR").ok()?;
+    let trimmed = custom.trim();
+    (!trimmed.is_empty()).then(|| PathBuf::from(trimmed))
+}
+
 /// 获取应用配置目录路径 (default ~/.cc-switch)
 ///
 /// Fork override: if `CC_SWITCH_CONFIG_DIR` is set to a non-empty path it
@@ -316,11 +325,8 @@ pub fn get_claude_settings_path() -> PathBuf {
 /// unavailable in headless web-server mode). Set it to isolate this fork's
 /// database/settings/skills, e.g. `CC_SWITCH_CONFIG_DIR=~/.cc-switch-web`.
 pub fn get_app_config_dir() -> PathBuf {
-    if let Ok(custom) = std::env::var("CC_SWITCH_CONFIG_DIR") {
-        let trimmed = custom.trim();
-        if !trimmed.is_empty() {
-            return PathBuf::from(trimmed);
-        }
+    if let Some(custom) = config_dir_env_override() {
+        return custom;
     }
     if let Some(custom) = crate::app_store::get_app_config_dir_override() {
         return custom;

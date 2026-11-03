@@ -265,6 +265,10 @@ pub fn router(state: SharedState) -> Router {
         // settings & environment
         .route("/api/settings", get(get_settings).put(save_settings))
         .route("/api/paths", get(paths))
+        .route(
+            "/api/app-config-dir",
+            get(get_app_config_dir_status).put(set_app_config_dir),
+        )
         .route("/api/env/tools", post(tool_versions))
         .route("/api/tools/lifecycle", post(tool_lifecycle))
         .route("/api/tools/lifecycle/:job_id", get(tool_lifecycle_status))
@@ -2905,6 +2909,140 @@ async fn paths() -> ApiResult {
         "configDir": crate::config::get_app_config_dir().to_string_lossy(),
         "configPath": crate::config::get_app_config_path().to_string_lossy(),
     }))
+}
+
+// ---------- data directory (WEB-26) ----------
+
+/// Verbatim to the frontend: the plan fixes this text.
+const APP_CONFIG_DIR_ENV_LOCKED: &str = "каталог задан CC_SWITCH_CONFIG_DIR в unit сервера";
+
+fn conflict(msg: impl ToString) -> ApiResult {
+    (
+        StatusCode::CONFLICT,
+        Json(json!({ "ok": false, "error": msg.to_string() })),
+    )
+}
+
+/// `effective` and `source` describe this process (env / startup cache / default);
+/// `override` is the file's value, i.e. what applies after the next restart. `default` is the
+/// server's `~/.cc-switch` (the web shim's `homeDir` is only good for display).
+fn app_config_dir_status() -> Value {
+    let env_locked = crate::config::config_dir_env_override().is_some();
+    let source = if env_locked {
+        "env"
+    } else if crate::app_store::get_app_config_dir_override().is_some() {
+        "override"
+    } else {
+        "default"
+    };
+    json!({
+        "effective": crate::config::get_app_config_dir().to_string_lossy(),
+        "source": source,
+        "override": crate::app_store::read_headless_override_file()
+            .map(|p| p.to_string_lossy().into_owned()),
+        "envLocked": env_locked,
+        "default": crate::config::get_home_dir().join(".cc-switch").to_string_lossy(),
+    })
+}
+
+async fn get_app_config_dir_status() -> ApiResult {
+    match tokio::task::spawn_blocking(app_config_dir_status).await {
+        Ok(status) => ok(status),
+        Err(e) => fail(format!("app config dir task failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct SetAppConfigDirReq {
+    /// `null` removes the override; the key itself is required, so a body that lost it
+    /// cannot silently reset the override.
+    #[serde(deserialize_with = "Option::deserialize")]
+    path: Option<String>,
+}
+
+/// Turns the typed text into an absolute directory that is usable now: `~` expanded through
+/// `get_home_dir` (`~user` is refused), created when missing, writable, and holding no
+/// database newer than this build. The error text goes to the UI as is.
+fn validate_app_config_dir(raw: &str) -> Result<std::path::PathBuf, String> {
+    use std::path::PathBuf;
+
+    let expanded = if raw == "~" {
+        crate::config::get_home_dir()
+    } else if let Some(rest) = raw.strip_prefix("~/").or_else(|| raw.strip_prefix("~\\")) {
+        crate::config::get_home_dir().join(rest)
+    } else if raw.starts_with('~') {
+        return Err(format!(
+            "путь «{raw}» не поддерживается: «~» раскрывается только в домашний каталог пользователя сервера (~ или ~/подкаталог)"
+        ));
+    } else {
+        PathBuf::from(raw)
+    };
+    if !expanded.is_absolute() {
+        return Err(format!(
+            "путь «{raw}» не абсолютный: укажите полный путь или начните с «~/»"
+        ));
+    }
+    // Drops `.` and a trailing separator; `..` stays for the OS to resolve.
+    let dir: PathBuf = expanded.components().collect();
+
+    match std::fs::metadata(&dir) {
+        Ok(meta) if meta.is_dir() => {}
+        Ok(_) => return Err(format!("{} — это файл, а не каталог", dir.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::create_dir_all(&dir)
+                .map_err(|e| format!("не удалось создать каталог {}: {e}", dir.display()))?;
+        }
+        Err(e) => return Err(format!("каталог {} недоступен: {e}", dir.display())),
+    }
+
+    // An unnamed temp file: nothing is left in the directory, not even after a crash.
+    tempfile::tempfile_in(&dir)
+        .map_err(|e| format!("в каталог {} нельзя записывать: {e}", dir.display()))?;
+
+    let db_path = dir.join("cc-switch.db");
+    match crate::database::Database::stored_user_version_exceeds_supported(&db_path) {
+        Ok(None) => {}
+        Ok(Some(version)) => {
+            return Err(format!(
+                "в каталоге {} лежит база данных версии {version}, а этот сервер поддерживает не новее {}: обновите cc-switch-web или выберите другой каталог",
+                dir.display(),
+                crate::database::SCHEMA_VERSION
+            ))
+        }
+        Err(e) => {
+            return Err(format!(
+                "{} не открывается как база данных SQLite: {e}",
+                db_path.display()
+            ))
+        }
+    }
+    Ok(dir)
+}
+
+/// Stores the override file only; `get_app_config_dir()` of the running process does not move
+/// until the restart.
+async fn set_app_config_dir(Json(body): Json<SetAppConfigDirReq>) -> ApiResult {
+    if crate::config::config_dir_env_override().is_some() {
+        return conflict(APP_CONFIG_DIR_ENV_LOCKED);
+    }
+    let result = tokio::task::spawn_blocking(move || -> Result<Value, ApiResult> {
+        let typed = body.path.as_deref().map(str::trim).unwrap_or("");
+        if typed.is_empty() {
+            crate::app_store::write_headless_override_file(None)
+                .map_err(|e| fail(e.to_string()))?;
+        } else {
+            let dir = validate_app_config_dir(typed).map_err(bad_request)?;
+            crate::app_store::write_headless_override_file(Some(&dir))
+                .map_err(|e| fail(e.to_string()))?;
+        }
+        Ok(app_config_dir_status())
+    })
+    .await;
+    match result {
+        Ok(Ok(status)) => ok(status),
+        Ok(Err(response)) => response,
+        Err(e) => fail(format!("app config dir task failed: {e}")),
+    }
 }
 
 #[derive(Deserialize)]
