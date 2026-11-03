@@ -52,7 +52,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 32 — WEB-19 / DX-77: Claude Desktop integration и official cards](2026-10-25-web-parity-m5/phase-32.md) — PR #33, merged `a3e77441` → main 2026-11-02, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-77 Done.
 
 Эпик cloud autosync:
-- [ ] [Phase 33 — WEB-11 / DX-69 (этап 1): WebDAV/S3 ручной режим](2026-10-25-web-parity-m5/phase-33.md)
+- [x] [Phase 33 — WEB-11 / DX-69 (этап 1): WebDAV/S3 ручной режим](2026-10-25-web-parity-m5/phase-33.md) — PR #34, merged `b3cc75d2` → main 2026-11-03, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-69 In Progress (этап 1 из 2).
 - [ ] [Phase 34 — WEB-11 / DX-69 (этап 2): автоматическая синхронизация в headless scheduler](2026-10-25-web-parity-m5/phase-34.md)
 
 Эпик lifecycle и обновления:
