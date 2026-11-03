@@ -54,7 +54,7 @@ Scope: `src-tauri/src/app_store.rs` (headless-бэкенд override), `src-tauri
 ### Task 5: документация, гейты, PR, Plane
 - [x] `docs/deploy.md`: env-locked режим (по умолчанию) и режим override (убрать `CC_SWITCH_CONFIG_DIR` из unit); почему exit 75.
 - [x] Полный набор гейтов + `cargo build --release --example server`; ручная проверка на agentbox: restart из UI поднимает сервис. Проверка сделана на сборке ветки во временном user-unit `cc-switch-web-p35-check` (порт 18799), а не на боевом `cc-switch-web`: в боевом ещё нет этого кода (см. «Уточнения контроллера», T5). Restart из UI на боевом сервисе — smoke после merge.
-- [ ] Ветка `web-parity/web-26-data-dir`, PR; DX-84 → In Review + ссылка. Закрыть чекбоксы, Notes (интерфейс restart нужен фазе 37).
+- [x] Ветка `web-parity/web-26-data-dir`, PR; DX-84 → In Review + ссылка. Закрыть чекбоксы, Notes (интерфейс restart нужен фазе 37).
 
 Риски для ревью:
 - Restart при активном takeover: live-конфиги CLI на сервере должны вернуться в исходное состояние до выхода (тест на ядро cleanup из фазы 27).
@@ -62,7 +62,7 @@ Scope: `src-tauri/src/app_store.rs` (headless-бэкенд override), `src-tauri
 
 ## Notes for next phase
 
-**Статус.** Ветка `web-parity/web-26-data-dir` (base `main`), запушена, до merge. PR и Plane (DX-84 → In Review) оставлены контроллеру: последний чекбокс Task 5 не отмечен. Отметка «Фаза 35» в индексе — первым коммитом ветки фазы 36.
+**Статус.** Ветка `web-parity/web-26-data-dir` (base `main`), PR #36, до merge; DX-84 In Review. Merge делает владелец. Отметка «Фаза 35» в индексе — первым коммитом ветки фазы 36.
 
 **Что сделано (file:line на HEAD ветки).**
 - T1 headless override: `app_store.rs:117` (`headless_override_file_path`: `<test_home>/.config/…` при `CC_SWITCH_TEST_HOME`, иначе `dirs::config_dir()/cc-switch-web/app_paths.json`), `:129` (`read_headless_override_file`), `:174` (`load_headless_override`, единственный писатель кэша), `:192` (`write_headless_override_file`, атомарно, кэш не трогает). Загрузка — первым шагом: `examples/server.rs:138-142` (до `server_log::init`, лог открывается уже в новом каталоге) и `bootstrap.rs:845` (до `BootstrapPaths::resolve()`). Порядок резолвера env > override > default не менялся (`config.rs:327`).
