@@ -864,8 +864,8 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "sync_current_providers_live":
       return { method: "POST", url: "/api/providers/sync-live" };
 
-    // ---------- WebDAV / S3 manual sync (WEB-11) ----------
-    // Runs on the server host. Auto-sync stays desktop-only until its own phase.
+    // ---------- WebDAV / S3 sync (WEB-11) ----------
+    // Runs on the server host; the auto-sync workers run there too and report over SSE.
     case "webdav_test_connection":
     case "s3_test_connection":
       return {

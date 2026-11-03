@@ -1116,13 +1116,8 @@ export function WebdavSyncSection({
                   checked={form.autoSync}
                   onCheckedChange={handleAutoSyncChange}
                   aria-label={t("settings.webdavSync.autoSync")}
-                  disabled={isLoading || isWeb}
+                  disabled={isLoading}
                 />
-                {isWeb && (
-                  <p className="mt-1 text-badge text-fg-2">
-                    {t("web.syncAutoLater")}
-                  </p>
-                )}
               </div>
             </div>
           </div>
@@ -1401,13 +1396,8 @@ export function WebdavSyncSection({
                     markS3Dirty();
                   }}
                   aria-label={t("settings.s3Sync.autoSync")}
-                  disabled={isS3Loading || isWeb}
+                  disabled={isS3Loading}
                 />
-                {isWeb && (
-                  <p className="mt-1 text-badge text-fg-2">
-                    {t("web.syncAutoLater")}
-                  </p>
-                )}
               </div>
             </div>
 
