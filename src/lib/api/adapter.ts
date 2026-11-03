@@ -1537,6 +1537,10 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
     return null as T;
   }
   // Browser-side commands with no HTTP endpoint.
+  if (cmd === "is_portable_mode") {
+    // WEB-26: the server is never a portable build (no portable.ini next to an exe).
+    return false as T;
+  }
   if (cmd === "open_external") {
     return openExternalInBrowser(args.url) as T;
   }

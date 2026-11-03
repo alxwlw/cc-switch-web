@@ -22,6 +22,11 @@ describe("adapter invoke · desktop-only fire-and-forget (WEB-00)", () => {
     },
   );
 
+  it("is_portable_mode: false без fetch (сервер не portable)", async () => {
+    await expect(invoke("is_portable_mode")).resolves.toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("контроль: прочие неподдержанные команды по-прежнему кидают WebUnsupportedError", async () => {
     await expect(invoke("launch_hermes_dashboard")).rejects.toBeInstanceOf(
       WebUnsupportedError,
