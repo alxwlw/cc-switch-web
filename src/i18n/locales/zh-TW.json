@@ -5082,7 +5082,8 @@
         "default": "預設目錄"
       },
       "envLocked": "目錄由伺服器 unit 中的 CC_SWITCH_CONFIG_DIR 固定，無法在此頁面修改。需由伺服器維運人員修改 unit（見 docs/deploy.md）。",
-      "scope": "新目錄會有自己的資料庫和日誌，現有資料庫不會被複製。settings.json、live-state.json 和裝置備份仍保存在伺服器的 ~/.cc-switch 中。變更在伺服器重新啟動後生效。",
+      "scope": "新目錄會有自己的資料庫、日誌、技能、資料庫備份、模型價格和其他應用程式檔案，現有資料庫不會被複製。settings.json、live-state.json 和裝置備份仍保存在伺服器的 ~/.cc-switch 中。變更在伺服器重新啟動後生效。",
+      "applyFailed": "其他設定已儲存，但資料目錄沒有變更：{{error}}",
       "restartRequiredMessage": "新的資料目錄在伺服器重新啟動後生效。主控台會有幾秒鐘無法使用，伺服器恢復後自動重新整理。是否立即重新啟動？",
       "restarting": "正在重新啟動…",
       "restartTimeout": "伺服器在一分鐘內沒有恢復。請在伺服器主機上查看狀態（例如 systemctl --user status cc-switch-web），然後重新整理此頁面。"

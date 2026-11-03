@@ -5081,7 +5081,8 @@
         "default": "the default directory"
       },
       "envLocked": "The directory is fixed by CC_SWITCH_CONFIG_DIR in the server's unit, so it cannot be changed from this page. The server operator changes it by editing the unit (see docs/deploy.md).",
-      "scope": "A new directory gets its own database and logs. The existing database is not copied. settings.json, live-state.json and device backups stay in ~/.cc-switch on the server. The change applies after the server restarts.",
+      "scope": "A new directory gets its own database, logs, skills, database backups, model prices and the other app files. The existing database is not copied. settings.json, live-state.json and device backups stay in ~/.cc-switch on the server. The change applies after the server restarts.",
+      "applyFailed": "The other settings were saved, but the data directory was not changed: {{error}}",
       "restartRequiredMessage": "The new data directory applies after the server restarts. This console is unavailable for a few seconds and reloads when the server is back. Restart now?",
       "restarting": "Restarting…",
       "restartTimeout": "The server did not come back within a minute. Check its status on the host (for example systemctl --user status cc-switch-web), then reload this page."

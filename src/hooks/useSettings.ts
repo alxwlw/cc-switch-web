@@ -407,20 +407,35 @@ export function useSettings(): UseSettingsResult {
           "settings",
         ])?.enableClaudePluginIntegration;
 
-        // Web: the server refuses a bad directory (400 with the reason). It goes first, so a
-        // refusal leaves every other setting unsaved too: the user sees the server's text in
-        // the "save failed" toast and nothing was half applied. Desktop keeps its order.
-        if (webAppDirChanged) {
-          await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
-        }
-
         await saveMutation.mutateAsync(payload);
 
-        if (!isWeb) {
-          await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
+        // The data dir goes after save_settings on both targets, and nothing undoes it. Web: the
+        // server refuses a bad directory (400 with the reason), but the other settings are
+        // already stored, so the refusal is its own toast, the remaining steps still run, the
+        // draft stays dirty and no restart is offered. Desktop keeps its throw.
+        let appDirFailed = false;
+        if (!isWeb || webAppDirChanged) {
+          try {
+            await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
+          } catch (error) {
+            if (!isWeb) throw error;
+            appDirFailed = true;
+            console.error(
+              "[useSettings] Failed to save the data directory",
+              error,
+            );
+            toast.error(
+              t("web.dataDir.applyFailed", {
+                defaultValue: "其他设置已保存，但数据目录没有更改：{{error}}",
+                error: (error as Error)?.message ?? String(error),
+              }),
+            );
+          }
         }
-        // 基准值换成刚存的：设置页不卸载，下次比较和「需要重启」都只跟真正没保存的改动走
-        commitAppConfigDir(sanitizedAppDir);
+        if (!appDirFailed) {
+          // 基准值换成刚存的：设置页不卸载，下次比较和「需要重启」都只跟真正没保存的改动走
+          commitAppConfigDir(sanitizedAppDir);
+        }
 
         // 只在开机自启状态真正改变时调用系统 API
         // WEB-00: set_auto_launch не поддержан (автозапуск ОС — desktop-only, в web не обслуживается)
@@ -525,10 +540,12 @@ export function useSettings(): UseSettingsResult {
         }
 
         const appDirChanged =
-          !appDirLocked && sanitizedAppDir !== (previousAppDir ?? undefined);
+          !appDirLocked &&
+          !appDirFailed &&
+          sanitizedAppDir !== (previousAppDir ?? undefined);
         setRequiresRestart(appDirChanged);
 
-        if (!options?.silent) {
+        if (!options?.silent && !appDirFailed) {
           toast.success(
             t("notifications.settingsSaved", {
               defaultValue: "设置已保存",

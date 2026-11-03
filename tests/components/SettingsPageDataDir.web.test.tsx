@@ -218,6 +218,24 @@ describe("SettingsPage data directory · WEB-26", () => {
     expect(screen.queryByTestId("app-config-dir-current")).toBeNull();
   });
 
+  it("the desktop help tip on the data dir row exists on desktop only; web has its own notes", () => {
+    setWeb(false);
+    page.status = null;
+    const desktop = renderPage();
+    expect(
+      screen.getByRole("button", { name: "settings.appConfigDir" }),
+    ).toBeInTheDocument();
+    desktop.unmount();
+
+    setWeb(true);
+    page.status = status();
+    renderPage();
+    expect(
+      screen.queryByRole("button", { name: "settings.appConfigDir" }),
+    ).toBeNull();
+    expect(screen.getByTestId("app-config-dir-scope")).toBeInTheDocument();
+  });
+
   it("a read-only DirectoryInput has neither Browse nor reset, on desktop too", () => {
     setWeb(false);
     render(

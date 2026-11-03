@@ -217,7 +217,7 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     arrange();
   });
 
-  it("web: full save sends the changed data dir before save_settings, runs the served side effects and asks for a restart", async () => {
+  it("web: full save sends the changed data dir after save_settings, runs the served side effects and asks for a restart", async () => {
     setWeb(true);
     const { result } = renderHook(() => useSettings());
 
@@ -236,10 +236,10 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     expect(metadataMock.setRequiresRestart).toHaveBeenCalledWith(true);
     expect(setAppConfigDirOverrideMock).toHaveBeenCalledTimes(1);
     expect(setAppConfigDirOverrideMock).toHaveBeenCalledWith("/override/app");
-    // a refusal of the directory must leave the rest unsaved, so the PUT goes first
-    expect(
+    // same order as desktop: a failed save_settings must never leave a new override behind
+    expect(mutateAsyncMock.mock.invocationCallOrder[0]).toBeLessThan(
       setAppConfigDirOverrideMock.mock.invocationCallOrder[0],
-    ).toBeLessThan(mutateAsyncMock.mock.invocationCallOrder[0]);
+    );
     expect(directorySettingsMock.commitAppConfigDir).toHaveBeenCalledWith(
       "/override/app",
     );
@@ -253,24 +253,51 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
-  it("web: a refused data dir (400) shows the server's text, saves nothing else and opens no restart", async () => {
+  it("web: a refused data dir (400) keeps the other settings, names only the directory in the toast and opens no restart", async () => {
     setWeb(true);
     setAppConfigDirOverrideMock.mockRejectedValue(
       new Error("путь «x» не абсолютный"),
     );
     const { result } = renderHook(() => useSettings());
+    let saveResult: { requiresRestart: boolean } | null = null;
+    await act(async () => {
+      saveResult = await result.current.saveSettings(undefined, {
+        silent: false,
+      });
+    });
+    // the other settings were stored and their side effects ran
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+    expect(applyClaudeOnboardingSkipMock).toHaveBeenCalledTimes(1);
+    expect(applyClaudePluginConfigMock).toHaveBeenCalledTimes(1);
+    expect(syncCurrentProvidersLiveMock).toHaveBeenCalledTimes(1);
+    // the directory was refused: the draft stays dirty and no restart is offered
+    expect(setAppConfigDirOverrideMock).toHaveBeenCalledTimes(1);
+    expect(directorySettingsMock.commitAppConfigDir).not.toHaveBeenCalled();
+    expect(metadataMock.setRequiresRestart).toHaveBeenCalledWith(false);
+    expect(metadataMock.setRequiresRestart).not.toHaveBeenCalledWith(true);
+    expect(saveResult).toEqual({ requiresRestart: false });
+    // one toast: the server's text verbatim, no "saved" and no "save failed"
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+    expect(toastErrorMock.mock.calls[0][0]).toContain("путь «x» не абсолютный");
+    expect(toastErrorMock.mock.calls[0][0]).not.toContain("保存设置失败");
+  });
+
+  it("web: a failed save_settings sends no data dir, leaves the override alone and keeps the save-failed toast", async () => {
+    setWeb(true);
+    mutateAsyncMock.mockRejectedValue(new Error("save_settings 500"));
+    const { result } = renderHook(() => useSettings());
     await act(async () => {
       await expect(
         result.current.saveSettings(undefined, { silent: true }),
-      ).rejects.toThrow("путь «x» не абсолютный");
+      ).rejects.toThrow("save_settings 500");
     });
-    expect(mutateAsyncMock).not.toHaveBeenCalled();
+    expect(setAppConfigDirOverrideMock).not.toHaveBeenCalled();
     expect(directorySettingsMock.commitAppConfigDir).not.toHaveBeenCalled();
     expect(metadataMock.setRequiresRestart).not.toHaveBeenCalled();
-    expect(applyClaudeOnboardingSkipMock).not.toHaveBeenCalled();
-    expect(applyClaudePluginConfigMock).not.toHaveBeenCalled();
     expect(toastErrorMock).toHaveBeenCalledTimes(1);
-    expect(toastErrorMock.mock.calls[0][0]).toContain("путь «x» не абсолютный");
+    expect(toastErrorMock.mock.calls[0][0]).toContain("保存设置失败");
+    expect(toastErrorMock.mock.calls[0][0]).toContain("save_settings 500");
   });
 
   it("web: a directory fixed by the env is never sent, whatever the draft says", async () => {
@@ -355,7 +382,7 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     });
     expect(saveResult).toEqual({ requiresRestart: true });
     expect(setAppConfigDirOverrideMock).toHaveBeenCalledWith("/override/app");
-    // once, after save_settings: the web pre-save call is web only
+    // once, after save_settings
     expect(setAppConfigDirOverrideMock).toHaveBeenCalledTimes(1);
     expect(
       setAppConfigDirOverrideMock.mock.invocationCallOrder[0],
@@ -366,5 +393,18 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
       official: false,
     });
     expect(syncCurrentProvidersLiveMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("desktop: a refused data dir still fails the whole save with the generic toast", async () => {
+    setAppConfigDirOverrideMock.mockRejectedValue(new Error("desktop 400"));
+    const { result } = renderHook(() => useSettings());
+    await act(async () => {
+      await expect(
+        result.current.saveSettings(undefined, { silent: true }),
+      ).rejects.toThrow("desktop 400");
+    });
+    expect(directorySettingsMock.commitAppConfigDir).not.toHaveBeenCalled();
+    expect(toastErrorMock).toHaveBeenCalledTimes(1);
+    expect(toastErrorMock.mock.calls[0][0]).toContain("保存设置失败");
   });
 });
