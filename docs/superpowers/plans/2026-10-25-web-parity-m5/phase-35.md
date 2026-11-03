@@ -36,9 +36,9 @@ Scope: `src-tauri/src/app_store.rs` (headless-бэкенд override), `src-tauri
 - [x] Тест: без env и с файлом override → `get_app_config_dir()` указывает на override; с env → env.
 
 ### Task 2: роуты data dir
-- [ ] `GET /api/app-config-dir` → `{effective, source: "env"|"override"|"default", override: string|null, envLocked: bool}`.
-- [ ] `PUT /api/app-config-dir` (body `{path: string|null}`): при `envLocked` → 409 «каталог задан CC_SWITCH_CONFIG_DIR в unit сервера»; валидация пути — абсолютный или `~`, существует или создаётся, доступен на запись, если в нём есть `cc-switch.db` — её schema version не новее поддерживаемой (та же проверка, что в bootstrap фазы 7); иначе 400 с причиной. `null` удаляет override. Применяется только после restart.
-- [ ] `is_portable_mode` — в adapter локально `false` (сервер не portable), без роута.
+- [x] `GET /api/app-config-dir` → `{effective, source: "env"|"override"|"default", override: string|null, envLocked: bool}`.
+- [x] `PUT /api/app-config-dir` (body `{path: string|null}`): при `envLocked` → 409 «каталог задан CC_SWITCH_CONFIG_DIR в unit сервера»; валидация пути — абсолютный или `~`, существует или создаётся, доступен на запись, если в нём есть `cc-switch.db` — её schema version не новее поддерживаемой (та же проверка, что в bootstrap фазы 7); иначе 400 с причиной. `null` удаляет override. Применяется только после restart.
+- [x] `is_portable_mode` — в adapter локально `false` (сервер не portable), без роута.
 
 ### Task 3: restart под supervisor
 - [ ] `POST /api/restart`: supervisor определяется по `INVOCATION_ID` (systemd) или `CC_SWITCH_WEB_SUPERVISED=1` (Docker и прочие); без supervisor → 409 «перезапустите сервер вручную». С supervisor — ответ 202, затем graceful shutdown (ядро `cleanup_before_exit` из фазы 27) и `std::process::exit(75)`: код 75 перезапускается и при `Restart=always`, и при `on-failure`.
