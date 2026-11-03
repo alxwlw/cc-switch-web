@@ -5,7 +5,7 @@
 //! log lands in `~/.cc-switch` while the database and `GET /api/logs/tail` use
 //! the override directory. This test starts the example as a child process with
 //! a temp HOME and checks that the log file, the database and the tail route all
-//! sit under the override, and that the default directory stays untouched.
+//! sit under the override, and that the default directory gets no log or database.
 //!
 //! The child gets its own `HOME` / `XDG_CONFIG_HOME` and none of
 //! `CC_SWITCH_CONFIG_DIR`, `CC_SWITCH_TEST_HOME`, `RUST_LOG`: nothing from the
