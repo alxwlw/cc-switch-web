@@ -42,7 +42,7 @@ const TOUCHED: [&str; 11] = [
     "WEB_DIST",
     "CC_SWITCH_WEB_SUPERVISED",
 ];
-const ALREADY: &str = "обновление уже идёт";
+const ALREADY: &str = "an update is already running";
 
 struct Fixture {
     saved: Vec<(&'static str, Option<OsString>)>,
@@ -661,4 +661,21 @@ async fn a_broken_status_file_is_a_500_that_does_not_quote_the_file() {
         json!("the update status file is not valid JSON")
     );
     assert!(!body.to_string().contains("hunter2"), "{body}");
+}
+
+#[tokio::test]
+#[serial]
+async fn status_is_null_when_there_is_nowhere_to_keep_one() {
+    let fx = Fixture::new();
+    // Neither XDG_STATE_HOME nor HOME: no update could have been started, so there is no
+    // status, and that is an answer, not a server error.
+    fx.write_status(r#"{"stage":"done","ok":true,"message":"updated","fromSha":"a","toSha":"b","startedAt":"x","finishedAt":"y"}"#);
+    std::env::remove_var("XDG_STATE_HOME");
+    std::env::remove_var("HOME");
+    let router = fx.router(&Fake::new());
+
+    let (code, body) = status(&router).await;
+
+    assert_eq!(code, StatusCode::OK, "{body}");
+    assert_eq!(body, json!({"ok": true, "data": null}));
 }
