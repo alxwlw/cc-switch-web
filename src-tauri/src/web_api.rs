@@ -5156,10 +5156,6 @@ mod tests {
         assert!(unset["buildSha"].is_null());
     }
 
-    /// The handler must feed the payload from `web_update::build_sha()` itself:
-    /// compared with the public function, not a copy of its rule. In a default
-    /// build both sides are `null`; the check bites when the tests are built with
-    /// `CC_SWITCH_WEB_GIT_SHA` set.
     /// GitHub stand-in: `compare` answers with `status`/`body`, counting only
     /// `GET /repos/o/r/compare/*` (a loopback prober sends `GET /`).
     async fn update_stub(
@@ -5231,6 +5227,10 @@ mod tests {
         );
     }
 
+    /// The handler must feed the payload from `web_update::build_sha()` itself:
+    /// compared with the public function, not a copy of its rule. In a default
+    /// build both sides are `null`; the check bites when the tests are built with
+    /// `CC_SWITCH_WEB_GIT_SHA` set.
     #[tokio::test]
     async fn capabilities_handler_reports_web_update_build_sha() {
         let body = capabilities().await.0;

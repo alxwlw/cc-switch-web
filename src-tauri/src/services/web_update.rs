@@ -113,9 +113,9 @@ fn normalize_sha(raw: Option<&'static str>) -> Option<&'static str> {
 
 #[derive(Debug, Deserialize)]
 struct CompareResponse {
-    #[serde(default)]
+    // Required: an answer without the counters (a proxy page, a changed API) is an
+    // unreadable answer, not "0 behind".
     ahead_by: u32,
-    #[serde(default)]
     behind_by: u32,
     #[serde(default)]
     commits: Vec<CompareCommit>,

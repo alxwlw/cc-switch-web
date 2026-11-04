@@ -74,7 +74,7 @@ struct Seen {
 }
 
 struct Shared {
-    compare: Reply,
+    compare: Mutex<Reply>,
     head: Reply,
     delay: Duration,
     compare_hits: Arc<AtomicUsize>,
@@ -88,6 +88,7 @@ struct Github {
     compare_hits: Arc<AtomicUsize>,
     head_hits: Arc<AtomicUsize>,
     seen: Arc<Seen>,
+    shared: Arc<Shared>,
     task: tokio::task::JoinHandle<()>,
 }
 
@@ -130,7 +131,7 @@ async fn compare_route(
     }
     // Overlap window for the parallel-requests test; the assertion is on the hit count.
     tokio::time::sleep(shared.delay).await;
-    respond(require_user_agent(&headers).unwrap_or_else(|| shared.compare.clone()))
+    respond(require_user_agent(&headers).unwrap_or_else(|| shared.compare.lock().unwrap().clone()))
 }
 
 async fn head_route(State(shared): State<Arc<Shared>>, headers: HeaderMap) -> Answer {
@@ -153,7 +154,7 @@ impl Github {
         let head_hits = Arc::new(AtomicUsize::new(0));
         let seen = Arc::new(Seen::default());
         let shared = Arc::new(Shared {
-            compare,
+            compare: Mutex::new(compare),
             head,
             delay,
             compare_hits: compare_hits.clone(),
@@ -167,7 +168,7 @@ impl Github {
             )
             .route("/repos/o/r/commits/main", axum::routing::get(head_route))
             .fallback(|| async { StatusCode::NOT_FOUND })
-            .with_state(shared);
+            .with_state(shared.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("http://{}", listener.local_addr().unwrap());
         let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -176,8 +177,14 @@ impl Github {
             compare_hits,
             head_hits,
             seen,
+            shared,
             task,
         }
+    }
+
+    /// The source answers `compare` with `reply` from now on.
+    fn set_compare(&self, reply: Reply) {
+        *self.shared.compare.lock().unwrap() = reply;
     }
 
     fn cfg(&self) -> UpdateSourceConfig {
@@ -523,12 +530,51 @@ async fn a_second_request_within_the_hour_is_served_from_the_cache() {
 async fn force_asks_the_source_again() {
     let sha = sha_of(0x100e);
     let gh = Github::start(ok(compare_body(2, 0, 1, 2))).await;
-    run(&gh, &sha, false).await;
-    run(&gh, &sha, true).await;
+    let stale = run(&gh, &sha, false).await;
+    assert_eq!(as_json(&stale)["status"], json!("behind"));
+    // The source moves on: the build is now level with the branch.
+    gh.set_compare(ok(compare_body(0, 0, 0, 0)));
+    let forced = run(&gh, &sha, true).await;
+    assert_eq!(as_json(&forced)["status"], json!("up-to-date"));
     assert_eq!(gh.compare_hits(), 2);
-    // The forced answer replaces the cached one.
-    run(&gh, &sha, false).await;
+    // The forced answer replaces the cached one: a plain call returns it, not the old one.
+    let after = run(&gh, &sha, false).await;
+    assert_eq!(after, forced);
     assert_eq!(gh.compare_hits(), 2);
+}
+
+#[tokio::test]
+#[serial]
+async fn a_commit_without_a_committer_takes_the_author_date() {
+    let sha = sha_of(0x1011);
+    let mut body = compare_body(2, 0, 1, 2);
+    // Commit 2 has no committer; commit 1 keeps both stamps.
+    body["commits"][1]["commit"]["committer"] = Value::Null;
+    let gh = Github::start(ok(body)).await;
+    let result = as_json(&run(&gh, &sha, false).await);
+
+    assert_eq!(result["commits"][0]["sha"], json!(sha_of(2)));
+    assert_eq!(result["commits"][0]["date"], json!("1999-01-01T00:00:00Z"));
+    assert_eq!(result["commits"][1]["date"], json!("2026-11-02T10:00:00Z"));
+}
+
+#[tokio::test]
+#[serial]
+async fn an_answer_without_the_counters_is_an_error_and_not_cached() {
+    let sha = sha_of(0x1012);
+    let gh = Github::start(ok(json!({}))).await;
+
+    let text = check(&gh.cfg(), Some(&sha), false)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(text.contains("unreadable answer"), "{text}");
+    // Neither counter alone is enough.
+    gh.set_compare(ok(json!({"ahead_by": 0})));
+    assert!(check(&gh.cfg(), Some(&sha), false).await.is_err());
+    gh.set_compare(ok(json!({"behind_by": 0})));
+    assert!(check(&gh.cfg(), Some(&sha), false).await.is_err());
+    assert_eq!(gh.compare_hits(), 3, "an unreadable answer is not cached");
 }
 
 #[tokio::test]
