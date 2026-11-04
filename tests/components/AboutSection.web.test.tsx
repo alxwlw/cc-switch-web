@@ -81,6 +81,7 @@ function updateData(over: Record<string, unknown> = {}) {
       { sha: "ccccccc3333333", message: "docs: oldest", date: null },
     ],
     checkedAt: "2026-11-04T10:30:00Z",
+    branch: "web-parity",
     instructions: { systemd: SYSTEMD, docker: DOCKER },
     ...over,
   };

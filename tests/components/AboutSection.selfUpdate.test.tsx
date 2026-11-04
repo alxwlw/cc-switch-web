@@ -54,6 +54,7 @@ function updateData(over: Record<string, unknown> = {}) {
       { sha: "bbbbbbb2222222", message: "fix: middle", date: null },
     ],
     checkedAt: "2026-11-04T10:30:00Z",
+    branch: "web-parity",
     instructions: { systemd: "SYSTEMD CMD", docker: "DOCKER CMD" },
     ...over,
   };
@@ -201,7 +202,7 @@ describe("AboutSection · self-update (WEB-28)", () => {
     ).toBeTruthy();
     expect(
       within(dialog).getByText(
-        'web.update.install.confirmMessage {"sha":"fedcba9","behind":2}',
+        'web.update.install.confirmMessage {"branch":"web-parity","sha":"fedcba9","behind":2}',
       ),
     ).toBeTruthy();
     // the same commit list as the page's, not another copy of its markup
@@ -343,13 +344,51 @@ describe("AboutSection · self-update (WEB-28)", () => {
     expect(installButton()).not.toBeNull();
   });
 
-  it("an old done on disk when About opens: no reload, no progress, the button is there", async () => {
+  it("an old done on disk when About opens: no reload, nothing shown, the button is there", async () => {
     runs = runStatus("done", { finishedAt: "2026-11-01T11:05:00Z" });
     await open();
     await tick(10_000);
     expect(mocks.reload).not.toHaveBeenCalled();
     expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
     expect(installButton()).not.toBeNull();
+  });
+
+  it.each([
+    ["failed", "web.update.install.failedTitle", true],
+    ["rolled-back", "web.update.install.rolledBackTitle", true],
+    ["rollback-failed", "web.update.install.rollbackFailedTitle", false],
+  ])(
+    "an old %s on disk when About opens is shown with its message and time, without a reload or a poll",
+    async (stage, title, button) => {
+      runs = runStatus(stage, {
+        message: `left from the earlier run: ${stage}`,
+        finishedAt: "2026-11-01T11:05:00Z",
+      });
+      await open();
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent(title);
+      expect(alert).toHaveTextContent(`left from the earlier run: ${stage}`);
+      const local = new Date("2026-11-01T11:05:00Z").toLocaleString();
+      expect(alert).toHaveTextContent(
+        `web.update.install.finishedAt {"time":"${local}"}`,
+      );
+      expect(installButton() !== null).toBe(button);
+      const probes = calls("/api/update/status").length;
+      await tick(30_000);
+      expect(calls("/api/update/status")).toHaveLength(probes);
+      expect(mocks.reload).not.toHaveBeenCalled();
+    },
+  );
+
+  it("a new launch replaces the outcome of the earlier run", async () => {
+    runs = runStatus("rolled-back", { message: "the earlier rollback" });
+    await open();
+    expect(screen.getByRole("alert")).toHaveTextContent("the earlier rollback");
+    runs = null;
+    await startUpdate();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText("web.update.install.starting")).toBeTruthy();
   });
 
   it("opened during a run: shows its progress without the button, and reloads when it is done", async () => {

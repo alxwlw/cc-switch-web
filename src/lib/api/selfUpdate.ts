@@ -11,22 +11,11 @@ export interface UpdateRunStatus {
   finishedAt: string | null;
 }
 
-/**
- * The stages that end a run, as `scripts/self-update.sh` writes them (`write_status` with a
- * `finished` time). Every other stage (checking, fetching, merging, building, installing,
- * restarting, rolling-back) is progress.
+/*
+ * Stages, as `scripts/self-update.sh` writes them. Progress: checking, fetching, merging,
+ * building, installing, restarting, rolling-back. Final (`finishedAt` is set): done, failed,
+ * rolled-back, rollback-failed. `useSelfUpdate` is where each one is acted on.
  */
-export const FINAL_STAGES = [
-  "done",
-  "failed",
-  "rolled-back",
-  "rollback-failed",
-] as const;
-export type FinalStage = (typeof FINAL_STAGES)[number];
-
-export function isFinalStage(stage: string): stage is FinalStage {
-  return (FINAL_STAGES as readonly string[]).includes(stage);
-}
 
 /** `POST /api/update/install` answered 202: the unit that runs the script and the branch it pulls. */
 export interface InstallLaunch {

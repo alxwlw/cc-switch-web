@@ -42,6 +42,7 @@ function webCheck(over: Record<string, unknown> = {}) {
       { sha: "aaaaaaa1111111", message: "older", date: null },
     ],
     checkedAt: "2026-11-04T10:30:00Z",
+    branch: "web-parity",
     instructions,
     ...over,
   };
@@ -176,6 +177,8 @@ describe("updater · checkForUpdate (web)", () => {
     ["commits that are not a list", webCheck({ commits: "none" })],
     ["behind without latestSha", webCheck({ latestSha: null })],
     ["no instructions", webCheck({ instructions: null })],
+    ["no branch", webCheck({ branch: undefined })],
+    ["a branch that is not text", webCheck({ branch: 7 })],
     ["a negative behindBy", webCheck({ behindBy: -1 })],
     ["a fractional behindBy", webCheck({ behindBy: 1.5 })],
   ])("rejects a payload with %s instead of guessing", async (_n, payload) => {

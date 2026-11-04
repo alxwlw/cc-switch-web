@@ -67,6 +67,7 @@ export function SelfUpdateButton({
         variant="info"
         title={t("web.update.install.confirmTitle")}
         message={t("web.update.install.confirmMessage", {
+          branch: webUpdate.branch,
           sha: (webUpdate.latestSha ?? "").slice(0, 7),
           behind: webUpdate.behindBy,
         })}
@@ -94,6 +95,19 @@ export function SelfUpdateButton({
         </div>
       </ConfirmDialog>
     </>
+  );
+}
+
+/** `finishedAt` in the viewer's locale; kept as the server wrote it when it is not a date. */
+function FinishedAt({ at }: { at: string | null }) {
+  const { t } = useTranslation();
+  if (!at) return null;
+  const date = new Date(at);
+  const time = Number.isNaN(date.getTime()) ? at : date.toLocaleString();
+  return (
+    <p className="text-caption text-fg-2">
+      {t("web.update.install.finishedAt", { time })}
+    </p>
   );
 }
 
@@ -213,6 +227,7 @@ export function SelfUpdateNotice({ state }: { state: SelfUpdateState }) {
               <p className="text-fg-1">
                 {t("web.update.install.rollbackFailedHint")}
               </p>
+              <FinishedAt at={state.finishedAt} />
             </Problem>
           );
         case "rolled-back":
@@ -220,14 +235,18 @@ export function SelfUpdateNotice({ state }: { state: SelfUpdateState }) {
             <Problem
               title={t("web.update.install.rolledBackTitle")}
               message={state.message}
-            />
+            >
+              <FinishedAt at={state.finishedAt} />
+            </Problem>
           );
         default:
           return (
             <Problem
               title={t("web.update.install.failedTitle")}
               message={state.message}
-            />
+            >
+              <FinishedAt at={state.finishedAt} />
+            </Problem>
           );
       }
   }

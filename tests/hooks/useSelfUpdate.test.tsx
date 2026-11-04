@@ -298,12 +298,25 @@ describe("useSelfUpdate (WEB-28)", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it.each(["failed", "rolled-back", "rollback-failed"])(
-    "an old %s on disk is not shown either",
+  it.each(["failed", "rolled-back", "rollback-failed"] as const)(
+    "an old %s on disk is shown with its message and time, with no poll and no reload",
     async (stage) => {
-      answerData(status(stage));
+      answerData(
+        status(stage, {
+          message: `old ${stage}`,
+          finishedAt: "2026-11-01T11:05:00Z",
+        }),
+      );
       const hook = await setup();
-      expect(hook.result.current.state).toEqual({ kind: "idle" });
+      expect(hook.result.current.state).toEqual({
+        kind: "ended",
+        outcome: stage,
+        message: `old ${stage}`,
+        finishedAt: "2026-11-01T11:05:00Z",
+      });
+      await tick(10 * SELF_UPDATE_POLL_INTERVAL_MS);
+      expect(statusCalls()).toHaveLength(1);
+      expect(reloadMock).not.toHaveBeenCalled();
       expect(vi.getTimerCount()).toBe(0);
     },
   );
@@ -369,6 +382,7 @@ describe("useSelfUpdate (WEB-28)", () => {
         kind: "ended",
         outcome,
         message: `why ${stage} happened`,
+        finishedAt: "2026-11-04T10:05:00Z",
       });
       expect(reloadMock).not.toHaveBeenCalled();
       expect(vi.getTimerCount()).toBe(0);
@@ -390,6 +404,7 @@ describe("useSelfUpdate (WEB-28)", () => {
       kind: "ended",
       outcome: "unchanged",
       message: "already up to date",
+      finishedAt: "2026-11-04T10:05:00Z",
     });
     expect(reloadMock).not.toHaveBeenCalled();
   });

@@ -3,7 +3,6 @@ import { reloadPage } from "@/lib/pageReload";
 import {
   fetchUpdateStatus,
   installWebUpdate,
-  isFinalStage,
   type UpdateRunStatus,
 } from "@/lib/api/selfUpdate";
 
@@ -54,6 +53,8 @@ export type SelfUpdateState =
       kind: "ended";
       outcome: "failed" | "rolled-back" | "rollback-failed" | "unchanged";
       message: string;
+      /** When the script finished, as it wrote it (`null` if it did not say). */
+      finishedAt: string | null;
     }
   /** The wait was given up: no stage change in `SELF_UPDATE_STAGE_WAIT_MS`, or no status at all. */
   | { kind: "stuck"; reason: "stalled" | "no-status" }
@@ -66,8 +67,11 @@ type Running = Extract<SelfUpdateState, { kind: "running" }>;
  * Self-update of the web server from the console (WEB-28): `POST /api/update/install`, then
  * `GET /api/update/status` every 2 s until a final stage; `done` reloads the page.
  *
- * Only a run this tab started, or one that was under way when the tab opened, is followed: a
- * final status left on disk by an earlier run is not an event (no reload on opening About).
+ * Only a run this tab started, or one that was under way when the tab opened, is followed. A
+ * final status found on disk when the tab opens is not an event: a `done` is not shown and
+ * never reloads the page; a `failed`, `rolled-back` or `rollback-failed` is shown with its message
+ * and time (the operator who left Settings during the run learns what happened), still without a
+ * reload or a poll. A new launch replaces it.
  * Leaving the page stops every timer and the probe in flight.
  */
 export function useSelfUpdate(enabled: boolean) {
@@ -147,6 +151,7 @@ export function useSelfUpdate(enabled: boolean) {
                 kind: "ended",
                 outcome: "unchanged",
                 message: status.message,
+                finishedAt: status.finishedAt,
               });
             } else {
               end({ kind: "reloading" });
@@ -160,6 +165,7 @@ export function useSelfUpdate(enabled: boolean) {
               kind: "ended",
               outcome: status.stage,
               message: status.message,
+              finishedAt: status.finishedAt,
             });
             return;
           default:
@@ -229,9 +235,24 @@ export function useSelfUpdate(enabled: boolean) {
     );
     fetchUpdateStatus(controller.signal)
       .then((status) => {
-        if (cancelled || !status || isFinalStage(status.stage)) return;
+        if (cancelled || !status) return;
         if (busyRef.current || stopRef.current) return;
-        track({ stage: status.stage, branch: null });
+        switch (status.stage) {
+          case "done":
+            return;
+          case "failed":
+          case "rolled-back":
+          case "rollback-failed":
+            setState({
+              kind: "ended",
+              outcome: status.stage,
+              message: status.message,
+              finishedAt: status.finishedAt,
+            });
+            return;
+          default:
+            track({ stage: status.stage, branch: null });
+        }
       })
       .catch(() => {
         // Nothing to adopt: the server may be restarting under someone else's run.
