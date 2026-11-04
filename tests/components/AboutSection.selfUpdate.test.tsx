@@ -5,7 +5,7 @@ import { AboutSection } from "@/components/settings/AboutSection";
 import { UpdateProvider } from "@/contexts/UpdateContext";
 import { setWeb } from "../helpers/web";
 
-const mocks = vi.hoisted(() => ({ reload: vi.fn() }));
+const mocks = vi.hoisted(() => ({ reload: vi.fn(), check: vi.fn() }));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -15,7 +15,7 @@ vi.mock("react-i18next", () => ({
     i18n: { language: "en" },
   }),
 }));
-vi.mock("@tauri-apps/plugin-updater", () => ({ check: vi.fn() }));
+vi.mock("@tauri-apps/plugin-updater", () => ({ check: mocks.check }));
 // Web: `invoke` is the real adapter (the command -> /api/update/* mapping runs); only `fetch`
 // is replaced.
 vi.mock("@tauri-apps/api/core", async () => {
@@ -92,6 +92,7 @@ describe("AboutSection · self-update (WEB-28)", () => {
     vi.useFakeTimers();
     setWeb(true);
     mocks.reload.mockReset();
+    mocks.check.mockReset().mockResolvedValue(null);
     selfUpdate = true;
     check = updateData();
     runs = null;
@@ -228,7 +229,15 @@ describe("AboutSection · self-update (WEB-28)", () => {
       screen.getByText('web.update.install.branch {"branch":"web-parity"}'),
     ).toBeTruthy();
 
-    for (const stage of ["fetching", "building", "restarting"]) {
+    for (const stage of [
+      "checking",
+      "fetching",
+      "merging",
+      "building",
+      "installing",
+      "restarting",
+      "rolling-back",
+    ]) {
       runs = runStatus(stage);
       await tick(2_000);
       expect(
@@ -242,6 +251,25 @@ describe("AboutSection · self-update (WEB-28)", () => {
     await tick(2_000);
     expect(mocks.reload).toHaveBeenCalledTimes(1);
     expect(screen.getByText("web.update.install.reloading")).toBeTruthy();
+  });
+
+  it("a stage the script may gain later is shown by its own name", async () => {
+    await open();
+    await startUpdate();
+    runs = runStatus("signing");
+    await tick(2_000);
+    expect(screen.getByText("signing")).toBeTruthy();
+  });
+
+  it("desktop: a failed check shows no web alert and no self-update", async () => {
+    setWeb(false);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.check.mockRejectedValue(new Error("updater down"));
+    await open();
+    expect(mocks.check).toHaveBeenCalled();
+    errorSpy.mockRestore();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(installButton()).toBeNull();
   });
 
   it("a 409 shows the server's reason as it came, and the button is back", async () => {
