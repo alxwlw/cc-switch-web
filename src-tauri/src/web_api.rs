@@ -752,14 +752,25 @@ struct UpdateCheckQuery {
     force: Option<String>,
 }
 
-/// `?force=1` (or `true`) skips the one-hour cache. Source and build commit are read
-/// per request.
 async fn update_check(Query(q): Query<UpdateCheckQuery>) -> ApiResult {
-    let force = matches!(q.force.as_deref(), Some("1" | "true"));
-    let cfg = crate::services::web_update::UpdateSourceConfig::from_env();
-    match crate::services::web_update::check(&cfg, crate::services::web_update::build_sha(), force)
-        .await
-    {
+    update_check_with(
+        &crate::services::web_update::UpdateSourceConfig::from_env(),
+        crate::services::web_update::build_sha(),
+        q.force.as_deref(),
+    )
+    .await
+}
+
+/// `force` is the `?force=` value: `1` or `true` skips the one-hour cache. The build
+/// commit and the source are parameters so tests can supply what the build and the
+/// environment do not.
+async fn update_check_with(
+    cfg: &crate::services::web_update::UpdateSourceConfig,
+    build_sha: Option<&str>,
+    force: Option<&str>,
+) -> ApiResult {
+    let force = matches!(force, Some("1" | "true"));
+    match crate::services::web_update::check(cfg, build_sha, force).await {
         Ok(result) => ok(result),
         Err(e) => fail(e.to_string()),
     }
@@ -5129,7 +5140,12 @@ async fn failover_set_auto(
 
 #[cfg(test)]
 mod tests {
-    use super::{capabilities, capabilities_payload, web_oauth_account_param};
+    use super::{
+        capabilities, capabilities_payload, get, update_check_with, web_oauth_account_param, Json,
+        Router,
+    };
+    use axum::http::StatusCode;
+    use std::sync::Arc;
 
     #[test]
     fn capabilities_payload_carries_the_given_build_sha() {
@@ -5144,6 +5160,77 @@ mod tests {
     /// compared with the public function, not a copy of its rule. In a default
     /// build both sides are `null`; the check bites when the tests are built with
     /// `CC_SWITCH_WEB_GIT_SHA` set.
+    /// GitHub stand-in: `compare` answers with `status`/`body`, counting only
+    /// `GET /repos/o/r/compare/*` (a loopback prober sends `GET /`).
+    async fn update_stub(
+        status: StatusCode,
+        body: String,
+    ) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+        let hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = hits.clone();
+        let app = Router::new().route(
+            "/repos/o/r/compare/:spec",
+            get(move || {
+                let counter = counter.clone();
+                let body = body.clone();
+                async move {
+                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    (status, [("content-type", "application/json")], body)
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        (url, hits)
+    }
+
+    fn update_cfg(api_base: String) -> crate::services::web_update::UpdateSourceConfig {
+        crate::services::web_update::UpdateSourceConfig {
+            api_base,
+            repo: "o/r".into(),
+            branch: "main".into(),
+        }
+    }
+
+    /// `?force=` reaches the cache: `1`/`true` ask the source again, anything else is
+    /// answered from the cache.
+    #[tokio::test]
+    async fn update_check_force_param_skips_the_cache() {
+        let body = serde_json::json!({"ahead_by": 0, "behind_by": 0, "commits": []}).to_string();
+        let (url, hits) = update_stub(StatusCode::OK, body).await;
+        let cfg = update_cfg(url);
+        let sha = "1111111aaaa";
+        let count = || hits.load(std::sync::atomic::Ordering::SeqCst);
+
+        let (status, Json(first)) = update_check_with(&cfg, Some(sha), None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(first["data"]["status"], "up-to-date");
+        assert_eq!(count(), 1);
+        let _ = update_check_with(&cfg, Some(sha), Some("0")).await;
+        let _ = update_check_with(&cfg, Some(sha), Some("")).await;
+        assert_eq!(count(), 1, "force=0 and an empty force use the cache");
+        let _ = update_check_with(&cfg, Some(sha), Some("1")).await;
+        assert_eq!(count(), 2, "force=1 asks the source");
+        let _ = update_check_with(&cfg, Some(sha), Some("true")).await;
+        assert_eq!(count(), 3, "force=true asks the source");
+    }
+
+    /// A refusal from the source reaches the console as `{ok:false}` with the text.
+    #[tokio::test]
+    async fn update_check_refusal_is_an_error_body_with_text() {
+        let (url, _hits) =
+            update_stub(StatusCode::FORBIDDEN, r#"{"message":"rate limit"}"#.into()).await;
+        let (status, Json(body)) =
+            update_check_with(&update_cfg(url), Some("2222222bbbb"), None).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body["ok"], false);
+        assert!(
+            body["error"].as_str().unwrap().contains("rate limit"),
+            "{body}"
+        );
+    }
+
     #[tokio::test]
     async fn capabilities_handler_reports_web_update_build_sha() {
         let body = capabilities().await.0;
