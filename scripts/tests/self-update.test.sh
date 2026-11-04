@@ -72,6 +72,7 @@ cat >"$STUBS/pnpm" <<EOF
 #!/usr/bin/env bash
 $common
 log "pnpm \$* cwd=\$PWD stage=\$(stage)"
+ln -f "\$STATUS_FILE" "\$STATUS_FILE.snap"
 case "\$1" in
   install) exit 0 ;;
   build:web)
@@ -105,6 +106,7 @@ cat >"$STUBS/systemctl" <<EOF
 #!/usr/bin/env bash
 $common
 log "systemctl \$* stage=\$(stage)"
+if [ "\$STATUS_FILE" -ef "\$STATUS_FILE.snap" ]; then log snap-same; else log snap-replaced; fi
 if [ "\$1 \$2" = "--user restart" ]; then
   if [ -n "\${STUB_BLOCK_RESTART:-}" ] && [ ! -e "\$STUB_SVC.blocked" ]; then
     : >"\$STUB_SVC.blocked"
@@ -261,6 +263,8 @@ check_has "success: service restarted" "$log" "systemctl --user restart cc-switc
 check "success: daemon-reload comes before restart" \
   "$(grep -n -F -e 'daemon-reload' -e '--user restart' "$LOG" | cut -d: -f2- | tr '\n' '|' | sed 's/ stage=[a-z-]*//g')" \
   "systemctl --user daemon-reload|systemctl --user restart cc-switch-web|"
+check "success: status is replaced by rename, not rewritten in place" \
+  "$(grep -m1 '^snap-' "$LOG")" "snap-replaced"
 check_lacks "success: unchanged unit template gives no warning" "$(field message)" "install-server.sh"
 
 # ==== health check address ==============================================================
