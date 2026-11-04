@@ -280,11 +280,12 @@ async fn three_commits_ahead_is_behind_with_three_newest_first() {
         .as_str()
         .unwrap()
         .contains("scripts/install-server.sh"));
-    // The script installs the binary but does not restart the unit.
+    // The script installs the binary but does not restart the unit, and the unit file it
+    // rewrites is only read after a daemon-reload.
     assert!(result["instructions"]["systemd"]
         .as_str()
         .unwrap()
-        .ends_with("&& systemctl --user restart cc-switch-web"));
+        .ends_with("&& systemctl --user daemon-reload && systemctl --user restart cc-switch-web"));
     assert!(result["instructions"]["docker"]
         .as_str()
         .unwrap()

@@ -34,9 +34,15 @@ use crate::session_manager;
 use crate::store::AppState;
 
 mod restart;
+mod self_update;
 use restart::RestartControl;
 pub use restart::{
     instance_id, is_supervised, ShutdownHandle, RESTART_EXIT_CODE, RESTART_SIGNAL_DELAY,
+};
+use self_update::UpdateControl;
+pub use self_update::{
+    SpawnError, SystemdRunSpawner, UpdateLaunch, UpdateRunStatus, UpdateRunner, UpdateSpawner,
+    UPDATE_UNIT,
 };
 
 pub type SharedState = Arc<AppState>;
@@ -97,6 +103,17 @@ pub fn router(state: SharedState) -> Router {
 /// [`router`] plus the handle `POST /api/restart` raises (WEB-26). The server example hands
 /// the same handle to its shutdown, which then exits with [`RESTART_EXIT_CODE`].
 pub fn router_with_shutdown(state: SharedState, shutdown: Option<ShutdownHandle>) -> Router {
+    router_with_update(state, shutdown, None)
+}
+
+/// [`router_with_shutdown`] plus the launcher `POST /api/update/install` starts the update
+/// with (WEB-28). Without one the route answers 409 whatever the environment says; the server
+/// example passes a [`SystemdRunSpawner`].
+pub fn router_with_update(
+    state: SharedState,
+    shutdown: Option<ShutdownHandle>,
+    updater: Option<Arc<UpdateRunner>>,
+) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/restart", post(restart_server))
@@ -104,6 +121,8 @@ pub fn router_with_shutdown(state: SharedState, shutdown: Option<ShutdownHandle>
         .route("/favicon.ico", get(favicon))
         .route("/api/capabilities", get(capabilities))
         .route("/api/update/check", get(update_check))
+        .route("/api/update/install", post(update_install))
+        .route("/api/update/status", get(update_status))
         .route("/api/init-status", get(init_status_route))
         // providers (per app)
         .route(
@@ -624,6 +643,7 @@ pub fn router_with_shutdown(state: SharedState, shutdown: Option<ShutdownHandle>
         )
         .with_state(state)
         .layer(Extension(RestartControl(shutdown)))
+        .layer(Extension(UpdateControl(updater)))
 }
 
 /// Router served when startup bootstrap failed and there is no `AppState`
@@ -727,23 +747,29 @@ async fn restart_server(
     )
 }
 
-/// `buildSha` is a parameter so a test can pin both the "set" and the "unset"
-/// value; a default build has no SHA and could not tell the handler's source apart.
-fn capabilities_payload(build_sha: Option<&str>) -> Value {
+/// `buildSha` and `self_update` are parameters so a test can pin both values: a default
+/// build has no SHA, and the flag follows the environment of the process.
+fn capabilities_payload(build_sha: Option<&str>, self_update: bool) -> Value {
     json!({
         "mode": "web",
         "auth": "none (tailscale-only; TRUSTED_TAILNET=1 required for non-loopback bind)",
         "version": env!("CARGO_PKG_VERSION"),
         "buildSha": build_sha,
+        "selfUpdate": self_update,
         "platform": std::env::consts::OS,
         "mvp_apps": ["claude", "codex", "gemini", "opencode"],
-        "runtime_boundaries": "manages files on the server host only; no tray, no native file pickers, no file dialogs, no terminal launch; updates: check in UI, install by operator",
+        "runtime_boundaries": "manages files on the server host only; no tray, no native file pickers, no file dialogs, no terminal launch; updates: check in UI, install by operator, or from the UI when selfUpdate is true",
     })
 }
 
-async fn capabilities() -> Json<Value> {
+/// `selfUpdate` is the install route's own precondition check (environment read now), so
+/// the console never offers a button the route would refuse. The init-error router has no
+/// update layer: `false` there.
+async fn capabilities(control: Option<Extension<UpdateControl>>) -> Json<Value> {
+    let self_update = control.is_some_and(|Extension(control)| control.enabled());
     Json(capabilities_payload(
         crate::services::web_update::build_sha(),
+        self_update,
     ))
 }
 
@@ -759,6 +785,47 @@ async fn update_check(Query(q): Query<UpdateCheckQuery>) -> ApiResult {
         q.force.as_deref(),
     )
     .await
+}
+
+/// `POST /api/update/install` (WEB-28). Same order as `restart_server`: the JSON content type
+/// first (a CORS-simple POST from another site must not start a build), then the conditions
+/// (409 with the reason), then the launch. Nothing is read from the body: the branch and every
+/// path come from the server's own environment.
+async fn update_install(
+    Extension(control): Extension<UpdateControl>,
+    headers: HeaderMap,
+) -> ApiResult {
+    if let Err(rejection) = require_json_content_type(&headers) {
+        return rejection;
+    }
+    match control.start().await {
+        self_update::Start::Started(launch) => (
+            StatusCode::ACCEPTED,
+            Json(json!({
+                "ok": true,
+                "data": { "unit": launch.unit, "branch": launch.branch },
+            })),
+        ),
+        self_update::Start::Refused(reason) => conflict(reason),
+        self_update::Start::Failed(why) => fail(why),
+    }
+}
+
+/// `GET /api/update/status`: the status file of the last self-update, or `null`.
+async fn update_status() -> ApiResult {
+    let read = tokio::task::spawn_blocking(|| {
+        match self_update::status_path(&self_update::process_env) {
+            Ok(path) => self_update::read_status(&path),
+            // No place to keep a status: no update could have been started.
+            Err(_) => Ok(None),
+        }
+    })
+    .await;
+    match read {
+        Ok(Ok(status)) => ok(status),
+        Ok(Err(why)) => fail(why),
+        Err(e) => fail(format!("update status task failed: {e}")),
+    }
 }
 
 /// `force` is the `?force=` value: `1` or `true` skips the one-hour cache. The build
@@ -5149,11 +5216,23 @@ mod tests {
 
     #[test]
     fn capabilities_payload_carries_the_given_build_sha() {
-        let set = capabilities_payload(Some("abc1234def"));
+        let set = capabilities_payload(Some("abc1234def"), false);
         assert_eq!(set["buildSha"], serde_json::json!("abc1234def"));
-        let unset = capabilities_payload(None);
+        let unset = capabilities_payload(None, false);
         assert!(unset.as_object().unwrap().contains_key("buildSha"));
         assert!(unset["buildSha"].is_null());
+    }
+
+    #[test]
+    fn capabilities_payload_carries_the_self_update_flag() {
+        assert_eq!(
+            capabilities_payload(None, true)["selfUpdate"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            capabilities_payload(None, false)["selfUpdate"],
+            serde_json::json!(false)
+        );
     }
 
     /// GitHub stand-in: `compare` answers with `status`/`body`, counting only
@@ -5233,7 +5312,7 @@ mod tests {
     /// `CC_SWITCH_WEB_GIT_SHA` set.
     #[tokio::test]
     async fn capabilities_handler_reports_web_update_build_sha() {
-        let body = capabilities().await.0;
+        let body = capabilities(None).await.0;
         assert_eq!(
             body["buildSha"],
             serde_json::json!(crate::services::web_update::build_sha())
