@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   checkUpdates: vi.fn(),
   install: vi.fn(),
   copyText: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -31,6 +33,9 @@ vi.mock("@tauri-apps/api/core", async () => {
   return { invoke: adapter.invoke };
 });
 vi.mock("@/lib/clipboard", () => ({ copyText: mocks.copyText }));
+vi.mock("@/lib/toast", () => ({
+  toast: { success: mocks.toastSuccess, error: mocks.toastError },
+}));
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: vi.fn().mockResolvedValue("3.0.0"),
 }));
@@ -122,6 +127,8 @@ describe("AboutSection · update controls", () => {
     mocks.checkUpdates.mockReset();
     mocks.install.mockReset().mockResolvedValue(true);
     mocks.copyText.mockReset().mockResolvedValue(undefined);
+    mocks.toastSuccess.mockReset();
+    mocks.toastError.mockReset();
     fetchMock.mockReset();
     serveCheck(updateData({ status: "up-to-date", behindBy: 0, commits: [] }));
     vi.stubGlobal("fetch", fetchMock);
@@ -197,6 +204,57 @@ describe("AboutSection · update controls", () => {
     expect(screen.queryByText("settings.updating")).toBeNull();
     expect(mocks.install).not.toHaveBeenCalled();
     expect(screen.queryByText("web.update.upToDateTitle")).toBeNull();
+  });
+
+  it("web, behind: a copied command is confirmed, a failed copy says why", async () => {
+    setWeb(true);
+    serveCheck(updateData());
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    renderAbout();
+    await clickCheck();
+    const copySystemd = await screen.findByRole("button", {
+      name: "web.update.copy: web.update.systemd",
+    });
+    fireEvent.click(copySystemd);
+    await waitFor(() =>
+      expect(mocks.toastSuccess).toHaveBeenCalledWith("web.update.copied", {
+        closeButton: true,
+      }),
+    );
+    expect(mocks.toastError).not.toHaveBeenCalled();
+
+    mocks.copyText.mockRejectedValue(new Error("clipboard denied"));
+    fireEvent.click(copySystemd);
+    await waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith("web.update.copyFailed", {
+        description: "clipboard denied",
+        closeButton: true,
+      }),
+    );
+    errorSpy.mockRestore();
+  });
+
+  it("web: the check time is shown in the viewer's locale, and kept as sent when it is not a date", async () => {
+    setWeb(true);
+    serveCheck(updateData({ checkedAt: "2026-11-04T10:30:00Z" }));
+    renderAbout();
+    await clickCheck();
+    const local = new Date("2026-11-04T10:30:00Z").toLocaleString();
+    expect(
+      await screen.findByText(
+        new RegExp(`web\\.update\\.checkedAt \\{"time":"${local}"\\}`),
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("web: an unreadable check time is shown as sent", async () => {
+    setWeb(true);
+    serveCheck(updateData({ checkedAt: "yesterday-ish" }));
+    renderAbout();
+    await clickCheck();
+    expect(
+      await screen.findByText(/"time":"yesterday-ish"/),
+    ).toBeInTheDocument();
   });
 
   it("web, behind with a long list: says how many of how many are shown", async () => {
