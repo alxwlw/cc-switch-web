@@ -82,6 +82,7 @@ pub use services::{
     profile::{ProfilePayload, ProfileScope, ProfileService},
     provider::{reapply_current_codex_official_live, EditorSave, EditorView},
     skill::{migrate_skills_to_ssot, ImportSkillSelection},
+    web_update::{check, UpdateCheck, UpdateSourceConfig},
     ConfigService, EndpointLatency, McpService, PromptService, ProviderService, ProxyService,
     SkillService, SpeedtestService,
 };

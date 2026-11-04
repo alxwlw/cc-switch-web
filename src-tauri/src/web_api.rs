@@ -103,6 +103,7 @@ pub fn router_with_shutdown(state: SharedState, shutdown: Option<ShutdownHandle>
         .route("/api/events", get(events_stream))
         .route("/favicon.ico", get(favicon))
         .route("/api/capabilities", get(capabilities))
+        .route("/api/update/check", get(update_check))
         .route("/api/init-status", get(init_status_route))
         // providers (per app)
         .route(
@@ -744,6 +745,24 @@ async fn capabilities() -> Json<Value> {
     Json(capabilities_payload(
         crate::services::web_update::build_sha(),
     ))
+}
+
+#[derive(Deserialize)]
+struct UpdateCheckQuery {
+    force: Option<String>,
+}
+
+/// `?force=1` (or `true`) skips the one-hour cache. Source and build commit are read
+/// per request.
+async fn update_check(Query(q): Query<UpdateCheckQuery>) -> ApiResult {
+    let force = matches!(q.force.as_deref(), Some("1" | "true"));
+    let cfg = crate::services::web_update::UpdateSourceConfig::from_env();
+    match crate::services::web_update::check(&cfg, crate::services::web_update::build_sha(), force)
+        .await
+    {
+        Ok(result) => ok(result),
+        Err(e) => fail(e.to_string()),
+    }
 }
 
 // ---------- providers ----------
