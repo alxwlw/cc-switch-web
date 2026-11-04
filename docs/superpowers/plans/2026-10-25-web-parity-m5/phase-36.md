@@ -59,7 +59,7 @@ Task 3:
 ### Task 4: гейты, PR, Plane
 - [x] Полный набор гейтов + `cargo build --release --example server` с `CC_SWITCH_WEB_GIT_SHA`. После сборки с переменной: запустить пример-сервер и `curl /api/capabilities` должен показать `buildSha`, равный этому SHA; после пересборки без переменной тот же `curl` показывает `buildSha: null`. Это единственная проверка, что обработчик берёт значение из `web_update::build_sha()`, а `option_env!` читает переменную: в обычной сборке тесты сравнивают `null` с `null`.
 - [x] Гейт скрипта (T4 r1): `bash scripts/tests/install-server-build-sha.test.sh` (`resolve_build_sha` во временных репозиториях: чистое дерево, untracked, unstaged, staged, обычный каталог, подкаталог) и `shellcheck -x -P SCRIPTDIR` на нём и на `scripts/install-server.sh`. Локальный: CI на форке не запускается.
-- [ ] Ветка `web-parity/web-28-update-check`, PR; DX-86 остаётся In Progress, комментарий со ссылкой на PR, «этап 1 из 2» и решением про источник обновлений.
+- [x] Ветка `web-parity/web-28-update-check`, PR #37; DX-86 остаётся In Progress, комментарий со ссылкой на PR, «этап 1 из 2» и решением про источник обновлений.
 
 Риски для ревью:
 - Сборка из грязного checkout или локального коммита, которого нет на origin, → compare 404 → `unknown`, а не ложный `up-to-date`.
@@ -67,7 +67,7 @@ Task 3:
 
 ## Notes for next phase
 
-**Статус.** Ветка `web-parity/web-28-update-check` (base `main`), до merge; PR открывает контроллер после финального ревью. DX-86 остаётся In Progress: это этап 1 из 2 (проверка и инструкция), установка из консоли — фаза 37. Отметка «Фаза 35» в индексе стоит в первом коммите ветки (`eaacded7`), отметка «Фаза 36» — первым коммитом ветки фазы 37.
+**Статус.** Ветка `web-parity/web-28-update-check` (base `main`), PR #37, до merge. Merge делает владелец. DX-86 остаётся In Progress: это этап 1 из 2 (проверка и инструкция), установка из консоли — фаза 37. Отметка «Фаза 35» в индексе стоит в первом коммите ветки (`eaacded7`), отметка «Фаза 36» — первым коммитом ветки фазы 37.
 
 **Что сделано (file:line на HEAD ветки).**
 - T1 SHA сборки: `services/web_update.rs:105` (`build_sha()` поверх `option_env!("CC_SWITCH_WEB_GIT_SHA")`, пустая строка → `None`, `normalize_sha` `:111`); `web_api.rs:732` (`capabilities_payload(build_sha)` с `buildSha`), `:744` (`capabilities()` берёт значение из `web_update::build_sha()`), `runtime_boundaries` `:740` («updates: check in UI, install by operator»). `scripts/install-server.sh:20-55` задаёт переменную только из корня git-checkout без изменённых tracked-файлов, иначе `unset` и предупреждение; `Dockerfile.web:17-21` (`ARG CC_SWITCH_WEB_GIT_SHA=` → `cargo build`); `docs/deploy.md` (раздел про консоль и build-arg).
