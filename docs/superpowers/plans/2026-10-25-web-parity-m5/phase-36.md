@@ -15,6 +15,29 @@ Scope: `src-tauri/src/services/web_update.rs` (новый), `src-tauri/src/web_a
 - `install_update_and_restart` (commands/settings.rs:277) — Tauri updater + `restart_process`, в web не переносится. `open_portable_update_download` (misc.rs:110) ведёт на релизы upstream — в web не нужен.
 - Исходящие запросы — через глобальный клиент `proxy::http_client::get()` (с фазы 24 инициализируется в bootstrap).
 
+**Уточнения контроллера (2026-11-04, разведка и проба GitHub API; важнее текста задач ниже).** Проверено: `gh release list` пуст, репозиторий публичный. Анонимный compare: без User-Agent → 403, неизвестный SHA → 404, ответ содержит `status`, `ahead_by`, `behind_by`, `commits`.
+
+Task 1:
+- Вместо константы — `pub fn build_sha() -> Option<&'static str>` поверх `option_env!`; пустое значение = `None` (у Docker ARG значение по умолчанию пустое).
+- В builder-стадии `Dockerfile.web` нет `git`, `.dockerignore` нет. Поэтому `ARG CC_SWITCH_WEB_GIT_SHA=` и передача в `cargo build`; команда сборки образа `--build-arg CC_SWITCH_WEB_GIT_SHA=$(git rev-parse HEAD)` описана в `docs/deploy.md` (файл добавляется в scope).
+- `install-server.sh`: SHA передаётся, только если `git -C "$ROOT" rev-parse HEAD` сработал и `git -C "$ROOT" diff --quiet HEAD` чист. Смотрим только отслеживаемые файлы: untracked `.scratch/` есть в боевом checkout. Иначе переменная снимается с предупреждением, и сборка честно даёт `unknown`.
+- `build.rs` не трогаем: rustc пишет `option_env!` в dep-info, cargo пересобирает при смене значения. Это проверяется двумя сборками в Task 4.
+- `buildSha` приходит из общего хендлера `capabilities()` (`web_api.rs:729`) в обоих роутерах; в `ServerCapabilities` (`src/lib/api/capabilities.ts`) добавить поле.
+
+Task 2:
+- Сигнатура `check(cfg, build_sha: Option<&str>, force: bool)`: тесты собираются без SHA, поэтому статусы проверяются вызовом сервиса со SHA. Тест роута: без SHA → `unknown`, заглушка получила 0 запросов. Env читается на каждый запрос.
+- Клиент — `http_client::get_for_url` (`get()` не обходит системный proxy для loopback), таймаут запроса 15 с (у клиента 600 с), явные заголовки `User-Agent` и `Accept: application/vnd.github+json`. Заглушка отвечает 403 на запрос без User-Agent, как настоящий GitHub.
+- Статус считается по обоим счётчикам: `behind_by > 0` → `unknown` (в сборке есть коммиты не из ветки, включая `diverged`; иначе будет ложный `up-to-date`), 404 и 422 → `unknown`, затем `ahead_by > 0` → `behind`, иначе `up-to-date`. На `diverged` и на сборку впереди ветки — отдельные тесты. `behindBy` = `ahead_by`, не длина списка.
+- `commits` приходят от старых к новым, не больше 250: берём 20 последних из полученных, новые первыми, только первую строку сообщения. UI пишет «показано N из M». `latestSha` — последний коммит; если `ahead_by` больше длины списка — `GET {api_base}/repos/{repo}/commits/{branch}` (тест); при `up-to-date` равен `currentSha`.
+- Кэш: `static OnceLock<tokio::sync::Mutex<Option<…>>>`, замок держится на время запроса, поэтому параллельные вкладки дают один запрос. Ключ (`api_base`, `repo`, `branch`, sha): заглушки на разных портах не делят кэш, хук сброса не нужен. Ошибки (403/429, сеть) не кэшируются; `unknown` от 404 кэшируется. Тест на параллельные запросы — один hit. Заглушки считают только ожидаемый метод и путь.
+- Модель тестов: `Stub`, `EnvGuard`, `#[serial]` из `tests/web_api_usage_live.rs`.
+
+Task 3:
+- Шим сейчас отдаёт `4.0.20-web`, сервер — `4.0.20`. Его читают `WhatsNewNotice` (`isNewerThanSeen`) и `FirstRunNoticeDialog` (`whatsNewSeenVersion`). Смена значения не должна заново показать «Что нового» тому, у кого записано `4.0.20-web`: проверить и закрепить тестом.
+- `updater.ts`: вариант `{status:"unknown"}` и `force` в `CheckOptions`. Ручная кнопка идёт с `force`, автопроверка без него. Web-данные (`commits`, `instructions`, `behindBy`, `status`) доходят до `AboutSection` через новое поле контекста. `unsupported` и пропуск автопроверки в web (`UpdateContext.tsx:125,139`) удаляются, моки в `tests/components/WebShellGating.test.tsx` и `tests/components/shell/SidebarToday.test.tsx` обновляются.
+- Ошибка проверки (rate limit) показывается текстом сервера и не выглядит как «актуальная версия». `AboutSection:233` заменяется, неиспользуемый ключ `web.update.unsupported` убирается из 5 локалей, новые строки — во всех 5.
+- Зелёная точка в сайдбаре и переход в About (`App.tsx:863`, `Sidebar.tsx:227`) в web начинают работать при `behind`: закрепить тестом. Строку таблицы фазы 6 про обновления отметить закрытой.
+
 ### Task 1: SHA сборки
 - [ ] `services/web_update.rs`: `pub const BUILD_SHA: Option<&str> = option_env!("CC_SWITCH_WEB_GIT_SHA");`. `scripts/install-server.sh` и `Dockerfile.web` передают `CC_SWITCH_WEB_GIT_SHA=$(git rev-parse HEAD)` в `cargo build`.
 - [ ] `/api/capabilities` дополнительно отдаёт `buildSha` (`null`, если не задан); `runtime_boundaries` — убрать «no auto-update», написать «updates: check in UI, install by operator».
