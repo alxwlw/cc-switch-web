@@ -30,6 +30,15 @@ fn fail_bootstrap_with_too_new_db() {
     }
 }
 
+/// `buildSha` of a test build: `null` unless the harness itself was compiled with
+/// `CC_SWITCH_WEB_GIT_SHA` (same env rule as the library).
+fn expected_build_sha() -> serde_json::Value {
+    match option_env!("CC_SWITCH_WEB_GIT_SHA").map(str::trim) {
+        Some(sha) if !sha.is_empty() => json!(sha),
+        _ => serde_json::Value::Null,
+    }
+}
+
 #[tokio::test]
 async fn degraded_router_reports_the_init_error() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
@@ -78,6 +87,12 @@ async fn degraded_router_keeps_capabilities() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["mode"], json!("web"));
     assert_eq!(body["version"], json!(env!("CARGO_PKG_VERSION")));
+    assert!(body.as_object().unwrap().contains_key("buildSha"), "{body}");
+    assert_eq!(body["buildSha"], expected_build_sha());
+    assert!(!body["runtime_boundaries"]
+        .as_str()
+        .unwrap()
+        .contains("no auto-update"));
 }
 
 #[tokio::test]

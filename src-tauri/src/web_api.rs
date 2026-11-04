@@ -731,9 +731,10 @@ async fn capabilities() -> Json<Value> {
         "mode": "web",
         "auth": "none (tailscale-only; TRUSTED_TAILNET=1 required for non-loopback bind)",
         "version": env!("CARGO_PKG_VERSION"),
+        "buildSha": crate::services::web_update::build_sha(),
         "platform": std::env::consts::OS,
         "mvp_apps": ["claude", "codex", "gemini", "opencode"],
-        "runtime_boundaries": "manages files on the server host only; no tray, no native file pickers, no auto-update, no file dialogs, no terminal launch",
+        "runtime_boundaries": "manages files on the server host only; no tray, no native file pickers, no file dialogs, no terminal launch; updates: check in UI, install by operator",
     }))
 }
 

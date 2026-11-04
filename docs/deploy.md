@@ -21,6 +21,25 @@ by the script only for its closing message: the unit comes from
 re-run of `install-server.sh` renders the unit from the template again, so an edit that
 removed that line is undone (see "Data directory" below).
 
+## Build commit
+
+The console compares the running build with the fork's branch, so the binary carries the
+commit it was built from (`buildSha` in `GET /api/capabilities`, `null` when unknown). It
+is the compile-time env `CC_SWITCH_WEB_GIT_SHA`:
+
+- `scripts/install-server.sh` sets it to `git rev-parse HEAD` of its checkout only when
+  that is a git checkout root and no tracked file differs from `HEAD` (untracked files do
+  not count). Otherwise it unsets the variable, prints a warning for tracked changes, and
+  the build reports an unknown commit. Commit before installing to get a known build.
+- Docker: the builder stage has no git, so pass the commit as a build argument. An empty
+  or missing argument gives an unknown build:
+
+  ```bash
+  docker build -f Dockerfile.web \
+    --build-arg CC_SWITCH_WEB_GIT_SHA=$(git rev-parse HEAD) \
+    -t cc-switch-web .
+  ```
+
 ## Data isolation
 
 The fork does not keep its database in `~/.cc-switch` unless you point it there, but a few

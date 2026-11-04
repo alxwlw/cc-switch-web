@@ -39,8 +39,8 @@ Task 3:
 - Зелёная точка в сайдбаре и переход в About (`App.tsx:863`, `Sidebar.tsx:227`) в web начинают работать при `behind`: закрепить тестом. Строку таблицы фазы 6 про обновления отметить закрытой.
 
 ### Task 1: SHA сборки
-- [ ] `services/web_update.rs`: `pub const BUILD_SHA: Option<&str> = option_env!("CC_SWITCH_WEB_GIT_SHA");`. `scripts/install-server.sh` и `Dockerfile.web` передают `CC_SWITCH_WEB_GIT_SHA=$(git rev-parse HEAD)` в `cargo build`.
-- [ ] `/api/capabilities` дополнительно отдаёт `buildSha` (`null`, если не задан); `runtime_boundaries` — убрать «no auto-update», написать «updates: check in UI, install by operator».
+- [x] `services/web_update.rs`: `pub const BUILD_SHA: Option<&str> = option_env!("CC_SWITCH_WEB_GIT_SHA");`. `scripts/install-server.sh` и `Dockerfile.web` передают `CC_SWITCH_WEB_GIT_SHA=$(git rev-parse HEAD)` в `cargo build`.
+- [x] `/api/capabilities` дополнительно отдаёт `buildSha` (`null`, если не задан); `runtime_boundaries` — убрать «no auto-update», написать «updates: check in UI, install by operator».
 
 ### Task 2: проверка обновлений
 - [ ] `pub async fn check(cfg: &UpdateSourceConfig) -> Result<UpdateCheck, AppError>`; `UpdateSourceConfig {api_base, repo, branch}` из env `CC_SWITCH_WEB_UPDATE_API` (по умолчанию `https://api.github.com`), `CC_SWITCH_WEB_UPDATE_REPO` (`alxwlw/cc-switch-web`), `CC_SWITCH_WEB_UPDATE_BRANCH` (`main`). Запрос `GET {api_base}/repos/{repo}/compare/{BUILD_SHA}...{branch}`.

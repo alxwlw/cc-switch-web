@@ -1,6 +1,8 @@
 export interface ServerCapabilities {
   mode: string;
   version: string;
+  /** Commit the server binary was built from; `null` when the build has none. */
+  buildSha: string | null;
   runtime_boundaries: string;
   /** `std::env::consts::OS` of the server: "linux" | "macos" | "windows". */
   platform: string;
@@ -20,6 +22,10 @@ export async function fetchCapabilities(): Promise<ServerCapabilities> {
   return {
     mode: String(body.mode ?? ""),
     version: body.version,
+    buildSha:
+      typeof body.buildSha === "string" && body.buildSha !== ""
+        ? body.buildSha
+        : null,
     runtime_boundaries: String(body.runtime_boundaries ?? ""),
     platform: String(body.platform ?? ""),
   };

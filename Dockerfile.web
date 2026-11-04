@@ -13,8 +13,12 @@ RUN curl -fsSL https://get.pnpm.io/install.sh | ENV="$HOME/.shrc" SHELL="$(which
   && ln -s /root/.local/share/pnpm/pnpm /usr/local/bin/pnpm
 WORKDIR /build
 COPY . .
-RUN pnpm install && pnpm build:web \
-  && cd src-tauri && cargo build --release --example server \
+RUN pnpm install && pnpm build:web
+# The builder has no git: pass the commit in, `--build-arg CC_SWITCH_WEB_GIT_SHA=$(git rev-parse HEAD)`
+# (docs/deploy.md). Empty means an unknown build. Declared after the frontend step so
+# a new commit does not invalidate its layer.
+ARG CC_SWITCH_WEB_GIT_SHA=
+RUN cd src-tauri && cargo build --release --example server \
   && cp target/release/examples/server /usr/local/bin/cc-switch-web
 
 FROM debian:bookworm-slim
