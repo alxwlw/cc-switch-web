@@ -59,9 +59,10 @@ behind gets a dot on Settings and, in About, the number of missing commits, the 
 them (with "showing N of M" when the list is shorter) and the update commands for systemd
 and Docker with copy buttons. A failed check shows the server's error text. The console
 does not install the update: the operator runs the commands on the server host. For
-systemd that is `cd <checkout> && git pull --ff-only && scripts/install-server.sh && systemctl --user restart cc-switch-web`
-(`install-server.sh` installs the binary but does not restart the unit, so without the last
-step the old process keeps running and the console still says "behind"). The source is
+systemd that is `cd <checkout> && git pull --ff-only && scripts/install-server.sh && systemctl --user daemon-reload && systemctl --user restart cc-switch-web`
+(`install-server.sh` installs the binary and rewrites the unit file but does not restart the
+unit, so without the last two steps the old process keeps running and the console still says
+"behind"). The source is
 read from the environment of the server on every request:
 
 | Variable                      | Default                  |
