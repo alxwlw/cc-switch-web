@@ -726,16 +726,24 @@ async fn restart_server(
     )
 }
 
-async fn capabilities() -> Json<Value> {
-    Json(json!({
+/// `buildSha` is a parameter so a test can pin both the "set" and the "unset"
+/// value; a default build has no SHA and could not tell the handler's source apart.
+fn capabilities_payload(build_sha: Option<&str>) -> Value {
+    json!({
         "mode": "web",
         "auth": "none (tailscale-only; TRUSTED_TAILNET=1 required for non-loopback bind)",
         "version": env!("CARGO_PKG_VERSION"),
-        "buildSha": crate::services::web_update::build_sha(),
+        "buildSha": build_sha,
         "platform": std::env::consts::OS,
         "mvp_apps": ["claude", "codex", "gemini", "opencode"],
         "runtime_boundaries": "manages files on the server host only; no tray, no native file pickers, no file dialogs, no terminal launch; updates: check in UI, install by operator",
-    }))
+    })
+}
+
+async fn capabilities() -> Json<Value> {
+    Json(capabilities_payload(
+        crate::services::web_update::build_sha(),
+    ))
 }
 
 // ---------- providers ----------
@@ -5102,7 +5110,29 @@ async fn failover_set_auto(
 
 #[cfg(test)]
 mod tests {
-    use super::web_oauth_account_param;
+    use super::{capabilities, capabilities_payload, web_oauth_account_param};
+
+    #[test]
+    fn capabilities_payload_carries_the_given_build_sha() {
+        let set = capabilities_payload(Some("abc1234def"));
+        assert_eq!(set["buildSha"], serde_json::json!("abc1234def"));
+        let unset = capabilities_payload(None);
+        assert!(unset.as_object().unwrap().contains_key("buildSha"));
+        assert!(unset["buildSha"].is_null());
+    }
+
+    /// The handler must feed the payload from `web_update::build_sha()` itself:
+    /// compared with the public function, not a copy of its rule. In a default
+    /// build both sides are `null`; the check bites when the tests are built with
+    /// `CC_SWITCH_WEB_GIT_SHA` set.
+    #[tokio::test]
+    async fn capabilities_handler_reports_web_update_build_sha() {
+        let body = capabilities().await.0;
+        assert_eq!(
+            body["buildSha"],
+            serde_json::json!(crate::services::web_update::build_sha())
+        );
+    }
 
     #[test]
     fn web_oauth_default_segment_resolves_like_desktop_none() {

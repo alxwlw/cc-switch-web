@@ -21,15 +21,6 @@ async fn init_status_is_null_without_error() {
     assert_eq!(body, json!({ "ok": true, "data": Value::Null }));
 }
 
-/// `buildSha` of a test build: `null` unless the harness itself was compiled with
-/// `CC_SWITCH_WEB_GIT_SHA` (same env rule as the library).
-fn expected_build_sha() -> serde_json::Value {
-    match option_env!("CC_SWITCH_WEB_GIT_SHA").map(str::trim) {
-        Some(sha) if !sha.is_empty() => json!(sha),
-        _ => Value::Null,
-    }
-}
-
 #[tokio::test]
 async fn full_router_capabilities_carry_the_build_sha() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
@@ -41,7 +32,12 @@ async fn full_router_capabilities_carry_the_build_sha() {
 
     assert_eq!(status, StatusCode::OK);
     assert!(body.as_object().unwrap().contains_key("buildSha"), "{body}");
-    assert_eq!(body["buildSha"], expected_build_sha());
+    // The value is pinned in-crate (`web_api::tests`), where `web_update::build_sha()`
+    // is reachable; here the field must exist and be a string or null.
+    assert!(
+        body["buildSha"].is_null() || body["buildSha"].is_string(),
+        "{body}"
+    );
     let boundaries = body["runtime_boundaries"].as_str().unwrap();
     assert!(!boundaries.contains("no auto-update"), "{boundaries}");
     assert!(

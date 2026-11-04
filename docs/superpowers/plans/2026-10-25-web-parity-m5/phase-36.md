@@ -57,7 +57,7 @@ Task 3:
 - [ ] Тесты `UpdateContext`/`AboutSection` (web): `behind` → баннер и инструкция; `up-to-date` → без баннера; `unknown` → «версию сборки определить нельзя».
 
 ### Task 4: гейты, PR, Plane
-- [ ] Полный набор гейтов + `cargo build --release --example server` с `CC_SWITCH_WEB_GIT_SHA`.
+- [ ] Полный набор гейтов + `cargo build --release --example server` с `CC_SWITCH_WEB_GIT_SHA`. После сборки с переменной: запустить пример-сервер и `curl /api/capabilities` должен показать `buildSha`, равный этому SHA; после пересборки без переменной тот же `curl` показывает `buildSha: null`. Это единственная проверка, что обработчик берёт значение из `web_update::build_sha()`, а `option_env!` читает переменную: в обычной сборке тесты сравнивают `null` с `null`.
 - [ ] Ветка `web-parity/web-28-update-check`, PR; DX-86 остаётся In Progress, комментарий со ссылкой на PR, «этап 1 из 2» и решением про источник обновлений.
 
 Риски для ревью:
