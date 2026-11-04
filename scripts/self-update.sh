@@ -98,7 +98,7 @@ run() {
   local label="$1" rc=0
   shift
   "$@" || rc=$?
-  [ "$rc" -eq 0 ] || die "$label failed (exit $rc); log: $JOURNAL_HINT"
+  [ "$rc" -eq 0 ] || die "$label failed (exit $rc)"
 }
 
 # run_in <dir> <label> <command...>
@@ -106,7 +106,7 @@ run_in() {
   local dir="$1" label="$2" rc=0
   shift 2
   (cd "$dir" && "$@") || rc=$?
-  [ "$rc" -eq 0 ] || die "$label failed (exit $rc); log: $JOURNAL_HINT"
+  [ "$rc" -eq 0 ] || die "$label failed (exit $rc)"
 }
 
 short() { printf '%.7s' "$1"; }
@@ -227,9 +227,6 @@ SRC="$(cd "$SRC_ARG" 2>/dev/null && pwd -P)" || die "source dir $SRC_ARG does no
 top="$(git -C "$SRC" rev-parse --show-toplevel 2>/dev/null)" || die "$SRC is not a git checkout"
 [ "$top" = "$SRC" ] || die "$SRC is not the root of a git checkout"
 
-case "$BRANCH" in
-  -* | '') die "invalid branch name" ;;
-esac
 git check-ref-format --branch "$BRANCH" >/dev/null 2>&1 || die "invalid branch name $BRANCH"
 current="$(git -C "$SRC" symbolic-ref --short -q HEAD)" || current="(detached HEAD)"
 [ "$current" = "$BRANCH" ] || die "checkout $SRC is on $current, not on $BRANCH"
@@ -293,7 +290,7 @@ rm -rf "$NEW_DIST"
 rm -f "$BIN_NEW"
 run_in "$SRC" "pnpm install --frozen-lockfile" pnpm install --frozen-lockfile
 run_in "$SRC" "pnpm build:web" pnpm build:web --outDir "$NEW_DIST"
-[ -f "$NEW_DIST/index.html" ] || die "pnpm build:web produced no $NEW_DIST/index.html; log: $JOURNAL_HINT"
+[ -f "$NEW_DIST/index.html" ] || die "pnpm build:web produced no $NEW_DIST/index.html"
 run_in "$SRC/src-tauri" "cargo build --release --example server" cargo build --release --example server
 run "install" install -m0755 "$SRC/src-tauri/target/release/examples/server" "$BIN_NEW"
 

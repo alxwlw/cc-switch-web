@@ -208,6 +208,7 @@ run_update() {
     HOST=100.64.0.7 PORT=18766 HEALTH_TIMEOUT=0 HEALTH_INTERVAL=0 \
     STUB_LOG="$LOG" STUB_SVC="$SVC" STATUS_FILE="$STATUS" \
     GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+    GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
     "$@" "$BASH" "$SCRIPT" "$SRC" "${BRANCH_ARG:-main}" >"$OUT" 2>&1
   RC=$?
 }
@@ -286,6 +287,8 @@ done
 setup_case health-port
 run_update PORT=19001
 check_has "health check uses PORT" "$(log_text)" "curl http://100.64.0.7:19001/api/capabilities"
+check "health check uses PORT: no probe went to the default port" \
+  "$(grep -F 'curl ' "$LOG" | grep -vc -F 'curl http://100.64.0.7:19001/api/capabilities' || true)" "0"
 
 setup_case warmup
 run_update STUB_WARMUP=3 HEALTH_TIMEOUT=30 HEALTH_INTERVAL=0.05
@@ -323,6 +326,7 @@ check "dirty tree: exit code" "$RC" "1"
 check "dirty tree: stage" "$(field stage)" "failed"
 check "dirty tree: ok" "$(field ok)" "false"
 check_has "dirty tree: message" "$(field message)" "differ from HEAD"
+check_lacks "dirty tree: no checkout note before the merge" "$(field message)" "checkout stays"
 check "dirty tree: finishedAt set" "$(field finishedAt | grep -c '^20')" "1"
 check "dirty tree: nothing fetched" "$(git -C "$SRC" rev-parse origin/main)" "$A"
 check "dirty tree: checkout stays" "$(git -C "$SRC" rev-parse HEAD)" "$A"
@@ -490,10 +494,11 @@ run_update_blocked() {
     for t in pnpm node cargo curl systemctl; do ln -s "$STUBS/$t" "$d/$t"; done
     exec env -i PATH="$d" HOME="$C/home" XDG_STATE_HOME="$STATE" BIN_DIR="$BIN_DIR" WEB_DIST="$WEB" \
       HOST=100.64.0.7 PORT=18766 HEALTH_TIMEOUT=0 HEALTH_INTERVAL=0 STUB_LOG="$LOG" STUB_SVC="$SVC" \
+      GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
       STATUS_FILE="$STATUS" "$1=$C/fifo" "$SETSID" "$BASH" "$SCRIPT" "$SRC" main >"$C/out.txt" 2>&1
   ) &
   PID=$!
-  read -r -t 20 _ <"$C/fifo" || echo "the stub never reached the fifo: $(cat "$C/out.txt")"
+  read -r -t 10 _ <"$C/fifo" || echo "the stub never reached the fifo: $(cat "$C/out.txt")"
 }
 
 setup_case term-building
@@ -519,13 +524,13 @@ check "SIGTERM after the swap: restart repeated for the rollback" "$(log_count '
 
 # ==== status file ===============================================================================
 
-setup_case 'weird' 'we"ird
+setup_case 'weird' 'we"ird\nlit\back
 name'
 git -C "$SRC" checkout -q -b other
 run_update
 check "quote and newline in a message: file parses as JSON" "$(python3 -I -c 'import json,sys; json.load(open(sys.argv[1])); print("valid")' "$STATUS" 2>&1)" "valid"
 check "quote and newline in a message: round trip" \
-  "$([[ "$(field message)" == *"we\"ird"$'\n'"name is on other"* ]] && echo yes)" "yes"
+  "$([[ "$(field message)" == *'we"ird\nlit\back'$'\n''name is on other'* ]] && echo yes)" "yes"
 check "no temporary status files left" "$(count_named '*tmp*' "$STATE/cc-switch-web")" "0"
 
 setup_case final-json
