@@ -10,7 +10,12 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT="$HERE/../self-update.sh"
 
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+LISTENER=""
+cleanup() {
+  if [ -n "$LISTENER" ]; then kill "$LISTENER" 2>/dev/null; fi
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 
@@ -145,7 +150,7 @@ chmod +x "$STUBS"/*
 
 # Only these real tools are visible to the script, next to the stubs: a missing build
 # tool is then really missing whatever the host has installed.
-BASE_TOOLS="bash env git sh cat mkdir mv rm date tr sed head tail install sleep dirname chmod cp touch grep basename mktemp wc sort ln readlink"
+BASE_TOOLS="timeout bash env git sh cat mkdir mv rm date tr sed head tail install sleep dirname chmod cp touch grep basename mktemp wc sort ln readlink"
 
 # --- repositories -------------------------------------------------------------------
 
@@ -204,12 +209,16 @@ run_update() {
     if [[ " ${NO_TOOL:-} " != *" $t "* ]]; then ln -s "$STUBS/$t" "$d/$t"; fi
   done
   OUT="$C/out.txt"
-  env -i PATH="$d" HOME="$C/home" XDG_STATE_HOME="$STATE" BIN_DIR="$BIN_DIR" WEB_DIST="$WEB" \
+  # SRC_ARG / BRANCH_ARG override the arguments, ONE_ARG drops the branch. The whole run is
+  # bounded, so a script that hangs shows up as a failed case (exit 124), not a stuck suite.
+  local args=("${SRC_ARG:-$SRC}")
+  if [ -z "${ONE_ARG:-}" ]; then args+=("${BRANCH_ARG:-main}"); fi
+  timeout 30 env -i PATH="$d" HOME="$C/home" XDG_STATE_HOME="$STATE" BIN_DIR="$BIN_DIR" WEB_DIST="$WEB" \
     HOST=100.64.0.7 PORT=18766 HEALTH_TIMEOUT=0 HEALTH_INTERVAL=0 \
     STUB_LOG="$LOG" STUB_SVC="$SVC" STATUS_FILE="$STATUS" \
     GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
     GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
-    "$@" "$BASH" "$SCRIPT" "$SRC" "${BRANCH_ARG:-main}" >"$OUT" 2>&1
+    "$@" "$BASH" "$SCRIPT" "${args[@]}" >"$OUT" 2>&1
   RC=$?
 }
 
@@ -309,6 +318,24 @@ check_has "up to date: message" "$(field message)" "already up to date"
 check "up to date: nothing built" "$(log_count 'cargo ')$(log_count 'pnpm ')" "00"
 check "up to date: binary untouched" "$(bin_text)" "bin-$B"
 
+setup_case uptodate-service-down
+git -C "$SRC" fetch -q origin
+git -C "$SRC" merge -q --ff-only origin/main
+echo down >"$SVC" # nothing answers: HEAD == origin is not proof that the right build runs
+run_update
+check "checkout == origin but the service is down: rebuilt" "$(field stage)" "done"
+check_lacks "checkout == origin but the service is down: not the shortcut" "$(field message)" "already up to date"
+check "checkout == origin but the service is down: new binary" "$(bin_text)" "bin-$B"
+check "checkout == origin but the service is down: built" "$(log_count 'cargo ')" "1"
+
+setup_case uptodate-no-sha
+git -C "$SRC" fetch -q origin
+git -C "$SRC" merge -q --ff-only origin/main
+echo none >"$SVC" # answers, but the build carries no sha
+run_update
+check "checkout == origin but the build has no sha: rebuilt" "$(field stage)" "done"
+check "checkout == origin but the build has no sha: new binary" "$(bin_text)" "bin-$B"
+
 setup_case ahead-of-running
 git -C "$SRC" fetch -q origin
 git -C "$SRC" merge -q --ff-only origin/main # checkout at B, the service still runs A
@@ -400,6 +427,93 @@ setup_case relative-dist
 run_update WEB_DIST=relative/dist
 check "relative WEB_DIST: stage" "$(field stage)" "failed"
 check_has "relative WEB_DIST: message" "$(field message)" "must be an absolute path"
+
+setup_case subdir-source
+SRC_ARG="$SRC/src-tauri" run_update
+check "source dir inside a checkout: stage" "$(field stage)" "failed"
+check_has "source dir inside a checkout: message" "$(field message)" "is not the root of a git checkout"
+check "source dir inside a checkout: nothing fetched" "$(git -C "$SRC" rev-parse origin/main)" "$A"
+assert_untouched "source dir inside a checkout"
+
+setup_case branch-not-on-origin
+git -C "$SRC" checkout -q -b nosuch
+BRANCH_ARG=nosuch run_update
+check "branch missing on origin: stage" "$(field stage)" "failed"
+check_has "branch missing on origin: message" "$(field message)" "origin/nosuch does not exist"
+check "branch missing on origin: checkout not moved" "$(git -C "$SRC" rev-parse HEAD)" "$A"
+assert_untouched "branch missing on origin"
+
+setup_case port-not-numeric
+run_update PORT=18x66
+check "PORT=18x66: stage" "$(field stage)" "failed"
+check_has "PORT=18x66: message" "$(field message)" "PORT must be a number"
+check "PORT=18x66: nothing fetched" "$(git -C "$SRC" rev-parse origin/main)" "$A"
+assert_untouched "PORT=18x66"
+
+for bad in HEALTH_TIMEOUT=abc HEALTH_TIMEOUT=1.5 HEALTH_INTERVAL=abc HEALTH_INTERVAL=1. FETCH_TIMEOUT=abc FETCH_TIMEOUT=0; do
+  setup_case "bad-${bad//[^a-zA-Z0-9]/_}"
+  run_update "$bad"
+  check "$bad: stage" "$(field stage)" "failed"
+  check_has "$bad: message names the variable" "$(field message)" "${bad%%=*} must be"
+  check "$bad: nothing fetched" "$(git -C "$SRC" rev-parse origin/main)" "$A"
+  assert_untouched "$bad"
+done
+
+setup_case no-source-dir
+SRC_ARG="$C/does-not-exist" run_update
+check "missing source dir: stage" "$(field stage)" "failed"
+check_has "missing source dir: message" "$(field message)" "does not exist"
+assert_untouched "missing source dir"
+
+setup_case usage
+ONE_ARG=1 run_update
+check "one argument: exit code" "$RC" "1"
+check "one argument: stage" "$(field stage)" "failed"
+check_has "one argument: message" "$(field message)" "usage: self-update.sh <source_dir> <branch>"
+assert_untouched "one argument"
+
+# ==== fetch ======================================================================================
+
+# an origin that accepts the connection and never answers; the fifo hands the port over
+setup_case fetch-hangs
+mkfifo "$C/port"
+python3 -I -c '
+import socket, sys
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+s.listen(5)
+open(sys.argv[1], "w").write(str(s.getsockname()[1]))
+held = []
+while True:
+    held.append(s.accept()[0])' "$C/port" &
+LISTENER=$!
+read -r -t 10 port <"$C/port" || [ -n "$port" ] || echo "the stub origin never started" # no newline: read returns 1 with the value set
+git -C "$SRC" remote set-url origin "http://127.0.0.1:$port/repo.git"
+run_update FETCH_TIMEOUT=1
+kill "$LISTENER" 2>/dev/null
+wait "$LISTENER" 2>/dev/null
+LISTENER=""
+check "fetch against a silent origin: exit code" "$RC" "1"
+check "fetch against a silent origin: stage" "$(field stage)" "failed"
+check_has "fetch against a silent origin: message names fetch and the bound" "$(field message)" "git fetch origin timed out after 1s"
+check "fetch against a silent origin: checkout not moved" "$(git -C "$SRC" rev-parse HEAD)" "$A"
+assert_untouched "fetch against a silent origin"
+
+setup_case fetch-secret
+git -C "$SRC" remote set-url origin "file://$C/user:secret@nowhere/repo.git"
+run_update
+check "failing fetch: stage" "$(field stage)" "failed"
+check_has "failing fetch: message says what failed" "$(field message)" "git fetch origin failed (exit "
+check_has "failing fetch: git's output is in the unit log" "$(cat "$OUT")" "secret"
+check_lacks "failing fetch: no git output in the status file" "$(cat "$STATUS")" "secret"
+check_has "failing fetch: message points at the journal" "$(field message)" "journalctl --user -u cc-switch-web-update"
+
+setup_case merge-output
+commit_in "$SRC" local-only secret-local
+run_update
+check "failing merge: stage" "$(field stage)" "failed"
+check_lacks "failing merge: no git output in the status file" "$(cat "$STATUS")" "hint:"
+check_has "failing merge: git's output is in the unit log" "$(cat "$OUT")" "fatal"
 
 # ==== build failures leave the installation alone =============================================
 
@@ -525,12 +639,12 @@ check "SIGTERM after the swap: restart repeated for the rollback" "$(log_count '
 # ==== status file ===============================================================================
 
 setup_case 'weird' 'we"ird\nlit\back
-name'
+na	me'
 git -C "$SRC" checkout -q -b other
 run_update
-check "quote and newline in a message: file parses as JSON" "$(python3 -I -c 'import json,sys; json.load(open(sys.argv[1])); print("valid")' "$STATUS" 2>&1)" "valid"
-check "quote and newline in a message: round trip" \
-  "$([[ "$(field message)" == *'we"ird\nlit\back'$'\n''name is on other'* ]] && echo yes)" "yes"
+check "quote, backslash, newline and tab in a message: file parses as JSON" "$(python3 -I -c 'import json,sys; json.load(open(sys.argv[1])); print("valid")' "$STATUS" 2>&1)" "valid"
+check "quote, backslash, newline and tab in a message: round trip" \
+  "$([[ "$(field message)" == *'we"ird\nlit\back'$'\n''na'$'\t''me is on other'* ]] && echo yes)" "yes"
 check "no temporary status files left" "$(count_named '*tmp*' "$STATE/cc-switch-web")" "0"
 
 setup_case final-json
@@ -544,6 +658,36 @@ echo changed >>"$SRC/f"
 run_update
 check "fromSha is the checkout HEAD in a refusal for a dirty tree" "$(field fromSha)" "$A"
 check "toSha is null before the fetch" "$(field toSha)" "null"
+
+# ==== second consecutive update, modes, trailing slash =======================================
+
+setup_case second-update
+mkdir -p "$WEB.prev"
+echo stale >"$WEB.prev/old"
+echo stale-bin >"$BIN_DIR/cc-switch-web.prev"
+run_update
+check "second update: stage" "$(field stage)" "done"
+check "second update: installed binary mode" "$(stat -c %a "$BIN_DIR/cc-switch-web")" "755"
+check "second update: .prev is the build that was live" "$(cat "$WEB.prev/index.html")" "web-$A"
+check "second update: stale .prev content is gone" "$([ -e "$WEB.prev/old" ] && echo present || echo gone)" "gone"
+check "second update: live dist-web is not nested in .prev" "$([ -e "$WEB.prev/$(basename "$WEB")" ] && echo nested || echo flat)" "flat"
+check "second update: previous binary" "$(cat "$BIN_DIR/cc-switch-web.prev")" "bin-$A"
+
+setup_case second-update-rollback
+mkdir -p "$WEB.prev"
+echo stale >"$WEB.prev/old"
+echo stale-bin >"$BIN_DIR/cc-switch-web.prev"
+run_update STUB_BIN=bin-down
+check "second update, failed: stage" "$(field stage)" "rolled-back"
+check "second update, failed: rolled back to the build that was live" "$(web_text)" "web-$A"
+check "second update, failed: binary" "$(bin_text)" "bin-$A"
+
+setup_case trailing-slash
+run_update WEB_DIST="$WEB/"
+check "WEB_DIST with a trailing slash: stage" "$(field stage)" "done"
+check "WEB_DIST with a trailing slash: new dist-web" "$(web_text)" "web-$B"
+check "WEB_DIST with a trailing slash: .prev lies next to dist-web" "$(cat "$WEB.prev/index.html")" "web-$A"
+check "WEB_DIST with a trailing slash: nothing inside the live dist-web" "$(find "$WEB" -mindepth 1 -maxdepth 1 -name '.*' | wc -l | tr -d ' ')" "0"
 
 # ==== unit template ===============================================================================
 

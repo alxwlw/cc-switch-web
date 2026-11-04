@@ -25,7 +25,9 @@
 #   CC_SWITCH_WEB_BUILD_PATH  directories with pnpm/node/cargo, put in front of PATH
 #                             (a systemd-run unit has the manager's PATH, not the login one)
 #   HEALTH_TIMEOUT (60)       seconds to wait for the restarted service
-#   HEALTH_INTERVAL (1)       seconds between probes
+#   HEALTH_INTERVAL (1)       seconds between probes (a number, may be fractional)
+#   FETCH_TIMEOUT (120)       seconds `git fetch origin` may take before it is killed
+#                             (GNU timeout: bounds any transport, ssh included)
 #
 # Build logs go to stdout/stderr, i.e. the journal of the transient unit:
 #   journalctl --user -u cc-switch-web-update
@@ -142,6 +144,7 @@ trap 'exit 129' HUP
 PORT="${PORT:-18766}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-60}"
 HEALTH_INTERVAL="${HEALTH_INTERVAL:-1}"
+FETCH_TIMEOUT="${FETCH_TIMEOUT:-120}"
 HEALTH_HOST="${HOST:-}"
 case "$HEALTH_HOST" in
   '' | 0.0.0.0 | :: | '[::]') HEALTH_HOST=127.0.0.1 ;;
@@ -216,7 +219,7 @@ if [ -n "${CC_SWITCH_WEB_BUILD_PATH:-}" ]; then
 fi
 
 missing=""
-for tool in git pnpm node cargo curl systemctl; do
+for tool in git pnpm node cargo curl systemctl timeout; do
   command -v "$tool" >/dev/null 2>&1 || missing="$missing $tool"
 done
 [ -z "$missing" ] || die "missing build tools:$missing (set CC_SWITCH_WEB_BUILD_PATH to the directories that hold them)"
@@ -252,6 +255,13 @@ esac
 case "$PORT" in
   '' | *[!0-9]*) die "PORT must be a number (got $PORT)" ;;
 esac
+case "$HEALTH_TIMEOUT" in
+  '' | *[!0-9]*) die "HEALTH_TIMEOUT must be a whole number of seconds (got $HEALTH_TIMEOUT)" ;;
+esac
+case "$FETCH_TIMEOUT" in
+  '' | 0 | *[!0-9]*) die "FETCH_TIMEOUT must be a positive whole number of seconds (got $FETCH_TIMEOUT)" ;;
+esac
+[[ "$HEALTH_INTERVAL" =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "HEALTH_INTERVAL must be a number of seconds (got $HEALTH_INTERVAL)"
 [ -f "$BIN" ] || die "no installed binary at $BIN; nothing to roll back to, run scripts/install-server.sh first"
 [ -d "$WEB_DIST" ] || die "no dist-web at $WEB_DIST; nothing to roll back to, run scripts/install-server.sh first"
 
@@ -261,17 +271,24 @@ RUNNING_SHA="$(running_sha)"
 # --- step 2: fetch, fast-forward ------------------------------------------------
 
 write_status fetching true "fetching origin"
-out="$(git -C "$SRC" fetch origin 2>&1)" || die "git fetch origin failed: $(printf '%s' "$out" | tail -n 3)"
+# git's own output goes to the unit log, never into the status file: the status is served
+# unauthenticated and a remote URL may carry a token.
+rc=0
+timeout -k 5 "$FETCH_TIMEOUT" git -C "$SRC" fetch origin || rc=$?
+[ "$rc" -ne 124 ] || die "git fetch origin timed out after ${FETCH_TIMEOUT}s"
+[ "$rc" -eq 0 ] || die "git fetch origin failed (exit $rc)"
 TO_SHA="$(git -C "$SRC" rev-parse --verify -q "refs/remotes/origin/$BRANCH^{commit}")" || die "origin/$BRANCH does not exist"
 
-if [ "$FROM_SHA" = "$TO_SHA" ] && { [ -z "$RUNNING_SHA" ] || [ "$RUNNING_SHA" = "$TO_SHA" ]; }; then
+# Up to date only when the live service itself reports this commit: a service that is down
+# or runs a build without a sha is rebuilt.
+if [ "$FROM_SHA" = "$TO_SHA" ] && [ "$RUNNING_SHA" = "$TO_SHA" ]; then
   TERMINAL=1
   write_status "done" true "already up to date at $(short "$TO_SHA")"
   exit 0
 fi
 
 write_status merging true "fast-forwarding to origin/$BRANCH"
-out="$(git -C "$SRC" merge --ff-only "origin/$BRANCH" 2>&1)" || die "cannot fast-forward $BRANCH to origin/$BRANCH: $(printf '%s' "$out" | tail -n 3)"
+git -C "$SRC" merge --ff-only "origin/$BRANCH" || die "cannot fast-forward $BRANCH to origin/$BRANCH"
 MERGED=1
 [ "$(git -C "$SRC" rev-parse HEAD)" = "$TO_SHA" ] || die "checkout is not on $(short "$TO_SHA") after the merge"
 
