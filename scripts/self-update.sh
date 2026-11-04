@@ -256,7 +256,8 @@ case "$PORT" in
   '' | *[!0-9]*) die "PORT must be a number (got $PORT)" ;;
 esac
 case "$HEALTH_TIMEOUT" in
-  '' | *[!0-9]*) die "HEALTH_TIMEOUT must be a whole number of seconds (got $HEALTH_TIMEOUT)" ;;
+  # a leading zero would be read as octal by the deadline arithmetic ($((SECONDS + 08)) is an error)
+  '' | *[!0-9]* | 0[0-9]*) die "HEALTH_TIMEOUT must be a whole number of seconds without a leading zero (got $HEALTH_TIMEOUT)" ;;
 esac
 case "$FETCH_TIMEOUT" in
   '' | 0 | *[!0-9]*) die "FETCH_TIMEOUT must be a positive whole number of seconds (got $FETCH_TIMEOUT)" ;;

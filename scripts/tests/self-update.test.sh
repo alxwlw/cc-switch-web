@@ -450,7 +450,7 @@ check_has "PORT=18x66: message" "$(field message)" "PORT must be a number"
 check "PORT=18x66: nothing fetched" "$(git -C "$SRC" rev-parse origin/main)" "$A"
 assert_untouched "PORT=18x66"
 
-for bad in HEALTH_TIMEOUT=abc HEALTH_TIMEOUT=1.5 HEALTH_INTERVAL=abc HEALTH_INTERVAL=1. FETCH_TIMEOUT=abc FETCH_TIMEOUT=0; do
+for bad in HEALTH_TIMEOUT=abc HEALTH_TIMEOUT=1.5 HEALTH_TIMEOUT=08 HEALTH_TIMEOUT=010 HEALTH_INTERVAL=abc HEALTH_INTERVAL=1. FETCH_TIMEOUT=abc FETCH_TIMEOUT=0; do
   setup_case "bad-${bad//[^a-zA-Z0-9]/_}"
   run_update "$bad"
   check "$bad: stage" "$(field stage)" "failed"
