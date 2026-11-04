@@ -41,7 +41,7 @@ Scope: `scripts/self-update.sh` (новый), `scripts/tests/self-update.test.sh
 ### Task 4: гейты, PR, Plane
 - [x] Полный набор гейтов + `bash scripts/tests/self-update.test.sh`; ручной прогон на agentbox: обновление с коммита N-1 на N через UI, затем искусственно сломанная сборка → откат. Сквозной прогон шёл в изоляции (шимы `systemctl`/`systemd-run`, отдельные `BIN_DIR`, `WEB_DIST`, `XDG_STATE_HOME`, юнит `cc-switch-web-e2e`), не на боевом сервисе: см. Notes.
 - [x] `docs/deploy.md`: включение self-update, что делает скрипт, как откатиться вручную (`.prev`).
-- [ ] Ветка `web-parity/web-28-self-update`, PR; DX-86 → In Review + ссылка. Ветка запушена; PR и Plane — контроллер, номер PR не указан.
+- [x] Ветка `web-parity/web-28-self-update`, PR #38; DX-86 → In Review + ссылка.
 
 ### Task 5: закрытие модуля M5
 - [ ] После merge: все 33 задачи модуля в Done (сверка `module list_workitems`); модуль `c2c8690c-…` → status `completed`.
@@ -53,7 +53,7 @@ Scope: `scripts/self-update.sh` (новый), `scripts/tests/self-update.test.sh
 
 ## Notes for next phase
 
-- **Статус.** Ветка `web-parity/web-28-self-update` (base `main` = `c366a8a9`), PR открывает контроллер, номер — после открытия; merge делает владелец. Фаза закрывает DX-86 (этап 2 из 2: установка из консоли). **Self-update на боевом сервисе не включался и не включается без решения владельца**: боевой прогон не согласован, `cc-switch-web.service`, `~/.local/bin/cc-switch-web`, `dist-web` и checkout `/home/alex/cc-switch-web` в фазе не менялись (снимок до/после совпал, ниже). Задача 5 (закрытие модуля M5) — после merge.
+- **Статус.** Ветка `web-parity/web-28-self-update` (base `main` = `c366a8a9`), PR #38, до merge; merge делает владелец. Фаза закрывает DX-86 (этап 2 из 2: установка из консоли). **Self-update на боевом сервисе не включался и не включается без решения владельца**: боевой прогон не согласован, `cc-switch-web.service`, `~/.local/bin/cc-switch-web`, `dist-web` и checkout `/home/alex/cc-switch-web` в фазе не менялись (снимок до/после совпал, ниже). Задача 5 (закрытие модуля M5) — после merge.
 
 **Что сделано (file:line на HEAD ветки).**
 - T1 скрипт: `scripts/self-update.sh` — статус атомарно (`write_status` `:73`, временный файл + `mv`), `on_exit` `:122` (любой выход до финала пишет `failed`, после начала замены идёт в откат), `probe`/`running_sha`/`wait_healthy` `:160-185` (опрос `http://$HOST:$PORT/api/capabilities` с `buildSha` **и** `/api/health` 2xx), `rollback` `:189` (копии `.prev` остаются, подтверждение откатом по прежнему `buildSha` и рабочему `/api/health`, иначе `rollback-failed` с указанием на БД и `docs/deploy.md`), проверки `:215-275` (инструменты, ветка, tracked-изменения), fetch под `timeout` `:279-285`, `merge --ff-only` `:297`, сборка `:310-318` (`pnpm install --frozen-lockfile`, `pnpm build:web --outDir …new`, `cargo build --release --example server` с `CC_SWITCH_WEB_GIT_SHA`), замена `:322-329`, `daemon-reload` + restart `:331-336`, итог `:339` (предупреждение, если менялся `scripts/cc-switch-web.service.template`). `.gitignore`: `dist-web.new/`, `dist-web.prev/`. `scripts/tests/self-update.test.sh` — `324 passed, 0 failed` (временные репозитории, заглушки `cargo`/`pnpm`/`systemctl`/`curl`).
@@ -111,4 +111,4 @@ Scope: `scripts/self-update.sh` (новый), `scripts/tests/self-update.test.sh
 4. Smoke: `GET /api/capabilities` → `buildSha` = HEAD `main`, `selfUpdate:false`; `GET /api/update/check` → `up-to-date`; About без кнопки. Бюджет: 1–2 запроса к GitHub.
 5. **Self-update на боевом сервисе не включать** (drop-in из `docs/deploy.md` не создавать) без решения владельца: риск раздела «Self-update from the console».
 6. DX-86 → Done после merge (хук Plane при открытии PR переведёт в In Review).
-7. Задача 5: закрытие модуля M5 (все задачи в Done, модуль `c2c8690c-…` → `completed`, индекс).
+7. Задача 5: закрытие модуля M5 (все задачи в Done, модуль `c2c8690c-…` → `completed`, индекс). Следующей фазы нет, поэтому закрытие фазы 37 и итог индекса не могут лечь первым коммитом следующей ветки, а прямых пушей в `main` нет: нужен отдельный docs-PR.
