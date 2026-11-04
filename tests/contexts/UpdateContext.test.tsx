@@ -203,6 +203,44 @@ describe("updater · checkForUpdate (web)", () => {
       vi.useRealTimers();
     }
   });
+
+  it("without opts.timeout the wait is 30 s", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockReturnValue(new Promise(() => {}));
+      let settled = false;
+      const outcome = checkForUpdate().then(
+        () => ((settled = true), null),
+        (e: Error) => ((settled = true), e.message),
+      );
+      await vi.advanceTimersByTimeAsync(29999);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await outcome).toBe(
+        "update check: no answer from the server in 30 s",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("an answer, or an error, before the deadline leaves no timer behind", async () => {
+    vi.useFakeTimers();
+    try {
+      answer(webCheck());
+      await checkForUpdate();
+      expect(vi.getTimerCount()).toBe(0);
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ ok: false, error: "boom" }),
+      });
+      await expect(checkForUpdate()).rejects.toThrow("boom");
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("UpdateContext", () => {
