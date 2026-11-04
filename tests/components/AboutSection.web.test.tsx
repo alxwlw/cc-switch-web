@@ -359,6 +359,37 @@ describe("AboutSection · update controls", () => {
     expect(url).not.toContain("+");
   });
 
+  it("web, up to date: Release notes opens the running version's page", async () => {
+    setWeb(true);
+    renderAbout();
+    await clickCheck();
+    await screen.findByText("web.update.upToDateTitle");
+    fireEvent.click(screen.getByText("settings.releaseNotes"));
+    await waitFor(() =>
+      expect(mocks.openExternal).toHaveBeenCalledWith(
+        "https://github.com/farion1231/cc-switch/releases/tag/v3.0.0",
+      ),
+    );
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1);
+  });
+
+  it("desktop, no update: Release notes opens the running version's page", async () => {
+    renderAbout();
+    await clickCheck();
+    await waitFor(() =>
+      expect(mocks.toastSuccess).toHaveBeenCalledWith("settings.upToDate", {
+        closeButton: true,
+      }),
+    );
+    fireEvent.click(screen.getByText("settings.releaseNotes"));
+    await waitFor(() =>
+      expect(mocks.openExternal).toHaveBeenCalledWith(
+        "https://github.com/farion1231/cc-switch/releases/tag/v3.0.0",
+      ),
+    );
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1);
+  });
+
   it("desktop: Release notes opens the available version's page", async () => {
     mocks.check.mockResolvedValue({ version: "9.9.9", notes: "n" });
     renderAbout();
