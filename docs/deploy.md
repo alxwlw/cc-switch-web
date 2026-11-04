@@ -121,7 +121,9 @@ systemctl --user restart cc-switch-web
   `~/.cargo/bin`. Missing tools are reported by name before anything is touched.
 - The unit already carries `HOST`, `PORT` and `WEB_DIST`; the server forwards those, the
   build path and `XDG_STATE_HOME` to the update unit. The health check polls
-  `http://$HOST:$PORT/api/capabilities` (`HOST` empty or `0.0.0.0` means `127.0.0.1`).
+  `http://$HOST:$PORT/api/capabilities` (the new `buildSha` must show up) and
+  `http://$HOST:$PORT/api/health` (must answer 2xx); `HOST` empty or `0.0.0.0` means
+  `127.0.0.1`.
   `BIN_DIR` is **not** forwarded: the script always installs to
   `~/.local/bin/cc-switch-web`, where `install-server.sh` puts it by default. A service
   installed to another `BIN_DIR`, or one that runs another binary path, cannot be updated
@@ -165,12 +167,16 @@ not survive the restart). Build output goes to the journal:
    place; `dist-web` becomes `dist-web.prev` and `dist-web.new` takes its place.
 6. `restarting`: `systemctl --user daemon-reload`, `systemctl --user restart
    cc-switch-web`, then up to 60 s (`HEALTH_TIMEOUT`) of polling until `/api/capabilities`
-   reports the new `buildSha`. The run ends `done`.
+   reports the new `buildSha` **and** `/api/health` answers 2xx. Both are needed: a server
+   whose startup failed (a database newer than the binary) serves in init-error mode,
+   where `/api/capabilities` still answers with the build's own sha but `/api/health`,
+   like every other `/api` route, is `503`. Only when both hold does the run end `done`.
 7. A failure after step 5 (the process exits at start, the sha never shows up, SIGTERM)
    starts `rolling-back`: the `.prev` files are copied back (the copies stay), the
-   service restarts and must report the previous `buildSha`. Then `rolled-back`, with the
-   reason; or `rollback-failed` when the old build does not answer either. The message of
-   `rollback-failed` names the `.prev` files.
+   service restarts and must report the previous `buildSha` with a working `/api/health`.
+   Then `rolled-back`, with the reason; or `rollback-failed` when the old build does not
+   work either. The message of `rollback-failed` names the `.prev` files and points at the
+   database section below as one possible cause.
 
 Final stages are `done`, `failed`, `rolled-back` and `rollback-failed`. `failed` also
 covers an interrupted run (SIGTERM). About shows the outcome of an earlier `failed`,
@@ -207,13 +213,15 @@ script makes no backup of its own.
   init-error mode (`examples/server.rs:209`): the console shows "database version is too
   new", `/api/init-status` reports it and every other `/api/*` route answers `503`. There
   are no downgrade migrations.
-- **So a rollback after a migration does not give you back a working service.** If the
-  new build migrated the database and then failed its health check, the rollback puts
-  the previous binary back and that binary starts in init-error mode. Its
-  `/api/capabilities` still answers with the previous `buildSha`, which is all the script
-  checks, so the status can read `rolled-back` while the console is unusable. After any
-  `rolled-back` with a schema change, open the console and `GET /api/health` (it
-  answers `503` in this mode).
+- **A rollback after a migration does not give you back a working service, and the script
+  says so.** If the new build migrated the database and then crashed, or came up in
+  init-error mode, the health check (which includes `/api/health`) fails. The rollback puts
+  the previous binary back; it cannot open the migrated database and starts in init-error
+  mode too, so its health check fails as well and the status is `rollback-failed`, with a
+  message that names the database as a possible cause. The same goes for a new build that
+  starts in init-error mode on its own: it is a failed update, never `done`. The way out is
+  the database restore below. (The same check also stops "already up to date" from being
+  reported for a service that is in init-error mode.)
 - **Check for a migration before you click**: `git fetch origin && git diff HEAD
   origin/<branch> -- src-tauri/src/database` shows a changed `SCHEMA_VERSION` or
   schema; if so, take your own backup first:
