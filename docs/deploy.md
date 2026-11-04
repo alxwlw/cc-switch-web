@@ -45,7 +45,14 @@ commit (`status` is `up-to-date`, `behind` or `unknown`; `unknown` also covers a
 that is not on the branch, such as a local build, and a build with commits the branch
 lacks). The answer is cached in memory for one hour for every client, so open tabs do not
 spend the 60 anonymous requests an hour; `?force=1` asks again. A rate-limit or network
-failure is returned as an error and is not cached. The source is read from the
+failure is returned as an error and is not cached.
+
+In the console the check runs once, a second after it opens, and never with `force`;
+only the "Check for updates" button in Settings → About sends `?force=1`. A build that is
+behind gets a dot on Settings and, in About, the number of missing commits, the newest of
+them (with "showing N of M" when the list is shorter) and the update commands for systemd
+and Docker with copy buttons. A failed check shows the server's error text. The console
+does not install the update: the operator runs the commands on the server host. The source is read from the
 environment of the server on every request:
 
 | Variable                      | Default                  |

@@ -51,10 +51,10 @@ Task 3:
 - [x] Тесты (`tests/web_api_update.rs`, заглушка GitHub API на axum через `CC_SWITCH_WEB_UPDATE_API`): `ahead_by: 3` → `behind`, `behindBy: 3`, три коммита; `ahead_by: 0` → `up-to-date`; 404 → `unknown`; 403 rate limit → `{ok:false}` с понятным текстом; второй запрос в пределах часа не идёт в заглушку.
 
 ### Task 3: frontend
-- [ ] `web-shims/app.ts`: `getVersion()` берёт `version` из `/api/capabilities` вместо хардкода.
-- [ ] `updater.ts`: web-ветка вызывает `invoke("web_check_update")` (adapter → `GET /api/update/check`) и маппит `behind` в `hasUpdate` с `availableVersion = "<version>+<latestSha[0..7]>"`; статус `unsupported` из фазы 6 для проверки убрать, установку оставить недоступной.
-- [ ] `AboutSection`: в web — блок «сборка отстаёт на N коммитов» со списком коммитов и инструкцией (кнопка копирования через `copyText` из `src/lib/clipboard.ts`, с фоллбеком фазы 25 для http-origin); кнопка install скрыта до фазы 37.
-- [ ] Тесты `UpdateContext`/`AboutSection` (web): `behind` → баннер и инструкция; `up-to-date` → без баннера; `unknown` → «версию сборки определить нельзя».
+- [x] `web-shims/app.ts`: `getVersion()` берёт `version` из `/api/capabilities` вместо хардкода.
+- [x] `updater.ts`: web-ветка вызывает `invoke("web_check_update")` (adapter → `GET /api/update/check`) и маппит `behind` в `hasUpdate` с `availableVersion = "<version>+<latestSha[0..7]>"`; статус `unsupported` из фазы 6 для проверки убрать, установку оставить недоступной.
+- [x] `AboutSection`: в web — блок «сборка отстаёт на N коммитов» со списком коммитов и инструкцией (кнопка копирования через `copyText` из `src/lib/clipboard.ts`, с фоллбеком фазы 25 для http-origin); кнопка install скрыта до фазы 37.
+- [x] Тесты `UpdateContext`/`AboutSection` (web): `behind` → баннер и инструкция; `up-to-date` → без баннера; `unknown` → «версию сборки определить нельзя».
 
 ### Task 4: гейты, PR, Plane
 - [ ] Полный набор гейтов + `cargo build --release --example server` с `CC_SWITCH_WEB_GIT_SHA`. После сборки с переменной: запустить пример-сервер и `curl /api/capabilities` должен показать `buildSha`, равный этому SHA; после пересборки без переменной тот же `curl` показывает `buildSha: null`. Это единственная проверка, что обработчик берёт значение из `web_update::build_sha()`, а `option_env!` читает переменную: в обычной сборке тесты сравнивают `null` с `null`.

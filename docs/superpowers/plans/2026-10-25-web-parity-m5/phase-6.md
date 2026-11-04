@@ -88,7 +88,7 @@ Scope: `src/lib/updater.ts`, `src/contexts/UpdateContext.tsx`, `src/components/s
 
 | область | команды | UI (file:line) | сейчас в web | класс | гейт | parity |
 |---|---|---|---|---|---|---|
-| update | `check_for_updates`, `plugin:updater\|check` | `updater.ts:31,36`; авто-чек `UpdateContext.tsx:119-125`; кнопка `AboutSection.tsx:241-253` (handler `:133-170`); dot `Sidebar.tsx:222,711` | fake success «up-to-date» | c | T2 | WEB-28 (ф.36–37) |
+| update | `check_for_updates`, `plugin:updater\|check` | `updater.ts:31,36`; авто-чек `UpdateContext.tsx:119-125`; кнопка `AboutSection.tsx:241-253` (handler `:133-170`); dot `Sidebar.tsx:222,711` | ~~fake success «up-to-date»~~ (закрыто WEB-28, ф.36: `checkForUpdate` в web спрашивает `/api/update/check`, статусы `behind` / `up-to-date` / `unknown`, ошибка показывается текстом сервера) | c | T2 | WEB-28 (ф.36–37) |
 | update | `install_update_and_restart`, `open_portable_update_download`, `check_app_update_available` | `AboutSection.tsx:138,150`; `DatabaseUpgrade.tsx:69,105,290,300` | `AboutSection` недостижимо (`hasUpdate` всегда false); `DatabaseUpgrade` достижим с ф.7 при `db_version_too_new` (`GET /api/init-status`), в web гейт `isWeb` (нет вызовов, кнопки скрыты, подсказка «обновляет оператор») до WEB-28 | a | T2 | WEB-28 |
 | settings | `is_portable_mode` | `useSettingsMetadata.ts:30` | mount, throws, пойман | e | T4 | WEB-28 |
 | settings | `restart_app` | `SettingsPage.tsx:293-309` | throws → toast; достижимо только после смены data dir | b | T4 | **закрыто WEB-26, ф.35**: `restart_app` и `restart_server` → `POST /api/restart`; в web диалог опрашивает `/api/health` (1 с, до 60 с) и перезагружает страницу при новом `instanceId` или 503; ветка DEV его не касается |
