@@ -649,6 +649,14 @@ check_has "rollback into init-error: message names the backup files" "$(field me
 check_has "rollback into init-error: message still names the .prev copies" "$(field message)" "$BIN_DIR/cc-switch-web.prev"
 check "rollback into init-error: message is plain ASCII" "$(field message | LC_ALL=C grep -c '[^ -~]')" "0"
 
+setup_case rollback-into-init-error-unknown-build
+# the build that was running reported no sha (RUNNING_SHA is empty), so the rollback is
+# confirmed by /api/health alone; the previous binary is in init-error: not rolled-back
+echo none >"$SVC"
+echo "initerr-none" >"$BIN_DIR/cc-switch-web"
+run_update STUB_BIN="initerr-$B"
+check "rollback into init-error, unknown running build: stage" "$(field stage)" "rollback-failed"
+
 setup_case rollback-needs-the-running-sha
 # the service ran a build older than the checkout's HEAD (A); rolling back must be
 # confirmed against what it ran (R), not against fromSha
