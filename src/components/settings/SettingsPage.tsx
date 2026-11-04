@@ -32,6 +32,7 @@ import { useSettingsQuery } from "@/lib/query";
 import { resolveSettingsSection, type SettingsSection } from "@/lib/navigation";
 import { AppPageHeader } from "@/components/shell/AppPageHeader";
 import { DirectoryInput } from "@/components/settings/DirectorySettings";
+import { AppConfigDirNotes } from "@/components/settings/AppConfigDirNotes";
 import { DeepLinkPasteEntry } from "@/components/deeplink/DeepLinkPasteEntry";
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
 import { BackupListSection } from "@/components/settings/BackupListSection";
@@ -51,6 +52,7 @@ import {
   SettingsRow,
 } from "@/components/settings/SettingsLayout";
 import { useSettings } from "@/hooks/useSettings";
+import { useServerRestart } from "@/hooks/useServerRestart";
 import { useImportExport } from "@/hooks/useImportExport";
 import type { SettingsFormState } from "@/hooks/useSettings";
 import { isTextEditableTarget } from "@/utils/domUtils";
@@ -99,6 +101,7 @@ export function SettingsPage({
     isPortable,
     appConfigDir,
     initialAppConfigDir,
+    appConfigDirStatus,
     resolvedDirs,
     updateSettings,
     updateDirectory,
@@ -128,6 +131,8 @@ export function SettingsPage({
   } = useImportExport({ onImportSuccess });
 
   const [showRestartPrompt, setShowRestartPrompt] = useState(false);
+  const { restart: restartServer, restarting: serverRestarting } =
+    useServerRestart();
   const [logViewerOpen, setLogViewerOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -298,6 +303,16 @@ export function SettingsPage({
   }, [afterSave]);
 
   const handleRestartNow = useCallback(async () => {
+    if (isWeb) {
+      // WEB-26: the server restarts under its supervisor, whatever build serves the console, so
+      // this must not go through the DEV branch below (a dev console would never restart).
+      // The dialog stays up, with the button blocked, until the flow is over.
+      // A click while a restart is under way changes nothing: the dialog stays up for the first.
+      if (!(await restartServer())) return;
+      setShowRestartPrompt(false);
+      afterSave();
+      return;
+    }
     setShowRestartPrompt(false);
     if (import.meta.env.DEV) {
       toast.success(t("settings.devModeRestartHint"), { closeButton: true });
@@ -313,7 +328,7 @@ export function SettingsPage({
     } finally {
       afterSave();
     }
-  }, [afterSave, t]);
+  }, [afterSave, restartServer, t]);
 
   const handleRevealLogFile = useCallback(async () => {
     try {
@@ -366,9 +381,12 @@ export function SettingsPage({
   const isBusy = useMemo(() => isLoading && !settings, [isLoading, settings]);
   const SectionIcon = SECTION_ICON[section];
 
+  // Web: a directory fixed by CC_SWITCH_CONFIG_DIR is shown, not edited (every PUT is a 409).
+  const appConfigLocked = isWeb && appConfigDirStatus?.envLocked === true;
   const appConfigDirty =
+    !appConfigLocked &&
     (appConfigDir?.trim() || undefined) !==
-    (initialAppConfigDir?.trim() || undefined);
+      (initialAppConfigDir?.trim() || undefined);
 
   const renderSection = () => {
     if (!settings) return null;
@@ -414,47 +432,55 @@ export function SettingsPage({
       case "data":
         return (
           <>
-            {/* WEB-00: only location is desktop-only until WEB-26; cloud sync works in web since WEB-11, backups (WEB-10) and import/export (WEB-09) too. */}
-            {!isWeb && (
-              <SettingsBlock
-                title={t("settings.data.location")}
-                actions={
-                  appConfigDirty ? (
-                    <Button
-                      variant="solid"
-                      size="compact"
-                      disabled={isSaving}
-                      onClick={() => void handleSave()}
-                    >
-                      {isSaving && (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      )}
-                      {t("common.save")}
-                    </Button>
-                  ) : null
-                }
-              >
-                <SettingsCard>
-                  <SettingsRow
-                    label={t("settings.appConfigDir")}
-                    help={{
-                      title: t("settings.appConfigDir"),
-                      body: t("settings.appConfigDirDescription"),
-                    }}
+            {/* Web: the server's data directory (WEB-26): typed path, applied after a restart; a directory fixed by the unit's env is read-only. */}
+            <SettingsBlock
+              title={t("settings.data.location")}
+              actions={
+                appConfigDirty ? (
+                  <Button
+                    variant="solid"
+                    size="compact"
+                    disabled={isSaving}
+                    onClick={() => void handleSave()}
                   >
-                    <DirectoryInput
-                      label=""
-                      value={appConfigDir}
-                      resolvedValue={resolvedDirs.appConfig}
-                      placeholder={t("settings.browsePlaceholderApp")}
-                      onChange={updateAppConfigDir}
-                      onBrowse={browseAppConfigDir}
-                      onReset={resetAppConfigDir}
-                    />
-                  </SettingsRow>
-                </SettingsCard>
-              </SettingsBlock>
-            )}
+                    {isSaving && (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    )}
+                    {t("common.save")}
+                  </Button>
+                ) : null
+              }
+            >
+              <SettingsCard>
+                <SettingsRow
+                  label={t("settings.appConfigDir")}
+                  help={
+                    isWeb
+                      ? undefined
+                      : {
+                          title: t("settings.appConfigDir"),
+                          body: t("settings.appConfigDirDescription"),
+                        }
+                  }
+                >
+                  <DirectoryInput
+                    label=""
+                    value={appConfigDir}
+                    resolvedValue={resolvedDirs.appConfig}
+                    placeholder={t("settings.browsePlaceholderApp")}
+                    onChange={updateAppConfigDir}
+                    onBrowse={browseAppConfigDir}
+                    onReset={resetAppConfigDir}
+                    readOnly={appConfigLocked}
+                  />
+                  {isWeb && (
+                    <div className="mt-2">
+                      <AppConfigDirNotes status={appConfigDirStatus ?? null} />
+                    </div>
+                  )}
+                </SettingsRow>
+              </SettingsCard>
+            </SettingsBlock>
             <SettingsBlock
               title={t("settings.advanced.data.title")}
               help={{
@@ -570,7 +596,9 @@ export function SettingsPage({
 
       <Dialog
         open={showRestartPrompt}
-        onOpenChange={(open) => !open && handleRestartLater()}
+        onOpenChange={(open) =>
+          !open && !serverRestarting && handleRestartLater()
+        }
       >
         <DialogContent zIndex="alert" className="max-w-md">
           <DialogHeader>
@@ -578,13 +606,16 @@ export function SettingsPage({
           </DialogHeader>
           <div className="px-6">
             <p className="text-body text-fg-2">
-              {t("settings.restartRequiredMessage")}
+              {isWeb
+                ? t("web.dataDir.restartRequiredMessage")
+                : t("settings.restartRequiredMessage")}
             </p>
           </div>
           <DialogFooter>
             <Button
               variant="neutral"
               size="regular"
+              disabled={serverRestarting}
               onClick={handleRestartLater}
             >
               {t("settings.restartLater")}
@@ -592,9 +623,17 @@ export function SettingsPage({
             <Button
               variant="solid"
               size="regular"
+              disabled={serverRestarting}
               onClick={() => void handleRestartNow()}
             >
-              {t("settings.restartNow")}
+              {serverRestarting ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {t("web.dataDir.restarting")}
+                </>
+              ) : (
+                t("settings.restartNow")
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

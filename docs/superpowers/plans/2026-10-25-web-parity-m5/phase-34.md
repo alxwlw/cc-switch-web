@@ -44,6 +44,7 @@ Scope: `src-tauri/src/services/webdav_auto_sync.rs`, `src-tauri/src/services/s3_
 
 ## Notes for next phase
 
+- **Закрыта 2026-11-03**: PR #35 merged `2054627e` → main; live на `cc-switch-web.service` с 13:52; DX-69 Done (этап 2 из 2). Бэкап БД и прежний бинарь — `~/.cc-switch-web/backups-predeploy-p34-*`, миграций нет. Auto-sync на боевом сервере не включён: remote там не настроен, включение — решение владельца.
 - **Статус до merge (2026-11-03)**: ветка `web-parity/web-11-sync-auto` (worktree `.worktrees/web-11-sync-auto`), PR → main (URL — в отчёте T5); этап 2 из 2, **последний этап DX-69**. Чекбоксы Т1–Т5 закрыты. Merge делает владелец; Plane (DX-69 → In Review, ссылка на PR) — контроллер. Actions на форке не запускаются: CI не прогонялся, гейты ниже — локальные.
 - **Сделано**:
   - T1. Воркеры не знают про `AppHandle` (source-grep тест `worker_does_not_depend_on_the_tauri_app_handle`, `webdav_auto_sync.rs:269`, S3 — тот же). Сам `start_worker(db, events)` уже был таким с фазы 8 (`2a4e38cb`), в плане это было устаревшим. `tauri::async_runtime::set(Handle::current())` — первый оператор `main` в `examples/server.rs:100-105`. Пункт a фазы 33 закрыт для воркеров: `run_auto_sync_upload` читает настройки и проверяет `should_run_auto_sync` внутри `run_with_sync_lock` (`webdav_auto_sync.rs:98-125`, S3 — зеркально; тесты `lock_order_tests`, `:306`).

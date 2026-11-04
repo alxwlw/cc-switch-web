@@ -4,7 +4,6 @@ import { FolderSearch, Undo2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { HoverTip } from "@/components/ui/hover-tip";
-import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import { isWeb } from "@/lib/api/adapter";
 import { useTranslation } from "react-i18next";
 import type { AppId } from "@/lib/api";
@@ -222,6 +221,8 @@ export interface DirectoryInputProps {
   onChange: (value?: string) => void;
   onBrowse: () => Promise<void>;
   onReset: () => Promise<void>;
+  /** Shown but not editable, and nothing to reset (a directory fixed by the server's env). */
+  readOnly?: boolean;
 }
 
 export function DirectoryInput({
@@ -233,6 +234,7 @@ export function DirectoryInput({
   onChange,
   onBrowse,
   onReset,
+  readOnly = false,
 }: DirectoryInputProps) {
   const { t } = useTranslation();
   const displayValue = useMemo(
@@ -257,34 +259,36 @@ export function DirectoryInput({
           value={displayValue}
           placeholder={placeholder}
           className="text-xs"
+          readOnly={readOnly}
           onChange={(event) => onChange(event.target.value)}
         />
-        {/* WEB-00: pick_directory не поддержан — Browse disabled, ввод пути остаётся (путь на сервере) — снимет WEB-26 */}
-        <WebUnavailableTip active={isWeb}>
-          <HoverTip content={isWeb ? undefined : t("settings.browseDirectory")}>
+        {/* Web: pick_directory is a native dialog on the server host, the path is typed (WEB-26). */}
+        {!isWeb && !readOnly && (
+          <HoverTip content={t("settings.browseDirectory")}>
             <Button
               type="button"
               variant="outline"
               size="icon"
-              disabled={isWeb}
               onClick={onBrowse}
               aria-label={t("settings.browseDirectory")}
             >
               <FolderSearch className="h-4 w-4" />
             </Button>
           </HoverTip>
-        </WebUnavailableTip>
-        <HoverTip content={t("settings.resetDefault")}>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={onReset}
-            aria-label={t("settings.resetDefault")}
-          >
-            <Undo2 className="h-4 w-4" />
-          </Button>
-        </HoverTip>
+        )}
+        {!readOnly && (
+          <HoverTip content={t("settings.resetDefault")}>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={onReset}
+              aria-label={t("settings.resetDefault")}
+            >
+              <Undo2 className="h-4 w-4" />
+            </Button>
+          </HoverTip>
+        )}
       </div>
     </div>
   );

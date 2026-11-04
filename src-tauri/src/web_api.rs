@@ -9,7 +9,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use axum::{
-    extract::{DefaultBodyLimit, Path, Query, State},
+    extract::{DefaultBodyLimit, Extension, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     routing::{any, delete, get, patch, post, put},
     Json, Router,
@@ -32,6 +32,12 @@ use crate::services::usage_stats::LogFilters;
 use crate::services::{McpService, OmoService};
 use crate::session_manager;
 use crate::store::AppState;
+
+mod restart;
+use restart::RestartControl;
+pub use restart::{
+    instance_id, is_supervised, ShutdownHandle, RESTART_EXIT_CODE, RESTART_SIGNAL_DELAY,
+};
 
 pub type SharedState = Arc<AppState>;
 
@@ -83,9 +89,17 @@ macro_rules! app_type {
     };
 }
 
+/// The full API without a way to restart the process: `POST /api/restart` answers 409.
 pub fn router(state: SharedState) -> Router {
+    router_with_shutdown(state, None)
+}
+
+/// [`router`] plus the handle `POST /api/restart` raises (WEB-26). The server example hands
+/// the same handle to its shutdown, which then exits with [`RESTART_EXIT_CODE`].
+pub fn router_with_shutdown(state: SharedState, shutdown: Option<ShutdownHandle>) -> Router {
     Router::new()
         .route("/api/health", get(health))
+        .route("/api/restart", post(restart_server))
         .route("/api/events", get(events_stream))
         .route("/favicon.ico", get(favicon))
         .route("/api/capabilities", get(capabilities))
@@ -265,6 +279,10 @@ pub fn router(state: SharedState) -> Router {
         // settings & environment
         .route("/api/settings", get(get_settings).put(save_settings))
         .route("/api/paths", get(paths))
+        .route(
+            "/api/app-config-dir",
+            get(get_app_config_dir_status).put(set_app_config_dir),
+        )
         .route("/api/env/tools", post(tool_versions))
         .route("/api/tools/lifecycle", post(tool_lifecycle))
         .route("/api/tools/lifecycle/:job_id", get(tool_lifecycle_status))
@@ -604,6 +622,7 @@ pub fn router(state: SharedState) -> Router {
             get(failover_auto).put(failover_set_auto),
         )
         .with_state(state)
+        .layer(Extension(RestartControl(shutdown)))
 }
 
 /// Router served when startup bootstrap failed and there is no `AppState`
@@ -677,8 +696,34 @@ async fn events_stream(
     Sse::new(stream).keep_alive(KeepAlive::new().interval(SSE_KEEP_ALIVE).text("keep-alive"))
 }
 
+/// No `ok` envelope: the probes of `docs/deploy.md` and the console's restart poll read
+/// `status` and `instanceId` at the top level.
 async fn health() -> Json<Value> {
-    Json(json!({ "status": "ok" }))
+    Json(json!({ "status": "ok", "instanceId": instance_id() }))
+}
+
+const RESTART_NEEDS_SUPERVISOR: &str = "перезапустите сервер вручную: он запущен без supervisor (systemd, Docker с restart policy), который поднял бы его снова";
+
+/// `POST /api/restart` (WEB-26). Checks in this order: the JSON content type (a CORS-simple
+/// POST without a body from another site must not restart the server), a supervisor and a
+/// handle to signal (409), then 202 and the signal shortly after. The process leaves through
+/// the server's shutdown with [`RESTART_EXIT_CODE`], so the supervisor starts it again.
+/// A request that arrives while the shutdown is already under way gets the same 202.
+async fn restart_server(
+    Extension(RestartControl(shutdown)): Extension<RestartControl>,
+    headers: HeaderMap,
+) -> ApiResult {
+    if let Err(rejection) = require_json_content_type(&headers) {
+        return rejection;
+    }
+    let Some(shutdown) = shutdown.filter(|_| is_supervised()) else {
+        return conflict(RESTART_NEEDS_SUPERVISOR);
+    };
+    shutdown.request_after_response();
+    (
+        StatusCode::ACCEPTED,
+        Json(json!({ "ok": true, "data": { "instanceId": instance_id() } })),
+    )
 }
 
 async fn capabilities() -> Json<Value> {
@@ -2905,6 +2950,140 @@ async fn paths() -> ApiResult {
         "configDir": crate::config::get_app_config_dir().to_string_lossy(),
         "configPath": crate::config::get_app_config_path().to_string_lossy(),
     }))
+}
+
+// ---------- data directory (WEB-26) ----------
+
+/// Verbatim to the frontend: the plan fixes this text.
+const APP_CONFIG_DIR_ENV_LOCKED: &str = "каталог задан CC_SWITCH_CONFIG_DIR в unit сервера";
+
+fn conflict(msg: impl ToString) -> ApiResult {
+    (
+        StatusCode::CONFLICT,
+        Json(json!({ "ok": false, "error": msg.to_string() })),
+    )
+}
+
+/// `effective` and `source` describe this process (env / startup cache / default);
+/// `override` is the file's value, i.e. what applies after the next restart. `default` is the
+/// server's `~/.cc-switch` (the web shim's `homeDir` is only good for display).
+fn app_config_dir_status() -> Value {
+    let env_locked = crate::config::config_dir_env_override().is_some();
+    let source = if env_locked {
+        "env"
+    } else if crate::app_store::get_app_config_dir_override().is_some() {
+        "override"
+    } else {
+        "default"
+    };
+    json!({
+        "effective": crate::config::get_app_config_dir().to_string_lossy(),
+        "source": source,
+        "override": crate::app_store::read_headless_override_file()
+            .map(|p| p.to_string_lossy().into_owned()),
+        "envLocked": env_locked,
+        "default": crate::config::get_home_dir().join(".cc-switch").to_string_lossy(),
+    })
+}
+
+async fn get_app_config_dir_status() -> ApiResult {
+    match tokio::task::spawn_blocking(app_config_dir_status).await {
+        Ok(status) => ok(status),
+        Err(e) => fail(format!("app config dir task failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct SetAppConfigDirReq {
+    /// `null` removes the override; the key itself is required, so a body that lost it
+    /// cannot silently reset the override.
+    #[serde(deserialize_with = "Option::deserialize")]
+    path: Option<String>,
+}
+
+/// Turns the typed text into an absolute directory that is usable now: `~` expanded through
+/// `get_home_dir` (`~user` is refused), created when missing, writable, and holding no
+/// database newer than this build. The error text goes to the UI as is.
+fn validate_app_config_dir(raw: &str) -> Result<std::path::PathBuf, String> {
+    use std::path::PathBuf;
+
+    let expanded = if raw == "~" {
+        crate::config::get_home_dir()
+    } else if let Some(rest) = raw.strip_prefix("~/") {
+        crate::config::get_home_dir().join(rest)
+    } else if raw.starts_with('~') {
+        return Err(format!(
+            "путь «{raw}» не поддерживается: «~» раскрывается только в домашний каталог пользователя сервера (~ или ~/подкаталог)"
+        ));
+    } else {
+        PathBuf::from(raw)
+    };
+    if !expanded.is_absolute() {
+        return Err(format!(
+            "путь «{raw}» не абсолютный: укажите полный путь или начните с «~/»"
+        ));
+    }
+    // Drops `.` and a trailing separator; `..` stays for the OS to resolve.
+    let dir: PathBuf = expanded.components().collect();
+
+    match std::fs::metadata(&dir) {
+        Ok(meta) if meta.is_dir() => {}
+        Ok(_) => return Err(format!("{} — это файл, а не каталог", dir.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::create_dir_all(&dir)
+                .map_err(|e| format!("не удалось создать каталог {}: {e}", dir.display()))?;
+        }
+        Err(e) => return Err(format!("каталог {} недоступен: {e}", dir.display())),
+    }
+
+    // An unnamed temp file: nothing is left in the directory, not even after a crash.
+    tempfile::tempfile_in(&dir)
+        .map_err(|e| format!("в каталог {} нельзя записывать: {e}", dir.display()))?;
+
+    let db_path = dir.join("cc-switch.db");
+    match crate::database::Database::stored_user_version_exceeds_supported(&db_path) {
+        Ok(None) => {}
+        Ok(Some(version)) => {
+            return Err(format!(
+                "в каталоге {} лежит база данных версии {version}, а этот сервер поддерживает не новее {}: обновите cc-switch-web или выберите другой каталог",
+                dir.display(),
+                crate::database::SCHEMA_VERSION
+            ))
+        }
+        Err(e) => {
+            return Err(format!(
+                "{} не открывается как база данных SQLite: {e}",
+                db_path.display()
+            ))
+        }
+    }
+    Ok(dir)
+}
+
+/// Stores the override file only; `get_app_config_dir()` of the running process does not move
+/// until the restart.
+async fn set_app_config_dir(Json(body): Json<SetAppConfigDirReq>) -> ApiResult {
+    if crate::config::config_dir_env_override().is_some() {
+        return conflict(APP_CONFIG_DIR_ENV_LOCKED);
+    }
+    let result = tokio::task::spawn_blocking(move || -> Result<Value, ApiResult> {
+        let typed = body.path.as_deref().map(str::trim).unwrap_or("");
+        if typed.is_empty() {
+            crate::app_store::write_headless_override_file(None)
+                .map_err(|e| fail(e.to_string()))?;
+        } else {
+            let dir = validate_app_config_dir(typed).map_err(bad_request)?;
+            crate::app_store::write_headless_override_file(Some(&dir))
+                .map_err(|e| fail(e.to_string()))?;
+        }
+        Ok(app_config_dir_status())
+    })
+    .await;
+    match result {
+        Ok(Ok(status)) => ok(status),
+        Ok(Err(response)) => response,
+        Err(e) => fail(format!("app config dir task failed: {e}")),
+    }
 }
 
 #[derive(Deserialize)]

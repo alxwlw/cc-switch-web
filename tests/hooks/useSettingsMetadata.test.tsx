@@ -69,17 +69,19 @@ describe("useSettingsMetadata", () => {
     expect(result.current.requiresRestart).toBe(false);
   });
 
-  it("web: does not call is_portable_mode and finishes loading", async () => {
+  it("web: asks is_portable_mode through the adapter and takes its answer", async () => {
     setWeb(true);
-    isPortableMock.mockResolvedValue(true);
+    isPortableMock.mockResolvedValue(false);
 
     const { result } = renderHook(() => useSettingsMetadata());
+
+    expect(result.current.isLoading).toBe(true);
 
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(isPortableMock).not.toHaveBeenCalled();
+    expect(isPortableMock).toHaveBeenCalledTimes(1);
     expect(result.current.isPortable).toBe(false);
     expect(result.current.isLoading).toBe(false);
   });

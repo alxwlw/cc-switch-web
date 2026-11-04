@@ -142,7 +142,7 @@ export function AppConfigSection({
 
   return (
     <>
-      {/* WEB-00: пути вводятся вручную и относятся к серверному хосту — снимет WEB-26 */}
+      {/* WEB-00: пути вводятся вручную (Browse скрыт, WEB-26) и относятся к серверному хосту */}
       {isWeb && (
         <p role="note" className="text-caption text-fg-2">
           {t("web.serverPath")}
