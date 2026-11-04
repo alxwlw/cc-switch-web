@@ -151,8 +151,9 @@ not survive the restart). Build output goes to the journal:
    differs from `HEAD` (untracked files such as `.scratch/` are fine), the installed
    binary and `dist-web` exist. A failure here touches nothing.
 2. `fetching`: `git fetch origin`, killed after 120 s (`FETCH_TIMEOUT`). If the checkout
-   is already at `origin/<branch>` and the running service reports that commit, the run
-   ends `done` with "already up to date".
+   is already at `origin/<branch>` and the running service reports that commit **and
+   its `/api/health` answers 2xx**, the run ends `done` with "already up to date"; a
+   service that is down or in init-error mode is rebuilt instead.
 3. `merging`: `git merge --ff-only origin/<branch>`. A branch that cannot fast-forward is
    refused. The checkout is **never reset**: after any later failure it stays on the new
    commit, and the message says so.
@@ -224,8 +225,13 @@ script makes no backup of its own.
   reported for a service that is in init-error mode.)
 - **Check for a migration before you click**: `git fetch origin && git diff HEAD
   origin/<branch> -- src-tauri/src/database` shows a changed `SCHEMA_VERSION` or
-  schema; if so, take your own backup first:
-  `sqlite3 ~/.cc-switch-web/cc-switch.db ".backup ~/cc-switch-before-update.db"`.
+  schema; if so, take your own backup first. The command needs no `sqlite3` binary (the
+  host may not have one); it also prints the database's `user_version`, to compare with
+  `SCHEMA_VERSION` in `src-tauri/src/database/mod.rs` of the new commit:
+
+  ```bash
+  python3 -c 'import os, sqlite3; db = os.path.expanduser("~/.cc-switch-web/cc-switch.db"); src = sqlite3.connect("file:" + db + "?mode=ro", uri=True); src.backup(sqlite3.connect(os.path.expanduser("~/cc-switch-before-update.db"))); print("user_version", src.execute("PRAGMA user_version").fetchone()[0])'
+  ```
 - **Restore the database** (service stopped; the file to use is the newest
   `db_backup_*.db` from before the update, or your own copy):
 
@@ -251,18 +257,25 @@ BIN="$HOME/.local/bin/cc-switch-web"
 DIST="$HOME/cc-switch-web/dist-web"   # WEB_DIST of the unit
 STATUS="${XDG_STATE_HOME:-$HOME/.local/state}/cc-switch-web/update-status.json"
 
-cp -p "$BIN.prev" "$BIN.restore" && mv -f "$BIN.restore" "$BIN"
-rm -rf "$DIST.new" && mv "$DIST" "$DIST.new" && cp -a "$DIST.prev" "$DIST" && rm -rf "$DIST.new"
-rm -f "$STATUS"
-systemctl --user restart cc-switch-web
+if [ -f "$BIN.prev" ] && [ -d "$DIST.prev" ]; then
+  cp -p "$BIN.prev" "$BIN.restore" && mv -f "$BIN.restore" "$BIN" &&
+    rm -rf "$DIST.new" && mv "$DIST" "$DIST.new" && cp -a "$DIST.prev" "$DIST" && rm -rf "$DIST.new" &&
+    rm -f "$STATUS" &&
+    systemctl --user restart cc-switch-web ||
+    echo "a step failed; the steps after it were not run" >&2
+else
+  echo "no $BIN.prev or $DIST.prev: nothing was changed" >&2
+fi
 ```
 
-The last two lines matter after `rollback-failed`: the console keeps showing that
+The block does nothing and says so when either `.prev` is missing (an install that was
+never updated), and stops at the first failing step. The `rm -f "$STATUS"` and restart
+steps matter after `rollback-failed`: the console keeps showing that
 outcome, and hides the update button, for as long as the status file exists (a started
 update clears it). Removing it brings the button back. `systemctl --user restart` is
 enough; if the unit file itself changed, run `daemon-reload` first. If `.prev` is
 damaged or missing, rebuild the old commit instead: `git -C <checkout> checkout
-<fromSha>` (the sha is in the status message), `scripts/install-server.sh`, restart, and
+<fromSha>` (the `fromSha` field of the status file, `jq -r .fromSha "$STATUS"`, or of `GET /api/update/status`; the status messages name only the new commit), `scripts/install-server.sh`, restart, and
 `git checkout <branch>` afterwards, because the next update insists on the update branch.
 
 The checkout is not touched by this recipe: it stays on the commit of the update. The
