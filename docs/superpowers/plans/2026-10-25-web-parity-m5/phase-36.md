@@ -43,12 +43,12 @@ Task 3:
 - [x] `/api/capabilities` дополнительно отдаёт `buildSha` (`null`, если не задан); `runtime_boundaries` — убрать «no auto-update», написать «updates: check in UI, install by operator».
 
 ### Task 2: проверка обновлений
-- [ ] `pub async fn check(cfg: &UpdateSourceConfig) -> Result<UpdateCheck, AppError>`; `UpdateSourceConfig {api_base, repo, branch}` из env `CC_SWITCH_WEB_UPDATE_API` (по умолчанию `https://api.github.com`), `CC_SWITCH_WEB_UPDATE_REPO` (`alxwlw/cc-switch-web`), `CC_SWITCH_WEB_UPDATE_BRANCH` (`main`). Запрос `GET {api_base}/repos/{repo}/compare/{BUILD_SHA}...{branch}`.
-- [ ] `UpdateCheck` (camelCase): `{status: "up-to-date"|"behind"|"unknown", currentVersion, currentSha, latestSha, behindBy, commits: [{sha, message, date}] (не больше 20), checkedAt, instructions: {systemd, docker}}`. `unknown` — `BUILD_SHA` не задан или SHA нет в ветке (404 от compare).
-- [ ] Кэш результата в памяти на 1 час (лимит GitHub без токена — 60 запросов в час); `?force=1` обходит кэш.
-- [ ] Тексты инструкций: systemd — `cd <checkout> && git pull --ff-only && scripts/install-server.sh`; Docker — пересборка образа из `Dockerfile.web` и пересоздание контейнера.
-- [ ] `GET /api/update/check` → `ok(UpdateCheck)`.
-- [ ] Тесты (`tests/web_api_update.rs`, заглушка GitHub API на axum через `CC_SWITCH_WEB_UPDATE_API`): `ahead_by: 3` → `behind`, `behindBy: 3`, три коммита; `ahead_by: 0` → `up-to-date`; 404 → `unknown`; 403 rate limit → `{ok:false}` с понятным текстом; второй запрос в пределах часа не идёт в заглушку.
+- [x] `pub async fn check(cfg: &UpdateSourceConfig) -> Result<UpdateCheck, AppError>`; `UpdateSourceConfig {api_base, repo, branch}` из env `CC_SWITCH_WEB_UPDATE_API` (по умолчанию `https://api.github.com`), `CC_SWITCH_WEB_UPDATE_REPO` (`alxwlw/cc-switch-web`), `CC_SWITCH_WEB_UPDATE_BRANCH` (`main`). Запрос `GET {api_base}/repos/{repo}/compare/{BUILD_SHA}...{branch}`.
+- [x] `UpdateCheck` (camelCase): `{status: "up-to-date"|"behind"|"unknown", currentVersion, currentSha, latestSha, behindBy, commits: [{sha, message, date}] (не больше 20), checkedAt, instructions: {systemd, docker}}`. `unknown` — `BUILD_SHA` не задан или SHA нет в ветке (404 от compare).
+- [x] Кэш результата в памяти на 1 час (лимит GitHub без токена — 60 запросов в час); `?force=1` обходит кэш.
+- [x] Тексты инструкций: systemd — `cd <checkout> && git pull --ff-only && scripts/install-server.sh`; Docker — пересборка образа из `Dockerfile.web` и пересоздание контейнера.
+- [x] `GET /api/update/check` → `ok(UpdateCheck)`.
+- [x] Тесты (`tests/web_api_update.rs`, заглушка GitHub API на axum через `CC_SWITCH_WEB_UPDATE_API`): `ahead_by: 3` → `behind`, `behindBy: 3`, три коммита; `ahead_by: 0` → `up-to-date`; 404 → `unknown`; 403 rate limit → `{ok:false}` с понятным текстом; второй запрос в пределах часа не идёт в заглушку.
 
 ### Task 3: frontend
 - [ ] `web-shims/app.ts`: `getVersion()` берёт `version` из `/api/capabilities` вместо хардкода.

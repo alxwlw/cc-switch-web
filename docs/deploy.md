@@ -40,6 +40,20 @@ is the compile-time env `CC_SWITCH_WEB_GIT_SHA`:
     -t cc-switch-web .
   ```
 
+`GET /api/update/check` asks the GitHub compare API how far the branch is ahead of that
+commit (`status` is `up-to-date`, `behind` or `unknown`; `unknown` also covers a commit
+that is not on the branch, such as a local build, and a build with commits the branch
+lacks). The answer is cached in memory for one hour for every client, so open tabs do not
+spend the 60 anonymous requests an hour; `?force=1` asks again. A rate-limit or network
+failure is returned as an error and is not cached. The source is read from the
+environment of the server on every request:
+
+| Variable                      | Default                  |
+| ----------------------------- | ------------------------ |
+| `CC_SWITCH_WEB_UPDATE_API`    | `https://api.github.com` |
+| `CC_SWITCH_WEB_UPDATE_REPO`   | `alxwlw/cc-switch-web`   |
+| `CC_SWITCH_WEB_UPDATE_BRANCH` | `main`                   |
+
 ## Data isolation
 
 The fork does not keep its database in `~/.cc-switch` unless you point it there, but a few
