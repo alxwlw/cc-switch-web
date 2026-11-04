@@ -88,6 +88,10 @@ describe("AboutSection · self-update (WEB-28)", () => {
 
   const calls = (url: string) =>
     fetchMock.mock.calls.filter(([u]) => u === url);
+  const checkUrls = () =>
+    fetchMock.mock.calls
+      .map(([u]) => u as string)
+      .filter((u) => u.startsWith("/api/update/check"));
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -271,6 +275,38 @@ describe("AboutSection · self-update (WEB-28)", () => {
     errorSpy.mockRestore();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(installButton()).toBeNull();
+  });
+
+  it("done at the checkout's own commit, no rebuild: nothing reloads, and the check is asked again past the server cache", async () => {
+    await open();
+    await startUpdate();
+    runs = runStatus("done", {
+      fromSha: SHA,
+      toSha: SHA,
+      message: "already up to date",
+      finishedAt: "2026-11-04T11:05:00Z",
+    });
+    const before = checkUrls().length;
+    await tick(2_000);
+    expect(mocks.reload).not.toHaveBeenCalled();
+    expect(screen.getByText("web.update.install.unchangedTitle")).toBeTruthy();
+    expect(checkUrls().slice(before)).toEqual(["/api/update/check?force=1"]);
+  });
+
+  it("the same done after a rebuild reloads and asks nothing", async () => {
+    await open();
+    await startUpdate();
+    runs = runStatus("building", { fromSha: SHA, toSha: SHA });
+    await tick(2_000);
+    runs = runStatus("done", {
+      fromSha: SHA,
+      toSha: SHA,
+      finishedAt: "2026-11-04T11:05:00Z",
+    });
+    const before = checkUrls().length;
+    await tick(2_000);
+    expect(mocks.reload).toHaveBeenCalledTimes(1);
+    expect(checkUrls()).toHaveLength(before);
   });
 
   it("a 409 shows the server's reason as it came, and the button is back", async () => {

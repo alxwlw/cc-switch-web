@@ -222,7 +222,14 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
   // web: the server says whether the install route would accept a request now.
   const capabilities = useServerCapabilities();
   const selfUpdateEnabled = isWeb && capabilities.data?.selfUpdate === true;
-  const selfUpdate = useSelfUpdate(selfUpdateEnabled);
+  const selfUpdate = useSelfUpdate(selfUpdateEnabled, {
+    // Nothing was merged: the server's cached `behind` is stale, ask again past its cache.
+    onNothingToUpdate: () => {
+      checkUpdate({ force: true }).catch((error) =>
+        console.error("[AboutSection] Re-check after the update failed", error),
+      );
+    },
+  });
 
   useEffect(() => {
     let active = true;

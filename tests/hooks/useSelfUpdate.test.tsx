@@ -93,8 +93,12 @@ describe("useSelfUpdate (WEB-28)", () => {
     });
   const poll = () => tick(SELF_UPDATE_POLL_INTERVAL_MS);
 
+  const onNothing = vi.fn();
   const setup = async (enabled = true) => {
-    const hook = renderHook(() => useSelfUpdate(enabled));
+    onNothing.mockReset();
+    const hook = renderHook(() =>
+      useSelfUpdate(enabled, { onNothingToUpdate: onNothing }),
+    );
     await tick(0);
     return hook;
   };
@@ -389,9 +393,13 @@ describe("useSelfUpdate (WEB-28)", () => {
     },
   );
 
-  it("done at the commit it started from has nothing new to load: no reload", async () => {
+  it("done at the same commit with no rebuild seen has nothing to load: no reload, and the caller re-checks once", async () => {
     const hook = await setup();
     await start(hook);
+    answerData(
+      status("fetching", { fromSha: FROM, toSha: null, message: "fetching" }),
+    );
+    await poll();
     answerData(
       status("done", {
         fromSha: FROM,
@@ -407,6 +415,47 @@ describe("useSelfUpdate (WEB-28)", () => {
       finishedAt: "2026-11-04T10:05:00Z",
     });
     expect(reloadMock).not.toHaveBeenCalled();
+    expect(onNothing).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["building", "installing", "restarting"])(
+    "done at the same commit after %s is a rebuild (the retry after a rollback): reload once, no re-check",
+    async (stage) => {
+      const hook = await setup();
+      await start(hook);
+      answerData(status(stage, { fromSha: FROM, toSha: FROM }));
+      await poll();
+      answerData(status("done", { fromSha: FROM, toSha: FROM }));
+      await poll();
+      expect(hook.result.current.state).toEqual({ kind: "reloading" });
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+      expect(onNothing).not.toHaveBeenCalled();
+    },
+  );
+
+  it("a run adopted already in a rebuild stage counts as a rebuild: same-commit done reloads", async () => {
+    answerData(status("restarting", { fromSha: FROM, toSha: FROM }));
+    await setup();
+    answerData(status("done", { fromSha: FROM, toSha: FROM }));
+    await poll();
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+    expect(onNothing).not.toHaveBeenCalled();
+  });
+
+  it("a run that stopped answering with a status ends the wait after 1 min, also when it was picked up mid-run", async () => {
+    answerData(status("building"));
+    const hook = await setup();
+    expect(hook.result.current.state).toMatchObject({ stage: "building" });
+    // the status file is gone (cleared by another launch): a real status was seen, then null
+    answerData(null);
+    await tick(SELF_UPDATE_FIRST_STATUS_WAIT_MS - SELF_UPDATE_POLL_INTERVAL_MS);
+    expect(hook.result.current.state.kind).toBe("running");
+    await tick(2 * SELF_UPDATE_POLL_INTERVAL_MS);
+    expect(hook.result.current.state).toEqual({
+      kind: "stuck",
+      reason: "no-status",
+    });
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("a second start while a run is followed does nothing", async () => {

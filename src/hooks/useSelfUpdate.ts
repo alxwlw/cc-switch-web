@@ -64,6 +64,26 @@ export type SelfUpdateState =
 type Running = Extract<SelfUpdateState, { kind: "running" }>;
 
 /**
+ * Stages that only a run which rebuilds goes through. A `done` with the same commit before and
+ * after, after one of these, is a rebuild at a checkout that already was at the target (the
+ * retry after a `rolled-back`): the running build is older, so the page must reload. Without
+ * them the script found nothing to merge and the build is current.
+ */
+const REBUILD_STAGES: readonly string[] = [
+  "building",
+  "installing",
+  "restarting",
+];
+
+interface SelfUpdateOptions {
+  /**
+   * Called when a run ends with nothing to update (`done`, same commit, no rebuild seen): the
+   * server's cached check may still say `behind` for up to an hour, so the caller asks again.
+   */
+  onNothingToUpdate?: () => void;
+}
+
+/**
  * Self-update of the web server from the console (WEB-28): `POST /api/update/install`, then
  * `GET /api/update/status` every 2 s until a final stage; `done` reloads the page.
  *
@@ -74,11 +94,16 @@ type Running = Extract<SelfUpdateState, { kind: "running" }>;
  * reload or a poll. A new launch replaces it.
  * Leaving the page stops every timer and the probe in flight.
  */
-export function useSelfUpdate(enabled: boolean) {
+export function useSelfUpdate(
+  enabled: boolean,
+  options: SelfUpdateOptions = {},
+) {
   const [state, setState] = useState<SelfUpdateState>({ kind: "idle" });
   const mountedRef = useRef(true);
   const busyRef = useRef(false);
   const stopRef = useRef<(() => void) | null>(null);
+  const onNothingRef = useRef(options.onNothingToUpdate);
+  onNothingRef.current = options.onNothingToUpdate;
 
   const track = useCallback(
     (initial: { stage: string | null; branch: string | null }) => {
@@ -97,6 +122,8 @@ export function useSelfUpdate(enabled: boolean) {
         waiting: false,
       };
       let lastKey: string | null = null;
+      let rebuilt =
+        initial.stage !== null && REBUILD_STAGES.includes(initial.stage);
 
       const stop = () => {
         settled = true;
@@ -146,13 +173,18 @@ export function useSelfUpdate(enabled: boolean) {
         }
         switch (status.stage) {
           case "done":
-            if (status.fromSha !== null && status.fromSha === status.toSha) {
+            if (
+              !rebuilt &&
+              status.fromSha !== null &&
+              status.fromSha === status.toSha
+            ) {
               end({
                 kind: "ended",
                 outcome: "unchanged",
                 message: status.message,
                 finishedAt: status.finishedAt,
               });
+              if (mountedRef.current) onNothingRef.current?.();
             } else {
               end({ kind: "reloading" });
               reloadPage();
@@ -170,6 +202,7 @@ export function useSelfUpdate(enabled: boolean) {
             return;
           default:
             // Known progress stages and any the script may gain later.
+            if (REBUILD_STAGES.includes(status.stage)) rebuilt = true;
             show({ stage: status.stage, waiting: false });
         }
       };
