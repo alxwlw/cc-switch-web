@@ -569,7 +569,7 @@
       "restore": "Geri yükle",
       "restoring": "Geri yükleniyor...",
       "confirmTitle": "Geri Yüklemeyi Onayla",
-      "confirmMessage": "Sunucu {{branch}} dalını çeker ({{sha}} commit'ine kadar, {{behind}} yeni commit), kendini yeniden derler ve yeniden başlar. Derleme sürerken ulaşılamaz; bu birkaç dakika sürebilir. Yeni derleme başlamazsa sunucu öncekine döner.",
+      "confirmMessage": "Bu yedeğin geri yüklenmesi mevcut veritabanının üzerine yazılacaktır. İlk önce bir güvenlik yedeği oluşturulacaktır.",
       "restoreSuccess": "Başarılı bir şekilde geri yükle! Güvenlik yedeklemesi oluşturuldu",
       "restoreFailed": "Geri yükleme başarısız oldu",
       "safetyBackupId": "Güvenlik Yedekleme Kimliği",
@@ -5085,7 +5085,7 @@
       "install": {
         "button": "Şimdi güncelle",
         "confirmTitle": "Sunucu güncellensin mi?",
-        "confirmMessage": "Sunucu, üzerinde ayarlı güncelleme dalını çeker ({{sha}} commit'ine kadar, {{behind}} yeni commit), kendini yeniden derler ve yeniden başlar. Derleme sürerken ulaşılamaz; bu birkaç dakika sürebilir. Yeni derleme başlamazsa sunucu öncekine döner.",
+        "confirmMessage": "Sunucu {{branch}} dalını çeker ({{sha}} commit'ine kadar, {{behind}} yeni commit), kendini yeniden derler ve yeniden başlar. Derleme sürerken ulaşılamaz; bu birkaç dakika sürebilir. Yeni derleme başlamazsa sunucu öncekine döner.",
         "confirmDbWarning": "Yeni sürüm veritabanını taşıyabilir (migrate). İkili dosyayı geri almak veritabanını geri almaz.",
         "confirmButton": "Yeniden derle ve başlat",
         "runningTitle": "Sunucu güncelleniyor",

@@ -569,7 +569,7 @@
       "restore": "Restore",
       "restoring": "Restoring...",
       "confirmTitle": "Confirm Restore",
-      "confirmMessage": "The server will pull the branch {{branch}} (up to {{sha}}, {{behind}} new commit(s)), rebuild itself and restart. It is unreachable while it builds, which can take several minutes. If the new build does not start, the server returns to the previous one.",
+      "confirmMessage": "Restoring this backup will overwrite the current database. A safety backup will be created first.",
       "restoreSuccess": "Restore successful! Safety backup created",
       "restoreFailed": "Restore failed",
       "safetyBackupId": "Safety Backup ID",
@@ -5107,7 +5107,7 @@
       "install": {
         "button": "Update now",
         "confirmTitle": "Update the server?",
-        "confirmMessage": "The server will pull the update branch configured on the server (up to {{sha}}, {{behind}} new commit(s)), rebuild itself and restart. It is unreachable while it builds, which can take several minutes. If the new build does not start, the server returns to the previous one.",
+        "confirmMessage": "The server will pull the branch {{branch}} (up to {{sha}}, {{behind}} new commit(s)), rebuild itself and restart. It is unreachable while it builds, which can take several minutes. If the new build does not start, the server returns to the previous one.",
         "confirmDbWarning": "The new version may migrate the database. Rolling the binary back does not roll the database back.",
         "confirmButton": "Rebuild and restart",
         "runningTitle": "Updating the server",

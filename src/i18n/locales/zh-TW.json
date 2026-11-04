@@ -569,7 +569,7 @@
       "restore": "還原",
       "restoring": "還原中...",
       "confirmTitle": "確認還原備份",
-      "confirmMessage": "伺服器將拉取分支 {{branch}}（至 {{sha}}，{{behind}} 個新提交），自行重新建置並重新啟動。建置期間無法連線，可能需要數分鐘。若新版本無法啟動，伺服器會回復到先前的版本。",
+      "confirmMessage": "還原至此備份將覆寫目前資料庫。還原前會自動建立安全備份。",
       "restoreSuccess": "還原成功！安全備份已建立",
       "restoreFailed": "還原失敗",
       "safetyBackupId": "安全備份 ID",
@@ -5108,7 +5108,7 @@
       "install": {
         "button": "立即更新",
         "confirmTitle": "更新伺服器？",
-        "confirmMessage": "伺服器將拉取其上設定的更新分支（至 {{sha}}，{{behind}} 個新提交），自行重新建置並重新啟動。建置期間無法連線，可能需要數分鐘。若新版本無法啟動，伺服器會回復到先前的版本。",
+        "confirmMessage": "伺服器將拉取分支 {{branch}}（至 {{sha}}，{{behind}} 個新提交），自行重新建置並重新啟動。建置期間無法連線，可能需要數分鐘。若新版本無法啟動，伺服器會回復到先前的版本。",
         "confirmDbWarning": "新版本可能會遷移資料庫。將執行檔回復到舊版不會回復資料庫。",
         "confirmButton": "重新建置並重新啟動",
         "runningTitle": "正在更新伺服器",
