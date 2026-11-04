@@ -22,7 +22,7 @@ Task 1:
 - В builder-стадии `Dockerfile.web` нет `git`, `.dockerignore` нет. Поэтому `ARG CC_SWITCH_WEB_GIT_SHA=` и передача в `cargo build`; команда сборки образа `--build-arg CC_SWITCH_WEB_GIT_SHA=$(git rev-parse HEAD)` описана в `docs/deploy.md` (файл добавляется в scope).
 - `install-server.sh`: SHA передаётся, только если `git -C "$ROOT" rev-parse HEAD` сработал и `git -C "$ROOT" diff --quiet HEAD` чист. Смотрим только отслеживаемые файлы: untracked `.scratch/` есть в боевом checkout. Иначе переменная снимается с предупреждением, и сборка честно даёт `unknown`.
 - `build.rs` не трогаем: rustc пишет `option_env!` в dep-info, cargo пересобирает при смене значения. Это проверяется двумя сборками в Task 4.
-- `buildSha` приходит из общего хендлера `capabilities()` (`web_api.rs:729`) в обоих роутерах; в `ServerCapabilities` (`src/lib/api/capabilities.ts`) добавить поле.
+- `buildSha` приходит из общего хендлера `capabilities()` (`web_api.rs:743`) в обоих роутерах; в `ServerCapabilities` (`src/lib/api/capabilities.ts`) добавить поле.
 
 Task 2:
 - Сигнатура `check(cfg, build_sha: Option<&str>, force: bool)`: тесты собираются без SHA, поэтому статусы проверяются вызовом сервиса со SHA. Тест роута: без SHA → `unknown`, заглушка получила 0 запросов. Env читается на каждый запрос.
