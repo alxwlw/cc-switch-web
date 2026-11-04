@@ -175,9 +175,33 @@ describe("updater · checkForUpdate (web)", () => {
     ["commits that are not a list", webCheck({ commits: "none" })],
     ["behind without latestSha", webCheck({ latestSha: null })],
     ["no instructions", webCheck({ instructions: null })],
+    ["a negative behindBy", webCheck({ behindBy: -1 })],
+    ["a fractional behindBy", webCheck({ behindBy: 1.5 })],
   ])("rejects a payload with %s instead of guessing", async (_n, payload) => {
     answer(payload);
     await expect(checkForUpdate()).rejects.toThrow("unexpected payload");
+  });
+
+  it("a server that never answers rejects after opts.timeout, with a text of its own", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockReturnValue(new Promise(() => {}));
+      const outcome = checkForUpdate({ timeout: 5000 }).then(
+        () => null,
+        (e: Error) => e.message,
+      );
+      await vi.advanceTimersByTimeAsync(4999);
+      let settled = false;
+      void outcome.then(() => (settled = true));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await outcome).toBe(
+        "update check: no answer from the server in 5 s",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -293,5 +317,56 @@ describe("UpdateContext", () => {
     expect(result.current.error).toBe("rate limit text from server");
     expect(result.current.hasUpdate).toBe(false);
     expect(result.current.webUpdate).toBeNull();
+  });
+
+  it("web: a failed re-check after a behind answer drops the behind state", async () => {
+    setWeb(true);
+    answer(webCheck());
+    const { result } = renderHook(() => useUpdate(), { wrapper });
+    await act(async () => {
+      await result.current.checkUpdate();
+    });
+    expect(result.current.hasUpdate).toBe(true);
+    expect(result.current.webUpdate?.status).toBe("behind");
+
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ ok: false, error: "rate limit text from server" }),
+    });
+    await act(async () => {
+      await expect(result.current.checkUpdate({ force: true })).rejects.toThrow(
+        "rate limit text from server",
+      );
+    });
+    expect(result.current.error).toBe("rate limit text from server");
+    expect(result.current.hasUpdate).toBe(false);
+    expect(result.current.webUpdate).toBeNull();
+  });
+
+  it("web: a server that never answers ends the check after 30 s and frees the button", async () => {
+    setWeb(true);
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useUpdate(), { wrapper });
+    let outcome!: Promise<string | null>;
+    await act(async () => {
+      outcome = result.current.checkUpdate({ force: true }).then(
+        () => null,
+        (e: Error) => e.message,
+      );
+      await vi.advanceTimersByTimeAsync(29999);
+    });
+    expect(result.current.isChecking).toBe(true);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(await outcome).toBe(
+      "update check: no answer from the server in 30 s",
+    );
+    expect(result.current.isChecking).toBe(false);
+    expect(result.current.error).toBe(
+      "update check: no answer from the server in 30 s",
+    );
+    expect(result.current.hasUpdate).toBe(false);
   });
 });

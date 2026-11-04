@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   copyText: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
+  openExternal: vi.fn(),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -43,7 +44,7 @@ vi.mock("@/lib/api", () => ({
   settingsApi: {
     checkUpdates: mocks.checkUpdates,
     installUpdateAndRestart: mocks.install,
-    openExternal: vi.fn(),
+    openExternal: mocks.openExternal,
   },
 }));
 
@@ -129,6 +130,7 @@ describe("AboutSection · update controls", () => {
     mocks.copyText.mockReset().mockResolvedValue(undefined);
     mocks.toastSuccess.mockReset();
     mocks.toastError.mockReset();
+    mocks.openExternal.mockReset().mockResolvedValue(undefined);
     fetchMock.mockReset();
     serveCheck(updateData({ status: "up-to-date", behindBy: 0, commits: [] }));
     vi.stubGlobal("fetch", fetchMock);
@@ -179,6 +181,11 @@ describe("AboutSection · update controls", () => {
     expect(screen.getByText("fix: middle")).toBeInTheDocument();
     expect(screen.getByText("docs: oldest")).toBeInTheDocument();
     expect(screen.getByText(LATEST.slice(0, 7))).toBeInTheDocument();
+    // The running build, cut to 7 characters, sits in the footer with the check time.
+    expect(
+      screen.getByText(/web\.update\.buildSha \{"sha":"0123456"\}/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(SHA))).toBeNull();
     // All three commits are listed: no "showing N of M".
     expect(screen.queryByText(/web\.update\.shown/)).toBeNull();
 
@@ -230,6 +237,10 @@ describe("AboutSection · update controls", () => {
         description: "clipboard denied",
         closeButton: true,
       }),
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[AboutSection] Failed to copy instructions",
+      expect.objectContaining({ message: "clipboard denied" }),
     );
     errorSpy.mockRestore();
   });
@@ -299,6 +310,9 @@ describe("AboutSection · update controls", () => {
     expect(screen.getByText("web.update.unknownHint")).toBeInTheDocument();
     expect(screen.queryByText("web.update.upToDateTitle")).toBeNull();
     expect(screen.queryByText(/web\.update\.behindTitle/)).toBeNull();
+    // No build commit is known: no build line, only the check time.
+    expect(screen.queryByText(/web\.update\.buildSha/)).toBeNull();
+    expect(screen.getByText(/web\.update\.checkedAt/)).toBeInTheDocument();
   });
 
   it("web, failed check: shows the server's text as it came, not an up-to-date state", async () => {
@@ -312,6 +326,50 @@ describe("AboutSection · update controls", () => {
     expect(alert).toHaveTextContent(text);
     expect(screen.queryByText("web.update.upToDateTitle")).toBeNull();
     expect(screen.queryByText("settings.upToDate")).toBeNull();
+  });
+
+  it("web, behind: after a rate-limited re-check the alert replaces the behind block", async () => {
+    setWeb(true);
+    serveCheck(updateData());
+    renderAbout();
+    await clickCheck();
+    await screen.findByText('web.update.behindTitle {"count":3}');
+
+    const text = "GitHub rate limit reached (HTTP 403); try again after 11:42";
+    serve({ ok: false, status: 500, body: { ok: false, error: text } });
+    await clickCheck();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(text);
+    expect(screen.queryByText(/web\.update\.behindTitle/)).toBeNull();
+    expect(document.querySelector("pre")).toBeNull();
+  });
+
+  it("web, behind: Release notes opens the running version's page, not <version>+<sha>", async () => {
+    setWeb(true);
+    serveCheck(updateData());
+    renderAbout();
+    await clickCheck();
+    await screen.findByText('web.update.behindTitle {"count":3}');
+    fireEvent.click(screen.getByText("settings.releaseNotes"));
+    await waitFor(() => expect(mocks.openExternal).toHaveBeenCalledTimes(1));
+    const url = mocks.openExternal.mock.calls[0][0] as string;
+    expect(url).toBe(
+      "https://github.com/farion1231/cc-switch/releases/tag/v3.0.0",
+    );
+    expect(url).not.toContain("+");
+  });
+
+  it("desktop: Release notes opens the available version's page", async () => {
+    mocks.check.mockResolvedValue({ version: "9.9.9", notes: "n" });
+    renderAbout();
+    await clickCheck();
+    await screen.findByText('settings.updateTo {"version":"9.9.9"}');
+    fireEvent.click(screen.getByText("settings.releaseNotes"));
+    await waitFor(() =>
+      expect(mocks.openExternal).toHaveBeenCalledWith(
+        "https://github.com/farion1231/cc-switch/releases/tag/v9.9.9",
+      ),
+    );
   });
 
   it("web: the manual button is the one that forces past the server cache", async () => {

@@ -252,7 +252,11 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
 
   const handleOpenReleaseNotes = useCallback(async () => {
     try {
-      const targetVersion = updateInfo?.availableVersion ?? version ?? "";
+      // web: `availableVersion` is the build string `<version>+<sha>`, not a release tag;
+      // the link is the running version's page, as when up to date.
+      const targetVersion = isWeb
+        ? (version ?? "")
+        : (updateInfo?.availableVersion ?? version ?? "");
       const displayVersion = targetVersion.startsWith("v")
         ? targetVersion
         : targetVersion

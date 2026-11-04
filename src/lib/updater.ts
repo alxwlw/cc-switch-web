@@ -112,11 +112,42 @@ export function parseWebUpdateCheck(raw: unknown): WebUpdateCheck {
   };
 }
 
+/**
+ * The adapter's fetch has no client deadline, so a server that accepts and never answers would
+ * keep the check (and its button) busy for good; the desktop plugin takes the same `timeout`.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `update check: no answer from the server in ${ms / 1000} s`,
+          ),
+        ),
+      ms,
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 async function checkWebUpdate(opts: CheckOptions): Promise<CheckResult> {
   // A failed check rejects with the server's own text (rate limit, network): it is
   // not turned into "up-to-date" here.
   const web = parseWebUpdateCheck(
-    await invoke<unknown>("web_check_update", { force: opts.force === true }),
+    await withTimeout(
+      invoke<unknown>("web_check_update", { force: opts.force === true }),
+      opts.timeout ?? 30000,
+    ),
   );
   if (web.status === "unknown") return { status: "unknown", web };
   if (web.status === "up-to-date") return { status: "up-to-date", web };

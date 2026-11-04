@@ -60,7 +60,7 @@ export function DatabaseUpgrade({ payload }: DatabaseUpgradeProps) {
 
   // 启动时检查可用更新，决定 upgradable / incompatible
   useEffect(() => {
-    // WEB-00: в web нет проверки обновлений — сервер обновляет оператор — снимет WEB-28
+    // WEB-00: в web экран без кнопок: проверка обновлений есть в «О программе» (WEB-28), сервер обновляет оператор; установку вернёт фаза 37
     if (isWeb) return;
     let cancelled = false;
     (async () => {
