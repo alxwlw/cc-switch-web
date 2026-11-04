@@ -29,6 +29,7 @@ const skillsPanelMocks = vi.hoisted(() => ({
   initialViews: [] as string[],
 }));
 const officialWarningMock = vi.hoisted(() => vi.fn());
+const updateMock = vi.hoisted(() => ({ hasUpdate: false }));
 const windowMocks = vi.hoisted(() => ({
   isLinux: vi.fn(() => false),
   isMaximized: vi.fn(),
@@ -175,12 +176,14 @@ vi.mock("@/components/ConfirmDialog", () => ({
 }));
 
 vi.mock("@/contexts/UpdateContext", () => ({
-  useUpdate: () => ({ hasUpdate: false, updateInfo: null }),
+  useUpdate: () => ({ hasUpdate: updateMock.hasUpdate, updateInfo: null }),
 }));
 
 // 设置页要 ThemeProvider，这里只看导航进去时发生了什么
 vi.mock("@/components/settings/SettingsPage", () => ({
-  SettingsPage: () => <div data-testid="settings-page" />,
+  SettingsPage: ({ section }: { section?: string }) => (
+    <div data-testid="settings-page" data-section={section} />
+  ),
 }));
 
 vi.mock("@/components/skills/UnifiedSkillsPanel", () => ({
@@ -240,6 +243,7 @@ describe("App integration with MSW", () => {
     toastSuccessMock.mockReset();
     toastErrorMock.mockReset();
     skillsPanelMocks.initialViews = [];
+    updateMock.hasUpdate = false;
     windowMocks.isLinux.mockReturnValue(false);
     windowMocks.isMaximized.mockResolvedValue(false);
     windowMocks.isFullscreen.mockResolvedValue(false);
@@ -491,6 +495,23 @@ describe("App integration with MSW", () => {
       screen.queryByTestId("edit-provider-dialog"),
     ).not.toBeInTheDocument();
   }, 10_000);
+
+  it("opens Settings on About when the sidebar dot says there is an update (also in web, where behind sets it)", async () => {
+    updateMock.hasUpdate = true;
+    const { default: App } = await import("@/App");
+    renderApp(App);
+    fireEvent.click(sidebarApp("nav.settings"));
+    const page = await screen.findByTestId("settings-page");
+    expect(page).toHaveAttribute("data-section", "about");
+  });
+
+  it("opens Settings on its first section when there is no update", async () => {
+    const { default: App } = await import("@/App");
+    renderApp(App);
+    fireEvent.click(sidebarApp("nav.settings"));
+    const page = await screen.findByTestId("settings-page");
+    expect(page).toHaveAttribute("data-section", "general");
+  });
 
   it("keeps the unsaved guard when re-clicking the current page", async () => {
     const { default: App } = await import("@/App");

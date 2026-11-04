@@ -5066,7 +5066,22 @@
       "restartTimeout": "Sunucu bir dakika içinde geri dönmedi. Durumunu ana makinede kontrol edin (örneğin systemctl --user status cc-switch-web), ardından bu sayfayı yeniden yükleyin."
     },
     "update": {
-      "unsupported": "Web modunda güncellemeler kullanılamaz: sunucuyu operatör günceller"
+      "unsupported": "Web modunda güncellemeler kullanılamaz: sunucuyu operatör günceller",
+      "behindTitle": "Bu derleme daldan {{count}} commit geride",
+      "shown": "{{total}} içinden {{shown}} gösteriliyor",
+      "commitsTitle": "Daldaki yeni commit'ler",
+      "upToDateTitle": "Bu derleme fork'un dalıyla aynı",
+      "unknownTitle": "Derleme sürümü belirlenemiyor",
+      "unknownHint": "Sunucu commit kaydedilmeden, yerel değişiklik içeren bir checkout'tan veya dalda olmayan bir commit'ten derlendi; bu yüzden dalla karşılaştırılamıyor.",
+      "buildSha": "Derleme {{sha}}",
+      "checkedAt": "Kontrol: {{time}}",
+      "instructionsTitle": "Nasıl güncellenir (sunucu ana makinesinde çalıştırın)",
+      "systemd": "systemd servisi",
+      "docker": "Docker",
+      "copy": "Kopyala",
+      "copied": "Panoya kopyalandı",
+      "copyFailed": "Panoya kopyalanamadı",
+      "checkFailedTitle": "Güncelleme kontrolü başarısız"
     },
     "proxyCaption": "Proxy sunucuda çalışır ve sunucudaki CLI'ları yeniden yapılandırır; sizin makinenizdeki CLI'lara dokunmaz.",
     "desktopRouteHost": "Claude Desktop, sunucudaki proxy'ye bağlantı adresi ve bağlantı noktası üzerinden bağlanır. Claude Desktop başka bir makinede çalışıyorsa, Ayarlar → Yerel yönlendirme bölümünde bağlantı adresini (client host) o makinenin erişebildiği bir ana bilgisayara ayarlayın.",

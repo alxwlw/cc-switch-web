@@ -1058,6 +1058,13 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return { method: "POST", url: "/api/restart" };
     case "restart_app":
       return { method: "POST", url: "/api/restart", transform: () => true };
+    // WEB-28: build commit against the fork's branch. `force` skips the server's one-hour
+    // cache and spends the shared GitHub quota: only the manual button sends it.
+    case "web_check_update":
+      return {
+        method: "GET",
+        url: `/api/update/check${query({ force: a.force === true ? "1" : undefined })}`,
+      };
     case "get_config_dir":
       return { method: "GET", url: "/api/paths", pick: "configDir" };
     case "get_tool_versions":

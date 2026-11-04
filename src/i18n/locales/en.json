@@ -5088,7 +5088,22 @@
       "restartTimeout": "The server did not come back within a minute. Check its status on the host (for example systemctl --user status cc-switch-web), then reload this page."
     },
     "update": {
-      "unsupported": "Updates are unavailable in web mode: the server operator updates the app"
+      "unsupported": "Updates are unavailable in web mode: the server operator updates the app",
+      "behindTitle": "This build is {{count}} commit(s) behind the branch",
+      "shown": "Showing {{shown}} of {{total}}",
+      "commitsTitle": "New commits on the branch",
+      "upToDateTitle": "This build matches the fork's branch",
+      "unknownTitle": "The build version cannot be determined",
+      "unknownHint": "The server was built without a recorded commit, from a checkout with local changes, or from a commit that is not on the branch, so it cannot be compared with the branch.",
+      "buildSha": "Build {{sha}}",
+      "checkedAt": "Checked {{time}}",
+      "instructionsTitle": "How to update (run on the server host)",
+      "systemd": "systemd service",
+      "docker": "Docker",
+      "copy": "Copy",
+      "copied": "Copied to clipboard",
+      "copyFailed": "Could not copy to the clipboard",
+      "checkFailedTitle": "Update check failed"
     },
     "proxyCaption": "The proxy runs on the server and reconfigures the CLIs on the server; it does not touch CLIs on your machine.",
     "desktopRouteHost": "Claude Desktop connects to the proxy on the server at the connection address and port. If Claude Desktop runs on another machine, set the connection address (client host) to a host that machine can reach in Settings → Local routing.",

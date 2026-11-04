@@ -62,6 +62,8 @@ Scope: `src-tauri/src/app_store.rs` (headless-бэкенд override), `src-tauri
 
 ## Notes for next phase
 
+- **Закрыта 2026-11-04**: PR #36 merged `749133e8` → main; live на `cc-switch-web.service` с 08:27; DX-84 Done. Бэкап БД и прежний бинарь — `~/.cc-switch-web/backups-predeploy-p35-20261104-082444`, миграций нет. Restart из UI на боевом сервисе не запускался (решение владельца), смена каталога там заблокирована env. Открытые находки фазы: DX-175, DX-176, DX-177.
+
 **Статус.** Ветка `web-parity/web-26-data-dir` (base `main`), PR #36, до merge; DX-84 In Review. Merge делает владелец. Отметка «Фаза 35» в индексе — первым коммитом ветки фазы 36.
 
 **Что сделано (file:line на HEAD ветки).**

@@ -103,6 +103,7 @@ pub fn router_with_shutdown(state: SharedState, shutdown: Option<ShutdownHandle>
         .route("/api/events", get(events_stream))
         .route("/favicon.ico", get(favicon))
         .route("/api/capabilities", get(capabilities))
+        .route("/api/update/check", get(update_check))
         .route("/api/init-status", get(init_status_route))
         // providers (per app)
         .route(
@@ -726,15 +727,53 @@ async fn restart_server(
     )
 }
 
-async fn capabilities() -> Json<Value> {
-    Json(json!({
+/// `buildSha` is a parameter so a test can pin both the "set" and the "unset"
+/// value; a default build has no SHA and could not tell the handler's source apart.
+fn capabilities_payload(build_sha: Option<&str>) -> Value {
+    json!({
         "mode": "web",
         "auth": "none (tailscale-only; TRUSTED_TAILNET=1 required for non-loopback bind)",
         "version": env!("CARGO_PKG_VERSION"),
+        "buildSha": build_sha,
         "platform": std::env::consts::OS,
         "mvp_apps": ["claude", "codex", "gemini", "opencode"],
-        "runtime_boundaries": "manages files on the server host only; no tray, no native file pickers, no auto-update, no file dialogs, no terminal launch",
-    }))
+        "runtime_boundaries": "manages files on the server host only; no tray, no native file pickers, no file dialogs, no terminal launch; updates: check in UI, install by operator",
+    })
+}
+
+async fn capabilities() -> Json<Value> {
+    Json(capabilities_payload(
+        crate::services::web_update::build_sha(),
+    ))
+}
+
+#[derive(Deserialize)]
+struct UpdateCheckQuery {
+    force: Option<String>,
+}
+
+async fn update_check(Query(q): Query<UpdateCheckQuery>) -> ApiResult {
+    update_check_with(
+        &crate::services::web_update::UpdateSourceConfig::from_env(),
+        crate::services::web_update::build_sha(),
+        q.force.as_deref(),
+    )
+    .await
+}
+
+/// `force` is the `?force=` value: `1` or `true` skips the one-hour cache. The build
+/// commit and the source are parameters so tests can supply what the build and the
+/// environment do not.
+async fn update_check_with(
+    cfg: &crate::services::web_update::UpdateSourceConfig,
+    build_sha: Option<&str>,
+    force: Option<&str>,
+) -> ApiResult {
+    let force = matches!(force, Some("1" | "true"));
+    match crate::services::web_update::check(cfg, build_sha, force).await {
+        Ok(result) => ok(result),
+        Err(e) => fail(e.to_string()),
+    }
 }
 
 // ---------- providers ----------
@@ -5101,7 +5140,105 @@ async fn failover_set_auto(
 
 #[cfg(test)]
 mod tests {
-    use super::web_oauth_account_param;
+    use super::{
+        capabilities, capabilities_payload, get, update_check_with, web_oauth_account_param, Json,
+        Router,
+    };
+    use axum::http::StatusCode;
+    use std::sync::Arc;
+
+    #[test]
+    fn capabilities_payload_carries_the_given_build_sha() {
+        let set = capabilities_payload(Some("abc1234def"));
+        assert_eq!(set["buildSha"], serde_json::json!("abc1234def"));
+        let unset = capabilities_payload(None);
+        assert!(unset.as_object().unwrap().contains_key("buildSha"));
+        assert!(unset["buildSha"].is_null());
+    }
+
+    /// GitHub stand-in: `compare` answers with `status`/`body`, counting only
+    /// `GET /repos/o/r/compare/*` (a loopback prober sends `GET /`).
+    async fn update_stub(
+        status: StatusCode,
+        body: String,
+    ) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
+        let hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = hits.clone();
+        let app = Router::new().route(
+            "/repos/o/r/compare/:spec",
+            get(move || {
+                let counter = counter.clone();
+                let body = body.clone();
+                async move {
+                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    (status, [("content-type", "application/json")], body)
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        (url, hits)
+    }
+
+    fn update_cfg(api_base: String) -> crate::services::web_update::UpdateSourceConfig {
+        crate::services::web_update::UpdateSourceConfig {
+            api_base,
+            repo: "o/r".into(),
+            branch: "main".into(),
+        }
+    }
+
+    /// `?force=` reaches the cache: `1`/`true` ask the source again, anything else is
+    /// answered from the cache.
+    #[tokio::test]
+    async fn update_check_force_param_skips_the_cache() {
+        let body = serde_json::json!({"ahead_by": 0, "behind_by": 0, "commits": []}).to_string();
+        let (url, hits) = update_stub(StatusCode::OK, body).await;
+        let cfg = update_cfg(url);
+        let sha = "1111111aaaa";
+        let count = || hits.load(std::sync::atomic::Ordering::SeqCst);
+
+        let (status, Json(first)) = update_check_with(&cfg, Some(sha), None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(first["data"]["status"], "up-to-date");
+        assert_eq!(count(), 1);
+        let _ = update_check_with(&cfg, Some(sha), Some("0")).await;
+        let _ = update_check_with(&cfg, Some(sha), Some("")).await;
+        assert_eq!(count(), 1, "force=0 and an empty force use the cache");
+        let _ = update_check_with(&cfg, Some(sha), Some("1")).await;
+        assert_eq!(count(), 2, "force=1 asks the source");
+        let _ = update_check_with(&cfg, Some(sha), Some("true")).await;
+        assert_eq!(count(), 3, "force=true asks the source");
+    }
+
+    /// A refusal from the source reaches the console as `{ok:false}` with the text.
+    #[tokio::test]
+    async fn update_check_refusal_is_an_error_body_with_text() {
+        let (url, _hits) =
+            update_stub(StatusCode::FORBIDDEN, r#"{"message":"rate limit"}"#.into()).await;
+        let (status, Json(body)) =
+            update_check_with(&update_cfg(url), Some("2222222bbbb"), None).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body["ok"], false);
+        assert!(
+            body["error"].as_str().unwrap().contains("rate limit"),
+            "{body}"
+        );
+    }
+
+    /// The handler must feed the payload from `web_update::build_sha()` itself:
+    /// compared with the public function, not a copy of its rule. In a default
+    /// build both sides are `null`; the check bites when the tests are built with
+    /// `CC_SWITCH_WEB_GIT_SHA` set.
+    #[tokio::test]
+    async fn capabilities_handler_reports_web_update_build_sha() {
+        let body = capabilities().await.0;
+        assert_eq!(
+            body["buildSha"],
+            serde_json::json!(crate::services::web_update::build_sha())
+        );
+    }
 
     #[test]
     fn web_oauth_default_segment_resolves_like_desktop_none() {

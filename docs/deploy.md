@@ -21,6 +21,55 @@ by the script only for its closing message: the unit comes from
 re-run of `install-server.sh` renders the unit from the template again, so an edit that
 removed that line is undone (see "Data directory" below).
 
+## Build commit
+
+The console compares the running build with the fork's branch, so the binary carries the
+commit it was built from (`buildSha` in `GET /api/capabilities`, `null` when unknown). It
+is the compile-time env `CC_SWITCH_WEB_GIT_SHA`:
+
+- `scripts/install-server.sh` sets it to `git rev-parse HEAD` of its checkout only when
+  that is a git checkout root and no tracked file differs from `HEAD` (untracked files do
+  not count). Otherwise it unsets the variable, prints a warning for tracked changes, and
+  the build reports an unknown commit. Commit before installing to get a known build.
+- Docker: the builder stage has no git, so pass the commit as a build argument. An empty
+  or missing argument gives an unknown build. The expression
+  `$(git diff --quiet HEAD && git rev-parse HEAD)` prints the commit only when no tracked
+  file differs from `HEAD`, and nothing otherwise:
+
+  ```bash
+  docker build -f Dockerfile.web \
+    --build-arg CC_SWITCH_WEB_GIT_SHA=$(git diff --quiet HEAD && git rev-parse HEAD) \
+    -t cc-switch-web .
+  ```
+
+  The clean-tree guard of the Docker path is that expression in your command; an image
+  built by another command (a bare `$(git rev-parse HEAD)` from a dirty tree, a CI
+  pipeline) is unguarded and can report `up-to-date` for code the branch does not have.
+
+`GET /api/update/check` asks the GitHub compare API how far the branch is ahead of that
+commit (`status` is `up-to-date`, `behind` or `unknown`; `unknown` also covers a commit
+that is not on the branch, such as a local build, and a build with commits the branch
+lacks). The answer is cached in memory for one hour for every client, so open tabs do not
+spend the 60 anonymous requests an hour; `?force=1` asks again. A rate-limit or network
+failure is returned as an error and is not cached.
+
+In the console the check runs once, a second after it opens, and never with `force`;
+only the "Check for updates" button in Settings → About sends `?force=1`. A build that is
+behind gets a dot on Settings and, in About, the number of missing commits, the newest of
+them (with "showing N of M" when the list is shorter) and the update commands for systemd
+and Docker with copy buttons. A failed check shows the server's error text. The console
+does not install the update: the operator runs the commands on the server host. For
+systemd that is `cd <checkout> && git pull --ff-only && scripts/install-server.sh && systemctl --user restart cc-switch-web`
+(`install-server.sh` installs the binary but does not restart the unit, so without the last
+step the old process keeps running and the console still says "behind"). The source is
+read from the environment of the server on every request:
+
+| Variable                      | Default                  |
+| ----------------------------- | ------------------------ |
+| `CC_SWITCH_WEB_UPDATE_API`    | `https://api.github.com` |
+| `CC_SWITCH_WEB_UPDATE_REPO`   | `alxwlw/cc-switch-web`   |
+| `CC_SWITCH_WEB_UPDATE_BRANCH` | `main`                   |
+
 ## Data isolation
 
 The fork does not keep its database in `~/.cc-switch` unless you point it there, but a few

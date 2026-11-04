@@ -130,6 +130,14 @@ describe("WhatsNewNotice", () => {
     expect(mocks.save).not.toHaveBeenCalled();
   });
 
+  it("stays closed when the web console had recorded <version>-web before the server's own version replaced it", async () => {
+    mocks.settings!.whatsNewSeenVersion = "4.0.4-web";
+    renderNotice();
+    await settle();
+    expect(title()).not.toBeInTheDocument();
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+
   it("stays closed after a downgrade and keeps the higher version", async () => {
     mocks.version = "4.0.2";
     mocks.settings!.whatsNewSeenVersion = "4.0.4";

@@ -19,8 +19,38 @@ describe("fetchCapabilities", () => {
     await expect(fetchCapabilities()).resolves.toEqual({
       mode: "web",
       version: "1.2.3",
+      buildSha: null,
       runtime_boundaries: "",
       platform: "macos",
+    });
+  });
+
+  it("passes the build sha through", async () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ mode: "web", version: "1.2.3", buildSha: sha }),
+      }),
+    );
+    await expect(fetchCapabilities()).resolves.toMatchObject({ buildSha: sha });
+  });
+
+  it.each([
+    { buildSha: "", what: "an empty string" },
+    { buildSha: null, what: "null" },
+    { buildSha: 42, what: "a non-string" },
+  ])("treats $what as no build sha", async ({ buildSha }) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ mode: "web", version: "1.2.3", buildSha }),
+      }),
+    );
+    await expect(fetchCapabilities()).resolves.toMatchObject({
+      buildSha: null,
     });
   });
 

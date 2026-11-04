@@ -78,6 +78,17 @@ async fn degraded_router_keeps_capabilities() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["mode"], json!("web"));
     assert_eq!(body["version"], json!(env!("CARGO_PKG_VERSION")));
+    assert!(body.as_object().unwrap().contains_key("buildSha"), "{body}");
+    // The value is pinned in-crate (`web_api::tests`), where `web_update::build_sha()`
+    // is reachable; here the field must exist and be a string or null.
+    assert!(
+        body["buildSha"].is_null() || body["buildSha"].is_string(),
+        "{body}"
+    );
+    assert!(!body["runtime_boundaries"]
+        .as_str()
+        .unwrap()
+        .contains("no auto-update"));
 }
 
 #[tokio::test]

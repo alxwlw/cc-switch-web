@@ -5088,7 +5088,22 @@
       "restartTimeout": "サーバーが 1 分以内に戻りませんでした。ホストで状態を確認し（例: systemctl --user status cc-switch-web）、このページを再読み込みしてください。"
     },
     "update": {
-      "unsupported": "Webモードではアップデートを利用できません。サーバーの更新は運用者が行います"
+      "unsupported": "Webモードではアップデートを利用できません。サーバーの更新は運用者が行います",
+      "behindTitle": "このビルドはブランチより {{count}} コミット遅れています",
+      "shown": "{{total}} 件中 {{shown}} 件を表示",
+      "commitsTitle": "ブランチの新しいコミット",
+      "upToDateTitle": "このビルドはフォークのブランチと一致しています",
+      "unknownTitle": "ビルドのバージョンを特定できません",
+      "unknownHint": "サーバーがコミットを記録せずにビルドされた、ローカルの変更があるチェックアウトからビルドされた、またはブランチにないコミットからビルドされたため、ブランチと比較できません。",
+      "buildSha": "ビルド {{sha}}",
+      "checkedAt": "確認日時 {{time}}",
+      "instructionsTitle": "更新方法（サーバーホストで実行）",
+      "systemd": "systemd サービス",
+      "docker": "Docker",
+      "copy": "コピー",
+      "copied": "クリップボードにコピーしました",
+      "copyFailed": "クリップボードにコピーできませんでした",
+      "checkFailedTitle": "更新の確認に失敗しました"
     },
     "proxyCaption": "プロキシはサーバー上で動作し、サーバー上の CLI の設定を書き換えます。お使いのマシン上の CLI には影響しません。",
     "desktopRouteHost": "Claude Desktop は「接続アドレス」とポートでサーバー上のプロキシに接続します。Claude Desktop が別のマシンで動いている場合は、設定 → ローカルルーティングで、そのマシンから到達できるホストを接続アドレス（client host）に設定してください。",

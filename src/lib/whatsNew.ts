@@ -32,11 +32,22 @@ export const WHATS_NEW_ENTRIES: WhatsNewEntry[] = Object.values(modules).sort(
   (a, b) => compareVersions(b.version, a.version),
 );
 
+/**
+ * The web console's `getVersion()` used to be the hard-coded `<version>-web`, and that
+ * string went into `whatsNewSeenVersion`. As a prerelease it sorts below the release
+ * (`4.0.20` > `4.0.20-web`), so the server's plain version would show the summary
+ * again to everyone who had already seen it. The suffix is dropped when comparing.
+ */
+function withoutLegacyWebSuffix(seen: string | undefined): string | undefined {
+  return seen?.replace(/-web$/, "");
+}
+
 /** 当前版本比记录的已看版本新（或从没记录过）：需要处理一次 */
 export function isNewerThanSeen(
   current: string,
-  seen: string | undefined,
+  seenRaw: string | undefined,
 ): boolean {
+  const seen = withoutLegacyWebSuffix(seenRaw);
   return !seen || compareVersions(current, seen) > 0;
 }
 
@@ -46,9 +57,10 @@ export function isNewerThanSeen(
  */
 export function entriesSince(
   entries: WhatsNewEntry[],
-  seen: string | undefined,
+  seenRaw: string | undefined,
   current: string,
 ): WhatsNewEntry[] {
+  const seen = withoutLegacyWebSuffix(seenRaw);
   return entries.filter((entry) => {
     if (entry.items.length === 0) return false;
     if (!seen) return entry.version === current;

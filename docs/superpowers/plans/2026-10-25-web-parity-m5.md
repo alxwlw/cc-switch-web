@@ -56,7 +56,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 - [x] [Phase 34 — WEB-11 / DX-69 (этап 2): автоматическая синхронизация в headless scheduler](2026-10-25-web-parity-m5/phase-34.md) — PR #35, merged `2054627e` → main 2026-11-03, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-69 Done (этап 2 из 2).
 
 Эпик lifecycle и обновления:
-- [ ] [Phase 35 — WEB-26 / DX-84: смена data directory и restart](2026-10-25-web-parity-m5/phase-35.md)
+- [x] [Phase 35 — WEB-26 / DX-84: смена data directory и restart](2026-10-25-web-parity-m5/phase-35.md) — PR #36, merged `749133e8` → main 2026-11-04, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-84 Done.
 - [ ] [Phase 36 — WEB-28 / DX-86 (этап 1): проверка обновлений и инструкция](2026-10-25-web-parity-m5/phase-36.md)
 - [ ] [Phase 37 — WEB-28 / DX-86 (этап 2): safe self-update; закрытие модуля M5](2026-10-25-web-parity-m5/phase-37.md)
 

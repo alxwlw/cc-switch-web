@@ -13,8 +13,13 @@ RUN curl -fsSL https://get.pnpm.io/install.sh | ENV="$HOME/.shrc" SHELL="$(which
   && ln -s /root/.local/share/pnpm/pnpm /usr/local/bin/pnpm
 WORKDIR /build
 COPY . .
-RUN pnpm install && pnpm build:web \
-  && cd src-tauri && cargo build --release --example server \
+RUN pnpm install && pnpm build:web
+# The builder has no git: pass the commit in, `--build-arg CC_SWITCH_WEB_GIT_SHA=$(git diff --quiet HEAD && git rev-parse HEAD)`
+# (docs/deploy.md). Empty means an unknown build. There is no .dockerignore, so `COPY . .`
+# takes .git and every commit changes that layer anyway; the ARG sits after the frontend
+# step only so that a different value of it alone does not rerun the frontend build.
+ARG CC_SWITCH_WEB_GIT_SHA=
+RUN cd src-tauri && cargo build --release --example server \
   && cp target/release/examples/server /usr/local/bin/cc-switch-web
 
 FROM debian:bookworm-slim
