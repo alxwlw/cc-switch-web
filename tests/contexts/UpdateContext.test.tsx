@@ -5,34 +5,179 @@ import { UpdateProvider, useUpdate } from "@/contexts/UpdateContext";
 import { checkForUpdate } from "@/lib/updater";
 import { setWeb } from "../helpers/web";
 
-const mocks = vi.hoisted(() => ({ check: vi.fn(), checkForUpdate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ check: vi.fn() }));
 
 vi.mock("@tauri-apps/plugin-updater", () => ({ check: mocks.check }));
-vi.mock("@/lib/updater", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/updater")>();
-  mocks.checkForUpdate.mockImplementation(actual.checkForUpdate);
-  return { ...actual, checkForUpdate: mocks.checkForUpdate };
+// Web: `invoke` is the real adapter, so the command -> URL mapping is under test; only
+// `fetch` is replaced.
+vi.mock("@tauri-apps/api/core", async () => {
+  const adapter =
+    await vi.importActual<typeof import("@/lib/api/adapter")>(
+      "@/lib/api/adapter",
+    );
+  return { invoke: adapter.invoke };
 });
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: vi.fn().mockResolvedValue("3.0.0"),
 }));
 
+const SHA = "0123456789abcdef0123456789abcdef01234567";
+const LATEST = "fedcba9876543210fedcba9876543210fedcba98";
+
+const instructions = {
+  systemd: "cd <checkout> && git pull --ff-only && scripts/install-server.sh",
+  docker: "docker build -f Dockerfile.web -t cc-switch-web .",
+};
+
+function webCheck(over: Record<string, unknown> = {}) {
+  return {
+    status: "behind",
+    currentVersion: "4.0.20",
+    currentSha: SHA,
+    latestSha: LATEST,
+    behindBy: 2,
+    commits: [
+      { sha: LATEST, message: "newest", date: "2026-11-04T10:00:00Z" },
+      { sha: "aaaaaaa1111111", message: "older", date: null },
+    ],
+    checkedAt: "2026-11-04T10:30:00Z",
+    instructions,
+    ...over,
+  };
+}
+
+const fetchMock = vi.fn();
+
+function answer(data: unknown) {
+  fetchMock.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ ok: true, data }),
+  });
+}
+
+/** URLs of the update-check requests made so far. */
+const checkUrls = () =>
+  fetchMock.mock.calls
+    .map((c) => c[0] as string)
+    .filter((u) => u.startsWith("/api/update/check"));
+
 const wrapper = ({ children }: { children: ReactNode }) => (
   <UpdateProvider>{children}</UpdateProvider>
 );
 
-describe("updater · checkForUpdate", () => {
-  beforeEach(() => mocks.check.mockReset().mockResolvedValue(null));
+describe("updater · checkForUpdate (desktop)", () => {
+  beforeEach(() => {
+    mocks.check.mockReset().mockResolvedValue(null);
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
 
-  it("desktop: no update from the plugin is up-to-date", async () => {
+  it("no update from the plugin is up-to-date", async () => {
     await expect(checkForUpdate()).resolves.toEqual({ status: "up-to-date" });
     expect(mocks.check).toHaveBeenCalledTimes(1);
   });
 
-  it("web: unsupported, never up-to-date, plugin not called", async () => {
+  it("an update from the plugin is available with its version, and the server is not asked", async () => {
+    mocks.check.mockResolvedValue({
+      version: "9.9.9",
+      notes: "n",
+      date: "2026-01-01",
+    });
+    await expect(checkForUpdate({ force: true })).resolves.toEqual({
+      status: "available",
+      info: {
+        currentVersion: "3.0.0",
+        availableVersion: "9.9.9",
+        notes: "n",
+        pubDate: "2026-01-01",
+      },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("updater · checkForUpdate (web)", () => {
+  beforeEach(() => {
     setWeb(true);
-    await expect(checkForUpdate()).resolves.toEqual({ status: "unsupported" });
+    mocks.check.mockReset().mockResolvedValue(null);
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("behind: available, version is <version>+<7 chars of latestSha>, the plugin is not called", async () => {
+    answer(webCheck());
+    const result = await checkForUpdate();
+    expect(result).toMatchObject({
+      status: "available",
+      info: {
+        currentVersion: "4.0.20",
+        availableVersion: `4.0.20+${LATEST.slice(0, 7)}`,
+        pubDate: "2026-11-04T10:00:00Z",
+      },
+      web: { status: "behind", behindBy: 2, instructions },
+    });
     expect(mocks.check).not.toHaveBeenCalled();
+  });
+
+  it("up-to-date and unknown keep the server's data and never become an update", async () => {
+    answer(webCheck({ status: "up-to-date", behindBy: 0, commits: [] }));
+    await expect(checkForUpdate()).resolves.toMatchObject({
+      status: "up-to-date",
+      web: { status: "up-to-date" },
+    });
+    answer(
+      webCheck({
+        status: "unknown",
+        currentSha: null,
+        latestSha: null,
+        behindBy: 0,
+        commits: [],
+      }),
+    );
+    await expect(checkForUpdate()).resolves.toMatchObject({
+      status: "unknown",
+      web: { status: "unknown", currentSha: null },
+    });
+  });
+
+  it("asks without force by default and with ?force=1 only when told to", async () => {
+    answer(webCheck());
+    await checkForUpdate();
+    await checkForUpdate({ force: false });
+    await checkForUpdate({ force: true });
+    expect(checkUrls()).toEqual([
+      "/api/update/check",
+      "/api/update/check",
+      "/api/update/check?force=1",
+    ]);
+  });
+
+  it("a server error rejects with the server's text, unchanged", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({
+        ok: false,
+        error: "GitHub rate limit reached (HTTP 403); try again after 11:42",
+      }),
+    });
+    await expect(checkForUpdate()).rejects.toThrow(
+      "GitHub rate limit reached (HTTP 403); try again after 11:42",
+    );
+  });
+
+  it.each([
+    ["an unknown status", webCheck({ status: "newer" })],
+    ["a missing behindBy", webCheck({ behindBy: undefined })],
+    ["commits that are not a list", webCheck({ commits: "none" })],
+    ["behind without latestSha", webCheck({ latestSha: null })],
+    ["no instructions", webCheck({ instructions: null })],
+  ])("rejects a payload with %s instead of guessing", async (_n, payload) => {
+    answer(payload);
+    await expect(checkForUpdate()).rejects.toThrow("unexpected payload");
   });
 });
 
@@ -40,16 +185,22 @@ describe("UpdateContext", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mocks.check.mockReset().mockResolvedValue(null);
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
   });
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 
-  it("desktop: auto-checks on mount, reports not unsupported", async () => {
+  it("desktop: auto-checks on mount, webUpdate stays null", async () => {
     const { result } = renderHook(() => useUpdate(), { wrapper });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1100);
     });
     expect(mocks.check).toHaveBeenCalledTimes(1);
-    expect(result.current.unsupported).toBe(false);
+    expect(result.current.webUpdate).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("desktop: an available update sets hasUpdate", async () => {
@@ -64,24 +215,83 @@ describe("UpdateContext", () => {
     expect(result.current.updateInfo?.availableVersion).toBe("9.9.9");
   });
 
-  it("web: skips the mount check, hasUpdate stays false, manual check is not fake success", async () => {
+  it("web: the automatic check runs after a second, without force, and behind sets hasUpdate", async () => {
     setWeb(true);
+    answer(webCheck());
     const { result } = renderHook(() => useUpdate(), { wrapper });
+    expect(checkUrls()).toEqual([]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100);
+    });
+    expect(checkUrls()).toEqual(["/api/update/check"]);
+    expect(result.current.hasUpdate).toBe(true);
+    expect(result.current.updateInfo?.availableVersion).toBe(
+      `4.0.20+${LATEST.slice(0, 7)}`,
+    );
+    expect(result.current.webUpdate).toMatchObject({
+      status: "behind",
+      behindBy: 2,
+    });
+    expect(mocks.check).not.toHaveBeenCalled();
+  });
+
+  it("web: a re-render and a re-mount never force; only the manual call does", async () => {
+    setWeb(true);
+    answer(webCheck({ status: "up-to-date", behindBy: 0, commits: [] }));
+    const first = renderHook(() => useUpdate(), { wrapper });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100);
+    });
+    first.rerender();
+    first.rerender();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5000);
     });
-    expect(mocks.checkForUpdate).not.toHaveBeenCalled();
-    expect(mocks.check).not.toHaveBeenCalled();
-    expect(result.current.unsupported).toBe(true);
-    expect(result.current.hasUpdate).toBe(false);
+    expect(checkUrls()).toEqual(["/api/update/check"]);
 
+    first.unmount();
+    renderHook(() => useUpdate(), { wrapper });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1100);
+    });
+    expect(checkUrls()).toEqual(["/api/update/check", "/api/update/check"]);
+
+    const manual = renderHook(() => useUpdate(), { wrapper });
+    await act(async () => {
+      await manual.result.current.checkUpdate({ force: true });
+    });
+    expect(checkUrls().at(-1)).toBe("/api/update/check?force=1");
+    expect(checkUrls().filter((u) => u.includes("force"))).toHaveLength(1);
+  });
+
+  it("web: up-to-date and unknown leave hasUpdate false but keep webUpdate", async () => {
+    setWeb(true);
+    answer(webCheck({ status: "unknown", latestSha: null, commits: [] }));
+    const { result } = renderHook(() => useUpdate(), { wrapper });
     let available = true;
     await act(async () => {
       available = await result.current.checkUpdate();
     });
     expect(available).toBe(false);
-    expect(mocks.checkForUpdate).toHaveBeenCalledTimes(1);
-    expect(mocks.check).not.toHaveBeenCalled();
     expect(result.current.hasUpdate).toBe(false);
+    expect(result.current.webUpdate?.status).toBe("unknown");
+  });
+
+  it("web: a failed check keeps the server's text in error, hasUpdate false, no webUpdate", async () => {
+    setWeb(true);
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ ok: false, error: "rate limit text from server" }),
+    });
+    const { result } = renderHook(() => useUpdate(), { wrapper });
+    await act(async () => {
+      await expect(result.current.checkUpdate()).rejects.toThrow(
+        "rate limit text from server",
+      );
+    });
+    expect(result.current.error).toBe("rate limit text from server");
+    expect(result.current.hasUpdate).toBe(false);
+    expect(result.current.webUpdate).toBeNull();
   });
 });

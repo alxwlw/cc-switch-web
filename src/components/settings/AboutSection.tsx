@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Copy,
   Download,
   ExternalLink,
   Github,
@@ -23,6 +24,9 @@ import { WHATS_NEW_ENTRIES, entriesUpTo } from "@/lib/whatsNew";
 import ccswitchLogo from "@/assets/icons/logo.svg";
 import { WebModeInfo } from "@/components/web/WebModeInfo";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { isWeb } from "@/lib/api/adapter";
+import { copyText } from "@/lib/clipboard";
+import type { WebUpdateCheck } from "@/lib/updater";
 
 interface AboutSectionProps {
   isPortable: boolean;
@@ -40,6 +44,151 @@ function readStarPromptDismissed(): boolean {
   } catch {
     return false;
   }
+}
+
+/** web: the result of the server's update check — how far behind, what is new, how to update. */
+function WebUpdateStatus({
+  webUpdate,
+  error,
+}: {
+  webUpdate: WebUpdateCheck | null;
+  error: string | null;
+}) {
+  const { t } = useTranslation();
+
+  const handleCopy = useCallback(
+    async (text: string) => {
+      try {
+        await copyText(text);
+        toast.success(t("web.update.copied"), { closeButton: true });
+      } catch (copyError) {
+        console.error("[AboutSection] Failed to copy instructions", copyError);
+        toast.error(t("web.update.copyFailed"), {
+          description: extractErrorMessage(copyError) || undefined,
+          closeButton: true,
+        });
+      }
+    },
+    [t],
+  );
+
+  // The server's own text (rate limit, no network), as it came: not "up to date".
+  if (error) {
+    return (
+      <div role="alert" className="space-y-1 px-5 py-4 text-body">
+        <p className="font-medium text-fg-1">
+          {t("web.update.checkFailedTitle")}
+        </p>
+        <p className="break-words text-fg-2">{error}</p>
+      </div>
+    );
+  }
+  if (!webUpdate) return null;
+
+  const checked = new Date(webUpdate.checkedAt);
+  const checkedAt = Number.isNaN(checked.getTime())
+    ? webUpdate.checkedAt
+    : checked.toLocaleString();
+  const footer = (
+    <p className="text-caption text-fg-2">
+      {webUpdate.currentSha && (
+        <span className="tabular-nums">
+          {t("web.update.buildSha", { sha: webUpdate.currentSha.slice(0, 7) })}
+          {" · "}
+        </span>
+      )}
+      {t("web.update.checkedAt", { time: checkedAt })}
+    </p>
+  );
+
+  if (webUpdate.status === "unknown") {
+    return (
+      <div className="space-y-1 px-5 py-4 text-body">
+        <p className="font-medium text-fg-1">{t("web.update.unknownTitle")}</p>
+        <p className="text-fg-2">{t("web.update.unknownHint")}</p>
+        {footer}
+      </div>
+    );
+  }
+
+  if (webUpdate.status === "up-to-date") {
+    return (
+      <div className="space-y-1 px-5 py-4 text-body">
+        <p className="font-medium text-fg-1">{t("web.update.upToDateTitle")}</p>
+        {footer}
+      </div>
+    );
+  }
+
+  const instructions = [
+    { key: "systemd", text: webUpdate.instructions.systemd },
+    { key: "docker", text: webUpdate.instructions.docker },
+  ];
+  return (
+    <div className="space-y-3 px-5 py-4 text-body">
+      <div className="space-y-1">
+        <p className="font-medium text-fg-1">
+          {t("web.update.behindTitle", { count: webUpdate.behindBy })}
+        </p>
+        {footer}
+      </div>
+
+      {webUpdate.commits.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-caption font-medium text-fg-2">
+            {t("web.update.commitsTitle")}
+            {webUpdate.commits.length < webUpdate.behindBy && (
+              <>
+                {" · "}
+                {t("web.update.shown", {
+                  shown: webUpdate.commits.length,
+                  total: webUpdate.behindBy,
+                })}
+              </>
+            )}
+          </p>
+          <ul className="space-y-0.5">
+            {webUpdate.commits.map((commit) => (
+              <li key={commit.sha} className="flex gap-2 text-fg-2">
+                <code className="shrink-0 tabular-nums text-fg-1">
+                  {commit.sha.slice(0, 7)}
+                </code>
+                <span className="min-w-0 break-words">{commit.message}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <p className="text-caption font-medium text-fg-2">
+          {t("web.update.instructionsTitle")}
+        </p>
+        {instructions.map(({ key, text }) => (
+          <div key={key} className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-caption text-fg-1">
+                {t(`web.update.${key}`)}
+              </span>
+              <Button
+                type="button"
+                variant="neutral"
+                size="compact"
+                onClick={() => void handleCopy(text)}
+                aria-label={`${t("web.update.copy")}: ${t(`web.update.${key}`)}`}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                {t("web.update.copy")}
+              </Button>
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-control bg-subtle p-2 text-caption text-fg-1">
+              {text}
+            </pre>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -70,7 +219,8 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
     checkUpdate,
     resetDismiss,
     isChecking,
-    unsupported,
+    webUpdate,
+    error: checkError,
   } = useUpdate();
 
   useEffect(() => {
@@ -139,6 +289,17 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
   }, []);
 
   const handleCheckUpdate = useCallback(async () => {
+    if (isWeb) {
+      // The button is the only caller that forces past the server's cache; the result
+      // (or the server's error text) is shown by WebUpdateStatus, install is phase 37.
+      try {
+        await checkUpdate({ force: true });
+      } catch (error) {
+        console.error("[AboutSection] Check update failed", error);
+      }
+      return;
+    }
+
     if (hasUpdate) {
       if (isPortable) {
         try {
@@ -229,47 +390,43 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
             )}
           </div>
         </div>
-        {/* WEB-00: в web кнопки check/install нет — сервер обновляет оператор — снимет WEB-28 */}
-        {unsupported ? (
-          <p className="max-w-xs text-caption text-fg-2">
-            {t("web.update.unsupported")}
-          </p>
-        ) : (
-          <Button
-            type="button"
-            variant={hasUpdate ? "solid" : "neutral"}
-            size="regular"
-            onClick={handleCheckUpdate}
-            disabled={isChecking || isDownloading}
-          >
-            {isDownloading ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t("settings.updating")}
-              </>
-            ) : hasUpdate ? (
-              <>
-                <Download className="h-3.5 w-3.5" />
-                {t("settings.updateTo", {
-                  version: updateInfo?.availableVersion ?? "",
-                })}
-              </>
-            ) : isChecking ? (
-              <>
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                {t("settings.checking")}
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-3.5 w-3.5" />
-                {t("settings.checkForUpdates")}
-              </>
-            )}
-          </Button>
-        )}
+        {/* web: the button only checks; installing from the console is phase 37 */}
+        <Button
+          type="button"
+          variant={hasUpdate && !isWeb ? "solid" : "neutral"}
+          size="regular"
+          onClick={handleCheckUpdate}
+          disabled={isChecking || isDownloading}
+        >
+          {isDownloading ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {t("settings.updating")}
+            </>
+          ) : hasUpdate && !isWeb ? (
+            <>
+              <Download className="h-3.5 w-3.5" />
+              {t("settings.updateTo", {
+                version: updateInfo?.availableVersion ?? "",
+              })}
+            </>
+          ) : isChecking ? (
+            <>
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              {t("settings.checking")}
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-3.5 w-3.5" />
+              {t("settings.checkForUpdates")}
+            </>
+          )}
+        </Button>
       </div>
 
-      {hasUpdate && updateInfo && (
+      {isWeb && <WebUpdateStatus webUpdate={webUpdate} error={checkError} />}
+
+      {!isWeb && hasUpdate && updateInfo && (
         <div className="space-y-1 px-5 py-4 text-body">
           <p className="font-medium text-fg-1">
             {t("settings.updateAvailable", {

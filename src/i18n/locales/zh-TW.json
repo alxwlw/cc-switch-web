@@ -5089,7 +5089,22 @@
       "restartTimeout": "伺服器在一分鐘內沒有恢復。請在伺服器主機上查看狀態（例如 systemctl --user status cc-switch-web），然後重新整理此頁面。"
     },
     "update": {
-      "unsupported": "Web 模式下無法檢查更新：伺服器由維運人員負責升級"
+      "unsupported": "Web 模式下無法檢查更新：伺服器由維運人員負責升級",
+      "behindTitle": "目前建置落後分支 {{count}} 個提交",
+      "shown": "顯示 {{shown}} / {{total}} 個",
+      "commitsTitle": "分支上的新提交",
+      "upToDateTitle": "目前建置與分叉分支一致",
+      "unknownTitle": "無法確定建置版本",
+      "unknownHint": "伺服器建置時沒有記錄提交、簽出目錄含本機變更，或所用提交不在該分支上，因此無法與分支比較。",
+      "buildSha": "建置 {{sha}}",
+      "checkedAt": "檢查於 {{time}}",
+      "instructionsTitle": "更新方法（在伺服器主機上執行）",
+      "systemd": "systemd 服務",
+      "docker": "Docker",
+      "copy": "複製",
+      "copied": "已複製到剪貼簿",
+      "copyFailed": "無法複製到剪貼簿",
+      "checkFailedTitle": "檢查更新失敗"
     },
     "proxyCaption": "代理運行在伺服器上，並重新設定伺服器上的 CLI；不會影響你本機上的 CLI。",
     "desktopRouteHost": "Claude Desktop 會依「連線位址」和連接埠連到伺服器上的代理。如果 Claude Desktop 裝在另一台機器上，請在 設定 → 本地路由 中把連線位址（client host）改成那台機器能連到的主機。",
