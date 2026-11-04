@@ -265,6 +265,7 @@ async fn three_commits_ahead_is_behind_with_three_newest_first() {
     assert_eq!(result["currentSha"], json!(sha));
     assert_eq!(result["latestSha"], json!(sha_of(3)));
     assert_eq!(result["currentVersion"], json!(env!("CARGO_PKG_VERSION")));
+    assert_eq!(result["branch"], json!("main"));
     let shas: Vec<&str> = result["commits"]
         .as_array()
         .unwrap()
@@ -614,6 +615,29 @@ async fn a_cached_answer_is_not_shared_with_another_build_or_source() {
 
 #[tokio::test]
 #[serial]
+async fn a_cached_answer_names_the_branch_it_was_computed_for() {
+    let sha = sha_of(0x1011);
+    let gh = Github::start(ok(compare_body(1, 0, 1, 1))).await;
+    let main = gh.cfg();
+    let dev = UpdateSourceConfig {
+        branch: "dev".to_string(),
+        ..gh.cfg()
+    };
+
+    let first = as_json(&check_web_update(&main, Some(&sha), false).await.unwrap());
+    assert_eq!(first["branch"], json!("main"));
+    // Same source, same build, another branch: not served from main's entry.
+    let other = as_json(&check_web_update(&dev, Some(&sha), false).await.unwrap());
+    assert_eq!(other["branch"], json!("dev"));
+    assert_eq!(gh.compare_hits(), 2, "another branch asks again");
+    // And the one-hour cache still serves the branch it holds.
+    let again = as_json(&check_web_update(&dev, Some(&sha), false).await.unwrap());
+    assert_eq!(again["branch"], json!("dev"));
+    assert_eq!(gh.compare_hits(), 2);
+}
+
+#[tokio::test]
+#[serial]
 async fn a_build_without_a_usable_commit_is_unknown_and_asks_nobody() {
     let gh = Github::start(ok(compare_body(3, 0, 1, 3))).await;
     let cfg = gh.cfg();
@@ -624,6 +648,7 @@ async fn a_build_without_a_usable_commit_is_unknown_and_asks_nobody() {
     assert_eq!(none["latestSha"], Value::Null);
     assert_eq!(none["behindBy"], json!(0));
     assert_eq!(none["commits"], json!([]));
+    assert_eq!(none["branch"], json!("main"), "even with no build commit");
 
     // Text that is not a commit hash never reaches the URL.
     for bad in ["", "main", "abc", "abc1234/../../x", "abc1234?x=1"] {
