@@ -123,3 +123,4 @@ Task 3:
 4. Пересобрать server и `dist-web` через `scripts/install-server.sh`, не вручную, затем `systemctl --user restart cc-switch-web` (скрипт юнит не перезапускает).
 5. Smoke на боевом сервисе: `GET /api/capabilities` → `buildSha` = HEAD `main` после merge; `GET /api/update/check` → `up-to-date`; About показывает «This build matches the fork's branch», точки нет. Бюджет: 1–2 запроса к GitHub.
 6. Закрытие фазы 36 (отметка в индексе) — первым коммитом ветки фазы 37.
+7. DX-86 остаётся In Progress (этап 1 из 2). Хук Plane перевёл её в In Review при открытии PR и может сменить статус при merge: проверить и вернуть In Progress.
