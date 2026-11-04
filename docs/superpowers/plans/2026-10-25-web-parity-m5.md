@@ -57,7 +57,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 
 Эпик lifecycle и обновления:
 - [x] [Phase 35 — WEB-26 / DX-84: смена data directory и restart](2026-10-25-web-parity-m5/phase-35.md) — PR #36, merged `749133e8` → main 2026-11-04, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-84 Done.
-- [ ] [Phase 36 — WEB-28 / DX-86 (этап 1): проверка обновлений и инструкция](2026-10-25-web-parity-m5/phase-36.md)
+- [x] [Phase 36 — WEB-28 / DX-86 (этап 1): проверка обновлений и инструкция](2026-10-25-web-parity-m5/phase-36.md) — PR #37, merged `c366a8a9` → main 2026-11-04, live на cc-switch-web.service (server + dist-web пересобраны через `install-server.sh`, БД забэкаплена); DX-86 In Progress (этап 1 из 2).
 - [ ] [Phase 37 — WEB-28 / DX-86 (этап 2): safe self-update; закрытие модуля M5](2026-10-25-web-parity-m5/phase-37.md)
 
 Гейты фазы (по `.github/workflows/ci.yml`): frontend — `pnpm typecheck`, `pnpm format:check`, `pnpm test:unit`, `pnpm build:renderer`; backend — `cargo fmt --check --manifest-path src-tauri/Cargo.toml`, `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`, `cargo nextest run --manifest-path src-tauri/Cargo.toml --profile ci`. Перед закрытием фазы — полный прогон всего затронутого, не только новые тесты. `pnpm build:web` и сборка example server в CI отсутствуют — при правках web_api/server.rs собирать `cargo build --release --example server` локально.
