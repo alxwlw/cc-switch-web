@@ -20,7 +20,7 @@
 # Env (all optional):
 #   BIN_DIR (~/.local/bin)    installed binary is $BIN_DIR/cc-switch-web
 #   WEB_DIST (<source_dir>/dist-web)   absolute; .new and .prev live next to it
-#   HOST, PORT (18766)        health check polls http://$HOST:$PORT/api/capabilities;
+#   HOST, PORT (18766)        health check polls http://$HOST:$PORT/api/capabilities and /api/health;
 #                             HOST empty or 0.0.0.0 -> 127.0.0.1
 #   CC_SWITCH_WEB_BUILD_PATH  directories with pnpm/node/cargo, put in front of PATH
 #                             (a systemd-run unit has the manager's PATH, not the login one)
@@ -152,14 +152,19 @@ case "$HEALTH_HOST" in
   *:*) HEALTH_HOST="[$HEALTH_HOST]" ;;
 esac
 
-# probe <wanted sha or "">: the service answers /api/capabilities and, when a sha is
-# wanted, reports exactly that buildSha.
+# probe <wanted sha or "">: the service is up and working: /api/capabilities answers and,
+# when a sha is wanted, reports exactly that buildSha, and /api/health answers 2xx. Both are
+# needed: a server whose startup failed (a database newer than the binary) runs in init-error
+# mode, where /api/capabilities still answers with the build's own sha but /api/health, like
+# every other /api route, is 503.
 probe() {
   local want="$1" body got
   body="$(curl -fsS --max-time 3 "http://$HEALTH_HOST:$PORT/api/capabilities" 2>/dev/null)" || return 1
-  [ -n "$want" ] || return 0
-  got="$(printf '%s' "$body" | sed -n 's/.*"buildSha"[[:space:]]*:[[:space:]]*"\([0-9a-fA-F]*\)".*/\1/p' | head -n 1)"
-  [ "$got" = "$want" ]
+  if [ -n "$want" ]; then
+    got="$(printf '%s' "$body" | sed -n 's/.*"buildSha"[[:space:]]*:[[:space:]]*"\([0-9a-fA-F]*\)".*/\1/p' | head -n 1)"
+    [ "$got" = "$want" ] || return 1
+  fi
+  curl -fsS --max-time 3 -o /dev/null "http://$HEALTH_HOST:$PORT/api/health" 2>/dev/null
 }
 
 # running_sha: buildSha of the live service, empty when it is down or has no sha.
@@ -196,12 +201,12 @@ rollback() {
   fi
   if [ "$ok" -eq 1 ] && { [ "$RESTARTED" -eq 0 ] || systemctl --user restart "$SERVICE"; } &&
     wait_healthy "$RUNNING_SHA"; then
-    write_status rolled-back false "$why. The previous binary and dist-web are back (copies kept as $BIN_PREV and $PREV_DIST) and the service answers.$(checkout_note) Log: $JOURNAL_HINT"
+    write_status rolled-back false "$why. The previous binary and dist-web are back (copies kept as $BIN_PREV and $PREV_DIST) and the service works.$(checkout_note) Log: $JOURNAL_HINT"
     return 0
   fi
   [ ! -e "$BIN_PREV" ] || left="$left $BIN_PREV"
   [ ! -d "$PREV_DIST" ] || left="$left $PREV_DIST"
-  write_status rollback-failed false "$why. ROLLBACK FAILED: the service does not answer with the previous build. Previous files kept at:${left:- (none)}. Restore them by hand, then: systemctl --user restart $SERVICE.$(checkout_note) Log: $JOURNAL_HINT"
+  write_status rollback-failed false "$why. ROLLBACK FAILED: the service does not work with the previous build. One possible cause is a database that the new build migrated and the previous binary cannot open: see docs/deploy.md, section \"The database and an update\", to restore db_backup_*. Previous files kept at:${left:- (none)}. Restore them by hand, then: systemctl --user restart $SERVICE.$(checkout_note) Log: $JOURNAL_HINT"
   return 1
 }
 
@@ -280,9 +285,9 @@ timeout -k 5 "$FETCH_TIMEOUT" git -C "$SRC" fetch origin || rc=$?
 [ "$rc" -eq 0 ] || die "git fetch origin failed (exit $rc)"
 TO_SHA="$(git -C "$SRC" rev-parse --verify -q "refs/remotes/origin/$BRANCH^{commit}")" || die "origin/$BRANCH does not exist"
 
-# Up to date only when the live service itself reports this commit: a service that is down
-# or runs a build without a sha is rebuilt.
-if [ "$FROM_SHA" = "$TO_SHA" ] && [ "$RUNNING_SHA" = "$TO_SHA" ]; then
+# Up to date only when the live service itself reports this commit and works: a service that
+# is down, in init-error mode, or runs a build without a sha is rebuilt.
+if [ "$FROM_SHA" = "$TO_SHA" ] && [ "$RUNNING_SHA" = "$TO_SHA" ] && probe "$TO_SHA"; then
   TERMINAL=1
   write_status "done" true "already up to date at $(short "$TO_SHA")"
   exit 0
@@ -327,7 +332,7 @@ write_status restarting true "restarting $SERVICE"
 systemctl --user daemon-reload
 RESTARTED=1
 systemctl --user restart "$SERVICE"
-wait_healthy "$TO_SHA" || die "the service did not report build $(short "$TO_SHA") within ${HEALTH_TIMEOUT}s"
+wait_healthy "$TO_SHA" || die "the service did not report build $(short "$TO_SHA") with a working /api/health within ${HEALTH_TIMEOUT}s"
 
 PHASE=committed
 TERMINAL=1

@@ -119,8 +119,14 @@ if [ "\$1 \$2" = "--user restart" ]; then
     sleep 30
   fi
   content="\$(cat "\$BIN_DIR/cc-switch-web")"
+  rm -f "\$STUB_SVC.initerr"
   if [ -e "\$STUB_SVC.always-down" ] || [ "\$content" = bin-down ]; then
     echo down >"\$STUB_SVC"
+  elif [[ "\$content" == initerr-* ]]; then
+    # a server whose startup failed: it runs in init-error mode, capabilities still answer
+    # with its sha, /api/health is 503
+    echo "\${content#initerr-}" >"\$STUB_SVC"
+    : >"\$STUB_SVC.initerr"
   else
     echo "\${content#bin-}" >"\$STUB_SVC"
   fi
@@ -140,6 +146,14 @@ if [ -e "\$STUB_SVC.warm" ] && [ "\$(cat "\$STUB_SVC.warm")" -gt 0 ]; then
 fi
 state="\$(cat "\$STUB_SVC")"
 if [ "\$state" = down ]; then exit 7; fi
+case "\$last" in
+  */api/health)
+    # what curl -f does with the 503 of every /api route of an init-error server
+    if [ -e "\$STUB_SVC.initerr" ]; then exit 22; fi
+    echo '{"ok":true}'
+    exit 0
+    ;;
+esac
 if [ "\$state" = none ]; then
   echo '{"buildSha":null}'
 else
@@ -275,6 +289,9 @@ check "success: daemon-reload comes before restart" \
   "systemctl --user daemon-reload|systemctl --user restart cc-switch-web|"
 check "success: status is replaced by rename, not rewritten in place" \
   "$(grep -m1 '^snap-' "$LOG")" "snap-replaced"
+after_restart="$(sed -n '/--user restart/,$p' "$LOG")"
+check_has "success: capabilities probed after the restart" "$after_restart" "/api/capabilities"
+check_has "success: health probed after the restart" "$after_restart" "/api/health"
 check_lacks "success: unchanged unit template gives no warning" "$(field message)" "install-server.sh"
 
 # ==== health check address ==============================================================
@@ -285,19 +302,23 @@ for host in "100.64.0.7|http://100.64.0.7:18766/api/capabilities" \
   "0.0.0.0|http://127.0.0.1:18766/api/capabilities" \
   "fd7a::1|http://[fd7a::1]:18766/api/capabilities"; do
   n=$((n + 1))
+  caps="${host#*|}"
+  hlth="${caps%capabilities}health"
   setup_case "health-$n"
   run_update HOST="${host%%|*}"
   check "health host '${host%%|*}': done" "$(field stage)" "done"
-  check_has "health host '${host%%|*}': probed ${host#*|}" "$(log_text)" "curl ${host#*|}"
-  check "health host '${host%%|*}': only that URL was probed" \
-    "$(grep -F 'curl ' "$LOG" | grep -vc -F "curl ${host#*|}" || true)" "0"
+  check_has "health host '${host%%|*}': probed $caps" "$(log_text)" "curl $caps"
+  check_has "health host '${host%%|*}': probed $hlth" "$(log_text)" "curl $hlth"
+  check "health host '${host%%|*}': only those two URLs were probed" \
+    "$(grep -F 'curl ' "$LOG" | grep -vc -F -e "curl $caps" -e "curl $hlth" || true)" "0"
 done
 
 setup_case health-port
 run_update PORT=19001
 check_has "health check uses PORT" "$(log_text)" "curl http://100.64.0.7:19001/api/capabilities"
+check_has "health check uses PORT: /api/health too" "$(log_text)" "curl http://100.64.0.7:19001/api/health"
 check "health check uses PORT: no probe went to the default port" \
-  "$(grep -F 'curl ' "$LOG" | grep -vc -F 'curl http://100.64.0.7:19001/api/capabilities' || true)" "0"
+  "$(grep -F 'curl ' "$LOG" | grep -vc -F -e 'curl http://100.64.0.7:19001/api/capabilities' -e 'curl http://100.64.0.7:19001/api/health' || true)" "0"
 
 setup_case warmup
 run_update STUB_WARMUP=3 HEALTH_TIMEOUT=30 HEALTH_INTERVAL=0.05
@@ -317,6 +338,27 @@ check "up to date: stage" "$(field stage)" "done"
 check_has "up to date: message" "$(field message)" "already up to date"
 check "up to date: nothing built" "$(log_count 'cargo ')$(log_count 'pnpm ')" "00"
 check "up to date: binary untouched" "$(bin_text)" "bin-$B"
+
+setup_case uptodate-init-error
+git -C "$SRC" fetch -q origin
+git -C "$SRC" merge -q --ff-only origin/main
+echo "bin-$B" >"$BIN_DIR/cc-switch-web"
+echo "$B" >"$SVC"
+: >"$SVC.initerr" # reports the target sha, but is in init-error mode: /api/health is 503
+run_update
+check "checkout == origin, service in init-error: not the shortcut" "$(field message | grep -c 'already up to date')" "0"
+check "checkout == origin, service in init-error: rebuilt" "$(log_count 'cargo ')" "1"
+check "checkout == origin, service in init-error, healthy rebuild: done" "$(field stage)" "done"
+
+setup_case uptodate-init-error-again
+git -C "$SRC" fetch -q origin
+git -C "$SRC" merge -q --ff-only origin/main
+echo "bin-$B" >"$BIN_DIR/cc-switch-web"
+echo "$B" >"$SVC"
+: >"$SVC.initerr"
+run_update STUB_BIN="initerr-$B"
+check "checkout == origin, init-error before and after the rebuild: not done" "$(field stage)" "rolled-back"
+check "checkout == origin, init-error before and after the rebuild: rebuilt once" "$(log_count 'cargo ')" "1"
 
 setup_case uptodate-service-down
 git -C "$SRC" fetch -q origin
@@ -578,8 +620,34 @@ check "rollback fails: stage" "$(field stage)" "rollback-failed"
 check "rollback fails: ok" "$(field ok)" "false"
 check_has "rollback fails: message names the bin .prev" "$(field message)" "$BIN_DIR/cc-switch-web.prev"
 check_has "rollback fails: message names the dist-web .prev" "$(field message)" "$WEB.prev"
+check_has "rollback fails: message mentions the database as a possible cause" "$(field message)" "docs/deploy.md"
 check "rollback fails: .prev copies still there" "$(cat "$BIN_DIR/cc-switch-web.prev")$(cat "$WEB.prev/index.html")" "bin-$A""web-$A"
 check "rollback fails: finishedAt set" "$(field finishedAt | grep -c '^20')" "1"
+
+setup_case new-build-in-init-error
+# the new build starts, answers /api/capabilities with its own sha, but its database is
+# newer than it supports: /api/health is 503. That is a failed update, not a done one.
+run_update STUB_BIN="initerr-$B"
+check "new build in init-error: exit code" "$RC" "1"
+check "new build in init-error: rolled back, not done" "$(field stage)" "rolled-back"
+check "new build in init-error: binary restored" "$(bin_text)" "bin-$A"
+check "new build in init-error: dist-web restored" "$(web_text)" "web-$A"
+check "new build in init-error: the restored build is running" "$(cat "$SVC")" "$A"
+check "new build in init-error: and works" "$([ -e "$SVC.initerr" ] && echo init-error || echo healthy)" "healthy"
+check_has "new build in init-error: message gives the reason" "$(field message)" "did not report build ${B:0:7} with a working /api/health"
+
+setup_case rollback-target-in-init-error
+# the previous binary cannot open the (migrated) database either: it answers /api/capabilities
+# with its sha, /api/health is 503
+echo "initerr-$A" >"$BIN_DIR/cc-switch-web"
+run_update STUB_BIN="initerr-$B"
+check "rollback into init-error: exit code" "$RC" "1"
+check "rollback into init-error: rollback-failed, not rolled-back" "$(field stage)" "rollback-failed"
+check_has "rollback into init-error: message names the database as a possible cause" "$(field message)" "database that the new build migrated"
+check_has "rollback into init-error: message points to the docs section" "$(field message)" "docs/deploy.md"
+check_has "rollback into init-error: message names the backup files" "$(field message)" "db_backup_*"
+check_has "rollback into init-error: message still names the .prev copies" "$(field message)" "$BIN_DIR/cc-switch-web.prev"
+check "rollback into init-error: message is plain ASCII" "$(field message | LC_ALL=C grep -c '[^ -~]')" "0"
 
 setup_case rollback-needs-the-running-sha
 # the service ran a build older than the checkout's HEAD (A); rolling back must be
