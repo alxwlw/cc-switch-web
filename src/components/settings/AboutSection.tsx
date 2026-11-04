@@ -27,6 +27,13 @@ import { extractErrorMessage } from "@/utils/errorUtils";
 import { isWeb } from "@/lib/api/adapter";
 import { copyText } from "@/lib/clipboard";
 import type { WebUpdateCheck } from "@/lib/updater";
+import { useServerCapabilities } from "@/hooks/useServerCapabilities";
+import { useSelfUpdate } from "@/hooks/useSelfUpdate";
+import { WebCommitList } from "@/components/settings/WebCommitList";
+import {
+  SelfUpdateButton,
+  SelfUpdateNotice,
+} from "@/components/settings/SelfUpdatePanel";
 
 interface AboutSectionProps {
   isPortable: boolean;
@@ -50,9 +57,12 @@ function readStarPromptDismissed(): boolean {
 function WebUpdateStatus({
   webUpdate,
   error,
+  selfUpdate,
 }: {
   webUpdate: WebUpdateCheck | null;
   error: string | null;
+  /** Set when the server accepts self-update; the button shows only for `behind`. */
+  selfUpdate: ReturnType<typeof useSelfUpdate> | null;
 }) {
   const { t } = useTranslation();
 
@@ -133,32 +143,18 @@ function WebUpdateStatus({
         {footer}
       </div>
 
-      {webUpdate.commits.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-caption font-medium text-fg-2">
-            {t("web.update.commitsTitle")}
-            {webUpdate.commits.length < webUpdate.behindBy && (
-              <>
-                {" · "}
-                {t("web.update.shown", {
-                  shown: webUpdate.commits.length,
-                  total: webUpdate.behindBy,
-                })}
-              </>
-            )}
-          </p>
-          <ul className="space-y-0.5">
-            {webUpdate.commits.map((commit) => (
-              <li key={commit.sha} className="flex gap-2 text-fg-2">
-                <code className="shrink-0 tabular-nums text-fg-1">
-                  {commit.sha.slice(0, 7)}
-                </code>
-                <span className="min-w-0 break-words">{commit.message}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {selfUpdate && (
+        <SelfUpdateButton
+          webUpdate={webUpdate}
+          state={selfUpdate.state}
+          onStart={selfUpdate.start}
+        />
       )}
+
+      <WebCommitList
+        commits={webUpdate.commits}
+        behindBy={webUpdate.behindBy}
+      />
 
       <div className="space-y-2">
         <p className="text-caption font-medium text-fg-2">
@@ -222,6 +218,11 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
     webUpdate,
     error: checkError,
   } = useUpdate();
+
+  // web: the server says whether the install route would accept a request now.
+  const capabilities = useServerCapabilities();
+  const selfUpdateEnabled = isWeb && capabilities.data?.selfUpdate === true;
+  const selfUpdate = useSelfUpdate(selfUpdateEnabled);
 
   useEffect(() => {
     let active = true;
@@ -295,7 +296,7 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
   const handleCheckUpdate = useCallback(async () => {
     if (isWeb) {
       // The button is the only caller that forces past the server's cache; the result
-      // (or the server's error text) is shown by WebUpdateStatus, install is phase 37.
+      // (or the server's error text) is shown by WebUpdateStatus.
       try {
         await checkUpdate({ force: true });
       } catch (error) {
@@ -394,7 +395,7 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
             )}
           </div>
         </div>
-        {/* web: the button only checks; installing from the console is phase 37 */}
+        {/* web: the button only checks; installing is the "Update now" button of the behind block */}
         <Button
           type="button"
           variant={hasUpdate && !isWeb ? "solid" : "neutral"}
@@ -428,7 +429,16 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
         </Button>
       </div>
 
-      {isWeb && <WebUpdateStatus webUpdate={webUpdate} error={checkError} />}
+      {isWeb && (
+        <WebUpdateStatus
+          webUpdate={webUpdate}
+          error={checkError}
+          selfUpdate={selfUpdateEnabled ? selfUpdate : null}
+        />
+      )}
+      {isWeb && selfUpdateEnabled && (
+        <SelfUpdateNotice state={selfUpdate.state} />
+      )}
 
       {!isWeb && hasUpdate && updateInfo && (
         <div className="space-y-1 px-5 py-4 text-body">

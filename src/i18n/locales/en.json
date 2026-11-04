@@ -5103,7 +5103,37 @@
       "copy": "Copy",
       "copied": "Copied to clipboard",
       "copyFailed": "Could not copy to the clipboard",
-      "checkFailedTitle": "Update check failed"
+      "checkFailedTitle": "Update check failed",
+      "install": {
+        "button": "Update now",
+        "confirmTitle": "Update the server?",
+        "confirmMessage": "The server will pull the update branch configured on the server (up to {{sha}}, {{behind}} new commit(s)), rebuild itself and restart. It is unreachable while it builds, which can take several minutes. If the new build does not start, the server returns to the previous one.",
+        "confirmDbWarning": "The new version may migrate the database. Rolling the binary back does not roll the database back.",
+        "confirmButton": "Rebuild and restart",
+        "runningTitle": "Updating the server",
+        "starting": "Starting the update...",
+        "reloading": "Updated. Reloading the page...",
+        "branch": "Branch: {{branch}}",
+        "waiting": "The server is not answering (it is probably restarting). Waiting...",
+        "stage": {
+          "checking": "Checking the checkout...",
+          "fetching": "Fetching the branch...",
+          "merging": "Fast-forwarding the checkout...",
+          "building": "Building the web console and the server (this takes minutes)...",
+          "installing": "Replacing the binary and the web console...",
+          "restarting": "Restarting the service and checking that it answers...",
+          "rolling-back": "The new build did not come up. Restoring the previous one..."
+        },
+        "refusedTitle": "The update was not started",
+        "failedTitle": "The update failed",
+        "rolledBackTitle": "The update was rolled back",
+        "rollbackFailedTitle": "The rollback failed: the server may not be working",
+        "rollbackFailedHint": "Restore the previous files on the server host by hand, as described above, then restart the service.",
+        "unchangedTitle": "Nothing to update: the checkout is already at the branch head",
+        "stuckTitle": "No result from the update",
+        "stuckStalled": "The update has not changed its stage for a long time, or the server does not answer. Read its log on the server host:",
+        "stuckNoStatus": "The update did not report any progress; it may have failed to start. Read its log on the server host:"
+      }
     },
     "proxyCaption": "The proxy runs on the server and reconfigures the CLIs on the server; it does not touch CLIs on your machine.",
     "desktopRouteHost": "Claude Desktop connects to the proxy on the server at the connection address and port. If Claude Desktop runs on another machine, set the connection address (client host) to a host that machine can reach in Settings → Local routing.",

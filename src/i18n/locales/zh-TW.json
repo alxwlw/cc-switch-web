@@ -5104,7 +5104,37 @@
       "copy": "複製",
       "copied": "已複製到剪貼簿",
       "copyFailed": "無法複製到剪貼簿",
-      "checkFailedTitle": "檢查更新失敗"
+      "checkFailedTitle": "檢查更新失敗",
+      "install": {
+        "button": "立即更新",
+        "confirmTitle": "更新伺服器？",
+        "confirmMessage": "伺服器將拉取其上設定的更新分支（至 {{sha}}，{{behind}} 個新提交），自行重新建置並重新啟動。建置期間無法連線，可能需要數分鐘。若新版本無法啟動，伺服器會回復到先前的版本。",
+        "confirmDbWarning": "新版本可能會遷移資料庫。將執行檔回復到舊版不會回復資料庫。",
+        "confirmButton": "重新建置並重新啟動",
+        "runningTitle": "正在更新伺服器",
+        "starting": "正在開始更新...",
+        "reloading": "已更新。正在重新載入頁面...",
+        "branch": "分支：{{branch}}",
+        "waiting": "伺服器沒有回應（可能正在重新啟動）。等待中...",
+        "stage": {
+          "checking": "正在檢查工作目錄...",
+          "fetching": "正在取得分支...",
+          "merging": "正在快轉工作目錄...",
+          "building": "正在建置網頁主控台與伺服器（需要數分鐘）...",
+          "installing": "正在替換執行檔與網頁主控台...",
+          "restarting": "正在重新啟動服務並確認其有回應...",
+          "rolling-back": "新版本未能啟動。正在還原先前的版本..."
+        },
+        "refusedTitle": "未能開始更新",
+        "failedTitle": "更新失敗",
+        "rolledBackTitle": "更新已回復",
+        "rollbackFailedTitle": "回復失敗：伺服器可能無法運作",
+        "rollbackFailedHint": "請在伺服器主機上依上述說明手動還原先前的檔案，然後重新啟動服務。",
+        "unchangedTitle": "沒有可更新的內容：工作目錄已在分支最新處",
+        "stuckTitle": "沒有取得更新結果",
+        "stuckStalled": "更新長時間沒有變更階段，或伺服器沒有回應。請在伺服器主機上查看其記錄：",
+        "stuckNoStatus": "更新沒有回報任何進度，可能未能啟動。請在伺服器主機上查看其記錄："
+      }
     },
     "proxyCaption": "代理運行在伺服器上，並重新設定伺服器上的 CLI；不會影響你本機上的 CLI。",
     "desktopRouteHost": "Claude Desktop 會依「連線位址」和連接埠連到伺服器上的代理。如果 Claude Desktop 裝在另一台機器上，請在 設定 → 本地路由 中把連線位址（client host）改成那台機器能連到的主機。",

@@ -223,6 +223,24 @@ describe("useSelfUpdate (WEB-28)", () => {
     expect(reloadMock).not.toHaveBeenCalled();
   });
 
+  it("a stage the server keeps reporting does not keep the wait alive: a hung unit ends it", async () => {
+    const hook = await setup();
+    await start(hook);
+    answerData(status("building"));
+    await poll();
+    // the same stage on every probe for 15 minutes
+    await tick(SELF_UPDATE_STAGE_WAIT_MS - 1);
+    expect(hook.result.current.state).toMatchObject({
+      kind: "running",
+      stage: "building",
+    });
+    await tick(2);
+    expect(hook.result.current.state).toEqual({
+      kind: "stuck",
+      reason: "stalled",
+    });
+  });
+
   it("a new stage restarts the 15 min wait", async () => {
     const hook = await setup();
     await start(hook);
