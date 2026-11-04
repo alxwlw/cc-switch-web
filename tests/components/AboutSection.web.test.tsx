@@ -63,7 +63,7 @@ const fetchMock = vi.fn();
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const LATEST = "fedcba9876543210fedcba9876543210fedcba98";
 const SYSTEMD =
-  "cd <checkout> && git pull --ff-only && scripts/install-server.sh";
+  "cd <checkout> && git pull --ff-only && scripts/install-server.sh && systemctl --user restart cc-switch-web";
 const DOCKER =
   "cd <checkout> && git pull --ff-only\ndocker build -f Dockerfile.web -t cc-switch-web .";
 

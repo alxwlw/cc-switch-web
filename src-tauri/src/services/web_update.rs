@@ -88,10 +88,11 @@ pub struct UpdateCheck {
 
 fn instructions() -> UpdateInstructions {
     UpdateInstructions {
-        systemd: "cd <checkout> && git pull --ff-only && scripts/install-server.sh".to_string(),
+        systemd: "cd <checkout> && git pull --ff-only && scripts/install-server.sh && systemctl --user restart cc-switch-web"
+            .to_string(),
         docker: concat!(
             "cd <checkout> && git pull --ff-only\n",
-            "docker build -f Dockerfile.web --build-arg CC_SWITCH_WEB_GIT_SHA=$(git rev-parse HEAD) -t cc-switch-web .\n",
+            "docker build -f Dockerfile.web --build-arg CC_SWITCH_WEB_GIT_SHA=$(git diff --quiet HEAD && git rev-parse HEAD) -t cc-switch-web .\n",
             "docker rm -f <container> && docker run -d --name <container> <your usual options> cc-switch-web",
         )
         .to_string(),

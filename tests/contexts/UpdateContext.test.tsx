@@ -25,7 +25,8 @@ const SHA = "0123456789abcdef0123456789abcdef01234567";
 const LATEST = "fedcba9876543210fedcba9876543210fedcba98";
 
 const instructions = {
-  systemd: "cd <checkout> && git pull --ff-only && scripts/install-server.sh",
+  systemd:
+    "cd <checkout> && git pull --ff-only && scripts/install-server.sh && systemctl --user restart cc-switch-web",
   docker: "docker build -f Dockerfile.web -t cc-switch-web .",
 };
 

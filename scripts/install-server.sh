@@ -27,7 +27,8 @@ resolve_build_sha() {
   printf '%s\n' "$sha"
 }
 
-# Sourced by a test: only the function above is wanted.
+# Sourced by scripts/tests/install-server-build-sha.test.sh: only the function above
+# is wanted (run it with `bash scripts/tests/install-server-build-sha.test.sh`).
 if [ "${BASH_SOURCE[0]}" != "$0" ]; then
   return 0
 fi

@@ -11,7 +11,7 @@ mod support;
 
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
-use cc_switch_lib::{check, AppState, UpdateCheck, UpdateSourceConfig};
+use cc_switch_lib::{check_web_update, AppState, UpdateCheck, UpdateSourceConfig};
 use serde_json::{json, Value};
 use serial_test::serial;
 use std::ffi::OsString;
@@ -244,7 +244,7 @@ fn ok(body: Value) -> Reply {
 }
 
 async fn run(gh: &Github, sha: &str, force: bool) -> UpdateCheck {
-    check(&gh.cfg(), Some(sha), force)
+    check_web_update(&gh.cfg(), Some(sha), force)
         .await
         .expect("update check")
 }
@@ -280,10 +280,19 @@ async fn three_commits_ahead_is_behind_with_three_newest_first() {
         .as_str()
         .unwrap()
         .contains("scripts/install-server.sh"));
+    // The script installs the binary but does not restart the unit.
+    assert!(result["instructions"]["systemd"]
+        .as_str()
+        .unwrap()
+        .ends_with("&& systemctl --user restart cc-switch-web"));
     assert!(result["instructions"]["docker"]
         .as_str()
         .unwrap()
         .contains("Dockerfile.web"));
+    // The clean-tree guard of the Docker path lives in this expression.
+    assert!(result["instructions"]["docker"].as_str().unwrap().contains(
+        "--build-arg CC_SWITCH_WEB_GIT_SHA=$(git diff --quiet HEAD && git rev-parse HEAD)"
+    ));
 
     // The request itself: path, and the headers the real API insists on.
     assert_eq!(
@@ -388,13 +397,17 @@ async fn rate_limit_403_is_an_error_with_text_and_not_cached() {
         .push(("x-ratelimit-reset", "1793795696".to_string()));
     let gh = Github::start(reply).await;
 
-    let err = check(&gh.cfg(), Some(&sha), false).await.unwrap_err();
+    let err = check_web_update(&gh.cfg(), Some(&sha), false)
+        .await
+        .unwrap_err();
     let text = err.to_string();
     assert!(text.contains("HTTP 403"), "{text}");
     assert!(text.contains("rate limit"), "{text}");
     assert!(text.contains("retry after 12:34 UTC"), "{text}");
 
-    assert!(check(&gh.cfg(), Some(&sha), false).await.is_err());
+    assert!(check_web_update(&gh.cfg(), Some(&sha), false)
+        .await
+        .is_err());
     assert_eq!(gh.compare_hits(), 2, "an error is not cached");
 }
 
@@ -407,7 +420,7 @@ async fn rate_limit_429_is_an_error_with_text() {
         json!({"message": "slow down"}),
     ))
     .await;
-    let text = check(&gh.cfg(), Some(&sha), false)
+    let text = check_web_update(&gh.cfg(), Some(&sha), false)
         .await
         .unwrap_err()
         .to_string();
@@ -425,12 +438,14 @@ async fn server_error_and_dead_source_are_errors_not_cached() {
         json!({"message": "boom"}),
     ))
     .await;
-    let text = check(&gh.cfg(), Some(&sha), false)
+    let text = check_web_update(&gh.cfg(), Some(&sha), false)
         .await
         .unwrap_err()
         .to_string();
     assert!(text.contains("HTTP 500"), "{text}");
-    assert!(check(&gh.cfg(), Some(&sha), false).await.is_err());
+    assert!(check_web_update(&gh.cfg(), Some(&sha), false)
+        .await
+        .is_err());
     assert_eq!(gh.compare_hits(), 2);
 
     let dead = {
@@ -442,7 +457,7 @@ async fn server_error_and_dead_source_are_errors_not_cached() {
         repo: "o/r".to_string(),
         branch: "main".to_string(),
     };
-    let text = check(&cfg, Some(&sha), false)
+    let text = check_web_update(&cfg, Some(&sha), false)
         .await
         .unwrap_err()
         .to_string();
@@ -503,10 +518,10 @@ async fn parallel_requests_cost_one_source_request() {
     .await;
     let cfg = gh.cfg();
     let (a, b, c, d) = tokio::join!(
-        check(&cfg, Some(&sha), false),
-        check(&cfg, Some(&sha), false),
-        check(&cfg, Some(&sha), false),
-        check(&cfg, Some(&sha), false),
+        check_web_update(&cfg, Some(&sha), false),
+        check_web_update(&cfg, Some(&sha), false),
+        check_web_update(&cfg, Some(&sha), false),
+        check_web_update(&cfg, Some(&sha), false),
     );
     for result in [a, b, c, d] {
         assert_eq!(as_json(&result.unwrap())["status"], json!("behind"));
@@ -564,16 +579,20 @@ async fn an_answer_without_the_counters_is_an_error_and_not_cached() {
     let sha = sha_of(0x1012);
     let gh = Github::start(ok(json!({}))).await;
 
-    let text = check(&gh.cfg(), Some(&sha), false)
+    let text = check_web_update(&gh.cfg(), Some(&sha), false)
         .await
         .unwrap_err()
         .to_string();
     assert!(text.contains("unreadable answer"), "{text}");
     // Neither counter alone is enough.
     gh.set_compare(ok(json!({"ahead_by": 0})));
-    assert!(check(&gh.cfg(), Some(&sha), false).await.is_err());
+    assert!(check_web_update(&gh.cfg(), Some(&sha), false)
+        .await
+        .is_err());
     gh.set_compare(ok(json!({"behind_by": 0})));
-    assert!(check(&gh.cfg(), Some(&sha), false).await.is_err());
+    assert!(check_web_update(&gh.cfg(), Some(&sha), false)
+        .await
+        .is_err());
     assert_eq!(gh.compare_hits(), 3, "an unreadable answer is not cached");
 }
 
@@ -598,7 +617,7 @@ async fn a_build_without_a_usable_commit_is_unknown_and_asks_nobody() {
     let gh = Github::start(ok(compare_body(3, 0, 1, 3))).await;
     let cfg = gh.cfg();
 
-    let none = as_json(&check(&cfg, None, false).await.unwrap());
+    let none = as_json(&check_web_update(&cfg, None, false).await.unwrap());
     assert_eq!(none["status"], json!("unknown"));
     assert_eq!(none["currentSha"], Value::Null);
     assert_eq!(none["latestSha"], Value::Null);
@@ -607,7 +626,7 @@ async fn a_build_without_a_usable_commit_is_unknown_and_asks_nobody() {
 
     // Text that is not a commit hash never reaches the URL.
     for bad in ["", "main", "abc", "abc1234/../../x", "abc1234?x=1"] {
-        let result = as_json(&check(&cfg, Some(bad), true).await.unwrap());
+        let result = as_json(&check_web_update(&cfg, Some(bad), true).await.unwrap());
         assert_eq!(result["status"], json!("unknown"), "{bad:?}");
     }
     assert_eq!(gh.compare_hits(), 0);
