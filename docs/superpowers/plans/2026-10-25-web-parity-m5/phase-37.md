@@ -22,26 +22,26 @@ Scope: `scripts/self-update.sh` (новый), `scripts/tests/self-update.test.sh
 - **Spawner.** Готового инъецируемого исполнителя процессов нет; `RestartControl` (`web_api/restart.rs:93`) — образец Extension-слоя, `restart_server` (`web_api.rs:713`) — образец проверки JSON content type (415) и `conflict` (409). Ветка берётся только из `UpdateSourceConfig`, из тела запроса ничего не читается.
 
 ### Task 1: скрипт обновления
-- [ ] `scripts/self-update.sh <source_dir> <branch>`; каждый шаг пишет статус в `${XDG_STATE_HOME:-~/.local/state}/cc-switch-web/update-status.json` (`{stage, ok, message, fromSha, toSha, startedAt, finishedAt}`).
-- [ ] Шаги: отказ при грязном дереве → `git fetch origin` → `git merge --ff-only origin/<branch>` (non-ff → отказ) → `pnpm install --frozen-lockfile && pnpm build:web` в `dist-web.new` → `cargo build --release --example server` с `CC_SWITCH_WEB_GIT_SHA` → `install -m755` в `cc-switch-web.new` → текущие бинарник и `dist-web` переименовать в `.prev`, новые — на их место (`mv` в пределах одной ФС) → `systemctl --user restart cc-switch-web` → до 60 с опрашивать `http://127.0.0.1:$PORT/api/capabilities` и сверять `buildSha` с новым HEAD.
-- [ ] Неудачный health-check → вернуть `.prev` на место, restart, `stage: "rolled-back"`. Checkout остаётся на новом коммите (`git reset --hard` не делаем), это пишется в `message`.
-- [ ] `scripts/tests/self-update.test.sh`: временные git-репозитории и заглушки `cargo`/`pnpm`/`systemctl`/`curl` в `PATH`; кейсы — успех, грязное дерево, non-ff, health-check провален → откат восстановил `.prev`.
+- [x] `scripts/self-update.sh <source_dir> <branch>`; каждый шаг пишет статус в `${XDG_STATE_HOME:-~/.local/state}/cc-switch-web/update-status.json` (`{stage, ok, message, fromSha, toSha, startedAt, finishedAt}`).
+- [x] Шаги: отказ при грязном дереве → `git fetch origin` → `git merge --ff-only origin/<branch>` (non-ff → отказ) → `pnpm install --frozen-lockfile && pnpm build:web` в `dist-web.new` → `cargo build --release --example server` с `CC_SWITCH_WEB_GIT_SHA` → `install -m755` в `cc-switch-web.new` → текущие бинарник и `dist-web` переименовать в `.prev`, новые — на их место (`mv` в пределах одной ФС) → `systemctl --user restart cc-switch-web` → до 60 с опрашивать `http://127.0.0.1:$PORT/api/capabilities` и сверять `buildSha` с новым HEAD.
+- [x] Неудачный health-check → вернуть `.prev` на место, restart, `stage: "rolled-back"`. Checkout остаётся на новом коммите (`git reset --hard` не делаем), это пишется в `message`.
+- [x] `scripts/tests/self-update.test.sh`: временные git-репозитории и заглушки `cargo`/`pnpm`/`systemctl`/`curl` в `PATH`; кейсы — успех, грязное дерево, non-ff, health-check провален → откат восстановил `.prev`.
 
 ### Task 2: запуск из сервера
-- [ ] Включение только явно: `CC_SWITCH_WEB_SELF_UPDATE=1` + `CC_SWITCH_WEB_SOURCE_DIR` + systemd (`INVOCATION_ID`). Иначе `POST /api/update/install` → 409 с причиной; для Docker — текст инструкции.
-- [ ] Запуск через `systemd-run --user --unit=cc-switch-web-update --collect scripts/self-update.sh …`: transient unit переживает restart основного сервиса. Повторный запуск при живом unit → 409 «обновление уже идёт».
-- [ ] `GET /api/update/status` → содержимое `update-status.json` (или `null`).
-- [ ] Spawner инъецируемый; тесты: 409 при выключенном self-update / без systemd / при идущем обновлении; при включённом — spawner получил ожидаемые аргументы; status парсит файл.
+- [x] Включение только явно: `CC_SWITCH_WEB_SELF_UPDATE=1` + `CC_SWITCH_WEB_SOURCE_DIR` + systemd (`INVOCATION_ID`). Иначе `POST /api/update/install` → 409 с причиной; для Docker — текст инструкции.
+- [x] Запуск через `systemd-run --user --unit=cc-switch-web-update --collect scripts/self-update.sh …`: transient unit переживает restart основного сервиса. Повторный запуск при живом unit → 409 «обновление уже идёт».
+- [x] `GET /api/update/status` → содержимое `update-status.json` (или `null`).
+- [x] Spawner инъецируемый; тесты: 409 при выключенном self-update / без systemd / при идущем обновлении; при включённом — spawner получил ожидаемые аргументы; status парсит файл.
 
 ### Task 3: frontend
-- [ ] `AboutSection` (web, self-update включён — признак в `/api/capabilities`): кнопка «обновить» при `behind`, подтверждение со списком коммитов из фазы 36.
-- [ ] После запуска — опрос `GET /api/update/status` раз в 2 с (SSE не переживает restart); при недоступности сервера ждать и продолжать опрос; `done` → `location.reload()`; `rolled-back`/ошибка → показать `message`.
-- [ ] Тесты: кнопка скрыта без self-update; поток `building → restarting → done` по mock-статусам; `rolled-back` показывает причину.
+- [x] `AboutSection` (web, self-update включён — признак в `/api/capabilities`): кнопка «обновить» при `behind`, подтверждение со списком коммитов из фазы 36.
+- [x] После запуска — опрос `GET /api/update/status` раз в 2 с (SSE не переживает restart); при недоступности сервера ждать и продолжать опрос; `done` → `location.reload()`; `rolled-back`/ошибка → показать `message`.
+- [x] Тесты: кнопка скрыта без self-update; поток `building → restarting → done` по mock-статусам; `rolled-back` показывает причину.
 
 ### Task 4: гейты, PR, Plane
-- [ ] Полный набор гейтов + `bash scripts/tests/self-update.test.sh`; ручной прогон на agentbox: обновление с коммита N-1 на N через UI, затем искусственно сломанная сборка → откат.
-- [ ] `docs/deploy.md`: включение self-update, что делает скрипт, как откатиться вручную (`.prev`).
-- [ ] Ветка `web-parity/web-28-self-update`, PR; DX-86 → In Review + ссылка.
+- [x] Полный набор гейтов + `bash scripts/tests/self-update.test.sh`; ручной прогон на agentbox: обновление с коммита N-1 на N через UI, затем искусственно сломанная сборка → откат. Сквозной прогон шёл в изоляции (шимы `systemctl`/`systemd-run`, отдельные `BIN_DIR`, `WEB_DIST`, `XDG_STATE_HOME`, юнит `cc-switch-web-e2e`), не на боевом сервисе: см. Notes.
+- [x] `docs/deploy.md`: включение self-update, что делает скрипт, как откатиться вручную (`.prev`).
+- [ ] Ветка `web-parity/web-28-self-update`, PR; DX-86 → In Review + ссылка. Ветка запушена; PR и Plane — контроллер, номер PR не указан.
 
 ### Task 5: закрытие модуля M5
 - [ ] После merge: все 33 задачи модуля в Done (сверка `module list_workitems`); модуль `c2c8690c-…` → status `completed`.
@@ -53,4 +53,60 @@ Scope: `scripts/self-update.sh` (новый), `scripts/tests/self-update.test.sh
 
 ## Notes for next phase
 
-- (заполнить по итогам)
+- **Статус.** Ветка `web-parity/web-28-self-update` (base `main` = `c366a8a9`), PR открывает контроллер, номер — после открытия; merge делает владелец. Фаза закрывает DX-86 (этап 2 из 2: установка из консоли). **Self-update на боевом сервисе не включался и не включается без решения владельца**: боевой прогон не согласован, `cc-switch-web.service`, `~/.local/bin/cc-switch-web`, `dist-web` и checkout `/home/alex/cc-switch-web` в фазе не менялись (снимок до/после совпал, ниже). Задача 5 (закрытие модуля M5) — после merge.
+
+**Что сделано (file:line на HEAD ветки).**
+- T1 скрипт: `scripts/self-update.sh` — статус атомарно (`write_status` `:73`, временный файл + `mv`), `on_exit` `:122` (любой выход до финала пишет `failed`, после начала замены идёт в откат), `probe`/`running_sha`/`wait_healthy` `:157-171` (опрос `http://$HOST:$PORT/api/capabilities`, `buildSha`), `rollback` `:184` (копии `.prev` остаются, подтверждение откатом по прежнему `buildSha`, иначе `rollback-failed`), проверки `:210-270` (инструменты, ветка, tracked-изменения), fetch под `timeout` `:274-280`, `merge --ff-only` `:291`, сборка `:305-313` (`pnpm install --frozen-lockfile`, `pnpm build:web --outDir …new`, `cargo build --release --example server` с `CC_SWITCH_WEB_GIT_SHA`), замена `:317-324`, `daemon-reload` + restart `:326-330`, итог `:334` (предупреждение, если менялся `scripts/cc-switch-web.service.template`). `.gitignore`: `dist-web.new/`, `dist-web.prev/`. `scripts/tests/self-update.test.sh` — `296 passed, 0 failed` (временные репозитории, заглушки `cargo`/`pnpm`/`systemctl`/`curl`).
+- T2 запуск из сервера: `web_api/self_update.rs` — `UPDATE_UNIT` `:24`, `FORWARDED_ENV` `:34` (`HOST PORT WEB_DIST XDG_STATE_HOME CC_SWITCH_WEB_BUILD_PATH`; `BIN_DIR` не передаётся), `systemd_run_args` `:69`, `SystemdRunSpawner` `:127`, `status_path` `:241`, `resolve` `:260` (все условия включения; тот же результат даёт флаг `selfUpdate` в `/api/capabilities`), `UpdateRunner::run` `:379` (один запуск за раз под `Mutex`, статус стирается до старта), `read_status` `:429`. Роуты `web_api.rs:124-125`, `update_install` `:794`, `update_status` `:815`, флаг `:758`/`:769`; `examples/server.rs:198` (`router_with_update` с `SystemdRunSpawner`). `web_update.rs:88` — `UpdateCheck.branch`, `:94` — `daemon-reload` в инструкции systemd (долг фазы 36). Тесты: `web_api/self_update/tests.rs`, `tests/web_api_update_install.rs`.
+- T3 frontend: `lib/api/selfUpdate.ts` (`installWebUpdate`, `fetchUpdateStatus`), `hooks/useSelfUpdate.ts:97` (опрос раз в 2 с `:10`, ожидание стадии 15 мин `:20`, первый статус 60 с `:26`, `done` → перезагрузка), `components/settings/SelfUpdatePanel.tsx` (`canStartSelfUpdate` `:25`, кнопка с подтверждением `:39`, итог `:141`), `AboutSection.tsx:147,225,447`, `lib/api/capabilities.ts:13,36`, ключи `web.update.install.*` в 5 локалях. Тесты: `AboutSection.selfUpdate.test.tsx`, `useSelfUpdate.test.tsx`, `updateCatalog.test.tsx` (настоящие JSON-каталоги).
+- T4 документация: `docs/deploy.md` — раздел «Self-update from the console» (`:74`): риск, включение через drop-in (`:93`), шаги скрипта (`:140`), база данных и обновление (`:187`), ручной откат и рецепт после `rollback-failed` (`:235`).
+
+**Отклонения от плана (журнал `.claude/plans/2026-10-25-web-parity-m5-p37/journal.md`).**
+- Ruling 13:26 — уточнения по пробам: health-check на `HOST` (сервис не слушает loopback), `CC_SWITCH_WEB_BUILD_PATH` и `--setenv` (в transient unit нет `pnpm`/`cargo`), «грязное дерево» = только tracked-файлы, стадия `rollback-failed`.
+- T1 r1 — fetch ограничен `timeout` (любой транспорт), вывод git в статус не попадает (маршрут без аутентификации), «уже актуально» только когда живой `buildSha` равен HEAD. Второй TERM во время отката не чиним (нужны два сигнала). `HEALTH_TIMEOUT` с ведущим нулём закрыт в раунде T2.
+- T2 r1 — `ALREADY_RUNNING` на английском, как остальные причины 409; сброс статуса при неудачном запуске стирает `rollback-failed` (пути `.prev` детерминированы); `Mutex` вокруг `is-active` + `systemd-run`.
+- T3 r0 — ветка в подтверждении обязательна (`UpdateCheck.branch`, правка Rust); прежний итог `failed`/`rolled-back`/`rollback-failed` показывается при открытии About; `done` без увиденной стадии `building`/`installing`/`restarting` не перезагружает страницу, при `unchanged` идёт перепроверка с `force`; сетевая ошибка самого POST показывается как «не запущено».
+- T4 — `CARGO_TARGET_DIR` в сквозном прогоне не задавался: скрипт ставит бинарник из жёсткого `$SRC/src-tauri/target/release/examples/server`, поэтому `src-tauri/target` клона засеян копией `release` worktree. Единственное отличие argv `systemd-run` — один `--setenv=BIN_DIR=…`. Проверка f (`rollback-failed`): настоящий отказ отката с мёртвой службой UI показать не может (опрос идёт к самому серверу), поэтому откат ломался при живом сервисе: коммит, чей сервер отвечает, но с чужим `buildSha` (health-check не сходится), и каталог `bin/cc-switch-web.rollback` на месте временной копии (`mv` каталога поверх файла не проходит). Скрипт и код продукта не менялись.
+
+**Гейты (логи в scratchpad, по одному, на HEAD с `docs/deploy.md`; после них менялся только `phase-37.md`).**
+- `cargo fmt --check`: rc=0. `cargo clippy --lib --examples -- -D warnings`: rc=0.
+- `(umask 022; cargo test --no-fail-fast)`: сумма строк `test result` (awk) — 66 строк, 4715 passed, 1 failed, 10 ignored; единственный fail — baseline `commands::misc::tests::omp_search_paths_include_the_bun_global_bin`.
+- `cargo build --release --example server`: rc=0. `bash scripts/tests/self-update.test.sh`: `296 passed, 0 failed`. `bash scripts/tests/install-server-build-sha.test.sh`: `6 passed, 0 failed`. `shellcheck -x -P SCRIPTDIR` на четырёх скриптах: rc=0.
+- `pnpm typecheck`: rc=0. `pnpm format:check`: `All matched files use Prettier code style!`. `pnpm test:unit`: `Test Files 2 failed | 332 passed (334)`, `Tests 3 failed | 4208 passed (4211)`; ровно известные 3 (`UsageDashboard` ×2, `remembered usage choices › keeps working when storage is unavailable`). `pnpm build:renderer`: `✓ built in 6.71s`. `pnpm build:web`: `✓ built in 6.57s`.
+
+**Живая проверка** (настоящий Chromium через Playwright MCP, `/` → Settings → About; сборки N-1 → N… из временного bare-origin, заглушка compare API на `127.0.0.1:18798`, сервер — transient unit `cc-switch-web-e2e` на `127.0.0.1:18799` с `Restart=always`, свои `BIN_DIR`, `WEB_DIST`, `XDG_STATE_HOME`, `HOME`, копия БД через sqlite backup API; шим `systemctl` переписывает `restart cc-switch-web` в `restart cc-switch-web-e2e` и отвергает остальные действия над боевым юнитом, шим `systemd-run` добавляет `--setenv=BIN_DIR`; перезапуск transient-юнита подхватывает новый бинарник и переживает `daemon-reload`, проверено до прогона).
+- a. Успех `fd680af` → `a481fac`: About `behind` («1 commit(s) behind»), кнопка «Update now», диалог с веткой `main`, списком коммитов и предупреждением про миграцию БД; стадии `building` (2 мин) → `restarting` → `done` (7 с); страница перезагрузилась сама, `buildSha` = `a481fac6…`, `bin/cc-switch-web.prev` = хэш прежнего бинарника, `dist-web.prev` = хэш прежнего дерева.
+- b. Второе обновление → `2a53e0f`: `.prev` содержит `a481fac` (хэши бинарника и dist равны сохранённым перед запуском), вложенного каталога нет.
+- c. Коммит с `compile_error!` (на 390 px): `failed` («cargo build --release --example server failed (exit 101)… checkout stays on ab3adc1»), бинарник, `dist-web` и `.prev` не тронуты (хэши), `ExecMainStartTimestamp` e2e-юнита не менялся (19:39:42), `NRestarts=0`, сообщение показано, кнопка «Update now» на месте. Остался недостроенный `dist-web.new`.
+- d. Коммит, с которым сборка проходит, а процесс сразу выходит с кодом 3: `building` → `restarting` → через 65 с `rolling-back` → `rolled-back` («did not report build ceb1ee1 within 60s… previous binary and dist-web are back…»), старая сборка отвечает (`buildSha` `2a53e0f`), бинарник и dist равны прежним; после перезагрузки страницы About показывает ту же причину и время.
+- e. Исправленный origin после `rolled-back`: `done` → `0549ed4`, страница перезагрузилась сама.
+- f. `rollback-failed` (см. отклонения): `restarting` → через 63 с `rollback-failed`, About показывает «The rollback failed: the server may not be working», пути `.prev`, подсказку, кнопки нет. Рецепт из `docs/deploy.md` («Go back by hand») выполнен дословно (тело блока вырезано из файла скриптом, заданы только `BIN`, `DIST`, `XDG_STATE_HOME`): бинарник и dist возвращены из `.prev`, статус-файл удалён, restart; после перезагрузки About снова `behind` с кнопкой.
+- g. Без `CC_SWITCH_WEB_SELF_UPDATE=1`: `selfUpdate:false`, кнопки нет, ручные инструкции видны, `POST /api/update/install` → 409 «self-update is off: …».
+- h. `POST` при идущем обновлении → 409 «an update is already running», статус не стёрт.
+- i. 390 px: `documentElement.scrollWidth` = 390 в состояниях `behind` с кнопкой, диалог, прогресс «Building…», итог неудачи.
+- j. Без `CC_SWITCH_WEB_BUILD_PATH`: `failed` «missing build tools: pnpm node cargo (set CC_SWITCH_WEB_BUILD_PATH …)», бинарник, dist, `.prev` не тронуты, `ExecMainStartTimestamp` не менялся.
+- Боевой сервис: до и после `sha256` `~/.local/bin/cc-switch-web` = `94cc288d…e303`, `ExecMainStartTimestamp` = `Wed 2026-11-04 13:19:30 EET`, `NRestarts=0`, тот же `MainPID`; хэш дерева `dist-web` = `2fab3673…a3d9`; HEAD основного checkout = `c366a8a9`. В просмотренных логах шима (прогоны a и j) к настоящему `systemctl` ушли `daemon-reload`, `is-active cc-switch-web-update` и `restart`, переписанный в `cc-switch-web-e2e`; отказов (код 97) не было. Всё остановлено (юниты `cc-switch-web-e2e`, `cc-switch-web-e2e-stub`, браузер), временный каталог удалён; в `.playwright-mcp/` основного checkout удалены только файлы этого прогона (11 более ранних файлов других сессий оставлены).
+- Вопрос про БД (по коду и пробой на копии): перед миграцией бэкап создаётся самим новым бинарём при старте (`database/mod.rs:128-141`, файл `<data dir>/backups/db_backup_YYYYMMDD_HHMMSS.db`); проба: копия с `user_version=22` → бэкап с `user_version=22` создан, база стала 23. Старый бинарь на базе новее (`user_version=24`) не мигрирует и не пишет, запускается в init-error режиме: `/api/capabilities` отвечает `200`, `/api/health` и остальные роуты — `503`, `/api/init-status` называет версии.
+
+**Не проверялось.** Боевой сервис и боевой прогон self-update (не согласованы). Docker (ответ 409 для среды без `INVOCATION_ID` покрыт тестами, не контейнером). `scripts/install-server.sh` в живую. Настоящий GitHub compare API (источник — заглушка, считающая по настоящим SHA временного origin). `git fetch` по ssh/https (origin — локальный bare-репозиторий). Реальный подъём версии схемы БД обновлением (бэкап и init-error проверены вручную на копии, не через update). SIGTERM update-юнита и ожидание 15 мин без смены стадии вживую (покрыты тестами). Другие браузеры. Другие разрешения, кроме 1280 и 390.
+
+**Известные ограничения.**
+- Вкладка, ушедшая из Settings, сама не перезагрузится при `done`: опрос живёт в About. Итог прошлого запуска показывается при открытии About.
+- Сетевая ошибка самого POST показывается как «не запущено»; юнит при этом мог стартовать (проверка — открыть About ещё раз).
+- Второй TERM во время отката прерывает его (нужны два сигнала).
+- Сброс статуса при неудачном запуске стирает `rollback-failed`: пути `.prev` детерминированы, рецепт восстановления от статуса не зависит.
+- Сквозной прогон шёл с шимами и в изолированном юните, а не на боевом сервисе: `BIN_DIR` боевого юнита не передаётся (всегда `~/.local/bin`), это в `docs/deploy.md`.
+- **Откат не возвращает работающий сервис, если новая сборка успела мигрировать БД**: старый бинарь поднимается в init-error режиме, `/api/capabilities` отвечает с его `buildSha`, и скрипт пишет `rolled-back`, хотя консоль не работает. Скрипт не менялся (решает контроллер). В `docs/deploy.md` описано, как проверить (`/api/health` → 503) и как восстановить базу из `db_backup_*.db`.
+- Автоматического бэкапа перед обновлением скрипт не делает; бэкап перед миграцией есть, но его создание при сбое копирования лишь пишет предупреждение, а миграция идёт дальше (`database/mod.rs:137-139`). Хранится не более `backup_retain_count` файлов (10 по умолчанию) вместе с остальными копиями БД.
+- После неудачной сборки остаётся недостроенный `dist-web.new` до следующего запуска.
+- Опрос раз в 2 с не видит короткие стадии (`installing` исчезает быстрее): метка во время перезапуска может оставаться «Building…», под ней «The server is not answering (it is probably restarting). Waiting…». После `done` страница перезагружается на вкладку General, не на About.
+- Только одно поколение `.prev`; unit-файл не перерисовывается (предупреждение в `message`, нужен `install-server.sh`); self-update по HTTP без аутентификации: любой участник tailnet может запустить сборку ветки из конфигурации (opt-in, ff-only, ветка не из запроса).
+
+**Post-merge.**
+1. В боевом checkout: `git pull --ff-only` на `main` (дерево чистое, иначе сборка без SHA).
+2. Бэкап БД `~/.cc-switch-web/backups-predeploy-p37-<дата>/` (`sqlite3 … ".backup …"`), прежние бинарь и unit рядом, до установки. Миграций БД в фазе нет: `git diff origin/main..HEAD -- src-tauri/src/database` пуст.
+3. Деплой через `scripts/install-server.sh` из чистого `main`, затем `systemctl --user daemon-reload && systemctl --user restart cc-switch-web` (скрипт юнит не перезапускает).
+4. Smoke: `GET /api/capabilities` → `buildSha` = HEAD `main`, `selfUpdate:false`; `GET /api/update/check` → `up-to-date`; About без кнопки. Бюджет: 1–2 запроса к GitHub.
+5. **Self-update на боевом сервисе не включать** (drop-in из `docs/deploy.md` не создавать) без решения владельца: риск раздела «Self-update from the console».
+6. DX-86 → Done после merge (хук Plane при открытии PR переведёт в In Review).
+7. Задача 5: закрытие модуля M5 (все задачи в Done, модуль `c2c8690c-…` → `completed`, индекс).
