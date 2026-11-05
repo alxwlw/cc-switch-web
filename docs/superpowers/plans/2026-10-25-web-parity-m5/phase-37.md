@@ -45,7 +45,7 @@ Scope: `scripts/self-update.sh` (новый), `scripts/tests/self-update.test.sh
 
 ### Task 5: закрытие модуля M5
 - [ ] После merge: все 33 задачи модуля в Done (сверка `module list_workitems`); модуль `c2c8690c-…` → status `completed`.
-- [x] Индекс `docs/superpowers/plans/2026-10-25-web-parity-m5.md`: все чекбоксы закрыты, итог в Notes; таблица инвентаризации фазы 6 — все строки закрыты или отмечены «desktop-only навсегда» (трей, native-диалоги, терминал, Agy keychain на Linux).
+- [ ] Индекс `docs/superpowers/plans/2026-10-25-web-parity-m5.md`: все чекбоксы закрыты, итог в Notes; таблица инвентаризации фазы 6 — все строки закрыты или отмечены «desktop-only навсегда» (трей, native-диалоги, терминал, Agy keychain на Linux). **Критерий не выполнен (сверка 2026-11-05):** индекс закрыт, но 3 строки таблицы из 39 открыты: 100 (DX-176), 113 (квота Copilot, задачи Plane нет), 129 (DX-184).
 
 Риски для ревью:
 - Self-update по HTTP без аутентификации: любой участник tailnet может запустить сборку. Поэтому opt-in через env, ff-only и только ветка из конфигурации; в `docs/deploy.md` это сказано прямо.
