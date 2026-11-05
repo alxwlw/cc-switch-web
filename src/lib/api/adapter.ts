@@ -1065,6 +1065,10 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         method: "GET",
         url: `/api/update/check${query({ force: a.force === true ? "1" : undefined })}`,
       };
+    // WEB-28: 202 + `{unit, branch}`; 409 carries the reason (not enabled, no systemd, already
+    // running). The body is empty: the branch and every path come from the server's environment.
+    case "web_install_update":
+      return { method: "POST", url: "/api/update/install" };
     case "get_config_dir":
       return { method: "GET", url: "/api/paths", pick: "configDir" };
     case "get_tool_versions":

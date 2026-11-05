@@ -63,7 +63,7 @@ const fetchMock = vi.fn();
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const LATEST = "fedcba9876543210fedcba9876543210fedcba98";
 const SYSTEMD =
-  "cd <checkout> && git pull --ff-only && scripts/install-server.sh && systemctl --user restart cc-switch-web";
+  "cd <checkout> && git pull --ff-only && scripts/install-server.sh && systemctl --user daemon-reload && systemctl --user restart cc-switch-web";
 const DOCKER =
   "cd <checkout> && git pull --ff-only\ndocker build -f Dockerfile.web -t cc-switch-web .";
 
@@ -81,6 +81,7 @@ function updateData(over: Record<string, unknown> = {}) {
       { sha: "ccccccc3333333", message: "docs: oldest", date: null },
     ],
     checkedAt: "2026-11-04T10:30:00Z",
+    branch: "web-parity",
     instructions: { systemd: SYSTEMD, docker: DOCKER },
     ...over,
   };

@@ -6,6 +6,11 @@ export interface ServerCapabilities {
   runtime_boundaries: string;
   /** `std::env::consts::OS` of the server: "linux" | "macos" | "windows". */
   platform: string;
+  /**
+   * The install route would accept a request now (WEB-28): opted in, systemd, a source
+   * checkout. Anything but `true` in the payload is `false`: no button the server refuses.
+   */
+  selfUpdate: boolean;
 }
 
 /**
@@ -28,5 +33,6 @@ export async function fetchCapabilities(): Promise<ServerCapabilities> {
         : null,
     runtime_boundaries: String(body.runtime_boundaries ?? ""),
     platform: String(body.platform ?? ""),
+    selfUpdate: body.selfUpdate === true,
   };
 }

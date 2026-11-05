@@ -83,12 +83,15 @@ pub struct UpdateCheck {
     /// The newest [`MAX_COMMITS`] of them, newest first.
     pub commits: Vec<UpdateCommit>,
     pub checked_at: String,
+    /// The branch the check compared against (the one self-update would pull). Part of the
+    /// cache key, so a cached answer always names the branch it was computed for.
+    pub branch: String,
     pub instructions: UpdateInstructions,
 }
 
 fn instructions() -> UpdateInstructions {
     UpdateInstructions {
-        systemd: "cd <checkout> && git pull --ff-only && scripts/install-server.sh && systemctl --user restart cc-switch-web"
+        systemd: "cd <checkout> && git pull --ff-only && scripts/install-server.sh && systemctl --user daemon-reload && systemctl --user restart cc-switch-web"
             .to_string(),
         docker: concat!(
             "cd <checkout> && git pull --ff-only\n",
@@ -180,6 +183,7 @@ fn only_hex_sha(sha: &str) -> bool {
 }
 
 fn report(
+    branch: &str,
     status: UpdateStatus,
     current_sha: Option<&str>,
     latest_sha: Option<String>,
@@ -194,6 +198,7 @@ fn report(
         behind_by,
         commits,
         checked_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        branch: branch.to_string(),
         instructions: instructions(),
     }
 }
@@ -209,7 +214,14 @@ pub async fn check(
     force: bool,
 ) -> Result<UpdateCheck, AppError> {
     let Some(sha) = build_sha.filter(|sha| only_hex_sha(sha)) else {
-        return Ok(report(UpdateStatus::Unknown, None, None, 0, Vec::new()));
+        return Ok(report(
+            &cfg.branch,
+            UpdateStatus::Unknown,
+            None,
+            None,
+            0,
+            Vec::new(),
+        ));
     };
     let key = CacheKey {
         api_base: cfg.api_base.clone(),
@@ -299,6 +311,7 @@ async fn fetch(cfg: &UpdateSourceConfig, sha: &str) -> Result<UpdateCheck, AppEr
     // 404: the build's commit is not on GitHub; 422: GitHub cannot compare it.
     let Some((_, body)) = get_json(&url).await? else {
         return Ok(report(
+            &cfg.branch,
             UpdateStatus::Unknown,
             Some(sha),
             None,
@@ -310,6 +323,7 @@ async fn fetch(cfg: &UpdateSourceConfig, sha: &str) -> Result<UpdateCheck, AppEr
     if compare.behind_by > 0 {
         // The build holds commits the branch does not (diverged, or ahead of it).
         return Ok(report(
+            &cfg.branch,
             UpdateStatus::Unknown,
             Some(sha),
             None,
@@ -319,6 +333,7 @@ async fn fetch(cfg: &UpdateSourceConfig, sha: &str) -> Result<UpdateCheck, AppEr
     }
     if compare.ahead_by == 0 {
         return Ok(report(
+            &cfg.branch,
             UpdateStatus::UpToDate,
             Some(sha),
             Some(sha.to_string()),
@@ -371,6 +386,7 @@ async fn fetch(cfg: &UpdateSourceConfig, sha: &str) -> Result<UpdateCheck, AppEr
         }
     };
     Ok(report(
+        &cfg.branch,
         UpdateStatus::Behind,
         Some(sha),
         Some(latest_sha),
@@ -414,7 +430,14 @@ mod tests {
         Some(CacheEntry {
             key: key(sha),
             stored_at,
-            value: report(UpdateStatus::UpToDate, Some(sha), None, 0, Vec::new()),
+            value: report(
+                "main",
+                UpdateStatus::UpToDate,
+                Some(sha),
+                None,
+                0,
+                Vec::new(),
+            ),
         })
     }
 

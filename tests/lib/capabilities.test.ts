@@ -22,7 +22,29 @@ describe("fetchCapabilities", () => {
       buildSha: null,
       runtime_boundaries: "",
       platform: "macos",
+      selfUpdate: false,
     });
+  });
+
+  it("selfUpdate is true only for the boolean true", async () => {
+    const answer = (selfUpdate: unknown) =>
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ mode: "web", version: "1.2.3", selfUpdate }),
+        }),
+      );
+    answer(true);
+    await expect(fetchCapabilities()).resolves.toMatchObject({
+      selfUpdate: true,
+    });
+    for (const loose of ["true", 1, "1", null]) {
+      answer(loose);
+      await expect(fetchCapabilities()).resolves.toMatchObject({
+        selfUpdate: false,
+      });
+    }
   });
 
   it("passes the build sha through", async () => {

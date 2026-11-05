@@ -57,11 +57,12 @@ In the console the check runs once, a second after it opens, and never with `for
 only the "Check for updates" button in Settings → About sends `?force=1`. A build that is
 behind gets a dot on Settings and, in About, the number of missing commits, the newest of
 them (with "showing N of M" when the list is shorter) and the update commands for systemd
-and Docker with copy buttons. A failed check shows the server's error text. The console
-does not install the update: the operator runs the commands on the server host. For
-systemd that is `cd <checkout> && git pull --ff-only && scripts/install-server.sh && systemctl --user restart cc-switch-web`
-(`install-server.sh` installs the binary but does not restart the unit, so without the last
-step the old process keeps running and the console still says "behind"). The source is
+and Docker with copy buttons. A failed check shows the server's error text. Unless
+self-update is switched on (next section), the console does not install the update: the
+operator runs the commands on the server host. For systemd that is `cd <checkout> && git pull --ff-only && scripts/install-server.sh && systemctl --user daemon-reload && systemctl --user restart cc-switch-web`
+(`install-server.sh` installs the binary and rewrites the unit file but does not restart the
+unit, so without the last two steps the old process keeps running and the console still says
+"behind"). The source is
 read from the environment of the server on every request:
 
 | Variable                      | Default                  |
@@ -69,6 +70,217 @@ read from the environment of the server on every request:
 | `CC_SWITCH_WEB_UPDATE_API`    | `https://api.github.com` |
 | `CC_SWITCH_WEB_UPDATE_REPO`   | `alxwlw/cc-switch-web`   |
 | `CC_SWITCH_WEB_UPDATE_BRANCH` | `main`                   |
+
+## Self-update from the console (systemd user unit only, off by default)
+
+When it is on, a build that is behind gets an "Update now" button in Settings → About.
+The confirmation names the branch, lists the missing commits and warns that the database
+may be migrated. After the click the page follows the stages, survives the restart of the
+service and reloads itself when the new build answers.
+
+**The risk, stated plainly.** The server has no authentication (see the top of this file)
+and `POST /api/update/install` is an ordinary route of it: **anyone who can reach the
+port, that is every member of the tailnet, can start a build on the host and make the
+service restart.** They cannot choose what is built: the request body is ignored, the
+script runs `git merge --ff-only` of `origin/<branch>` where the branch is only
+`CC_SWITCH_WEB_UPDATE_BRANCH` (default `main`) from the server's own environment, and one
+update runs at a time (a second request answers `409`). But whoever can push to that
+branch of that remote gets their code built and run on the host with your user's rights,
+and a build costs minutes of CPU and disk. That is why self-update is opt-in and is not
+part of `install-server.sh`. Do not switch it on for a tailnet you do not trust, or for a
+branch you do not control.
+
+### Switch it on
+
+Put the settings in a drop-in, not in `cc-switch-web.service`: `install-server.sh`
+renders that file from the template on every run and would erase them.
+
+```bash
+mkdir -p ~/.config/systemd/user/cc-switch-web.service.d
+cat > ~/.config/systemd/user/cc-switch-web.service.d/self-update.conf <<EOF
+[Service]
+Environment=CC_SWITCH_WEB_SELF_UPDATE=1
+Environment=CC_SWITCH_WEB_SOURCE_DIR=$HOME/cc-switch-web
+Environment=CC_SWITCH_WEB_BUILD_PATH=$(dirname "$(command -v node)"):$(dirname "$(command -v pnpm)"):$(dirname "$(command -v cargo)")
+EOF
+systemctl --user daemon-reload
+systemctl --user restart cc-switch-web
+```
+
+- `CC_SWITCH_WEB_SELF_UPDATE=1` is the switch; any other value is off.
+- `CC_SWITCH_WEB_SOURCE_DIR` is the absolute path of the git checkout the service was
+  installed from (the one that holds `scripts/self-update.sh` and the `dist-web` the unit
+  serves). It must be on the update branch with no changed tracked files, and `git fetch
+  origin` must work without a prompt (an ssh key or a stored token).
+- `CC_SWITCH_WEB_BUILD_PATH` is a colon-separated list of directories put in front of
+  `PATH` for the build. The update runs in a transient unit (`systemd-run --user`), which
+  gets the user manager's `PATH`, not your login shell's, so `pnpm`, `node` and `cargo`
+  are usually not found there. The command above takes them from your current shell. With
+  mise the directories are the real install ones (`dirname "$(mise which node)"`,
+  `dirname "$(mise which pnpm)"`), not the shim directory. `cargo` from rustup lives in
+  `~/.cargo/bin`. Missing tools are reported by name before anything is touched.
+- The unit already carries `HOST`, `PORT` and `WEB_DIST`; the server forwards those, the
+  build path and `XDG_STATE_HOME` to the update unit. The health check polls
+  `http://$HOST:$PORT/api/capabilities` (the new `buildSha` must show up) and
+  `http://$HOST:$PORT/api/health` (must answer 2xx); `HOST` empty or `0.0.0.0` means
+  `127.0.0.1`.
+  `BIN_DIR` is **not** forwarded: the script always installs to
+  `~/.local/bin/cc-switch-web`, where `install-server.sh` puts it by default. A service
+  installed to another `BIN_DIR`, or one that runs another binary path, cannot be updated
+  this way: its binary would not change, the health check would time out and the update
+  would roll back.
+- **User unit only.** `INVOCATION_ID` is also set in a system unit, but the update is
+  started with `systemd-run --user`, which a system service cannot reach. In Docker (no
+  `INVOCATION_ID`) the install route answers `409` and the console shows the Docker
+  commands of the update check: rebuild the image with the build argument, as above.
+
+`GET /api/capabilities` reports `selfUpdate: true` only when every condition holds; the
+console shows the button from that flag. With self-update off, no button appears, the
+manual commands stay in About and `POST /api/update/install` answers `409` with the
+reason.
+
+### What `scripts/self-update.sh` does
+
+The server starts it as the transient unit `cc-switch-web-update` and it writes its
+progress to `${XDG_STATE_HOME:-~/.local/state}/cc-switch-web/update-status.json`
+(`GET /api/update/status`; the console polls it every 2 s because the event stream does
+not survive the restart). Build output goes to the journal:
+`journalctl --user -u cc-switch-web-update`.
+
+1. `checking`: the tools exist, the checkout is on the update branch and no tracked file
+   differs from `HEAD` (untracked files such as `.scratch/` are fine), the installed
+   binary and `dist-web` exist. A failure here touches nothing.
+2. `fetching`: `git fetch origin`, killed after 120 s (`FETCH_TIMEOUT`). If the checkout
+   is already at `origin/<branch>` and the running service reports that commit **and
+   its `/api/health` answers 2xx**, the run ends `done` with "already up to date"; a
+   service that is down or in init-error mode is rebuilt instead.
+3. `merging`: `git merge --ff-only origin/<branch>`. A branch that cannot fast-forward is
+   refused. The checkout is **never reset**: after any later failure it stays on the new
+   commit, and the message says so.
+4. `building`: `pnpm install --frozen-lockfile`, `pnpm build:web` into `dist-web.new`,
+   `cargo build --release --example server` with `CC_SWITCH_WEB_GIT_SHA` set to the new
+   commit, `install -m0755` to `cc-switch-web.new`. The live binary and `dist-web` are not
+   touched until all of that has succeeded, so a failed compile or a full disk leaves the
+   running service as it was (status `failed`, the service is not restarted). The
+   half-built `dist-web.new` stays on disk after such a failure until the next run deletes it.
+5. `installing`: the old `.prev` copies are deleted, then (all renames inside one
+   directory) `cc-switch-web` becomes `cc-switch-web.prev` and the new binary takes its
+   place; `dist-web` becomes `dist-web.prev` and `dist-web.new` takes its place.
+6. `restarting`: `systemctl --user daemon-reload`, `systemctl --user restart
+   cc-switch-web`, then up to 60 s (`HEALTH_TIMEOUT`) of polling until `/api/capabilities`
+   reports the new `buildSha` **and** `/api/health` answers 2xx. Both are needed: a server
+   whose startup failed (a database newer than the binary) serves in init-error mode,
+   where `/api/capabilities` still answers with the build's own sha but `/api/health`,
+   like every other `/api` route, is `503`. Only when both hold does the run end `done`.
+7. A failure after step 5 (the process exits at start, the sha never shows up, SIGTERM)
+   starts `rolling-back`: the `.prev` files are copied back (the copies stay), the
+   service restarts and must report the previous `buildSha` with a working `/api/health`.
+   Then `rolled-back`, with the reason; or `rollback-failed` when the old build does not
+   work either. The message of `rollback-failed` names the `.prev` files and points at the
+   database section below as one possible cause.
+
+Final stages are `done`, `failed`, `rolled-back` and `rollback-failed`. `failed` also
+covers an interrupted run (SIGTERM). About shows the outcome of an earlier `failed`,
+`rolled-back` or `rollback-failed` run when it opens.
+
+Only one `.prev` generation exists: the next update replaces it, so after a second update
+`.prev` holds the build before it, not the original one.
+
+If `scripts/cc-switch-web.service.template` changed in the update, the final message of
+`done` carries a warning. The script only runs `daemon-reload`; it does not render the
+unit. Run `scripts/install-server.sh` by hand (then `systemctl --user daemon-reload &&
+systemctl --user restart cc-switch-web`). The drop-in survives that.
+
+### The database and an update
+
+This is what the code does (`src-tauri/src/database`), not a promise of the script. The
+script makes no backup of its own.
+
+- **A backup is made before a migration, by the new binary at its start.**
+  `Database::init` (`database/mod.rs:128-141`) takes a copy when the database exists and
+  its `user_version` is above 0 and below the build's `SCHEMA_VERSION` (23 today). The copy
+  is `<data dir>/backups/db_backup_YYYYMMDD_HHMMSS.db` (`~/.cc-switch-web/backups/` for the
+  unit), made with the SQLite backup API and checked with an integrity check
+  (`database/backup.rs:478-564`). Only then do the migrations run. An update without a
+  schema change creates no such file. If the copy fails, the server logs a warning and
+  migrates anyway. The newest `backup_retain_count` files (10 by default, the "Backup Retention"
+  setting next to the backup list) are kept, older `.db` files in that directory are deleted
+  (`database/backup.rs:604`). The same directory holds the other database backups, so
+  copy the file you need somewhere safe soon after an update.
+- **An older binary does not open a newer database.**
+  `Database::stored_user_version_exceeds_supported` (`database/mod.rs:175`) finds a
+  `user_version` above the binary's `SCHEMA_VERSION`; the bootstrap
+  (`bootstrap.rs:164`) then refuses to touch the file and the server starts in
+  init-error mode (`examples/server.rs:209`): the console shows "database version is too
+  new", `/api/init-status` reports it and every other `/api/*` route answers `503`. There
+  are no downgrade migrations.
+- **A rollback after a migration does not give you back a working service, and the script
+  says so.** If the new build migrated the database and then crashed, or came up in
+  init-error mode, the health check (which includes `/api/health`) fails. The rollback puts
+  the previous binary back; it cannot open the migrated database and starts in init-error
+  mode too, so its health check fails as well and the status is `rollback-failed`, with a
+  message that names the database as a possible cause. The same goes for a new build that
+  starts in init-error mode on its own: it is a failed update, never `done`. The way out is
+  the database restore below. (The same check also stops "already up to date" from being
+  reported for a service that is in init-error mode.)
+- **Check for a migration before you click**: `git fetch origin && git diff HEAD
+  origin/<branch> -- src-tauri/src/database` shows a changed `SCHEMA_VERSION` or
+  schema; if so, take your own backup first. The command needs no `sqlite3` binary (the
+  host may not have one); it also prints the database's `user_version`, to compare with
+  `SCHEMA_VERSION` in `src-tauri/src/database/mod.rs` of the new commit:
+
+  ```bash
+  python3 -c 'import os, sqlite3; db = os.path.expanduser("~/.cc-switch-web/cc-switch.db"); src = sqlite3.connect("file:" + db + "?mode=ro", uri=True); src.backup(sqlite3.connect(os.path.expanduser("~/cc-switch-before-update.db"))); print("user_version", src.execute("PRAGMA user_version").fetchone()[0])'
+  ```
+- **Restore the database** (service stopped; the file to use is the newest
+  `db_backup_*.db` from before the update, or your own copy):
+
+  ```bash
+  systemctl --user stop cc-switch-web
+  cd ~/.cc-switch-web
+  mv cc-switch.db cc-switch.db.too-new
+  rm -f cc-switch.db-wal cc-switch.db-shm
+  cp -p backups/db_backup_<stamp>.db cc-switch.db
+  ```
+
+  Then put the previous binary and `dist-web` back with the recipe below. Everything
+  written between the backup and the stop is lost; `cc-switch.db.too-new` keeps it.
+
+### Go back by hand
+
+`.prev` holds the build that was running before the last update (the binary
+`cc-switch-web.prev` next to the installed one, `dist-web.prev` next to `dist-web`). To
+return to it, after a `done` you regret, or after `rollback-failed`:
+
+```bash
+BIN="$HOME/.local/bin/cc-switch-web"
+DIST="$HOME/cc-switch-web/dist-web"   # WEB_DIST of the unit
+STATUS="${XDG_STATE_HOME:-$HOME/.local/state}/cc-switch-web/update-status.json"
+
+if [ -f "$BIN.prev" ] && [ -d "$DIST.prev" ]; then
+  cp -p "$BIN.prev" "$BIN.restore" && mv -f "$BIN.restore" "$BIN" &&
+    rm -rf "$DIST.new" && mv "$DIST" "$DIST.new" && cp -a "$DIST.prev" "$DIST" && rm -rf "$DIST.new" &&
+    rm -f "$STATUS" &&
+    systemctl --user restart cc-switch-web ||
+    echo "a step failed; the steps after it were not run" >&2
+else
+  echo "no $BIN.prev or $DIST.prev: nothing was changed" >&2
+fi
+```
+
+The block does nothing and says so when either `.prev` is missing (an install that was
+never updated), and stops at the first failing step. The `rm -f "$STATUS"` and restart
+steps matter after `rollback-failed`: the console keeps showing that
+outcome, and hides the update button, for as long as the status file exists (a started
+update clears it). Removing it brings the button back. `systemctl --user restart` is
+enough; if the unit file itself changed, run `daemon-reload` first. If `.prev` is
+damaged or missing, rebuild the old commit instead: `git -C <checkout> checkout
+<fromSha>` (the `fromSha` field of the status file, `jq -r .fromSha "$STATUS"`, or of `GET /api/update/status`; the status messages name only the new commit), `scripts/install-server.sh`, restart, and
+`git checkout <branch>` afterwards, because the next update insists on the update branch.
+
+The checkout is not touched by this recipe: it stays on the commit of the update. The
+console will say "behind" again, because the running build is older than the branch; a
+click then rebuilds that same commit, so fix a bad commit on the branch first.
 
 ## Data isolation
 

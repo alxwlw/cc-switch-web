@@ -67,6 +67,8 @@ Task 3:
 
 ## Notes for next phase
 
+- **Закрыта 2026-11-04**: PR #37 merged `c366a8a9` → main; live на `cc-switch-web.service` с 13:19, `buildSha` = `c366a8a9`, `/api/update/check` → `up-to-date`; DX-86 In Progress (этап 1 из 2, хук при merge поставил Done, статус возвращён вручную). Бэкап БД, прежний бинарь и unit — `~/.cc-switch-web/backups-predeploy-p36-20261104-131706`, миграций нет. Страница About на боевом сервисе в браузере не открывалась, Docker не собирался. `install-server.sh` переписывает unit при каждом запуске, поэтому `systemctl --user restart` предупреждает «unit file changed on disk»; `daemon-reload` выполнен вручную, в инструкции консоли его нет — учесть в фазе 37. Открытая находка фазы: DX-184.
+
 **Статус.** Ветка `web-parity/web-28-update-check` (base `main`), PR #37, до merge. Merge делает владелец. DX-86 остаётся In Progress: это этап 1 из 2 (проверка и инструкция), установка из консоли — фаза 37. Отметка «Фаза 35» в индексе стоит в первом коммите ветки (`eaacded7`), отметка «Фаза 36» — первым коммитом ветки фазы 37.
 
 **Что сделано (file:line на HEAD ветки).**

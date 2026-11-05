@@ -41,7 +41,9 @@ async fn full_router_capabilities_carry_the_build_sha() {
     let boundaries = body["runtime_boundaries"].as_str().unwrap();
     assert!(!boundaries.contains("no auto-update"), "{boundaries}");
     assert!(
-        boundaries.contains("updates: check in UI, install by operator"),
+        boundaries.contains(
+            "updates: check in UI, install by operator, or from the UI when selfUpdate is true"
+        ),
         "{boundaries}"
     );
 }

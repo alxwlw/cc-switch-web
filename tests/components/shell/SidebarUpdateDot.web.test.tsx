@@ -56,6 +56,7 @@ function serve(status: "behind" | "up-to-date") {
             ? [{ sha: LATEST, message: "newer", date: null }]
             : [],
         checkedAt: "2026-11-04T10:30:00Z",
+        branch: "web-parity",
         instructions: { systemd: "s", docker: "d" },
       },
     }),

@@ -41,6 +41,8 @@ export interface WebUpdateCheck {
   /** The newest of them, newest first. */
   commits: WebUpdateCommit[];
   checkedAt: string;
+  /** The branch the server compared against, and would pull on self-update. */
+  branch: string;
   instructions: { systemd: string; docker: string };
 }
 
@@ -105,6 +107,7 @@ export function parseWebUpdateCheck(raw: unknown): WebUpdateCheck {
       };
     }),
     checkedAt: str(r.checkedAt, "checkedAt"),
+    branch: str(r.branch, "branch"),
     instructions: {
       systemd: str(instr.systemd, "instructions.systemd"),
       docker: str(instr.docker, "instructions.docker"),

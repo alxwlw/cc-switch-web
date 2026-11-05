@@ -15,6 +15,13 @@
 //!   exits (Docker with a restart policy, a unit not run by systemd). systemd sets
 //!   `INVOCATION_ID` itself. With either, `POST /api/restart` shuts the server down the way
 //!   SIGTERM does and exits with code 75; without, it answers 409.
+//! - `CC_SWITCH_WEB_SELF_UPDATE=1` — lets `POST /api/update/install` run `scripts/self-update.sh`
+//!   (fast-forward, build, swap, restart, roll back) in a transient systemd user unit. Needs
+//!   systemd (`INVOCATION_ID`) and `CC_SWITCH_WEB_SOURCE_DIR` (absolute path of the checkout the
+//!   service was installed from); the branch is `CC_SWITCH_WEB_UPDATE_BRANCH`. The unit gets only
+//!   `HOST`, `PORT`, `WEB_DIST`, `XDG_STATE_HOME` and `CC_SWITCH_WEB_BUILD_PATH` (directories with
+//!   `pnpm`/`node`/`cargo`) from this environment. Anyone who can reach the port can start a
+//!   build: enable it only on a Tailscale-only host. `GET /api/update/status` reads the progress.
 //! - `WEB_DIST` — directory with the `pnpm build:web` output (`dist-web`).
 //!   Defaults to `dist-web` next to the repo root, resolved from the
 //!   executable location. When missing, only `/api/*` is served.
@@ -188,7 +195,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // recovery for takeover) before the first request is served.
             run_headless_startup(&state).await;
             cleanup_state = Some(state.clone());
-            web_api::router_with_shutdown(state, Some(restart.clone()))
+            web_api::router_with_update(
+                state,
+                Some(restart.clone()),
+                Some(Arc::new(web_api::UpdateRunner::new(Arc::new(
+                    web_api::SystemdRunSpawner::default(),
+                )))),
+            )
         }
         Err(e) => {
             // init_status already holds the error; keep serving so the console
