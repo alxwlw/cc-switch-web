@@ -1,6 +1,6 @@
 # План: web-parity M5 — все 33 задачи модуля
 
-**Status:** active
+**Status:** closed
 
 Спека: `docs/research/web-feature-gaps-2026-10-25-plane-backlog.md` (аудит `main@4e2914de`).
 Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c2c8690c-443f-4dd4-8ad5-cab9a00f6a00`). WEB-N = DX-(58+N).
@@ -58,7 +58,7 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 Эпик lifecycle и обновления:
 - [x] [Phase 35 — WEB-26 / DX-84: смена data directory и restart](2026-10-25-web-parity-m5/phase-35.md) — PR #36, merged `749133e8` → main 2026-11-04, live на cc-switch-web.service (server + dist-web пересобраны, БД забэкаплена); DX-84 Done.
 - [x] [Phase 36 — WEB-28 / DX-86 (этап 1): проверка обновлений и инструкция](2026-10-25-web-parity-m5/phase-36.md) — PR #37, merged `c366a8a9` → main 2026-11-04, live на cc-switch-web.service (server + dist-web пересобраны через `install-server.sh`, БД забэкаплена); DX-86 In Progress (этап 1 из 2).
-- [ ] [Phase 37 — WEB-28 / DX-86 (этап 2): safe self-update; закрытие модуля M5](2026-10-25-web-parity-m5/phase-37.md)
+- [x] [Phase 37 — WEB-28 / DX-86 (этап 2): safe self-update; закрытие модуля M5](2026-10-25-web-parity-m5/phase-37.md) — PR #38, merged `60626f61` → main 2026-11-05, live на cc-switch-web.service (server + dist-web пересобраны через `install-server.sh`, БД забэкаплена); DX-86 Done (этап 2 из 2). Self-update на боевом сервисе выключен.
 
 Гейты фазы (по `.github/workflows/ci.yml`): frontend — `pnpm typecheck`, `pnpm format:check`, `pnpm test:unit`, `pnpm build:renderer`; backend — `cargo fmt --check --manifest-path src-tauri/Cargo.toml`, `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`, `cargo nextest run --manifest-path src-tauri/Cargo.toml --profile ci`. Перед закрытием фазы — полный прогон всего затронутого, не только новые тесты. `pnpm build:web` и сборка example server в CI отсутствуют — при правках web_api/server.rs собирать `cargo build --release --example server` локально.
 
@@ -78,3 +78,8 @@ Plane: проект DX «tooling», модуль M5 — cc-switch-web-parity (`c
 
 - План создан из 8 задач Todo модуля M5; 2026-10-25 расширен фазами 9–37 на все остальные задачи модуля (25 из Backlog, включая прежде заблокированные WEB-01/02/04/05/11/14/16/19/23/26/28 — их зависимости закрываются более ранними фазами). Связей blocked_by в Plane нет: зависимости — только текст спеки, порядок фаз их соблюдает.
 - Исполнитель в Plane: liqu.fi; после PR фазы — переводить соответствующую задачу DX в In Progress/In Review со ссылкой на PR.
+
+- **Итог модуля M5 (2026-11-05).** 37 фаз, все 33 задачи модуля Done (последняя — DX-86, фаза 37, PR #38 → `60626f61`; сверка по `module list_workitems` и статус модуля — за контроллером, Task 5 фазы 37). Индекс закрыт: `**Status:** closed`, чтобы резолвер не предлагал его как «следующую фазу»; открытых `- [ ]` нет.
+- **Что осталось открытым.** Находки с задачами Plane: DX-175 (при остановке сервера takeover затирает ручные правки live-конфига), DX-176 (поля Config directory в web показывают каталог данных сервера для всех CLI), DX-177 (`install-server.sh` обещает `CC_SWITCH_CONFIG_DIR`, который unit не использует), DX-184 (внешние ссылки в web показывают ошибку, хотя вкладка открылась). Сверка таблицы инвентаризации фазы 6 (`phase-6.md`, итог под таблицей): 39 строк — 29 закрыты, 7 desktop-only навсегда, 3 открыты: строка 100 (DX-176), строка 113 (`copilot_get_usage*` не замаплены, в web молчат квота Copilot на карточке и в аккаунте, а кнопка Test у Copilot-шаблона usage-скрипта падает; задачи Plane нет), строка 129 (`open_external`, DX-184). Критерий Task 5 про таблицу из-за этих трёх строк выполнен не полностью.
+- **Что не сделано осознанно.** Self-update на боевом сервисе `cc-switch-web.service` выключен и включается только решением владельца; настоящий прогон self-update на нём не запускался (в `~/.local/bin` лежит чужой `cc-switch-web.prev` от 2026-11-02, его перезапишет первый self-update). Docker-сборка (`Dockerfile.web`) и desktop-сборка в фазах 36–37 не проверялись.
+- **Статус модуля в Plane.** <статус модуля: решает владелец>

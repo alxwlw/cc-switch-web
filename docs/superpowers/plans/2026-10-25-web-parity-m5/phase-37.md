@@ -45,7 +45,7 @@ Scope: `scripts/self-update.sh` (новый), `scripts/tests/self-update.test.sh
 
 ### Task 5: закрытие модуля M5
 - [ ] После merge: все 33 задачи модуля в Done (сверка `module list_workitems`); модуль `c2c8690c-…` → status `completed`.
-- [ ] Индекс `docs/superpowers/plans/2026-10-25-web-parity-m5.md`: все чекбоксы закрыты, итог в Notes; таблица инвентаризации фазы 6 — все строки закрыты или отмечены «desktop-only навсегда» (трей, native-диалоги, терминал, Agy keychain на Linux).
+- [x] Индекс `docs/superpowers/plans/2026-10-25-web-parity-m5.md`: все чекбоксы закрыты, итог в Notes; таблица инвентаризации фазы 6 — все строки закрыты или отмечены «desktop-only навсегда» (трей, native-диалоги, терминал, Agy keychain на Linux).
 
 Риски для ревью:
 - Self-update по HTTP без аутентификации: любой участник tailnet может запустить сборку. Поэтому opt-in через env, ff-only и только ветка из конфигурации; в `docs/deploy.md` это сказано прямо.
@@ -53,6 +53,7 @@ Scope: `scripts/self-update.sh` (новый), `scripts/tests/self-update.test.sh
 
 ## Notes for next phase
 
+- **Закрыта 2026-11-05**: PR #38 merged `60626f61` → main; live на `cc-switch-web.service` с 10:01, `buildSha` = `60626f61`, `/api/update/check` → `up-to-date`, `selfUpdate: false`, `POST /api/update/install` → 409; страница About открыта на живом сервисе в Chromium, кнопки обновления нет. Бэкап БД, прежний бинарь и unit — `~/.cc-switch-web/backups-predeploy-p37-20261105-095828`, миграций нет, `user_version` 23. Настоящий self-update на боевом сервисе не запускался, включается только решением владельца; в `~/.local/bin` лежит чужой `cc-switch-web.prev` от 2026-11-02 21:25 (ручной деплой фазы 32), его перезапишет первый self-update. Таблица инвентаризации фазы 6 сверена с кодом на `main@60626f61` (итог под таблицей в `phase-6.md`): 39 строк — 29 закрыты, 7 desktop-only навсегда, 3 открыты (строки 100, 113, 129). Открытые находки: DX-175, DX-176, DX-177, DX-184.
 - **Статус.** Ветка `web-parity/web-28-self-update` (base `main` = `c366a8a9`), PR #38, до merge; merge делает владелец. Фаза закрывает DX-86 (этап 2 из 2: установка из консоли). **Self-update на боевом сервисе не включался и не включается без решения владельца**: боевой прогон не согласован, `cc-switch-web.service`, `~/.local/bin/cc-switch-web`, `dist-web` и checkout `/home/alex/cc-switch-web` в фазе не менялись (снимок до/после совпал, ниже). Задача 5 (закрытие модуля M5) — после merge.
 
 **Что сделано (file:line на HEAD ветки).**
