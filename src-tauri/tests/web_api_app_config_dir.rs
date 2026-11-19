@@ -226,7 +226,8 @@ async fn put_expands_tilde_and_stores_the_absolute_normalised_path() {
     assert_eq!(read_headless_override_file(), Some(expected.clone()));
     let stored = std::fs::read_to_string(headless_override_file_path()).unwrap();
     assert!(stored.contains(s(&expected)), "{stored}");
-    assert!(!stored.contains('~'), "{stored}");
+    // Not `contains('~')`: Windows temp paths carry 8.3 short names (`RUNNER~1`).
+    assert!(!stored.contains("\"~"), "{stored}");
 
     let (status, body) = put(&router, json!("~")).await;
     assert_eq!(status, StatusCode::OK, "{body}");
