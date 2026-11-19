@@ -1410,14 +1410,16 @@ mod tests {
     fn lifecycle_timeout_returns_stable_code_quickly() {
         let started = std::time::Instant::now();
         let err = run_tool_lifecycle_silently_with_timeout(
-            "sleep 5",
+            "sleep 30",
             "tool_install",
             &silent_progress(),
             std::time::Duration::from_secs(1),
         )
         .unwrap_err();
         assert_eq!(err, "TOOL_ACTION_TIMEOUT: tool_install exceeded 1 s");
-        assert!(started.elapsed() < std::time::Duration::from_secs(3));
+        // The call includes the login-shell PATH probe, which can take seconds on a loaded CI
+        // runner. The point is that it returned long before `sleep 30` finished.
+        assert!(started.elapsed() < std::time::Duration::from_secs(15));
     }
 
     #[cfg(unix)]

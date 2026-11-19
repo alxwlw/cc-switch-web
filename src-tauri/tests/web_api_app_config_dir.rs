@@ -225,8 +225,11 @@ async fn put_expands_tilde_and_stores_the_absolute_normalised_path() {
     assert_eq!(body["data"]["override"], json!(s(&expected)));
     assert_eq!(read_headless_override_file(), Some(expected.clone()));
     let stored = std::fs::read_to_string(headless_override_file_path()).unwrap();
-    assert!(stored.contains(s(&expected)), "{stored}");
-    assert!(!stored.contains('~'), "{stored}");
+    // The file is JSON: on Windows the backslashes are escaped, so compare the encoded form.
+    let encoded = serde_json::to_string(s(&expected)).unwrap();
+    assert!(stored.contains(&encoded), "{stored}");
+    // Not `contains('~')`: Windows temp paths carry 8.3 short names (`RUNNER~1`).
+    assert!(!stored.contains("\"~"), "{stored}");
 
     let (status, body) = put(&router, json!("~")).await;
     assert_eq!(status, StatusCode::OK, "{body}");

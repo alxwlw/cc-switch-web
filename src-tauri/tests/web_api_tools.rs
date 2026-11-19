@@ -325,7 +325,13 @@ async fn tampered_uninstall_command_is_rederived_and_never_executed() {
     std::fs::create_dir_all(&versions).unwrap();
     let real = versions.join("7.8.9");
     let _ = std::fs::remove_file(&real);
-    std::fs::copy("/bin/true", &real).unwrap();
+    // macOS has no /bin/true (it is /usr/bin/true there); the copy is a Mach-O, which counts
+    // as a native executable too.
+    let true_bin = ["/bin/true", "/usr/bin/true"]
+        .into_iter()
+        .find(|p| Path::new(p).is_file())
+        .expect("a `true` binary");
+    std::fs::copy(true_bin, &real).unwrap();
     let stub = home.join(".local/bin/claude");
     std::fs::create_dir_all(stub.parent().unwrap()).unwrap();
     let _ = std::fs::remove_file(&stub);

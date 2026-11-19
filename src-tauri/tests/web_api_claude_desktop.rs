@@ -154,6 +154,11 @@ async fn status_is_not_installed_without_the_claude_dir_and_installed_with_it() 
         dirs.normal
     );
 
+    // macOS only counts the app bundle (a leftover data dir does not mean it is installed);
+    // elsewhere the data dir is the signal.
+    #[cfg(target_os = "macos")]
+    std::fs::create_dir_all(ensure_test_home().join("Applications").join("Claude.app")).unwrap();
+    #[cfg(not(target_os = "macos"))]
     std::fs::create_dir_all(&dirs.normal).unwrap();
     let after = status(&f.router).await;
     assert_eq!(after["supported"], json!(true));
