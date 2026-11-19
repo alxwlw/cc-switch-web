@@ -2,21 +2,27 @@ name: Release (web)
 
 # Builds the web console server for Linux (x86_64, aarch64), smoke-tests the archives by
 # installing them in clean distro containers and, on a v<upstream>-web.<n> tag, publishes the
-# GitHub release. Pull requests and manual runs build and test but never publish.
+# GitHub release. Pull requests and manual runs build and test but never publish: only the push
+# of a tag publishes (scripts/release-meta.sh).
 on:
   push:
     tags: ["v*-web.*"]
   pull_request:
     branches: [main]
     paths:
+      # every input of the archive and of the image
+      - "src-tauri/**"
+      - "src/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".node-version"
+      - "vite.config.web.mts"
+      - "rust-toolchain.toml"
       - "scripts/**"
       - "deploy/**"
       - "Dockerfile.web"
       - "Dockerfile.web.dockerignore"
       - ".github/workflows/release-web.yml"
-      - "src-tauri/examples/server.rs"
-      - "src-tauri/src/services/web_update.rs"
-      - "src-tauri/src/web_api/**"
   workflow_dispatch:
 
 permissions:
@@ -53,40 +59,12 @@ jobs:
       - name: Work out the tag and the version
         id: meta
         env:
+          EVENT_NAME: ${{ github.event_name }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          cargo_version="$(sed -nE 's/^version *= *"([^"]+)".*/\1/p' src-tauri/Cargo.toml | head -n 1)"
-          [ -n "$cargo_version" ] || { echo "no version in src-tauri/Cargo.toml" >&2; exit 1; }
-          if [ "$REF_TYPE" = tag ]; then
-            tag="$REF_NAME"
-            if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-web\.[0-9]+$ ]]; then
-              echo "the tag '$tag' is not a release tag: expected v<upstream version>-web.<n>, for example v$cargo_version-web.1" >&2
-              exit 1
-            fi
-            version="${tag#v}"
-            upstream="${version%-web.*}"
-            if [ "$upstream" != "$cargo_version" ]; then
-              echo "the tag '$tag' is for upstream $upstream but src-tauri/Cargo.toml says $cargo_version" >&2
-              exit 1
-            fi
-            if ! grep -qE "^## v${version//./\\.}([^0-9]|\$)" CHANGELOG.md; then
-              echo "CHANGELOG.md has no line starting with '## v$version'; add the release section before tagging" >&2
-              exit 1
-            fi
-            publish=true
-          else
-            version="$cargo_version-web.0"
-            tag="v$version"
-            publish=false
-          fi
-          {
-            echo "tag=$tag"
-            echo "version=$version"
-            echo "publish=$publish"
-          } >>"$GITHUB_OUTPUT"
-          echo "tag=$tag version=$version publish=$publish"
+          bash scripts/release-meta.sh | tee -a "$GITHUB_OUTPUT"
 
   build:
     name: Build (${{ matrix.arch }})
