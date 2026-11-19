@@ -2,6 +2,16 @@ use super::*;
 use serial_test::serial;
 use std::collections::HashMap;
 
+/// A POSIX-looking absolute path that is also absolute on Windows (`/srv/x` has no drive
+/// there, so `Path::is_absolute` says no); identity elsewhere.
+fn abs(path: &str) -> String {
+    if cfg!(windows) {
+        format!("C:{path}")
+    } else {
+        path.to_string()
+    }
+}
+
 /// Everything a self-update needs, in a directory that has the script.
 struct Rig {
     dir: tempfile::TempDir,
@@ -76,7 +86,7 @@ fn a_complete_environment_resolves_to_the_launch() {
     rig.vars.insert("HOST", "100.64.0.7".into());
     rig.vars.insert("PORT", "18766".into());
     rig.vars.insert("WEB_DIST", "/srv/dist-web".into());
-    rig.vars.insert("XDG_STATE_HOME", "/srv/state".into());
+    rig.vars.insert("XDG_STATE_HOME", abs("/srv/state").into());
     rig.vars
         .insert("CC_SWITCH_WEB_BUILD_PATH", "/opt/node/bin".into());
 
@@ -93,7 +103,7 @@ fn a_complete_environment_resolves_to_the_launch() {
     assert_eq!(launch.script, rig.dir.path().join("scripts/self-update.sh"));
     assert_eq!(
         launch.status_file,
-        PathBuf::from("/srv/state/cc-switch-web/update-status.json")
+        PathBuf::from(abs("/srv/state/cc-switch-web/update-status.json"))
     );
     assert_eq!(
         launch.env,
@@ -101,7 +111,7 @@ fn a_complete_environment_resolves_to_the_launch() {
             ("HOST", OsString::from("100.64.0.7")),
             ("PORT", "18766".into()),
             ("WEB_DIST", "/srv/dist-web".into()),
-            ("XDG_STATE_HOME", "/srv/state".into()),
+            ("XDG_STATE_HOME", abs("/srv/state").into()),
             ("CC_SWITCH_WEB_BUILD_PATH", "/opt/node/bin".into()),
         ]
     );
@@ -303,13 +313,13 @@ fn the_systemd_run_arguments_are_one_element_per_value() {
 #[test]
 fn the_status_path_is_the_one_the_script_writes() {
     let env = |k: &str| match k {
-        "XDG_STATE_HOME" => Some(OsString::from("/x/state")),
+        "XDG_STATE_HOME" => Some(OsString::from(abs("/x/state"))),
         "HOME" => Some(OsString::from("/home/u")),
         _ => None,
     };
     assert_eq!(
         status_path(&env).unwrap(),
-        PathBuf::from("/x/state/cc-switch-web/update-status.json")
+        PathBuf::from(abs("/x/state/cc-switch-web/update-status.json"))
     );
     let blank = |k: &str| match k {
         "XDG_STATE_HOME" => Some(OsString::new()),

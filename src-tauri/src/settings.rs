@@ -1110,18 +1110,14 @@ pub(crate) fn resolve_override_path(raw: &str) -> PathBuf {
             .fold(home, |path, component| path.join(component))
     };
 
+    // get_home_dir() 而非 dirs::home_dir()：前者认 CC_SWITCH_TEST_HOME，Windows 上
+    // dirs 走 Known Folder API，测试无法隔离真实用户目录。
+    let home = crate::config::get_home_dir();
     if raw == "~" {
-        if let Some(home) = dirs::home_dir() {
-            return home;
-        }
-    } else if let Some(stripped) = raw.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
-            return join_home(home, stripped);
-        }
-    } else if let Some(stripped) = raw.strip_prefix("~\\") {
-        if let Some(home) = dirs::home_dir() {
-            return join_home(home, stripped);
-        }
+        return home;
+    }
+    if let Some(stripped) = raw.strip_prefix("~/").or_else(|| raw.strip_prefix("~\\")) {
+        return join_home(home, stripped);
     }
 
     PathBuf::from(raw)
@@ -1845,7 +1841,7 @@ mod tests {
 
     #[test]
     fn override_paths_expand_windows_style_tilde_separators() {
-        let home = dirs::home_dir().expect("home directory");
+        let home = crate::config::get_home_dir();
         assert_eq!(
             resolve_override_path(r"~\pi\agent"),
             home.join("pi").join("agent")
