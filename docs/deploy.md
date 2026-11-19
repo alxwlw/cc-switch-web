@@ -120,15 +120,15 @@ systemctl --user restart cc-switch-web
   `dirname "$(mise which pnpm)"`), not the shim directory. `cargo` from rustup lives in
   `~/.cargo/bin`. Missing tools are reported by name before anything is touched.
 - The unit already carries `HOST`, `PORT` and `WEB_DIST`; the server forwards those, the
-  build path and `XDG_STATE_HOME` to the update unit. The health check polls
+  build path, `XDG_STATE_HOME`, `BIN_DIR` and, for a release install,
+  `CC_SWITCH_WEB_INSTALL_DIR`, `CC_SWITCH_WEB_UPDATE_API` and `CC_SWITCH_WEB_DOWNLOAD_BASE` to the update unit. The health check polls
   `http://$HOST:$PORT/api/capabilities` (the new `buildSha` must show up) and
   `http://$HOST:$PORT/api/health` (must answer 2xx); `HOST` empty or `0.0.0.0` means
   `127.0.0.1`.
-  `BIN_DIR` is **not** forwarded: the script always installs to
+  `BIN_DIR` is forwarded when the unit sets it; otherwise the script installs to
   `~/.local/bin/cc-switch-web`, where `install-server.sh` puts it by default. A service
-  installed to another `BIN_DIR`, or one that runs another binary path, cannot be updated
-  this way: its binary would not change, the health check would time out and the update
-  would roll back.
+  that runs a binary other than `$BIN_DIR/cc-switch-web` cannot be updated this way: its
+  binary would not change, the health check would time out and the update would roll back.
 - **User unit only.** `INVOCATION_ID` is also set in a system unit, but the update is
   started with `systemd-run --user`, which a system service cannot reach. In Docker (no
   `INVOCATION_ID`) the install route answers `409` and the console shows the Docker

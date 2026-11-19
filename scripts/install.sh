@@ -222,7 +222,11 @@ main() {
   if [ -n "$version_flag" ]; then
     tag="$version_flag"
   elif ! [[ "$tag" =~ $TAG_RE ]]; then
-    tag="$(curl -fsSL "$api/repos/$repo/releases/latest" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/;T;p;q')" || tag=""
+    # curl into a variable, then a here-string: with a pipe, sed quitting at the first match
+    # kills curl on a body larger than the pipe buffer and pipefail loses the tag
+    local latest_body
+    latest_body="$(curl -fsSL "$api/repos/$repo/releases/latest")" || latest_body=""
+    tag="$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/;T;p;q' <<<"$latest_body")"
     [ -n "$tag" ] || die "could not read the latest release of $repo from $api"
   fi
   [[ "$tag" =~ $TAG_RE ]] || die "the release tag '$tag' is not a cc-switch-web release (expected v<x.y.z>-web.<n>)"

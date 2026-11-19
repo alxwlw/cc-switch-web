@@ -17,11 +17,16 @@
 //!   SIGTERM does and exits with code 75; without, it answers 409.
 //! - `CC_SWITCH_WEB_SELF_UPDATE=1` — lets `POST /api/update/install` run `scripts/self-update.sh`
 //!   (fast-forward, build, swap, restart, roll back) in a transient systemd user unit. Needs
-//!   systemd (`INVOCATION_ID`) and `CC_SWITCH_WEB_SOURCE_DIR` (absolute path of the checkout the
-//!   service was installed from); the branch is `CC_SWITCH_WEB_UPDATE_BRANCH`. The unit gets only
-//!   `HOST`, `PORT`, `WEB_DIST`, `XDG_STATE_HOME` and `CC_SWITCH_WEB_BUILD_PATH` (directories with
-//!   `pnpm`/`node`/`cargo`) from this environment. Anyone who can reach the port can start a
-//!   build: enable it only on a Tailscale-only host. `GET /api/update/status` reads the progress.
+//!   systemd (`INVOCATION_ID`) and, in a build from source, `CC_SWITCH_WEB_SOURCE_DIR` (absolute
+//!   path of the checkout the service was installed from); the branch is
+//!   `CC_SWITCH_WEB_UPDATE_BRANCH`. A release build (a fork version is embedded) instead runs
+//!   `self-update.sh --release` from `CC_SWITCH_WEB_INSTALL_DIR` (absolute path of the install
+//!   dir, set by `install.sh`) and installs the latest release of `CC_SWITCH_WEB_UPDATE_REPO`.
+//!   The update unit receives these variables from this environment, when set: `HOST`, `PORT`,
+//!   `WEB_DIST`, `XDG_STATE_HOME`, `BIN_DIR`, `CC_SWITCH_WEB_BUILD_PATH` (directories with
+//!   `pnpm`/`node`/`cargo`), `CC_SWITCH_WEB_INSTALL_DIR`, `CC_SWITCH_WEB_UPDATE_API` and
+//!   `CC_SWITCH_WEB_DOWNLOAD_BASE`. Anyone who can reach the port can start an update:
+//!   enable it only on a Tailscale-only host. `GET /api/update/status` reads the progress.
 //! - `WEB_DIST` — directory with the `pnpm build:web` output (`dist-web`).
 //!   Defaults to `dist-web` next to the repo root, resolved from the
 //!   executable location. When missing, only `/api/*` is served.

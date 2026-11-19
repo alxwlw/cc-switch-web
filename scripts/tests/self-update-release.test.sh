@@ -56,6 +56,7 @@ STUBS="$TMP/stubs"
 mkdir -p "$STUBS"
 REAL_CURL="$(command -v curl)"
 REAL_TAR="$(command -v tar)"
+REAL_CP="$(command -v cp)"
 REAL_SHA="$(command -v sha256sum)"
 REAL_UNAME="$(command -v uname)"
 
@@ -71,6 +72,8 @@ $common
 log "systemctl \$* stage=\$(stage)"
 if [ "\$1 \$2" = "--user restart" ]; then
   v="\$(sed -n 's/^# fake cc-switch-web //p' "\$BIN_DIR/cc-switch-web")"
+  # STUB_SVC_FORCE: whatever binary is installed, the service comes back reporting this version
+  [ -z "\${STUB_SVC_FORCE:-}" ] || v="\$STUB_SVC_FORCE"
   case " \${STUB_DOWN_VERSION:-} " in
     *" \$v "*) echo down >"\$STUB_SVC" ;;
     *) echo "\$v" >"\$STUB_SVC" ;;
@@ -113,6 +116,17 @@ log "sha256sum \$* stage=\$(stage)"
 exec "$REAL_SHA" "\$@"
 EOF
 
+# cp that leaves a partial copy behind and fails when its target ends in $STUB_CP_FAIL
+cat >"$STUBS/cp" <<EOF
+#!/usr/bin/env bash
+for last; do :; done
+if [ -n "\${STUB_CP_FAIL:-}" ] && [[ "\$last" == *"\$STUB_CP_FAIL" ]]; then
+  mkdir -p "\$last"
+  exit 1
+fi
+exec "$REAL_CP" "\$@"
+EOF
+
 cat >"$STUBS/ldd" <<'EOF'
 #!/usr/bin/env bash
 if [ -n "${STUB_LDD_MISSING:-}" ]; then printf '\t%s => not found\n' "$STUB_LDD_MISSING"; fi
@@ -127,7 +141,7 @@ EOF
 chmod +x "$STUBS"/*
 
 # Only these real tools are visible to the script, next to the stubs.
-BASE_TOOLS="bash env sh cat mkdir mv rm date tr sed head tail sleep dirname chmod cp touch grep awk basename mktemp wc sort ln readlink gzip"
+BASE_TOOLS="bash env sh cat mkdir mv rm date tr sed head tail sleep dirname chmod touch grep awk basename mktemp wc sort ln readlink gzip"
 
 # --- cases --------------------------------------------------------------------------
 
@@ -168,7 +182,7 @@ run_update() {
   for t in $BASE_TOOLS; do
     if [ -n "$(command -v "$t")" ]; then ln -s "$(command -v "$t")" "$d/$t"; fi
   done
-  for t in curl systemctl tar sha256sum ldd uname; do
+  for t in curl systemctl tar sha256sum ldd uname cp; do
     if [[ " ${NO_TOOL:-} " != *" $t "* ]]; then ln -s "$STUBS/$t" "$d/$t"; fi
   done
   OUT="$C/out.txt"
@@ -176,7 +190,7 @@ run_update() {
     CC_SWITCH_WEB_INSTALL_DIR="$INST" HOST=100.64.0.7 PORT=18766 HEALTH_TIMEOUT=0 HEALTH_INTERVAL=0 \
     CC_SWITCH_WEB_UPDATE_API="file://$REL/api" CC_SWITCH_WEB_DOWNLOAD_BASE="file://$REL" \
     STUB_LOG="$LOG" STUB_SVC="$SVC" STATUS_FILE="$STATUS" \
-    "$@" "$BASH" "$SCRIPT" --release o/r >"$OUT" 2>&1
+    "$@" "$BASH" "$SCRIPT" --release "${REPO_ARG:-o/r}" >"$OUT" 2>&1
   RC=$?
 }
 
@@ -338,6 +352,8 @@ run_update STUB_LDD_MISSING=libwebkit2gtk-4.1.so.0
 check "exit code" "$RC" "1"
 check "message lists the library" "$([[ "$(field message)" == *"libwebkit2gtk-4.1.so.0"* ]] && echo yes)" "yes"
 check "message names install.sh" "$([[ "$(field message)" == *"install.sh"* ]] && echo yes)" "yes"
+check "the command is not followed by a dot that breaks a paste" "$([[ "$(field message)" == *'| bash.'* ]] && echo dot)" ""
+check "the command ends at its closing backtick" "$([[ "$(field message)" == *'install.sh | bash` and update again.'* ]] && echo yes)" "yes"
 assert_untouched "missing libraries"
 end
 
@@ -362,6 +378,28 @@ check "message names the failure" "$([[ "$(field message)" == *"did not report v
 check "fromVersion" "$(field fromVersion)" "$V1"
 check "toVersion" "$(field toVersion)" "$V2"
 check "no download files left" "$(find "$INST" -maxdepth 1 -name '.update.*' | wc -l | tr -d ' ')" "0"
+end
+
+begin "a service that comes back on the old version is rolled back, not done"
+setup_case stale-restart
+run_update STUB_SVC_FORCE="$V1"
+check "exit code" "$RC" "1"
+check "stage" "$(field stage)" "rolled-back"
+check "message" "$([[ "$(field message)" == *"did not report version $V2"* ]] && echo yes)" "yes"
+check "binary is the old one" "$(bin_version)" "$V1"
+check "dist-web is the old one" "$(web_text)" "web-$V1"
+check "install.sh of the install dir is the old one" "$(cat "$INST/install.sh")" "$(printf '#!/bin/sh\n# old install.sh %s' "$V1")"
+end
+
+begin "a rollback is confirmed against the version that was running"
+setup_case rollback-wrong-version
+# the service reports some other version after both restarts: the new build never showed up,
+# and the old one did not come back either
+run_update STUB_SVC_FORCE=4.0.35-web.9
+check "exit code" "$RC" "1"
+check "stage" "$(field stage)" "rollback-failed"
+check "message" "$([[ "$(field message)" == *"ROLLBACK FAILED"* ]] && echo yes)" "yes"
+check "the old binary was put back" "$(bin_version)" "$V1"
 end
 
 begin "a rollback that cannot bring the old build up is rollback-failed"
@@ -484,6 +522,49 @@ check "exit code" "$RC" "1"
 check "message" "$([[ "$(field message)" == *"missing tools: sha256sum"* ]] && echo yes)" "yes"
 check "nothing downloaded" "$(downloads)" "0"
 assert_untouched "no sha256sum"
+end
+
+begin "a release answer larger than the pipe buffer still gives the tag"
+setup_case biglatest
+{
+  printf '{\n  "tag_name": "v%s",\n  "draft": false,\n  "body": "' "$V2"
+  head -c 102400 /dev/zero | tr '\0' x
+  printf '"\n}\n'
+} >"$REL/api/repos/o/r/releases/latest"
+run_update
+check "exit code" "$RC" "0"
+check "stage" "$(field stage)" "done"
+check "toVersion" "$(field toVersion)" "$V2"
+check "new binary installed" "$(bin_version)" "$V2"
+end
+
+begin "a failing copy before the swap leaves no replacement files and replaces nothing"
+for target in dist-web.new cc-switch-web.new; do
+  setup_case "cpfail"
+  run_update STUB_CP_FAIL="$target"
+  check "exit code ($target)" "$RC" "1"
+  check "message ($target)" "$([[ "$(field message)" == *"failed (exit 1)"* ]] && echo yes)" "yes"
+  assert_untouched "cp fails for $target"
+done
+end
+
+begin "a repository that is not owner/name is refused by the script itself"
+setup_case badrepo
+REPO_ARG='o r' run_update
+check "exit code" "$RC" "1"
+check "message" "$([[ "$(field message)" == *"not a usable owner/name"* ]] && echo yes)" "yes"
+check "nothing downloaded" "$(downloads)" "0"
+assert_untouched "bad repo"
+end
+
+begin "a running version that is not a fork version is refused"
+setup_case nightly-running "$V1"
+echo nightly >"$SVC"
+run_update
+check "exit code" "$RC" "1"
+check "message" "$([[ "$(field message)" == *"not a cc-switch-web release version"* ]] && echo yes)" "yes"
+check "nothing downloaded" "$(downloads)" "0"
+assert_untouched "running nightly"
 end
 
 echo "$passes passed, $fails failed"

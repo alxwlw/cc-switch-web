@@ -383,6 +383,17 @@ for mode_want in "no-install:incomplete (no install.sh)" "no-dist:incomplete (no
   check "broken archive ($mode): dist-web untouched" "$(cat "$(inst_path)/dist-web/index.html")" "$old_web"
 done
 
+# a releases/latest answer larger than the pipe buffer, the tag first (DP-252)
+setup_case biglatest
+{
+  printf '{\n  "tag_name": "v%s",\n  "body": "' "$V1"
+  head -c 102400 /dev/zero | tr '\0' x
+  printf '"\n}\n'
+} >"$REL/api/repos/o/r/releases/latest"
+run_install --
+check "a 100 KiB latest release answer still gives the tag: exit code" "$RC" "0"
+check "big answer: latest installed" "$(sed -n 2p "$(bin_path)")" "# fake cc-switch-web $V1"
+
 echo
 echo "$passes passed, $fails failed"
 [ "$fails" -eq 0 ]

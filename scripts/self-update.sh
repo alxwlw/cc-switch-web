@@ -393,7 +393,8 @@ update_release() {
   base="${CC_SWITCH_WEB_DOWNLOAD_BASE:-https://github.com/$repo/releases/download}"
   base="${base%/}"
   latest_body="$(fetch "$api/repos/$repo/releases/latest")" || die "could not read the latest release of $repo from $api"
-  tag="$(printf '%s\n' "$latest_body" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/;T;p;q')"
+  # a here-string, not a pipe: sed quits at the first match and a large body would kill printf
+  tag="$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/;T;p;q' <<<"$latest_body")"
   [ -n "$tag" ] || die "the latest release of $repo has no tag"
   [[ "$tag" =~ $TAG_RE ]] || die "the latest release tag '$tag' is not a cc-switch-web release (expected v<x.y.z>-web.<n>)"
   TO_VERSION="${tag#v}"
@@ -443,7 +444,8 @@ update_release() {
   libs="$(missing_libs "$EX/cc-switch-web")"
   if [ -n "$libs" ]; then
     libs="$(printf '%s\n' "$libs" | sed 's/^[[:space:]]*//' | tr '\n' ',' | sed 's/,$//')"
-    die "system libraries are missing for $TO_VERSION: $libs. Nothing was replaced. Run install.sh to install them: curl -fsSL https://github.com/$repo/releases/latest/download/install.sh | bash"
+    # the command is not last: on_exit appends a "." to the message
+    die "system libraries are missing for $TO_VERSION ($libs); nothing was replaced. To install them run \`curl -fsSL https://github.com/$repo/releases/latest/download/install.sh | bash\` and update again"
   fi
   rm -rf "$NEW_DIST"
   rm -f "$BIN_NEW"
