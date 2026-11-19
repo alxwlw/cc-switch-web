@@ -115,6 +115,56 @@ fn normalize_sha(raw: Option<&'static str>) -> Option<&'static str> {
     raw.map(str::trim).filter(|sha| !sha.is_empty())
 }
 
+/// The fork's own version, `<upstream x.y.z>-web.<n>` (`4.0.35-web.1`). Fields are ordered so the
+/// derived comparison is upstream first, then `n`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct WebVersion {
+    pub upstream: [u64; 3],
+    pub n: u64,
+}
+
+impl WebVersion {
+    /// Accepts `4.0.35-web.1` and `v4.0.35-web.1` and nothing else: no trimming, ASCII digits
+    /// only (`u64::from_str` alone would take a leading `+`), an overflowing number is `None`.
+    pub fn parse(s: &str) -> Option<Self> {
+        fn num(part: &str) -> Option<u64> {
+            if part.is_empty() || !part.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            part.parse().ok()
+        }
+        let s = s.strip_prefix('v').unwrap_or(s);
+        let (upstream, n) = s.split_once("-web.")?;
+        let mut parts = upstream.split('.');
+        let a = num(parts.next()?)?;
+        let b = num(parts.next()?)?;
+        let c = num(parts.next()?)?;
+        if parts.next().is_some() {
+            return None;
+        }
+        Some(Self {
+            upstream: [a, b, c],
+            n: num(n)?,
+        })
+    }
+}
+
+impl std::fmt::Display for WebVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let [a, b, c] = self.upstream;
+        write!(f, "{a}.{b}.{c}-web.{}", self.n)
+    }
+}
+
+/// The fork version a release build was made as, set at build time through
+/// `CC_SWITCH_WEB_VERSION` (the release workflow, the `Dockerfile.web` build argument).
+/// `None` for a build that is not a release: empty, or not a fork version.
+pub fn web_version() -> Option<WebVersion> {
+    option_env!("CC_SWITCH_WEB_VERSION")
+        .map(str::trim)
+        .and_then(WebVersion::parse)
+}
+
 #[derive(Debug, Deserialize)]
 struct CompareResponse {
     // Required: an answer without the counters (a proxy page, a changed API) is an
@@ -398,6 +448,54 @@ async fn fetch(cfg: &UpdateSourceConfig, sha: &str) -> Result<UpdateCheck, AppEr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn web_version_parses_the_tag_and_the_bare_form() {
+        assert_eq!(
+            WebVersion::parse("v4.0.35-web.1"),
+            Some(WebVersion {
+                upstream: [4, 0, 35],
+                n: 1
+            })
+        );
+        assert_eq!(WebVersion::parse("4.0.35-web.12").map(|v| v.n), Some(12));
+    }
+
+    #[test]
+    fn web_version_rejects_every_other_shape() {
+        for s in [
+            "",
+            "4.0.35",
+            "4.0.35-web.",
+            "4.0.35-web.1x",
+            "4.0-web.1",
+            "v4.0.35-beta.1",
+            " 4.0.35-web.1",
+            "vv4.0.35-web.1",
+            "+4.0.35-web.1",
+            "4.0.35-web.+1",
+            "4.0.35.1-web.1",
+            "4.0.35-web.99999999999999999999",
+        ] {
+            assert_eq!(WebVersion::parse(s), None, "{s:?}");
+        }
+    }
+
+    #[test]
+    fn web_versions_order_by_upstream_then_n() {
+        let p = |s| WebVersion::parse(s).unwrap();
+        assert!(p("4.0.35-web.2") > p("4.0.35-web.1"));
+        assert!(p("4.0.36-web.1") > p("4.0.35-web.9"));
+        assert!(p("4.1.0-web.1") > p("4.0.99-web.9"));
+    }
+
+    #[test]
+    fn web_version_displays_without_the_v() {
+        assert_eq!(
+            WebVersion::parse("v4.0.35-web.1").unwrap().to_string(),
+            "4.0.35-web.1"
+        );
+    }
 
     #[test]
     fn unset_value_is_none() {

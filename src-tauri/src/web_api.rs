@@ -727,14 +727,19 @@ async fn restart_server(
     )
 }
 
-/// `buildSha` and `self_update` are parameters so a test can pin both values: a default
-/// build has no SHA, and the flag follows the environment of the process.
-fn capabilities_payload(build_sha: Option<&str>, self_update: bool) -> Value {
+/// `buildSha`, `webVersion` and `self_update` are parameters so a test can pin them: a default
+/// build has no SHA and no fork version, and the flag follows the environment of the process.
+fn capabilities_payload(
+    build_sha: Option<&str>,
+    web_version: Option<crate::services::web_update::WebVersion>,
+    self_update: bool,
+) -> Value {
     json!({
         "mode": "web",
         "auth": "none (tailscale-only; TRUSTED_TAILNET=1 required for non-loopback bind)",
         "version": env!("CARGO_PKG_VERSION"),
         "buildSha": build_sha,
+        "webVersion": web_version.map(|v| v.to_string()),
         "selfUpdate": self_update,
         "platform": std::env::consts::OS,
         "mvp_apps": ["claude", "codex", "gemini", "opencode"],
@@ -749,6 +754,7 @@ async fn capabilities(control: Option<Extension<UpdateControl>>) -> Json<Value> 
     let self_update = control.is_some_and(|Extension(control)| control.enabled());
     Json(capabilities_payload(
         crate::services::web_update::build_sha(),
+        crate::services::web_update::web_version(),
         self_update,
     ))
 }
@@ -5122,14 +5128,15 @@ mod tests {
         capabilities, capabilities_payload, get, update_check_with, web_oauth_account_param, Json,
         Router,
     };
+    use crate::services::web_update::WebVersion;
     use axum::http::StatusCode;
     use std::sync::Arc;
 
     #[test]
     fn capabilities_payload_carries_the_given_build_sha() {
-        let set = capabilities_payload(Some("abc1234def"), false);
+        let set = capabilities_payload(Some("abc1234def"), None, false);
         assert_eq!(set["buildSha"], serde_json::json!("abc1234def"));
-        let unset = capabilities_payload(None, false);
+        let unset = capabilities_payload(None, None, false);
         assert!(unset.as_object().unwrap().contains_key("buildSha"));
         assert!(unset["buildSha"].is_null());
     }
@@ -5137,13 +5144,23 @@ mod tests {
     #[test]
     fn capabilities_payload_carries_the_self_update_flag() {
         assert_eq!(
-            capabilities_payload(None, true)["selfUpdate"],
+            capabilities_payload(None, None, true)["selfUpdate"],
             serde_json::json!(true)
         );
         assert_eq!(
-            capabilities_payload(None, false)["selfUpdate"],
+            capabilities_payload(None, None, false)["selfUpdate"],
             serde_json::json!(false)
         );
+    }
+
+    #[test]
+    fn capabilities_payload_carries_the_web_version() {
+        let v = WebVersion::parse("4.0.35-web.1");
+        assert_eq!(
+            capabilities_payload(None, v, false)["webVersion"],
+            "4.0.35-web.1"
+        );
+        assert!(capabilities_payload(None, None, false)["webVersion"].is_null());
     }
 
     /// GitHub stand-in: `compare` answers with `status`/`body`, counting only

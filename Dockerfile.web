@@ -26,6 +26,9 @@ COPY . .
 # (docs/deploy.md). Empty means an unknown build. The ARG sits after `COPY . .` so that a different value of it
 # alone reuses every layer above.
 ARG CC_SWITCH_WEB_GIT_SHA=
+# The fork version of a release build, `--build-arg CC_SWITCH_WEB_VERSION=4.0.35-web.1`. Empty means the build is
+# not from a release. After `COPY . .` for the same reason as the SHA.
+ARG CC_SWITCH_WEB_VERSION=
 # tauri.conf.json's frontendDist (../dist) must exist at compile time; the server does not serve it, so an empty
 # directory is enough. The target dir is a cache mount, so the binary is copied out in the same step.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
