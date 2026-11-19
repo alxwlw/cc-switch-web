@@ -101,6 +101,48 @@ bash "$SCRIPT" "$TAG" x86_64 "$TMP/missing" "$TMP/dist" "$TMP/out4" >/dev/null 2
 rc=$?
 check "a missing binary is refused" "$([ "$rc" != 0 ] && echo nonzero || echo zero)" "nonzero"
 
+# 5. guards with their own messages
+bash "$SCRIPT" "$TAG" x86_64 "$TMP/missing" "$TMP/dist" "$TMP/out4" >"$TMP/nobin.log" 2>&1
+check_has "a missing binary is named in the message" "$(cat "$TMP/nobin.log")" "binary not found: $TMP/missing"
+
+mkdir -p "$TMP/emptydist"
+bash "$SCRIPT" "$TAG" x86_64 "$TMP/bin" "$TMP/emptydist" "$TMP/out5" >"$TMP/noindex.log" 2>&1
+rc=$?
+check "a dist-web dir without index.html is refused" "$([ "$rc" != 0 ] && echo nonzero || echo zero)" "nonzero"
+check_has "a dist-web dir without index.html is named" "$(cat "$TMP/noindex.log")" "has no index.html"
+check "a dist-web dir without index.html writes no archive" "$(find "$TMP/out5" -type f 2>/dev/null | wc -l | tr -d ' ')" "0"
+
+bash "$SCRIPT" "$TAG" x86_64 >"$TMP/arity.log" 2>&1
+check "too few arguments exit 2" "$?" "2"
+check_has "too few arguments print the usage" "$(cat "$TMP/arity.log")" "usage: package-release.sh"
+bash "$SCRIPT" --installer "$TAG" >/dev/null 2>&1
+check "--installer without an out file exits 2" "$?" "2"
+
+# a copy of the script next to a doctored install.sh (the script reads its sibling install.sh)
+fx_installer() { # fx_installer <name> <install.sh body>; prints the out file, script in $TMP/fx-<name>
+  local d="$TMP/fx-$1"
+  mkdir -p "$d/scripts"
+  cp "$SCRIPT" "$d/scripts/package-release.sh"
+  printf '%s\n' "$2" >"$d/scripts/install.sh"
+}
+fx_installer two 'RELEASE_TAG="__RELEASE_TAG__"
+RELEASE_TAG="__RELEASE_TAG__"'
+bash "$TMP/fx-two/scripts/package-release.sh" --installer "$TAG" "$TMP/two.out" >"$TMP/two.log" 2>&1
+rc=$?
+check "an install.sh with two placeholder lines is refused" "$([ "$rc" != 0 ] && echo nonzero || echo zero)" "nonzero"
+check_has "two placeholder lines: the message says exactly one" "$(cat "$TMP/two.log")" "exactly one"
+fx_installer none 'echo no placeholder here'
+bash "$TMP/fx-none/scripts/package-release.sh" --installer "$TAG" "$TMP/none.out" >"$TMP/none.log" 2>&1
+rc=$?
+check "an install.sh with no placeholder line is refused" "$([ "$rc" != 0 ] && echo nonzero || echo zero)" "nonzero"
+check_has "no placeholder line: the message says exactly one" "$(cat "$TMP/none.log")" "exactly one"
+fx_installer comment 'RELEASE_TAG="__RELEASE_TAG__"
+# the placeholder __RELEASE_TAG__ is replaced by the release workflow'
+bash "$TMP/fx-comment/scripts/package-release.sh" --installer "$TAG" "$TMP/comment.out" >"$TMP/comment.log" 2>&1
+rc=$?
+check "an install.sh that names the placeholder elsewhere is refused" "$([ "$rc" != 0 ] && echo nonzero || echo zero)" "nonzero"
+check_has "a leftover placeholder is named in the message" "$(cat "$TMP/comment.log")" "still mentions __RELEASE_TAG__"
+
 echo
 echo "$passes passed, $fails failed"
 [ "$fails" = 0 ]

@@ -36,26 +36,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Run scripts/tests/*.test.sh
-        run: |
-          shopt -s nullglob
-          tests=(scripts/tests/*.test.sh)
-          if [ "${#tests[@]}" -eq 0 ]; then
-            echo "no scripts/tests/*.test.sh found" >&2
-            exit 1
-          fi
-          failed=()
-          for t in "${tests[@]}"; do
-            echo "::group::$t"
-            if ! bash "$t"; then
-              failed+=("$t")
-            fi
-            echo "::endgroup::"
-          done
-          if [ "${#failed[@]}" -gt 0 ]; then
-            echo "failed: ${failed[*]}" >&2
-            exit 1
-          fi
-          echo "all ${#tests[@]} suites passed"
+        run: bash scripts/tests/run-all.sh
 
   meta:
     name: Version and tag
