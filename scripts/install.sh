@@ -93,6 +93,28 @@ fi
 
 set -euo pipefail
 
+usage() {
+  cat <<'USAGE'
+Usage: install.sh [--tailscale | --loopback] [--port N] [--self-update | --no-self-update]
+                  [--version vX.Y.Z-web.N] [--uninstall]
+  --tailscale        listen on this machine's tailnet address (sets TRUSTED_TAILNET=1)
+  --loopback         listen on 127.0.0.1 only (the default on a first install)
+  --port N           port to listen on (default 18766)
+  --self-update      let the console update this install from a release (default)
+  --no-self-update   turn that off
+  --version TAG      install this release (vX.Y.Z-web.N) instead of the latest
+  --uninstall        remove the install; the data in ~/.cc-switch-web is kept
+A re-run without flags keeps the address, port and self-update setting of the installed unit.
+
+Environment:
+  CC_SWITCH_WEB_REPO              owner/name of the repository (alxwlw/cc-switch-web)
+  CC_SWITCH_WEB_UPDATE_API        API base for the latest release (https://api.github.com)
+  CC_SWITCH_WEB_DOWNLOAD_BASE     where release files are downloaded from
+                                  (https://github.com/$REPO/releases/download)
+  CC_SWITCH_WEB_HEALTH_TIMEOUT    seconds to wait for the service to come up (30)
+USAGE
+}
+
 has_systemd() {
   command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1
 }
@@ -132,7 +154,7 @@ main() {
         ;;
       --uninstall) uninstall=1 ;;
       -h | --help)
-        sed -n '2,13p' "${BASH_SOURCE[0]:-/dev/null}" 2>/dev/null || echo "see the header of install.sh"
+        usage
         return 0
         ;;
       *) die "unknown argument: $1 (see --help)" ;;

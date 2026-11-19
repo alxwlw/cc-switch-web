@@ -267,7 +267,8 @@ check_has "arch riscv64: names it" "$(cat "$ERR")" "riscv64"
 check_has "arch riscv64: docker" "$(cat "$ERR")" "docker"
 run_install STUB_ARCH=aarch64 --
 check "a missing architecture is an error naming it: exit code" "$RC" "1"
-check_has "arch aarch64: names it" "$(cat "$ERR")" "aarch64"
+check_has "arch aarch64: no archive for it" "$(cat "$ERR")" "no archive for aarch64"
+check_has "arch aarch64: docker" "$(cat "$ERR")" "docker"
 check "arch: nothing installed" "$(exists "$(bin_path)")" "no"
 
 # 7
@@ -345,6 +346,42 @@ setup_case journal
 run_install STUB_CAP_VERSION=9.9.9-web.9 CC_SWITCH_WEB_HEALTH_TIMEOUT=2 --
 check "a service that does not come up names the journal command: exit code" "$RC" "1"
 check_has "no health: journal command" "$(cat "$ERR")" "journalctl --user -u cc-switch-web"
+
+# 15-18: broken archives whose SHA256SUMS line is right still install nothing
+# repack <mode>: replaces the V2 archive by a broken one and fixes its sum
+repack() {
+  local dir="$REL/v$V2" n="cc-switch-web-$V2-linux-x86_64" w="$C/repack"
+  local a="$dir/$n.tar.gz"
+  mkdir -p "$w"
+  tar -xzf "$a" -C "$w"
+  case "$1" in
+    no-install) mv "$w/$n/install.sh" "$w/gone" ;;
+    no-dist) mv "$w/$n/dist-web" "$w/gone" ;;
+    unsafe)
+      echo x >"$w/evil"
+      tar -czf "$a" -C "$w" --transform 's|^evil$|../x|' "$n" evil
+      ;;
+    truncated) head -c 100 "$a" >"$w/cut" && mv "$w/cut" "$a" ;;
+  esac
+  if [ "$1" != unsafe ] && [ "$1" != truncated ]; then tar -czf "$a" -C "$w" "$n"; fi
+  (cd "$dir" && sha256sum "$n.tar.gz") >"$dir/SHA256SUMS"
+}
+for mode_want in "no-install:incomplete (no install.sh)" "no-dist:incomplete (no dist-web)" "unsafe:unsafe paths" "truncated:could not read"; do
+  mode="${mode_want%%:*}"
+  want_text="${mode_want#*:}"
+  setup_case "broken-$mode"
+  run_install --
+  old_bin="$(cat "$(bin_path)")"
+  old_web="$(cat "$(inst_path)/dist-web/index.html")"
+  make_release "$REL" "$V2" x86_64
+  set_latest "$REL" "$V2"
+  repack "$mode"
+  run_install --
+  check "a broken archive ($mode) installs nothing: exit code" "$RC" "1"
+  check_has "broken archive ($mode): stderr" "$(cat "$ERR")" "$want_text"
+  check "broken archive ($mode): binary untouched" "$(cat "$(bin_path)")" "$old_bin"
+  check "broken archive ($mode): dist-web untouched" "$(cat "$(inst_path)/dist-web/index.html")" "$old_web"
+done
 
 echo
 echo "$passes passed, $fails failed"
