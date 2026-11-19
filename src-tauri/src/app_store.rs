@@ -225,18 +225,13 @@ pub fn write_headless_override_file(path: Option<&Path>) -> Result<(), AppError>
 
 /// 解析路径，支持 ~ 开头的相对路径
 fn resolve_path(raw: &str) -> PathBuf {
+    // get_home_dir() 而非 dirs::home_dir()：前者认 CC_SWITCH_TEST_HOME，Windows 上
+    // dirs 走 Known Folder API，测试无法隔离真实用户目录。
     if raw == "~" {
-        if let Some(home) = dirs::home_dir() {
-            return home;
-        }
-    } else if let Some(stripped) = raw.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(stripped);
-        }
-    } else if let Some(stripped) = raw.strip_prefix("~\\") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(stripped);
-        }
+        return crate::config::get_home_dir();
+    }
+    if let Some(stripped) = raw.strip_prefix("~/").or_else(|| raw.strip_prefix("~\\")) {
+        return crate::config::get_home_dir().join(stripped);
     }
 
     PathBuf::from(raw)

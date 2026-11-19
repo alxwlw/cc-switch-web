@@ -144,6 +144,9 @@ async fn export_then_import_into_clean_db_restores_providers_with_backup() {
         .as_str()
         .unwrap()
         .to_string();
+    // Windows cannot delete the open SQLite file: `empty()` -> `reset_test_fs()` would
+    // fail to clean `.cc-switch` and the "clean" DB would still hold the source rows.
+    drop(src);
 
     let dst = empty();
     assert_eq!(key_of(&dst, "old-provider"), None);
