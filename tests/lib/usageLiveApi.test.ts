@@ -75,13 +75,6 @@ describe("usage/subscription/balance/stream-check over the web adapter (WEB-04)"
       },
     ],
     [
-      "check provider limits",
-      () => usageApi.checkProviderLimits("p1", "claude"),
-      "GET",
-      "/api/claude/providers/p1/limits",
-      undefined,
-    ],
-    [
       "subscription quota (CLI tool)",
       () => subscriptionApi.getQuota("claude"),
       "GET",

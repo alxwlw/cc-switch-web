@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getGlobalProxyUrl,
-  getUpstreamProxyStatus,
   scanLocalProxies,
   setGlobalProxyUrl,
   testProxyUrl,
@@ -74,17 +73,6 @@ describe("globalProxy API over the web adapter (WEB-23)", () => {
       url: "/api/global-proxy/test",
       method: "POST",
       body: { url: "http://10.0.0.2:8080" },
-    });
-  });
-
-  it("getUpstreamProxyStatus -> GET /api/global-proxy/status", async () => {
-    const status = { enabled: true, proxyUrl: "http://***@10.0.0.3:3128" };
-    fetchSpy.mockResolvedValue(ok(status));
-    expect(await getUpstreamProxyStatus()).toEqual(status);
-    expect(lastCall()).toEqual({
-      url: "/api/global-proxy/status",
-      method: "GET",
-      body: undefined,
     });
   });
 

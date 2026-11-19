@@ -36,7 +36,7 @@ async fn switch_provider_emits_provider_switched_with_the_desktop_payload_shape(
         Arc::new(create_test_state_with_config(&config_with_two_claude_providers()).unwrap());
     state
         .db
-        .set_proxy_flags_sync("claude", false, true)
+        .set_proxy_flags_sync(&cc_switch_lib::AppType::Claude, false, true)
         .unwrap();
     let mut rx = state.events.subscribe();
     let router = cc_switch_lib::web_api::router(state.clone());
@@ -96,7 +96,7 @@ fn provider_switched_payload_reads_both_flags_from_their_sources() {
     let app_state = create_test_state_with_config(&config_with_two_claude_providers()).unwrap();
     app_state
         .db
-        .set_proxy_flags_sync("claude", true, true)
+        .set_proxy_flags_sync(&cc_switch_lib::AppType::Claude, true, true)
         .unwrap();
     state::update(&DeviceStore::for_device(), |live| {
         let app = live.apps.entry("claude".to_string()).or_default();

@@ -171,7 +171,7 @@ pub fn fixture_with_providers() -> Fixture {
 pub fn db_key(fx: &Fixture, id: &str) -> Option<String> {
     fx.state
         .db
-        .get_provider_by_id(id, "claude")
+        .get_provider_by_id(id, &cc_switch_lib::AppType::Claude)
         .expect("db read")
         .map(|p| {
             p.settings_config["env"]["ANTHROPIC_API_KEY"]

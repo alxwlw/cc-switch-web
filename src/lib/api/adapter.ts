@@ -294,13 +294,6 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: `${appBase(a.app)}/providers/${enc(a.providerId)}/endpoints`,
         body: { url: a.url },
       };
-    case "update_endpoint_last_used":
-      return {
-        method: "POST",
-        url: `${appBase(a.app)}/providers/${enc(a.providerId)}/endpoints/last-used`,
-        body: { url: a.url },
-      };
-
     // ---------- prompts ----------
     case "get_prompts":
       return { method: "GET", url: `${appBase(a.app)}/prompts` };
@@ -368,8 +361,6 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       };
     case "get_mcp_config":
       return { method: "GET", url: `/api/mcp/config${query({ app: a.app })}` };
-    case "validate_mcp_command":
-      return { method: "POST", url: "/api/mcp/validate", body: { cmd: a.cmd } };
     case "import_mcp_from_apps":
       return { method: "POST", url: "/api/mcp/import" };
     case "resync_mcp_to_apps":
@@ -424,7 +415,10 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         body: { imports: a.imports },
       };
     case "discover_available_skills":
-      return { method: "GET", url: "/api/skills/discover" };
+      return {
+        method: "GET",
+        url: `/api/skills/discover${query({ forceRefresh: a.forceRefresh })}`,
+      };
     case "check_skill_updates":
       return { method: "GET", url: "/api/skills/updates" };
     // ids are "owner/name:directory": the id travels in the body, not the path
@@ -638,8 +632,6 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return { method: "GET", url: "/api/usage/last-sync" };
     case "rebuild_codex_usage":
       return { method: "POST", url: "/api/usage/rebuild-codex" };
-    case "get_usage_data_sources":
-      return { method: "GET", url: "/api/usage/data-sources" };
     case "get_pricing_model_source":
       return {
         method: "GET",
@@ -671,11 +663,6 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
           userId: a.userId,
           templateType: a.templateType,
         },
-      };
-    case "check_provider_limits":
-      return {
-        method: "GET",
-        url: `/api/${enc(a.appType)}/providers/${enc(a.providerId)}/limits`,
       };
     case "get_subscription_quota":
       return {
@@ -1109,13 +1096,6 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: "/api/env/conflicts/cleanup",
         body: { conflicts: a.conflicts },
       };
-    case "restore_env_backup":
-      return {
-        method: "POST",
-        url: "/api/env/restore",
-        body: { backupPath: a.backupPath },
-      };
-
     // ---------- OMO / OMO Slim live config ----------
     case "read_omo_local_file":
       return { method: "GET", url: "/api/omo/omo/local-file" };
@@ -1146,8 +1126,6 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     // ---------- universal providers ----------
     case "get_universal_providers":
       return { method: "GET", url: "/api/universal-providers" };
-    case "get_universal_provider":
-      return { method: "GET", url: `/api/universal-providers/${enc(a.id)}` };
     case "upsert_universal_provider":
       return {
         method: "PUT",
@@ -1246,24 +1224,6 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return {
         method: "GET",
         url: `/api/failover/health/${enc(a.appType)}/${enc(a.providerId)}`,
-      };
-    case "reset_circuit_breaker":
-      return {
-        method: "POST",
-        url: `/api/failover/breaker/${enc(a.appType)}/${enc(a.providerId)}/reset`,
-      };
-    case "get_circuit_breaker_config":
-      return { method: "GET", url: "/api/failover/breaker-config" };
-    case "update_circuit_breaker_config":
-      return {
-        method: "PUT",
-        url: "/api/failover/breaker-config",
-        body: a.config,
-      };
-    case "get_circuit_breaker_stats":
-      return {
-        method: "GET",
-        url: `/api/failover/breaker-stats/${enc(a.appType)}/${enc(a.providerId)}`,
       };
     case "get_failover_queue":
       return { method: "GET", url: `/api/failover/queue/${enc(a.appType)}` };

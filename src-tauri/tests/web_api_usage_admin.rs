@@ -296,16 +296,16 @@ fn backups(home: &Path) -> Vec<String> {
         .collect()
 }
 
-async fn codex_rows(router: &axum::Router) -> u64 {
-    let (status, body) = web_call(router, "GET", "/api/usage/data-sources", None).await;
-    assert_eq!(status, StatusCode::OK);
-    body["data"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|s| s["dataSource"] == "codex_session")
-        .map(|s| s["requestCount"].as_u64().unwrap())
-        .sum()
+/// `/api/usage/data-sources` was removed upstream: count the rows straight from the DB file.
+async fn codex_rows(_router: &axum::Router) -> u64 {
+    let conn = rusqlite::Connection::open(ensure_test_home().join(".cc-switch/cc-switch.db"))
+        .expect("open db");
+    conn.query_row(
+        "SELECT COUNT(*) FROM proxy_request_logs WHERE data_source = 'codex_session'",
+        [],
+        |row| row.get::<_, i64>(0),
+    )
+    .expect("count codex rows") as u64
 }
 
 #[tokio::test]

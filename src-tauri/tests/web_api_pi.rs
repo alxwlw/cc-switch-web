@@ -258,7 +258,10 @@ async fn usage_script_is_saved_on_provider_and_app_is_checked() {
         json!({ "baseUrl": "https://example.com/v1", "api": "openai-completions" }),
         None,
     );
-    state.db.save_provider("pi", &provider).expect("seed");
+    state
+        .db
+        .save_provider(&cc_switch_lib::AppType::Pi, &provider)
+        .expect("seed");
 
     let script = json!({ "enabled": true, "language": "javascript", "code": "return 1;" });
     let saved = data(
@@ -271,7 +274,7 @@ async fn usage_script_is_saved_on_provider_and_app_is_checked() {
     assert_eq!(saved, json!(true));
     let stored = state
         .db
-        .get_provider_by_id("pi-web", "pi")
+        .get_provider_by_id("pi-web", &cc_switch_lib::AppType::Pi)
         .unwrap()
         .unwrap()
         .meta

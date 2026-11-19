@@ -80,10 +80,14 @@ async function openMenu(props: {
       {...props}
     />,
   );
+  // the terminal action is an icon button on the card; grab it before the menu's modal layer hides it
+  const terminal = screen.queryByRole("button", {
+    name: "providerCard.action.openTerminal",
+  });
   await user.click(
     screen.getByRole("button", { name: "providerCard.action.more" }),
   );
-  return { user, menu: await screen.findByRole("menu") };
+  return { user, menu: await screen.findByRole("menu"), terminal };
 }
 
 describe("ProviderCardActions — web", () => {
@@ -91,13 +95,13 @@ describe("ProviderCardActions — web", () => {
     setWeb(true);
     const onTest = vi.fn();
     const onOpenTerminal = vi.fn();
-    const { user, menu } = await openMenu({ onTest, onOpenTerminal });
+    const { user, menu, terminal } = await openMenu({
+      onTest,
+      onOpenTerminal,
+    });
 
     const test = within(menu).getByRole("menuitem", {
       name: /provider\.connectivityCheck/,
-    });
-    const terminal = within(menu).getByRole("menuitem", {
-      name: /provider\.openTerminal/,
     });
     // WEB-04: stream check работает в web — пункт включён, подпись про сервер.
     expect(test).not.toHaveAttribute("aria-disabled", "true");
@@ -106,14 +110,13 @@ describe("ProviderCardActions — web", () => {
     expect(onTest).toHaveBeenCalledTimes(1);
     // Соседнее покрытие: терминал остаётся desktop-only.
     expect(terminal).toHaveAttribute("aria-disabled", "true");
-    expect(terminal).toHaveTextContent("web.unavailable");
-    await user.click(terminal);
+    await user.click(terminal!);
     expect(onOpenTerminal).not.toHaveBeenCalled();
   });
 
   it("keeps both enabled on desktop", async () => {
     const onTest = vi.fn();
-    const { user, menu } = await openMenu({
+    const { user, menu, terminal } = await openMenu({
       onTest,
       onOpenTerminal: vi.fn(),
     });
@@ -122,9 +125,7 @@ describe("ProviderCardActions — web", () => {
       name: "provider.connectivityCheck",
     });
     expect(test).not.toHaveAttribute("aria-disabled", "true");
-    expect(
-      within(menu).getByRole("menuitem", { name: "provider.openTerminal" }),
-    ).not.toHaveAttribute("aria-disabled", "true");
+    expect(terminal).not.toHaveAttribute("aria-disabled", "true");
     await user.click(test);
     expect(onTest).toHaveBeenCalledTimes(1);
   });

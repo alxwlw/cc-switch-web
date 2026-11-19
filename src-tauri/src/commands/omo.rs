@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use tauri::State;
 
 use crate::services::omo::{OmoLocalFileData, SLIM, STANDARD};
@@ -5,8 +6,8 @@ use crate::services::OmoService;
 use crate::store::AppState;
 
 #[tauri::command]
-pub async fn read_omo_local_file() -> Result<OmoLocalFileData, String> {
-    OmoService::read_local_file(&STANDARD).map_err(|e| e.to_string())
+pub async fn read_omo_local_file() -> Result<OmoLocalFileData, AppError> {
+    OmoService::read_local_file(&STANDARD)
 }
 
 #[tauri::command]
@@ -22,8 +23,8 @@ pub async fn disable_current_omo(state: State<'_, AppState>) -> Result<(), Strin
 // ── OMO Slim commands ───────────────────────────────────────
 
 #[tauri::command]
-pub async fn read_omo_slim_local_file() -> Result<OmoLocalFileData, String> {
-    OmoService::read_local_file(&SLIM).map_err(|e| e.to_string())
+pub async fn read_omo_slim_local_file() -> Result<OmoLocalFileData, AppError> {
+    OmoService::read_local_file(&SLIM)
 }
 
 #[tauri::command]

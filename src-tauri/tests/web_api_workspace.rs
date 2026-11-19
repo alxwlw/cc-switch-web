@@ -268,7 +268,8 @@ async fn workspace_paths_match_override() {
     );
 }
 
-/// Risk: an allowlisted name that is a symlink pointing outside the workspace.
+/// A symlinked allowlisted name (dotfile managers) is written through and stays a symlink:
+/// upstream `config::atomic_write` resolves link targets, so the target takes the content.
 #[cfg(unix)]
 #[tokio::test]
 #[serial]

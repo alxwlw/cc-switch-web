@@ -1,11 +1,16 @@
-use crate::commands::{AgyAccountState, CodexOAuthState, CopilotAuthState, XaiOAuthState};
+use crate::commands::{
+    AgyAccountState, ClaudeAccountState, CodexOAuthState, CopilotAuthState, WorkBuddyAccountState,
+    XaiOAuthState,
+};
 use crate::database::Database;
 use crate::events::EventHub;
 use crate::proxy::providers::codex_oauth_auth::CodexOAuthManager;
 use crate::proxy::providers::copilot_auth::CopilotAuthManager;
 use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
 use crate::services::agy_account::AgyAccountManager;
+use crate::services::claude_account::ClaudeAccountManager;
 use crate::services::kimi_oauth::KimiOAuthManager;
+use crate::services::workbuddy_account::WorkBuddyAccountManager;
 use crate::services::{ProxyService, UsageCache};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -25,6 +30,10 @@ pub struct AppState {
     pub xai_oauth: Arc<RwLock<XaiOAuthManager>>,
     /// Antigravity 官方账号管理器
     pub agy_account: Arc<AgyAccountManager>,
+    /// Claude Code 官方订阅账号管理器（每个账号一个 CLAUDE_CONFIG_DIR）
+    pub claude_account: Arc<ClaudeAccountManager>,
+    /// WorkBuddy 官方账号管理器（授权中心收录、切换桌面端登录的快照）
+    pub workbuddy_account: Arc<WorkBuddyAccountManager>,
     /// Kimi Code OAuth 管理器（桌面命令与 web 路由共享同一实例）
     pub kimi_oauth: Arc<KimiOAuthManager>,
     /// 后端 -> 前端事件总线（桌面端桥接到 AppHandle，web 端走 SSE）
@@ -38,7 +47,9 @@ impl AppState {
         let codex_oauth_manager = Arc::new(CodexOAuthManager::new(app_config_dir.clone()));
         let copilot_auth = Arc::new(RwLock::new(CopilotAuthManager::new(app_config_dir.clone())));
         let xai_oauth = Arc::new(RwLock::new(XaiOAuthManager::new(app_config_dir.clone())));
-        let agy_account = Arc::new(AgyAccountManager::new(app_config_dir));
+        let agy_account = Arc::new(AgyAccountManager::new(app_config_dir.clone()));
+        let claude_account = Arc::new(ClaudeAccountManager::new(app_config_dir.clone()));
+        let workbuddy_account = Arc::new(WorkBuddyAccountManager::new(app_config_dir));
         let events = EventHub::new();
         let proxy_service = ProxyService::new(db.clone())
             .with_events(events.clone())
@@ -56,12 +67,14 @@ impl AppState {
             copilot_auth,
             xai_oauth,
             agy_account,
+            claude_account,
+            workbuddy_account,
             kimi_oauth: Arc::new(KimiOAuthManager::default()),
             events,
         }
     }
 
-    /// 桌面端需要 `app.manage(...)` 的四个认证 State 包装，均为字段的 `Arc` 克隆，
+    /// 桌面端需要 `app.manage(...)` 的认证 State 包装，均为字段的 `Arc` 克隆，
     /// 不会产生新的管理器实例。
     pub(crate) fn managed_auth_states(&self) -> ManagedAuthStates {
         ManagedAuthStates {
@@ -69,6 +82,8 @@ impl AppState {
             codex: CodexOAuthState(self.codex_oauth_manager.clone()),
             xai: XaiOAuthState(self.xai_oauth.clone()),
             agy: AgyAccountState(self.agy_account.clone()),
+            claude: ClaudeAccountState(self.claude_account.clone()),
+            workbuddy: WorkBuddyAccountState(self.workbuddy_account.clone()),
         }
     }
 }
@@ -78,11 +93,14 @@ pub(crate) struct ManagedAuthStates {
     pub codex: CodexOAuthState,
     pub xai: XaiOAuthState,
     pub agy: AgyAccountState,
+    pub claude: ClaudeAccountState,
+    pub workbuddy: WorkBuddyAccountState,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app_config::AppType;
     use serial_test::serial;
 
     struct EnvGuard(Option<std::ffi::OsString>);
@@ -113,6 +131,8 @@ mod tests {
         assert!(Arc::ptr_eq(&m.codex.0, &state.codex_oauth_manager));
         assert!(Arc::ptr_eq(&m.xai.0, &state.xai_oauth));
         assert!(Arc::ptr_eq(&m.agy.0, &state.agy_account));
+        assert!(Arc::ptr_eq(&m.claude.0, &state.claude_account));
+        assert!(Arc::ptr_eq(&m.workbuddy.0, &state.workbuddy_account));
     }
 
     #[test]
@@ -227,15 +247,15 @@ mod tests {
             provider_type: Some("github_copilot".to_string()),
             ..Default::default()
         });
-        state.db.save_provider("claude", &provider).unwrap();
+        state.db.save_provider(&AppType::Claude, &provider).unwrap();
         state
             .db
-            .set_current_provider("claude", "copilot-1")
+            .set_current_provider(&AppType::Claude, "copilot-1")
             .unwrap();
-        let mut config = state.db.get_proxy_config().await.unwrap();
+        let mut config = state.db.get_global_proxy_config().await.unwrap();
         config.listen_address = "127.0.0.1".to_string();
         config.listen_port = 0;
-        state.db.update_proxy_config(config).await.unwrap();
+        state.db.update_global_proxy_config(config).await.unwrap();
         let info = state.proxy_service.start().await.expect("start proxy");
 
         let client = reqwest::Client::new();
@@ -274,9 +294,13 @@ mod tests {
 
         // Config update restarts the server through start_with; the restarted forwarder
         // must still carry the managers.
-        let mut config = state.db.get_proxy_config().await.unwrap();
+        let mut config = state.db.get_global_proxy_config().await.unwrap();
         config.listen_port = 0; // differs from the persisted ephemeral port -> restart
-        assert!(state.proxy_service.update_config(&config).await.unwrap());
+        assert!(state
+            .proxy_service
+            .update_global_config(&config)
+            .await
+            .unwrap());
         let new_port = state.proxy_service.get_status().await.unwrap().port;
         assert_ne!(new_port, info.port, "server did not restart");
         let restarted = send_to(new_port).await;
@@ -422,14 +446,11 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let _env = EnvGuard::set(home.path());
         let db = Arc::new(Database::memory().unwrap());
-        db.update_proxy_config(crate::proxy::types::ProxyConfig {
-            listen_port: 0,
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+        let mut global = db.get_global_proxy_config().await.unwrap();
+        global.listen_port = 0;
+        db.update_global_proxy_config(global).await.unwrap();
         db.save_provider(
-            "claude",
+            &AppType::Claude,
             &crate::provider::Provider::with_id(
                 "p1".into(),
                 "P1".into(),
@@ -440,17 +461,29 @@ mod tests {
         .unwrap();
         let state = AppState::new(db.clone());
         let unhealthy = || async {
-            db.update_provider_health("p1", "claude", false, Some("boom".into()))
-                .await
-                .unwrap();
+            db.update_provider_health_with_threshold(
+                "p1",
+                &AppType::Claude,
+                false,
+                Some("boom".into()),
+                5,
+            )
+            .await
+            .unwrap();
             // threshold 5: four more failures flip is_healthy
             for _ in 0..4 {
-                db.update_provider_health("p1", "claude", false, Some("boom".into()))
-                    .await
-                    .unwrap();
+                db.update_provider_health_with_threshold(
+                    "p1",
+                    &AppType::Claude,
+                    false,
+                    Some("boom".into()),
+                    5,
+                )
+                .await
+                .unwrap();
             }
             assert!(
-                !db.get_provider_health("p1", "claude")
+                !db.get_provider_health("p1", &AppType::Claude)
                     .await
                     .unwrap()
                     .is_healthy
@@ -460,18 +493,22 @@ mod tests {
         unhealthy().await;
         state.proxy_service.start().await.unwrap();
         assert!(
-            db.get_provider_health("p1", "claude")
+            db.get_provider_health("p1", &AppType::Claude)
                 .await
                 .unwrap()
                 .is_healthy
         );
 
         unhealthy().await;
-        let mut config = db.get_proxy_config().await.unwrap();
+        let mut config = db.get_global_proxy_config().await.unwrap();
         config.listen_port = 0; // differs from the persisted ephemeral port -> restart
-        assert!(state.proxy_service.update_config(&config).await.unwrap());
+        assert!(state
+            .proxy_service
+            .update_global_config(&config)
+            .await
+            .unwrap());
         assert!(
-            db.get_provider_health("p1", "claude")
+            db.get_provider_health("p1", &AppType::Claude)
                 .await
                 .unwrap()
                 .is_healthy
@@ -488,12 +525,9 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let _env = EnvGuard::set(home.path());
         let db = Arc::new(Database::memory().unwrap());
-        db.update_proxy_config(crate::proxy::types::ProxyConfig {
-            listen_port: 0,
-            ..Default::default()
-        })
-        .await
-        .unwrap();
+        let mut global = db.get_global_proxy_config().await.unwrap();
+        global.listen_port = 0;
+        db.update_global_proxy_config(global).await.unwrap();
         let state = AppState::new(db.clone());
 
         state.proxy_service.start().await.unwrap();
@@ -514,9 +548,13 @@ mod tests {
                 .await
         );
 
-        let mut config = db.get_proxy_config().await.unwrap();
+        let mut config = db.get_global_proxy_config().await.unwrap();
         config.listen_port = 0;
-        assert!(state.proxy_service.update_config(&config).await.unwrap());
+        assert!(state
+            .proxy_service
+            .update_global_config(&config)
+            .await
+            .unwrap());
         assert!(
             state
                 .proxy_service

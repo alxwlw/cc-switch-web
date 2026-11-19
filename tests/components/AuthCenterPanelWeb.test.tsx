@@ -5,6 +5,15 @@ import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
 import { createTestQueryClient } from "../utils/testQueryClient";
 import { setWeb } from "../helpers/web";
 
+vi.mock("@/components/providers/forms/ClaudeOfficialSection", () => ({
+  ClaudeOfficialSection: () => <div>claude-section</div>,
+}));
+vi.mock("@/components/settings/auth/WorkBuddyAccountSection", () => ({
+  WorkBuddyAccountSection: () => <div>workbuddy-section</div>,
+}));
+vi.mock("@/components/providers/DshAccount", () => ({
+  DshAccountLogin: () => <div>dsh-section</div>,
+}));
 vi.mock("@/components/providers/forms/CopilotAuthSection", () => ({
   CopilotAuthSection: () => <div>copilot-section</div>,
 }));

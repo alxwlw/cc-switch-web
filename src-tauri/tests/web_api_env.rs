@@ -1,4 +1,4 @@
-//! `/api/env/conflicts/cleanup` and `/api/env/restore`. The unix branch of
+//! `/api/env/conflicts/cleanup` (`/api/env/restore` was removed upstream). The unix branch of
 //! `env_manager` edits shell rc files named by `sourcePath` ("path:line"), so every
 //! fixture lives under the test home; the registry branch (windows) is never run here.
 #![cfg(not(target_os = "windows"))]
@@ -11,7 +11,6 @@ use std::path::PathBuf;
 use support::{ensure_test_home, reset_test_fs, test_mutex, web_call, web_router};
 
 const CLEANUP: &str = "/api/env/conflicts/cleanup";
-const RESTORE: &str = "/api/env/restore";
 
 fn rc_file(name: &str, content: &str) -> PathBuf {
     let path = ensure_test_home().join(name);
@@ -43,7 +42,7 @@ async fn raw_post(router: &axum::Router, uri: &str, body: &str) -> (StatusCode, 
 }
 
 #[tokio::test]
-async fn cleanup_backs_up_then_removes_only_the_named_variable_and_restore_puts_it_back() {
+async fn cleanup_backs_up_then_removes_only_the_named_variable() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     reset_test_fs();
     ensure_test_home();
@@ -82,20 +81,6 @@ async fn cleanup_backs_up_then_removes_only_the_named_variable_and_restore_puts_
         json!([conflict("ANTHROPIC_API_KEY", "sk-secret", "file", &src)])
     );
     assert_eq!(body["data"]["conflicts"], saved["conflicts"]);
-
-    let (status, body) = web_call(
-        &router,
-        "POST",
-        RESTORE,
-        Some(json!({"backupPath": backup_path})),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body, json!({"ok": true, "data": null}));
-    assert_eq!(
-        std::fs::read_to_string(&rc).unwrap(),
-        "export PATH=/bin\nexport KEEP_ME=1\nexport ANTHROPIC_API_KEY=sk-secret"
-    );
 }
 
 #[tokio::test]
@@ -131,38 +116,6 @@ async fn cleanup_of_a_missing_file_fails_verbatim_but_keeps_the_backup() {
 }
 
 #[tokio::test]
-async fn unix_system_source_is_a_noop_on_cleanup_and_unrestorable() {
-    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    reset_test_fs();
-    ensure_test_home();
-    let router = web_router();
-
-    let (status, body) = web_call(
-        &router,
-        "POST",
-        CLEANUP,
-        Some(json!({"conflicts": [conflict("SYS_VAR", "1", "system", "process env")]})),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["ok"], true);
-    let backup_path = body["data"]["backupPath"].as_str().unwrap().to_string();
-
-    let (status, body) = web_call(
-        &router,
-        "POST",
-        RESTORE,
-        Some(json!({"backupPath": backup_path})),
-    )
-    .await;
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    assert_eq!(
-        body,
-        json!({"ok": false, "error": "无法恢复类型为 system 的环境变量"})
-    );
-}
-
-#[tokio::test]
 async fn unknown_source_type_is_rejected_without_touching_anything() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     reset_test_fs();
@@ -185,43 +138,6 @@ async fn unknown_source_type_is_rejected_without_touching_anything() {
 }
 
 #[tokio::test]
-async fn restore_with_missing_or_corrupt_backup_fails_as_ok_false() {
-    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    reset_test_fs();
-    let home = ensure_test_home();
-    let router = web_router();
-
-    let missing = home.join("nope.json");
-    let (status, body) = web_call(
-        &router,
-        "POST",
-        RESTORE,
-        Some(json!({"backupPath": missing.to_str().unwrap()})),
-    )
-    .await;
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    assert_eq!(body["ok"], false);
-    assert!(body["error"]
-        .as_str()
-        .unwrap()
-        .starts_with("读取备份文件失败: "));
-
-    let corrupt = rc_file("corrupt.json", "{not json");
-    let (status, body) = web_call(
-        &router,
-        "POST",
-        RESTORE,
-        Some(json!({"backupPath": corrupt.to_str().unwrap()})),
-    )
-    .await;
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    assert!(body["error"]
-        .as_str()
-        .unwrap()
-        .starts_with("解析备份文件失败: "));
-}
-
-#[tokio::test]
 async fn malformed_bodies_are_rejected_by_the_json_extractor() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     reset_test_fs();
@@ -233,8 +149,6 @@ async fn malformed_bodies_are_rejected_by_the_json_extractor() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     // valid JSON, wrong shape / missing field
     let (status, _) = raw_post(&router, CLEANUP, r#"{"conflicts": "x"}"#).await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    let (status, _) = raw_post(&router, RESTORE, "{}").await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     // a conflict missing a required field
     let (status, _) = raw_post(&router, CLEANUP, r#"{"conflicts": [{"varName": "A"}]}"#).await;

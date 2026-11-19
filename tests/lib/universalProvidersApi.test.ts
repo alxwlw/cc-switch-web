@@ -43,14 +43,6 @@ describe("universalProvidersApi через adapter (WEB-07)", () => {
     expect(init.body).toBeUndefined();
   });
 
-  it("get: GET c url-encoded id, null проходит как есть", async () => {
-    fetchSpy.mockResolvedValue(okResponse(null));
-    await expect(universalProvidersApi.get("u/1 x")).resolves.toBeNull();
-    const [url, init] = fetchSpy.mock.calls[0];
-    expect(url).toBe("/api/universal-providers/u%2F1%20x");
-    expect(init.method).toBe("GET");
-  });
-
   it("upsert: PUT с body {provider}", async () => {
     fetchSpy.mockResolvedValue(okResponse(true));
     await expect(universalProvidersApi.upsert(provider)).resolves.toBe(true);

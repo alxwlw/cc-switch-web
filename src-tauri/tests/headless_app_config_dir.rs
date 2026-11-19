@@ -291,7 +291,7 @@ fn headless_bootstrap_loads_the_override_before_it_resolves_the_legacy_paths() {
     let providers = boot
         .state
         .db
-        .get_all_providers("claude")
+        .get_all_providers(&cc_switch_lib::AppType::Claude)
         .expect("providers");
     assert_eq!(providers["legacy-a"].name, "Legacy A");
     assert!(target.join("config.json.migrated").exists());

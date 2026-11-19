@@ -57,13 +57,22 @@ async fn fixture(a_url: &str, b_url: &str) -> Fixture {
     state.proxy_service.bind_app_state((*state).clone());
     state
         .db
-        .save_provider("claude", &claude("a", a_url, "sk-plain-a", 0))
+        .save_provider(
+            &cc_switch_lib::AppType::Claude,
+            &claude("a", a_url, "sk-plain-a", 0),
+        )
         .unwrap();
     state
         .db
-        .save_provider("claude", &claude("b", b_url, "sk-plain-b", 1))
+        .save_provider(
+            &cc_switch_lib::AppType::Claude,
+            &claude("b", b_url, "sk-plain-b", 1),
+        )
         .unwrap();
-    state.db.set_current_provider("claude", "a").unwrap();
+    state
+        .db
+        .set_current_provider(&cc_switch_lib::AppType::Claude, "a")
+        .unwrap();
     let router = web_router_with(state.clone());
     let settings = get_claude_settings_path();
     std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
@@ -268,23 +277,6 @@ async fn a_failing_provider_switches_the_route_and_emits_through_the_proxy() {
     assert!(health["consecutive_failures"].as_u64().unwrap() >= 1);
     assert!(health["last_error"].is_string(), "{health}");
 
-    // reset a: healthy again, and a (lower sort_index) takes the route back
-    ok_data(
-        &f.router,
-        "POST",
-        "/api/failover/breaker/claude/a/reset",
-        None,
-    )
-    .await;
-    let health = ok_data(&f.router, "GET", "/api/failover/health/claude/a", None).await;
-    assert_eq!(health["is_healthy"], json!(true), "{health}");
-    let back = next_switch(&mut rx).await;
-    assert_eq!(
-        back,
-        json!({"appType": "claude", "providerId": "a", "source": "failover"})
-    );
-    assert_eq!(route_of(&f).await, json!("a"));
-
     ok_data(&f.router, "POST", "/api/proxy/stop-with-restore", None).await;
 }
 
@@ -365,45 +357,10 @@ async fn queue_add_remove_available_and_auto_round_trip() {
 
 #[tokio::test]
 #[serial]
-async fn breaker_config_round_trips_and_stats_are_null() {
+async fn health_of_a_provider_that_never_failed_is_healthy() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     let f = fixture("https://a.example", "https://b.example").await;
-
-    let mut config = ok_data(&f.router, "GET", "/api/failover/breaker-config", None).await;
-    for key in [
-        "failureThreshold",
-        "successThreshold",
-        "timeoutSeconds",
-        "errorRateThreshold",
-        "minRequests",
-    ] {
-        assert!(config.get(key).is_some(), "camelCase {key}: {config}");
-    }
-    config["failureThreshold"] = json!(7);
-    config["timeoutSeconds"] = json!(33);
-    ok_data(
-        &f.router,
-        "PUT",
-        "/api/failover/breaker-config",
-        Some(config.clone()),
-    )
-    .await;
-    let again = ok_data(&f.router, "GET", "/api/failover/breaker-config", None).await;
-    assert_eq!(again["failureThreshold"], json!(7));
-    assert_eq!(again["timeoutSeconds"], json!(33));
-    assert_eq!(again, config);
-
-    assert_eq!(
-        ok_data(
-            &f.router,
-            "GET",
-            "/api/failover/breaker-stats/claude/a",
-            None
-        )
-        .await,
-        Value::Null
-    );
-    // health of a provider that never failed: no row means healthy
+    // no row means healthy
     let health = ok_data(&f.router, "GET", "/api/failover/health/claude/a", None).await;
     assert_eq!(health["is_healthy"], json!(true), "{health}");
 }
@@ -427,9 +384,7 @@ async fn bad_apps_and_bad_bodies_are_400_never_422() {
         ("POST", "/api/failover/queue/claude-desktop/a"),
         ("DELETE", "/api/failover/queue/claude-desktop/a"),
         ("GET", "/api/failover/auto/claude-desktop"),
-        ("POST", "/api/failover/breaker/claude-desktop/a/reset"),
         ("GET", "/api/failover/health/nope/a"),
-        ("GET", "/api/failover/breaker-stats/nope/a"),
         ("GET", "/api/failover/queue/nope"),
     ] {
         assert_eq!(
@@ -446,19 +401,6 @@ async fn bad_apps_and_bad_bodies_are_400_never_422() {
                 &f.router,
                 "PUT",
                 "/api/failover/auto/claude",
-                Some(body.clone())
-            )
-            .await,
-            400,
-            "{body}"
-        );
-    }
-    for body in [json!({}), json!({"failureThreshold": 3})] {
-        assert_eq!(
-            status_of(
-                &f.router,
-                "PUT",
-                "/api/failover/breaker-config",
                 Some(body.clone())
             )
             .await,

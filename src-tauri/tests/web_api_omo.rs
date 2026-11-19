@@ -45,7 +45,8 @@ fn live_file(v: &Variant, content: &str) -> PathBuf {
 fn seed(db: &Database, id: &str, category: &str) {
     let mut p = Provider::with_id(id.into(), format!("name-{id}"), json!({}), None);
     p.category = Some(category.into());
-    db.save_provider("opencode", &p).unwrap();
+    db.save_provider(&cc_switch_lib::AppType::OpenCode, &p)
+        .unwrap();
 }
 
 /// Fresh DB + router over it; hold `test_mutex()` and reset the fs before calling.
@@ -120,7 +121,7 @@ async fn current_provider_comes_from_the_db(v: &Variant) {
 
     seed(&db, v.other_provider_id, v.category);
     seed(&db, v.provider_id, v.category);
-    db.set_omo_provider_current("opencode", v.provider_id, v.category)
+    db.set_omo_provider_current(&cc_switch_lib::AppType::OpenCode, v.provider_id, v.category)
         .unwrap();
     let (status, body) = web_call(&router, "GET", &url(v, "current-provider"), None).await;
     assert_eq!(status, StatusCode::OK);
@@ -147,10 +148,10 @@ async fn disable_clears_current_and_deletes_the_file_idempotently(v: &Variant, o
     seed(&db, v.provider_id, v.category);
     seed(&db, other.provider_id, other.category);
     // set_omo_provider_current deactivates the opposite category, so `other` is never current.
-    db.set_omo_provider_current("opencode", v.provider_id, v.category)
+    db.set_omo_provider_current(&cc_switch_lib::AppType::OpenCode, v.provider_id, v.category)
         .unwrap();
     assert!(db
-        .is_omo_provider_current("opencode", v.provider_id, v.category)
+        .is_omo_provider_current(&cc_switch_lib::AppType::OpenCode, v.provider_id, v.category)
         .unwrap());
 
     for _ in 0..2 {
@@ -159,7 +160,7 @@ async fn disable_clears_current_and_deletes_the_file_idempotently(v: &Variant, o
         assert_eq!(body, json!({"ok": true, "data": Value::Null}));
         assert!(!path.exists(), "{} must be deleted", path.display());
         assert!(db
-            .get_current_omo_provider("opencode", v.category)
+            .get_current_omo_provider(&cc_switch_lib::AppType::OpenCode, v.category)
             .unwrap()
             .is_none());
     }

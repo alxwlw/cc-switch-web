@@ -120,13 +120,6 @@ describe("proxy API over the web adapter (WEB-01 stage 1)", () => {
       { stack: true },
     ],
     [
-      "direct provider",
-      () => proxyApi.getDirectProvider("claude"),
-      "GET",
-      "/api/proxy/direct/claude",
-      undefined,
-    ],
-    [
       "stack",
       () => proxyApi.getProxyStack("codex"),
       "GET",

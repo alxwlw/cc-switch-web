@@ -30,7 +30,7 @@ fn fixture() -> Fixture {
     let state = Arc::new(create_test_state().expect("test state"));
     state
         .db
-        .save_provider("claude", &claude_provider("p1"))
+        .save_provider(&cc_switch_lib::AppType::Claude, &claude_provider("p1"))
         .unwrap();
     let router = cc_switch_lib::web_api::router(state as Arc<AppState>);
     Fixture {
@@ -201,34 +201,6 @@ async fn endpoints_add_get_dedup_remove() {
     let (_, body) = web_call(&f.router, "GET", uri, None).await;
     assert_eq!(body["data"].as_array().unwrap().len(), 1);
     assert_eq!(body["data"][0]["url"], json!("https://b.example.com"));
-}
-
-/// Desktop parity: `provider_endpoints` has no last_used column, so the call is
-/// accepted but persists nothing; the endpoint list must stay intact.
-#[tokio::test]
-async fn endpoint_last_used_is_accepted_and_keeps_list_intact() {
-    let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    let f = fixture();
-    let uri = "/api/claude/providers/p1/endpoints";
-    web_call(
-        &f.router,
-        "POST",
-        uri,
-        Some(json!({ "url": "https://a.example.com" })),
-    )
-    .await;
-    let (status, body) = web_call(
-        &f.router,
-        "POST",
-        &format!("{uri}/last-used"),
-        Some(json!({ "url": "https://a.example.com/" })),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["data"], json!(true));
-    let (_, after) = web_call(&f.router, "GET", uri, None).await;
-    assert_eq!(after["data"].as_array().unwrap().len(), 1);
-    assert_eq!(after["data"][0]["url"], json!("https://a.example.com"));
 }
 
 #[tokio::test]

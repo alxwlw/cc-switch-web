@@ -35,14 +35,6 @@ describe("failover API over the web adapter (WEB-01 stage 2)", () => {
     };
   };
 
-  const breakerConfig = {
-    failureThreshold: 4,
-    successThreshold: 2,
-    timeoutSeconds: 60,
-    errorRateThreshold: 0.5,
-    minRequests: 10,
-  };
-
   // [name, call, method, url, body]
   const CASES: Array<
     [string, () => Promise<unknown>, string, string, unknown]
@@ -55,50 +47,10 @@ describe("failover API over the web adapter (WEB-01 stage 2)", () => {
       undefined,
     ],
     [
-      "reset circuit breaker",
-      () => failoverApi.resetCircuitBreaker("p1", "codex"),
-      "POST",
-      "/api/failover/breaker/codex/p1/reset",
-      undefined,
-    ],
-    [
-      "get breaker config",
-      () => failoverApi.getCircuitBreakerConfig(),
-      "GET",
-      "/api/failover/breaker-config",
-      undefined,
-    ],
-    [
-      "update breaker config (body is the config itself, not wrapped)",
-      () =>
-        failoverApi.updateCircuitBreakerConfig(
-          breakerConfig as unknown as Parameters<
-            typeof failoverApi.updateCircuitBreakerConfig
-          >[0],
-        ),
-      "PUT",
-      "/api/failover/breaker-config",
-      breakerConfig,
-    ],
-    [
-      "breaker stats",
-      () => failoverApi.getCircuitBreakerStats("p1", "gemini"),
-      "GET",
-      "/api/failover/breaker-stats/gemini/p1",
-      undefined,
-    ],
-    [
       "failover queue",
       () => failoverApi.getFailoverQueue("claude"),
       "GET",
       "/api/failover/queue/claude",
-      undefined,
-    ],
-    [
-      "available providers",
-      () => failoverApi.getAvailableProvidersForFailover("codex"),
-      "GET",
-      "/api/failover/available/codex",
       undefined,
     ],
     [

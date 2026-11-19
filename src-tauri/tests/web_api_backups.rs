@@ -101,7 +101,7 @@ fn db_key(fx: &Fixture) -> String {
     let p = fx
         .state
         .db
-        .get_provider_by_id("old-provider", "claude")
+        .get_provider_by_id("old-provider", &cc_switch_lib::AppType::Claude)
         .expect("db read")
         .expect("provider row");
     p.settings_config["env"]["ANTHROPIC_API_KEY"]
@@ -111,7 +111,10 @@ fn db_key(fx: &Fixture) -> String {
 }
 
 fn current(fx: &Fixture) -> Option<String> {
-    fx.state.db.get_current_provider("claude").expect("current")
+    fx.state
+        .db
+        .get_current_provider(&cc_switch_lib::AppType::Claude)
+        .expect("current")
 }
 
 #[tokio::test]
@@ -367,7 +370,10 @@ async fn concurrent_restores_and_delete_give_meaningful_answers_and_a_sound_db()
     assert!(providers.get("new-provider").is_some(), "{providers}");
     let reopened = cc_switch_lib::Database::init().expect("DB opens after the race");
     assert_eq!(
-        reopened.get_current_provider("claude").unwrap().as_deref(),
+        reopened
+            .get_current_provider(&cc_switch_lib::AppType::Claude)
+            .unwrap()
+            .as_deref(),
         Some(expected)
     );
 }

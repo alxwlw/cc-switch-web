@@ -63,8 +63,8 @@ fn schedule_emit(hub: &EventHub, scheduled: &'static AtomicBool) {
     }
 
     let hub = hub.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(DEBOUNCE_WINDOW);
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(DEBOUNCE_WINDOW).await;
         // 必须先清标志再 emit：万一 emit 期间又有新通知进来，
         // 下一轮防抖窗口会重新调度，不会丢失。
         scheduled.store(false, Ordering::Release);
