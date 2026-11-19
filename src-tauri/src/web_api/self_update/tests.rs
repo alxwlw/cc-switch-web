@@ -181,8 +181,8 @@ fn the_conditions_each_refuse_with_their_own_reason() {
         (
             "missing source dir",
             |r| {
-                r.vars
-                    .insert(SOURCE_DIR_ENV, "/nonexistent/cc-switch-web".into());
+                let missing = r.dir.path().join("missing");
+                r.vars.insert(SOURCE_DIR_ENV, missing.into_os_string());
             },
             "is not a directory",
         ),
@@ -423,7 +423,7 @@ fn a_release_build_does_not_need_a_source_dir() {
 
 #[test]
 fn a_release_build_refuses_without_the_install_dir_or_its_script() {
-    let cases: [(&str, fn(&mut Rig), &str); 5] = [
+    let cases: [(&str, fn(&mut Rig), &str); 4] = [
         (
             "no install dir",
             |r| {
@@ -441,8 +441,8 @@ fn a_release_build_refuses_without_the_install_dir_or_its_script() {
         (
             "missing install dir",
             |r| {
-                r.vars
-                    .insert(INSTALL_DIR_ENV, "/nonexistent/cc-switch-web".into());
+                let missing = r.dir.path().join("missing");
+                r.vars.insert(INSTALL_DIR_ENV, missing.into_os_string());
             },
             "CC_SWITCH_WEB_INSTALL_DIR is not a directory",
         ),
@@ -450,19 +450,6 @@ fn a_release_build_refuses_without_the_install_dir_or_its_script() {
             "no script",
             |r| {
                 std::fs::remove_file(r.dir.path().join(INSTALLED_SCRIPT)).unwrap();
-            },
-            "CC_SWITCH_WEB_INSTALL_DIR has no executable self-update.sh",
-        ),
-        (
-            "script without the exec bit",
-            |r| {
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let script = r.dir.path().join(INSTALLED_SCRIPT);
-                    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o644))
-                        .unwrap();
-                }
             },
             "CC_SWITCH_WEB_INSTALL_DIR has no executable self-update.sh",
         ),
@@ -479,8 +466,24 @@ fn a_release_build_refuses_without_the_install_dir_or_its_script() {
     }
 }
 
+#[cfg(unix)]
 #[test]
-fn a_release_build_has_its_own_flag_text_and_the_same_systemd_text() {
+fn a_release_build_refuses_an_install_script_without_the_exec_bit() {
+    use std::os::unix::fs::PermissionsExt;
+    let rig = release_rig();
+    let script = rig.dir.path().join(INSTALLED_SCRIPT);
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    let err = rig.resolve_release("o/r").unwrap_err();
+
+    assert_eq!(
+        err,
+        "CC_SWITCH_WEB_INSTALL_DIR has no executable self-update.sh"
+    );
+}
+
+#[test]
+fn a_release_build_has_its_own_flag_and_systemd_text() {
     let mut rig = release_rig();
     rig.vars.remove(SELF_UPDATE_ENV);
     let err = rig.resolve_release("o/r").unwrap_err();
@@ -492,7 +495,16 @@ fn a_release_build_has_its_own_flag_text_and_the_same_systemd_text() {
     let mut rig = release_rig();
     rig.vars.remove(SYSTEMD_ENV);
     let err = rig.resolve_release("o/r").unwrap_err();
-    assert!(err.contains("systemd user unit"), "{err}");
+    assert_eq!(
+        err,
+        "self-update needs the server to run as a systemd user unit (INVOCATION_ID is not set), and this server does not run under systemd; update by hand with the commands of the update check"
+    );
+    assert!(!err.contains("rebuild the image"), "{err}");
+
+    let mut checkout = self::rig();
+    checkout.vars.remove(SYSTEMD_ENV);
+    let err = checkout.resolve("main").unwrap_err();
+    assert!(err.contains("in Docker rebuild the image"), "{err}");
 }
 
 #[test]

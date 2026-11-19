@@ -364,9 +364,14 @@ pub(super) fn resolve(
         });
     }
     if non_empty(env, SYSTEMD_ENV).is_none() {
-        return Err(format!(
-            "self-update needs the server to run as a systemd user unit ({SYSTEMD_ENV} is not set); in Docker rebuild the image with the commands of the update check"
-        ));
+        return Err(match mode {
+            BuildMode::Checkout => format!(
+                "self-update needs the server to run as a systemd user unit ({SYSTEMD_ENV} is not set); in Docker rebuild the image with the commands of the update check"
+            ),
+            BuildMode::Release => format!(
+                "self-update needs the server to run as a systemd user unit ({SYSTEMD_ENV} is not set), and this server does not run under systemd; update by hand with the commands of the update check"
+            ),
+        });
     }
     let (script, source) = match mode {
         BuildMode::Checkout => {
