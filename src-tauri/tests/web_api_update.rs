@@ -11,7 +11,7 @@ mod support;
 
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
-use cc_switch_lib::{check_web_update, AppState, UpdateCheck, UpdateSourceConfig};
+use cc_switch_lib::{check_web_update, AppState, UpdateCheck, UpdateSourceConfig, WebVersion};
 use serde_json::{json, Value};
 use serial_test::serial;
 use std::ffi::OsString;
@@ -75,17 +75,21 @@ struct Seen {
 
 struct Shared {
     compare: Mutex<Reply>,
+    release: Mutex<Reply>,
     head: Reply,
     delay: Duration,
     compare_hits: Arc<AtomicUsize>,
+    release_hits: Arc<AtomicUsize>,
     head_hits: Arc<AtomicUsize>,
     seen: Arc<Seen>,
 }
 
-/// GitHub stand-in for `/repos/o/r/compare/:spec` and `/repos/o/r/commits/main`.
+/// GitHub stand-in for `/repos/o/r/compare/:spec`, `/repos/o/r/commits/main` and
+/// `/repos/o/r/releases/latest`.
 struct Github {
     url: String,
     compare_hits: Arc<AtomicUsize>,
+    release_hits: Arc<AtomicUsize>,
     head_hits: Arc<AtomicUsize>,
     seen: Arc<Seen>,
     shared: Arc<Shared>,
@@ -139,7 +143,20 @@ async fn head_route(State(shared): State<Arc<Shared>>, headers: HeaderMap) -> An
     respond(require_user_agent(&headers).unwrap_or_else(|| shared.head.clone()))
 }
 
+async fn release_route(State(shared): State<Arc<Shared>>, headers: HeaderMap) -> Answer {
+    shared.release_hits.fetch_add(1, Ordering::SeqCst);
+    respond(require_user_agent(&headers).unwrap_or_else(|| shared.release.lock().unwrap().clone()))
+}
+
 impl Github {
+    /// A source whose latest release answers `release`; the compare API answers 500, so a
+    /// release check that strays to it fails loudly.
+    async fn start_release(release: Reply) -> Self {
+        let gh = Self::start(Reply::json(StatusCode::INTERNAL_SERVER_ERROR, json!({}))).await;
+        gh.set_release(release);
+        gh
+    }
+
     async fn start(compare: Reply) -> Self {
         Self::start_with(
             compare,
@@ -152,12 +169,15 @@ impl Github {
     async fn start_with(compare: Reply, head: Reply, delay: Duration) -> Self {
         let compare_hits = Arc::new(AtomicUsize::new(0));
         let head_hits = Arc::new(AtomicUsize::new(0));
+        let release_hits = Arc::new(AtomicUsize::new(0));
         let seen = Arc::new(Seen::default());
         let shared = Arc::new(Shared {
             compare: Mutex::new(compare),
+            release: Mutex::new(Reply::json(StatusCode::NOT_FOUND, json!({}))),
             head,
             delay,
             compare_hits: compare_hits.clone(),
+            release_hits: release_hits.clone(),
             head_hits: head_hits.clone(),
             seen: seen.clone(),
         });
@@ -167,6 +187,10 @@ impl Github {
                 axum::routing::get(compare_route),
             )
             .route("/repos/o/r/commits/main", axum::routing::get(head_route))
+            .route(
+                "/repos/o/r/releases/latest",
+                axum::routing::get(release_route),
+            )
             .fallback(|| async { StatusCode::NOT_FOUND })
             .with_state(shared.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -175,6 +199,7 @@ impl Github {
         Self {
             url,
             compare_hits,
+            release_hits,
             head_hits,
             seen,
             shared,
@@ -185,6 +210,15 @@ impl Github {
     /// The source answers `compare` with `reply` from now on.
     fn set_compare(&self, reply: Reply) {
         *self.shared.compare.lock().unwrap() = reply;
+    }
+
+    /// The source answers `releases/latest` with `reply` from now on.
+    fn set_release(&self, reply: Reply) {
+        *self.shared.release.lock().unwrap() = reply;
+    }
+
+    fn release_hits(&self) -> usize {
+        self.release_hits.load(Ordering::SeqCst)
     }
 
     fn cfg(&self) -> UpdateSourceConfig {
@@ -244,7 +278,7 @@ fn ok(body: Value) -> Reply {
 }
 
 async fn run(gh: &Github, sha: &str, force: bool) -> UpdateCheck {
-    check_web_update(&gh.cfg(), Some(sha), force)
+    check_web_update(&gh.cfg(), Some(sha), None, force)
         .await
         .expect("update check")
 }
@@ -266,6 +300,10 @@ async fn three_commits_ahead_is_behind_with_three_newest_first() {
     assert_eq!(result["latestSha"], json!(sha_of(3)));
     assert_eq!(result["currentVersion"], json!(env!("CARGO_PKG_VERSION")));
     assert_eq!(result["branch"], json!("main"));
+    assert_eq!(result["mode"], json!("commit"));
+    assert_eq!(result["latestVersion"], Value::Null);
+    assert_eq!(result["releaseUrl"], Value::Null);
+    assert_eq!(result["publishedAt"], Value::Null);
     let shas: Vec<&str> = result["commits"]
         .as_array()
         .unwrap()
@@ -399,7 +437,7 @@ async fn rate_limit_403_is_an_error_with_text_and_not_cached() {
         .push(("x-ratelimit-reset", "1793795696".to_string()));
     let gh = Github::start(reply).await;
 
-    let err = check_web_update(&gh.cfg(), Some(&sha), false)
+    let err = check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .unwrap_err();
     let text = err.to_string();
@@ -407,7 +445,7 @@ async fn rate_limit_403_is_an_error_with_text_and_not_cached() {
     assert!(text.contains("rate limit"), "{text}");
     assert!(text.contains("retry after 12:34 UTC"), "{text}");
 
-    assert!(check_web_update(&gh.cfg(), Some(&sha), false)
+    assert!(check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .is_err());
     assert_eq!(gh.compare_hits(), 2, "an error is not cached");
@@ -422,7 +460,7 @@ async fn rate_limit_429_is_an_error_with_text() {
         json!({"message": "slow down"}),
     ))
     .await;
-    let text = check_web_update(&gh.cfg(), Some(&sha), false)
+    let text = check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .unwrap_err()
         .to_string();
@@ -440,12 +478,12 @@ async fn server_error_and_dead_source_are_errors_not_cached() {
         json!({"message": "boom"}),
     ))
     .await;
-    let text = check_web_update(&gh.cfg(), Some(&sha), false)
+    let text = check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .unwrap_err()
         .to_string();
     assert!(text.contains("HTTP 500"), "{text}");
-    assert!(check_web_update(&gh.cfg(), Some(&sha), false)
+    assert!(check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .is_err());
     assert_eq!(gh.compare_hits(), 2);
@@ -459,7 +497,7 @@ async fn server_error_and_dead_source_are_errors_not_cached() {
         repo: "o/r".to_string(),
         branch: "main".to_string(),
     };
-    let text = check_web_update(&cfg, Some(&sha), false)
+    let text = check_web_update(&cfg, Some(&sha), None, false)
         .await
         .unwrap_err()
         .to_string();
@@ -520,10 +558,10 @@ async fn parallel_requests_cost_one_source_request() {
     .await;
     let cfg = gh.cfg();
     let (a, b, c, d) = tokio::join!(
-        check_web_update(&cfg, Some(&sha), false),
-        check_web_update(&cfg, Some(&sha), false),
-        check_web_update(&cfg, Some(&sha), false),
-        check_web_update(&cfg, Some(&sha), false),
+        check_web_update(&cfg, Some(&sha), None, false),
+        check_web_update(&cfg, Some(&sha), None, false),
+        check_web_update(&cfg, Some(&sha), None, false),
+        check_web_update(&cfg, Some(&sha), None, false),
     );
     for result in [a, b, c, d] {
         assert_eq!(as_json(&result.unwrap())["status"], json!("behind"));
@@ -581,18 +619,18 @@ async fn an_answer_without_the_counters_is_an_error_and_not_cached() {
     let sha = sha_of(0x1012);
     let gh = Github::start(ok(json!({}))).await;
 
-    let text = check_web_update(&gh.cfg(), Some(&sha), false)
+    let text = check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .unwrap_err()
         .to_string();
     assert!(text.contains("unreadable answer"), "{text}");
     // Neither counter alone is enough.
     gh.set_compare(ok(json!({"ahead_by": 0})));
-    assert!(check_web_update(&gh.cfg(), Some(&sha), false)
+    assert!(check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .is_err());
     gh.set_compare(ok(json!({"behind_by": 0})));
-    assert!(check_web_update(&gh.cfg(), Some(&sha), false)
+    assert!(check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .is_err());
     assert_eq!(gh.compare_hits(), 3, "an unreadable answer is not cached");
@@ -624,14 +662,26 @@ async fn a_cached_answer_names_the_branch_it_was_computed_for() {
         ..gh.cfg()
     };
 
-    let first = as_json(&check_web_update(&main, Some(&sha), false).await.unwrap());
+    let first = as_json(
+        &check_web_update(&main, Some(&sha), None, false)
+            .await
+            .unwrap(),
+    );
     assert_eq!(first["branch"], json!("main"));
     // Same source, same build, another branch: not served from main's entry.
-    let other = as_json(&check_web_update(&dev, Some(&sha), false).await.unwrap());
+    let other = as_json(
+        &check_web_update(&dev, Some(&sha), None, false)
+            .await
+            .unwrap(),
+    );
     assert_eq!(other["branch"], json!("dev"));
     assert_eq!(gh.compare_hits(), 2, "another branch asks again");
     // And the one-hour cache still serves the branch it holds.
-    let again = as_json(&check_web_update(&dev, Some(&sha), false).await.unwrap());
+    let again = as_json(
+        &check_web_update(&dev, Some(&sha), None, false)
+            .await
+            .unwrap(),
+    );
     assert_eq!(again["branch"], json!("dev"));
     assert_eq!(gh.compare_hits(), 2);
 }
@@ -642,7 +692,7 @@ async fn a_build_without_a_usable_commit_is_unknown_and_asks_nobody() {
     let gh = Github::start(ok(compare_body(3, 0, 1, 3))).await;
     let cfg = gh.cfg();
 
-    let none = as_json(&check_web_update(&cfg, None, false).await.unwrap());
+    let none = as_json(&check_web_update(&cfg, None, None, false).await.unwrap());
     assert_eq!(none["status"], json!("unknown"));
     assert_eq!(none["currentSha"], Value::Null);
     assert_eq!(none["latestSha"], Value::Null);
@@ -652,7 +702,7 @@ async fn a_build_without_a_usable_commit_is_unknown_and_asks_nobody() {
 
     // Text that is not a commit hash never reaches the URL.
     for bad in ["", "main", "abc", "abc1234/../../x", "abc1234?x=1"] {
-        let result = as_json(&check_web_update(&cfg, Some(bad), true).await.unwrap());
+        let result = as_json(&check_web_update(&cfg, Some(bad), None, true).await.unwrap());
         assert_eq!(result["status"], json!("unknown"), "{bad:?}");
     }
     assert_eq!(gh.compare_hits(), 0);
@@ -710,4 +760,171 @@ async fn route_without_a_build_commit_is_unknown_and_asks_nobody() {
         assert!(body["data"]["instructions"]["systemd"].is_string());
     }
     assert_eq!(gh.compare_hits(), 0);
+}
+
+// ---------- release mode ----------
+
+const RELEASE_URL: &str = "https://github.com/o/r/releases/tag/v4.0.35-web.2";
+
+fn version(s: &str) -> Option<WebVersion> {
+    Some(WebVersion::parse(s).expect("test version"))
+}
+
+fn release(tag: &str) -> Reply {
+    ok(json!({
+        "tag_name": tag,
+        "html_url": RELEASE_URL,
+        "published_at": "2026-11-20T09:00:00Z",
+    }))
+}
+
+async fn run_release(gh: &Github, current: &str, force: bool) -> UpdateCheck {
+    check_web_update(&gh.cfg(), None, version(current), force)
+        .await
+        .expect("release check")
+}
+
+#[tokio::test]
+#[serial]
+async fn a_newer_release_is_behind_with_its_version_and_notes_url() {
+    let gh = Github::start_release(release("v4.0.35-web.2")).await;
+    let result = as_json(&run_release(&gh, "4.0.35-web.1", false).await);
+
+    assert_eq!(result["status"], json!("behind"));
+    assert_eq!(result["mode"], json!("release"));
+    assert_eq!(result["currentVersion"], json!("4.0.35-web.1"));
+    assert_eq!(result["latestVersion"], json!("4.0.35-web.2"));
+    assert_eq!(result["releaseUrl"], json!(RELEASE_URL));
+    assert_eq!(result["publishedAt"], json!("2026-11-20T09:00:00Z"));
+    assert_eq!(result["behindBy"], json!(0));
+    assert_eq!(result["commits"], json!([]));
+    assert_eq!(result["latestSha"], Value::Null);
+    assert_eq!(result["currentSha"], Value::Null);
+}
+
+#[tokio::test]
+#[serial]
+async fn a_release_build_keeps_its_commit_as_current_sha() {
+    let sha = sha_of(0x2001);
+    let gh = Github::start_release(release("v4.0.35-web.2")).await;
+    let result = as_json(
+        &check_web_update(&gh.cfg(), Some(&sha), version("4.0.35-web.1"), false)
+            .await
+            .unwrap(),
+    );
+    assert_eq!(result["currentSha"], json!(sha));
+}
+
+#[tokio::test]
+#[serial]
+async fn the_installed_release_is_up_to_date() {
+    let gh = Github::start_release(release("v4.0.35-web.1")).await;
+    let result = as_json(&run_release(&gh, "4.0.35-web.1", false).await);
+    assert_eq!(result["status"], json!("up-to-date"));
+    assert_eq!(result["latestVersion"], json!("4.0.35-web.1"));
+}
+
+#[tokio::test]
+#[serial]
+async fn a_build_newer_than_the_latest_release_is_unknown() {
+    let gh = Github::start_release(release("v4.0.35-web.3")).await;
+    let result = as_json(&run_release(&gh, "4.0.36-web.1", false).await);
+    assert_eq!(result["status"], json!("unknown"));
+    assert_eq!(result["mode"], json!("release"));
+    assert_eq!(result["currentVersion"], json!("4.0.36-web.1"));
+}
+
+#[tokio::test]
+#[serial]
+async fn no_release_yet_is_unknown() {
+    let gh = Github::start_release(Reply::json(
+        StatusCode::NOT_FOUND,
+        json!({"message": "Not Found"}),
+    ))
+    .await;
+    let result = as_json(&run_release(&gh, "4.0.35-web.1", false).await);
+    assert_eq!(result["status"], json!("unknown"));
+    assert_eq!(result["mode"], json!("release"));
+    assert_eq!(result["latestVersion"], Value::Null);
+    assert_eq!(result["releaseUrl"], Value::Null);
+}
+
+#[tokio::test]
+#[serial]
+async fn a_latest_tag_that_is_not_a_fork_version_is_unknown() {
+    let gh = Github::start_release(release("v4.0.36")).await;
+    let result = as_json(&run_release(&gh, "4.0.35-web.1", false).await);
+    assert_eq!(result["status"], json!("unknown"));
+    assert_eq!(result["latestVersion"], Value::Null);
+    assert_eq!(result["releaseUrl"], Value::Null);
+}
+
+#[tokio::test]
+#[serial]
+async fn a_release_build_never_asks_the_compare_api() {
+    let sha = sha_of(0x2002);
+    let gh = Github::start_release(release("v4.0.35-web.2")).await;
+    let _ = check_web_update(&gh.cfg(), Some(&sha), version("4.0.35-web.1"), false)
+        .await
+        .unwrap();
+    assert_eq!(gh.compare_hits(), 0);
+    assert_eq!(gh.head_hits(), 0);
+    assert_eq!(gh.release_hits(), 1);
+}
+
+#[tokio::test]
+#[serial]
+async fn a_release_answer_is_cached_and_force_asks_again() {
+    let gh = Github::start_release(release("v4.0.35-web.2")).await;
+    let _ = run_release(&gh, "4.0.35-web.1", false).await;
+    let _ = run_release(&gh, "4.0.35-web.1", false).await;
+    assert_eq!(gh.release_hits(), 1);
+    let _ = run_release(&gh, "4.0.35-web.1", true).await;
+    assert_eq!(gh.release_hits(), 2);
+}
+
+#[tokio::test]
+#[serial]
+async fn a_cached_release_answer_is_not_served_to_another_version() {
+    let gh = Github::start_release(release("v4.0.35-web.2")).await;
+    let first = as_json(&run_release(&gh, "4.0.35-web.1", false).await);
+    let second = as_json(&run_release(&gh, "4.0.35-web.2", false).await);
+    assert_eq!(first["status"], json!("behind"));
+    assert_eq!(second["status"], json!("up-to-date"));
+    assert_eq!(gh.release_hits(), 2);
+}
+
+#[tokio::test]
+#[serial]
+async fn a_rate_limited_release_check_is_an_error_and_not_cached() {
+    let gh = Github::start_release(Reply::json(
+        StatusCode::FORBIDDEN,
+        json!({"message": "API rate limit exceeded"}),
+    ))
+    .await;
+    let err = check_web_update(&gh.cfg(), None, version("4.0.35-web.1"), false)
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("rate limit"), "{err}");
+    assert!(
+        check_web_update(&gh.cfg(), None, version("4.0.35-web.1"), false)
+            .await
+            .is_err()
+    );
+    assert_eq!(gh.release_hits(), 2, "an error is not cached");
+}
+
+#[tokio::test]
+#[serial]
+async fn release_mode_instructions_rerun_the_installer_and_pull_the_image() {
+    let gh = Github::start_release(release("v4.0.35-web.2")).await;
+    let result = as_json(&run_release(&gh, "4.0.35-web.1", false).await);
+    assert_eq!(
+        result["instructions"]["systemd"],
+        json!("curl -fsSL https://github.com/o/r/releases/latest/download/install.sh | bash")
+    );
+    assert_eq!(
+        result["instructions"]["docker"],
+        json!("docker compose pull && docker compose up -d")
+    );
 }

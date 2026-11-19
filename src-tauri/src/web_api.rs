@@ -768,6 +768,7 @@ async fn update_check(Query(q): Query<UpdateCheckQuery>) -> ApiResult {
     update_check_with(
         &crate::services::web_update::UpdateSourceConfig::from_env(),
         crate::services::web_update::build_sha(),
+        crate::services::web_update::web_version(),
         q.force.as_deref(),
     )
     .await
@@ -815,15 +816,16 @@ async fn update_status() -> ApiResult {
 }
 
 /// `force` is the `?force=` value: `1` or `true` skips the one-hour cache. The build
-/// commit and the source are parameters so tests can supply what the build and the
+/// commit, the fork version and the source are parameters so tests can supply what the build and the
 /// environment do not.
 async fn update_check_with(
     cfg: &crate::services::web_update::UpdateSourceConfig,
     build_sha: Option<&str>,
+    web_version: Option<crate::services::web_update::WebVersion>,
     force: Option<&str>,
 ) -> ApiResult {
     let force = matches!(force, Some("1" | "true"));
-    match crate::services::web_update::check(cfg, build_sha, force).await {
+    match crate::services::web_update::check(cfg, build_sha, web_version, force).await {
         Ok(result) => ok(result),
         Err(e) => fail(e.to_string()),
     }
@@ -5206,16 +5208,16 @@ mod tests {
         let sha = "1111111aaaa";
         let count = || hits.load(std::sync::atomic::Ordering::SeqCst);
 
-        let (status, Json(first)) = update_check_with(&cfg, Some(sha), None).await;
+        let (status, Json(first)) = update_check_with(&cfg, Some(sha), None, None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(first["data"]["status"], "up-to-date");
         assert_eq!(count(), 1);
-        let _ = update_check_with(&cfg, Some(sha), Some("0")).await;
-        let _ = update_check_with(&cfg, Some(sha), Some("")).await;
+        let _ = update_check_with(&cfg, Some(sha), None, Some("0")).await;
+        let _ = update_check_with(&cfg, Some(sha), None, Some("")).await;
         assert_eq!(count(), 1, "force=0 and an empty force use the cache");
-        let _ = update_check_with(&cfg, Some(sha), Some("1")).await;
+        let _ = update_check_with(&cfg, Some(sha), None, Some("1")).await;
         assert_eq!(count(), 2, "force=1 asks the source");
-        let _ = update_check_with(&cfg, Some(sha), Some("true")).await;
+        let _ = update_check_with(&cfg, Some(sha), None, Some("true")).await;
         assert_eq!(count(), 3, "force=true asks the source");
     }
 
@@ -5225,7 +5227,7 @@ mod tests {
         let (url, _hits) =
             update_stub(StatusCode::FORBIDDEN, r#"{"message":"rate limit"}"#.into()).await;
         let (status, Json(body)) =
-            update_check_with(&update_cfg(url), Some("2222222bbbb"), None).await;
+            update_check_with(&update_cfg(url), Some("2222222bbbb"), None, None).await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(body["ok"], false);
         assert!(

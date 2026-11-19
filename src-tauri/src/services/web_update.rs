@@ -1,6 +1,7 @@
-//! Update check of the headless web server (WEB-28). The fork has no releases, so the
-//! signal is the commit the running binary was built from against the head of the
-//! fork's branch, asked of the GitHub compare API.
+//! Update check of the headless web server (WEB-28). A release build (one that knows its
+//! fork version, `CC_SWITCH_WEB_VERSION`) compares itself with the latest GitHub release.
+//! Any other build has no release to compare with, so the signal is the commit it was built
+//! from against the head of the fork's branch, asked of the GitHub compare API.
 
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -70,10 +71,19 @@ pub struct UpdateInstructions {
     pub docker: String,
 }
 
+/// What the check compared: the build with the latest release, or its commit with the branch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UpdateMode {
+    Release,
+    Commit,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateCheck {
     pub status: UpdateStatus,
+    pub mode: UpdateMode,
     pub current_version: String,
     pub current_sha: Option<String>,
     pub latest_sha: Option<String>,
@@ -87,6 +97,21 @@ pub struct UpdateCheck {
     /// cache key, so a cached answer always names the branch it was computed for.
     pub branch: String,
     pub instructions: UpdateInstructions,
+    /// Release mode: the version of the latest release (no `v`), when its tag is a fork version.
+    pub latest_version: Option<String>,
+    /// Release mode: the release's notes page.
+    pub release_url: Option<String>,
+    /// Release mode: when the latest release was published.
+    pub published_at: Option<String>,
+}
+
+fn release_instructions(repo: &str) -> UpdateInstructions {
+    UpdateInstructions {
+        systemd: format!(
+            "curl -fsSL https://github.com/{repo}/releases/latest/download/install.sh | bash"
+        ),
+        docker: "docker compose pull && docker compose up -d".to_string(),
+    }
 }
 
 fn instructions() -> UpdateInstructions {
@@ -207,6 +232,9 @@ struct CacheKey {
     repo: String,
     branch: String,
     sha: String,
+    /// `Some` for a release-mode answer: the same build commit asked as a release build and
+    /// as a plain build must not share an entry.
+    web_version: Option<WebVersion>,
 }
 
 struct CacheEntry {
@@ -242,6 +270,7 @@ fn report(
 ) -> UpdateCheck {
     UpdateCheck {
         status,
+        mode: UpdateMode::Commit,
         current_version: env!("CARGO_PKG_VERSION").to_string(),
         current_sha: current_sha.map(str::to_string),
         latest_sha,
@@ -250,20 +279,27 @@ fn report(
         checked_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         branch: branch.to_string(),
         instructions: instructions(),
+        latest_version: None,
+        release_url: None,
+        published_at: None,
     }
 }
 
-/// Compares the build `build_sha` with the head of the configured branch. `force` skips
+/// Compares the build with the latest release when `web_version` is known (release mode),
+/// otherwise the build `build_sha` with the head of the configured branch. `force` skips
 /// a cached answer (and refreshes it). A build without a known commit, a commit the
 /// branch does not contain (local or dirty build, rewritten history) and a build that
-/// has commits the branch lacks are all `Unknown`: never a false `UpToDate`. Errors
-/// (rate limit, network) are returned and not cached.
+/// has commits the branch lacks are all `Unknown`: never a false `UpToDate`. In release mode
+/// a missing release, a tag that is not a fork version and a build newer than the latest
+/// release are `Unknown` too. Errors (rate limit, network) are returned and not cached.
 pub async fn check(
     cfg: &UpdateSourceConfig,
     build_sha: Option<&str>,
+    web_version: Option<WebVersion>,
     force: bool,
 ) -> Result<UpdateCheck, AppError> {
-    let Some(sha) = build_sha.filter(|sha| only_hex_sha(sha)) else {
+    let sha = build_sha.filter(|sha| only_hex_sha(sha));
+    if web_version.is_none() && sha.is_none() {
         return Ok(report(
             &cfg.branch,
             UpdateStatus::Unknown,
@@ -272,12 +308,13 @@ pub async fn check(
             0,
             Vec::new(),
         ));
-    };
+    }
     let key = CacheKey {
         api_base: cfg.api_base.clone(),
         repo: cfg.repo.clone(),
         branch: cfg.branch.clone(),
-        sha: sha.to_string(),
+        sha: sha.unwrap_or_default().to_string(),
+        web_version,
     };
     let mut slot = cache().lock().await;
     if !force {
@@ -285,7 +322,11 @@ pub async fn check(
             return Ok(hit);
         }
     }
-    let value = fetch(cfg, sha).await?;
+    let value = match (web_version, sha) {
+        (Some(current), _) => fetch_release(cfg, current, sha).await?,
+        (None, Some(sha)) => fetch(cfg, sha).await?,
+        (None, None) => unreachable!("an unknown build returned above"),
+    };
     *slot = Some(CacheEntry {
         key,
         stored_at: Instant::now(),
@@ -351,6 +392,46 @@ async fn get_json(url: &str) -> Result<Option<(reqwest::StatusCode, String)>, Ap
 fn parse<T: serde::de::DeserializeOwned>(body: &str) -> Result<T, AppError> {
     serde_json::from_str(body)
         .map_err(|e| AppError::Message(format!("The update source sent an unreadable answer: {e}")))
+}
+
+#[derive(Debug, Deserialize)]
+struct ReleaseResponse {
+    // Required: an answer without a tag is an unreadable answer.
+    tag_name: String,
+    html_url: Option<String>,
+    published_at: Option<String>,
+}
+
+/// Release mode: the build `current` against `releases/latest` (GitHub leaves drafts and
+/// prereleases out of it). No release yet, a tag that is not a fork version and a build newer
+/// than the latest release are `Unknown`: never a false `Behind` or `UpToDate`.
+async fn fetch_release(
+    cfg: &UpdateSourceConfig,
+    current: WebVersion,
+    sha: Option<&str>,
+) -> Result<UpdateCheck, AppError> {
+    let url = format!("{}/repos/{}/releases/latest", cfg.api_base, cfg.repo);
+    let mut out = report(&cfg.branch, UpdateStatus::Unknown, sha, None, 0, Vec::new());
+    out.mode = UpdateMode::Release;
+    out.current_version = current.to_string();
+    out.instructions = release_instructions(&cfg.repo);
+    // 404: the repository has no release yet.
+    let Some((_, body)) = get_json(&url).await? else {
+        return Ok(out);
+    };
+    let release: ReleaseResponse = parse(&body)?;
+    let Some(latest) = WebVersion::parse(&release.tag_name) else {
+        return Ok(out);
+    };
+    out.latest_version = Some(latest.to_string());
+    out.release_url = release.html_url;
+    out.published_at = release.published_at;
+    out.status = match latest.cmp(&current) {
+        std::cmp::Ordering::Greater => UpdateStatus::Behind,
+        std::cmp::Ordering::Equal => UpdateStatus::UpToDate,
+        std::cmp::Ordering::Less => UpdateStatus::Unknown,
+    };
+    Ok(out)
 }
 
 async fn fetch(cfg: &UpdateSourceConfig, sha: &str) -> Result<UpdateCheck, AppError> {
@@ -521,6 +602,7 @@ mod tests {
             repo: "o/r".into(),
             branch: "main".into(),
             sha: sha.into(),
+            web_version: None,
         }
     }
 
