@@ -124,7 +124,8 @@ uninstall() {
   if command -v systemctl >/dev/null 2>&1; then
     systemctl --user disable --now cc-switch-web 2>/dev/null || true
   fi
-  rm -f "$unit" "$HOME/.local/bin/cc-switch-web"
+  rm -f "$unit" "$HOME/.local/bin/cc-switch-web" "$HOME/.local/bin/cc-switch-web.prev" \
+    "$HOME/.local/bin/cc-switch-web.new" "$HOME/.local/bin/cc-switch-web.rollback"
   rm -rf "$HOME/.local/share/cc-switch-web"
   if command -v systemctl >/dev/null 2>&1; then
     systemctl --user daemon-reload 2>/dev/null || true
@@ -261,7 +262,7 @@ main() {
   for f in cc-switch-web install.sh self-update.sh; do
     [ -f "$ex/$f" ] || die "the archive is incomplete (no $f); nothing was installed"
   done
-  [ -d "$ex/dist-web" ] || die "the archive is incomplete (no dist-web); nothing was installed"
+  [ -f "$ex/dist-web/index.html" ] || die "the archive is incomplete (no dist-web/index.html); nothing was installed"
 
   # 4. system libraries
   local libs
@@ -337,13 +338,14 @@ $libs"
     fi
   fi
 
-  # 9. wait for the new version
+  # 9. wait for the new version. /api/capabilities answers even when the database failed to
+  # open (the init-error router serves it), so the console is up only when /api/health is 2xx too.
   local probe_host="$host" timeout="${CC_SWITCH_WEB_HEALTH_TIMEOUT:-30}" waited=0 want_re ok=0 caps
   if [ "$probe_host" = 0.0.0.0 ]; then probe_host=127.0.0.1; fi
   want_re="\"webVersion\"[[:space:]]*:[[:space:]]*\"${version//./\\.}\""
   while :; do
     caps="$(curl -fsS --max-time 2 "http://$probe_host:$port/api/capabilities" 2>/dev/null)" || caps=""
-    if grep -qE "$want_re" <<<"$caps"; then
+    if grep -qE "$want_re" <<<"$caps" && curl -fsS --max-time 2 -o /dev/null "http://$probe_host:$port/api/health" 2>/dev/null; then
       ok=1
       break
     fi
@@ -351,7 +353,7 @@ $libs"
     sleep 1
     waited=$((waited + 1))
   done
-  [ "$ok" = 1 ] || die "the service did not report version $version on http://$probe_host:$port within ${timeout}s; see: journalctl --user -u cc-switch-web -n 50"
+  [ "$ok" = 1 ] || die "the service did not report version $version and a healthy console on http://$probe_host:$port within ${timeout}s; see http://$probe_host:$port/api/init-status and: journalctl --user -u cc-switch-web -n 50"
 
   # 10. summary
   echo

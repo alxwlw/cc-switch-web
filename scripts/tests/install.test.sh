@@ -127,6 +127,12 @@ case "\$last" in
     echo "{\"web\":true,\"webVersion\":\"\$v\"}"
     exit 0
     ;;
+  http://*/api/health)
+    echo "curl \$last" >>"\$STUB_LOG"
+    # curl -f turns a 503 into exit 22
+    if [ "\${STUB_HEALTH:-200}" != 200 ]; then exit 22; fi
+    exit 0
+    ;;
 esac
 exec "$REAL_CURL" "\$@"
 EOF
@@ -320,11 +326,16 @@ check_has "linger: sudo command" "$(out_text)" "sudo loginctl enable-linger"
 setup_case uninstall
 run_install --
 echo keep >"$HOME_D/.cc-switch-web/note"
+# the leftovers of a self-update (names as scripts/self-update.sh keeps them)
+for f in prev new rollback; do echo old >"$HOME_D/.local/bin/cc-switch-web.$f"; done
 run_install -- --uninstall
 check "--uninstall removes the install and keeps the data: exit code" "$RC" "0"
 check "uninstall: data kept" "$(cat "$HOME_D/.cc-switch-web/note")" "keep"
 check "uninstall: binary gone" "$(exists "$(bin_path)")" "no"
 check "uninstall: unit gone" "$(exists "$(unit_path)")" "no"
+for f in prev new rollback; do
+  check "uninstall: .$f leftover gone" "$(exists "$HOME_D/.local/bin/cc-switch-web.$f")" "no"
+done
 check "uninstall: install dir gone" "$(exists "$(inst_path)")" "no"
 check_has "uninstall: disable" "$(log_text)" "systemctl --user disable --now cc-switch-web"
 
@@ -347,6 +358,14 @@ run_install STUB_CAP_VERSION=9.9.9-web.9 CC_SWITCH_WEB_HEALTH_TIMEOUT=2 --
 check "a service that does not come up names the journal command: exit code" "$RC" "1"
 check_has "no health: journal command" "$(cat "$ERR")" "journalctl --user -u cc-switch-web"
 
+# 14b: the version answers but the console is 503 (init error): not a successful install
+setup_case unhealthy
+run_install STUB_HEALTH=503 CC_SWITCH_WEB_HEALTH_TIMEOUT=2 --
+check "a console that answers 503 is not running: exit code" "$RC" "1"
+check_has "503 health: names init-status" "$(cat "$ERR")" "/api/init-status"
+check_has "503 health: journal command" "$(cat "$ERR")" "journalctl --user -u cc-switch-web"
+check_has "503 health: /api/health was asked" "$(log_text)" "/api/health"
+
 # 15-18: broken archives whose SHA256SUMS line is right still install nothing
 # repack <mode>: replaces the V2 archive by a broken one and fixes its sum
 repack() {
@@ -357,6 +376,7 @@ repack() {
   case "$1" in
     no-install) mv "$w/$n/install.sh" "$w/gone" ;;
     no-dist) mv "$w/$n/dist-web" "$w/gone" ;;
+    no-index) mv "$w/$n/dist-web/index.html" "$w/gone" ;;
     unsafe)
       echo x >"$w/evil"
       tar -czf "$a" -C "$w" --transform 's|^evil$|../x|' "$n" evil
@@ -366,7 +386,7 @@ repack() {
   if [ "$1" != unsafe ] && [ "$1" != truncated ]; then tar -czf "$a" -C "$w" "$n"; fi
   (cd "$dir" && sha256sum "$n.tar.gz") >"$dir/SHA256SUMS"
 }
-for mode_want in "no-install:incomplete (no install.sh)" "no-dist:incomplete (no dist-web)" "unsafe:unsafe paths" "truncated:could not read"; do
+for mode_want in "no-install:incomplete (no install.sh)" "no-dist:incomplete (no dist-web/index.html)" "no-index:incomplete (no dist-web/index.html)" "unsafe:unsafe paths" "truncated:could not read"; do
   mode="${mode_want%%:*}"
   want_text="${mode_want#*:}"
   setup_case "broken-$mode"
