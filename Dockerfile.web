@@ -63,6 +63,9 @@ ENV HOST=127.0.0.1 PORT=18766 \
 LABEL org.opencontainers.image.source="https://github.com/alxwlw/cc-switch-web" \
       org.opencontainers.image.licenses="MIT"
 EXPOSE 18766
+# The probe goes to the address the server listens on: HOST can be a tailnet address, where
+# 127.0.0.1 answers nothing. A wildcard HOST is probed on loopback.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=4 \
-  CMD curl -fsS -o /dev/null "http://127.0.0.1:${PORT}/api/health" || exit 1
+  CMD h="${HOST:-127.0.0.1}"; case "$h" in 0.0.0.0|::) h=127.0.0.1;; *:*) h="[$h]";; esac; \
+      curl -fsS -o /dev/null "http://$h:${PORT}/api/health" || exit 1
 CMD ["cc-switch-web"]
