@@ -82,7 +82,8 @@ struct Shared {
     seen: Arc<Seen>,
 }
 
-/// GitHub stand-in for `/repos/o/r/compare/:spec` and `/repos/o/r/commits/main`.
+/// GitHub stand-in for `/repos/o/r/compare/:spec` and `/repos/o/r/commits/main`; the release
+/// mode has its own in `web_api_update_release.rs`.
 struct Github {
     url: String,
     compare_hits: Arc<AtomicUsize>,
@@ -244,7 +245,7 @@ fn ok(body: Value) -> Reply {
 }
 
 async fn run(gh: &Github, sha: &str, force: bool) -> UpdateCheck {
-    check_web_update(&gh.cfg(), Some(sha), force)
+    check_web_update(&gh.cfg(), Some(sha), None, force)
         .await
         .expect("update check")
 }
@@ -266,6 +267,10 @@ async fn three_commits_ahead_is_behind_with_three_newest_first() {
     assert_eq!(result["latestSha"], json!(sha_of(3)));
     assert_eq!(result["currentVersion"], json!(env!("CARGO_PKG_VERSION")));
     assert_eq!(result["branch"], json!("main"));
+    assert_eq!(result["mode"], json!("commit"));
+    assert_eq!(result["latestVersion"], Value::Null);
+    assert_eq!(result["releaseUrl"], Value::Null);
+    assert_eq!(result["publishedAt"], Value::Null);
     let shas: Vec<&str> = result["commits"]
         .as_array()
         .unwrap()
@@ -399,7 +404,7 @@ async fn rate_limit_403_is_an_error_with_text_and_not_cached() {
         .push(("x-ratelimit-reset", "1793795696".to_string()));
     let gh = Github::start(reply).await;
 
-    let err = check_web_update(&gh.cfg(), Some(&sha), false)
+    let err = check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .unwrap_err();
     let text = err.to_string();
@@ -407,7 +412,7 @@ async fn rate_limit_403_is_an_error_with_text_and_not_cached() {
     assert!(text.contains("rate limit"), "{text}");
     assert!(text.contains("retry after 12:34 UTC"), "{text}");
 
-    assert!(check_web_update(&gh.cfg(), Some(&sha), false)
+    assert!(check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .is_err());
     assert_eq!(gh.compare_hits(), 2, "an error is not cached");
@@ -422,7 +427,7 @@ async fn rate_limit_429_is_an_error_with_text() {
         json!({"message": "slow down"}),
     ))
     .await;
-    let text = check_web_update(&gh.cfg(), Some(&sha), false)
+    let text = check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .unwrap_err()
         .to_string();
@@ -440,12 +445,12 @@ async fn server_error_and_dead_source_are_errors_not_cached() {
         json!({"message": "boom"}),
     ))
     .await;
-    let text = check_web_update(&gh.cfg(), Some(&sha), false)
+    let text = check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .unwrap_err()
         .to_string();
     assert!(text.contains("HTTP 500"), "{text}");
-    assert!(check_web_update(&gh.cfg(), Some(&sha), false)
+    assert!(check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .is_err());
     assert_eq!(gh.compare_hits(), 2);
@@ -459,7 +464,7 @@ async fn server_error_and_dead_source_are_errors_not_cached() {
         repo: "o/r".to_string(),
         branch: "main".to_string(),
     };
-    let text = check_web_update(&cfg, Some(&sha), false)
+    let text = check_web_update(&cfg, Some(&sha), None, false)
         .await
         .unwrap_err()
         .to_string();
@@ -520,10 +525,10 @@ async fn parallel_requests_cost_one_source_request() {
     .await;
     let cfg = gh.cfg();
     let (a, b, c, d) = tokio::join!(
-        check_web_update(&cfg, Some(&sha), false),
-        check_web_update(&cfg, Some(&sha), false),
-        check_web_update(&cfg, Some(&sha), false),
-        check_web_update(&cfg, Some(&sha), false),
+        check_web_update(&cfg, Some(&sha), None, false),
+        check_web_update(&cfg, Some(&sha), None, false),
+        check_web_update(&cfg, Some(&sha), None, false),
+        check_web_update(&cfg, Some(&sha), None, false),
     );
     for result in [a, b, c, d] {
         assert_eq!(as_json(&result.unwrap())["status"], json!("behind"));
@@ -581,18 +586,18 @@ async fn an_answer_without_the_counters_is_an_error_and_not_cached() {
     let sha = sha_of(0x1012);
     let gh = Github::start(ok(json!({}))).await;
 
-    let text = check_web_update(&gh.cfg(), Some(&sha), false)
+    let text = check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .unwrap_err()
         .to_string();
     assert!(text.contains("unreadable answer"), "{text}");
     // Neither counter alone is enough.
     gh.set_compare(ok(json!({"ahead_by": 0})));
-    assert!(check_web_update(&gh.cfg(), Some(&sha), false)
+    assert!(check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .is_err());
     gh.set_compare(ok(json!({"behind_by": 0})));
-    assert!(check_web_update(&gh.cfg(), Some(&sha), false)
+    assert!(check_web_update(&gh.cfg(), Some(&sha), None, false)
         .await
         .is_err());
     assert_eq!(gh.compare_hits(), 3, "an unreadable answer is not cached");
@@ -624,14 +629,26 @@ async fn a_cached_answer_names_the_branch_it_was_computed_for() {
         ..gh.cfg()
     };
 
-    let first = as_json(&check_web_update(&main, Some(&sha), false).await.unwrap());
+    let first = as_json(
+        &check_web_update(&main, Some(&sha), None, false)
+            .await
+            .unwrap(),
+    );
     assert_eq!(first["branch"], json!("main"));
     // Same source, same build, another branch: not served from main's entry.
-    let other = as_json(&check_web_update(&dev, Some(&sha), false).await.unwrap());
+    let other = as_json(
+        &check_web_update(&dev, Some(&sha), None, false)
+            .await
+            .unwrap(),
+    );
     assert_eq!(other["branch"], json!("dev"));
     assert_eq!(gh.compare_hits(), 2, "another branch asks again");
     // And the one-hour cache still serves the branch it holds.
-    let again = as_json(&check_web_update(&dev, Some(&sha), false).await.unwrap());
+    let again = as_json(
+        &check_web_update(&dev, Some(&sha), None, false)
+            .await
+            .unwrap(),
+    );
     assert_eq!(again["branch"], json!("dev"));
     assert_eq!(gh.compare_hits(), 2);
 }
@@ -642,7 +659,7 @@ async fn a_build_without_a_usable_commit_is_unknown_and_asks_nobody() {
     let gh = Github::start(ok(compare_body(3, 0, 1, 3))).await;
     let cfg = gh.cfg();
 
-    let none = as_json(&check_web_update(&cfg, None, false).await.unwrap());
+    let none = as_json(&check_web_update(&cfg, None, None, false).await.unwrap());
     assert_eq!(none["status"], json!("unknown"));
     assert_eq!(none["currentSha"], Value::Null);
     assert_eq!(none["latestSha"], Value::Null);
@@ -652,7 +669,7 @@ async fn a_build_without_a_usable_commit_is_unknown_and_asks_nobody() {
 
     // Text that is not a commit hash never reaches the URL.
     for bad in ["", "main", "abc", "abc1234/../../x", "abc1234?x=1"] {
-        let result = as_json(&check_web_update(&cfg, Some(bad), true).await.unwrap());
+        let result = as_json(&check_web_update(&cfg, Some(bad), None, true).await.unwrap());
         assert_eq!(result["status"], json!("unknown"), "{bad:?}");
     }
     assert_eq!(gh.compare_hits(), 0);

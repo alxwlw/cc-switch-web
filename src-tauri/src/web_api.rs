@@ -41,8 +41,8 @@ pub use restart::{
 };
 use self_update::UpdateControl;
 pub use self_update::{
-    SpawnError, SystemdRunSpawner, UpdateLaunch, UpdateRunStatus, UpdateRunner, UpdateSpawner,
-    UPDATE_UNIT,
+    BuildMode, SpawnError, SystemdRunSpawner, UpdateLaunch, UpdateRunStatus, UpdateRunner,
+    UpdateSource, UpdateSpawner, UPDATE_UNIT,
 };
 
 pub type SharedState = Arc<AppState>;
@@ -727,14 +727,19 @@ async fn restart_server(
     )
 }
 
-/// `buildSha` and `self_update` are parameters so a test can pin both values: a default
-/// build has no SHA, and the flag follows the environment of the process.
-fn capabilities_payload(build_sha: Option<&str>, self_update: bool) -> Value {
+/// `buildSha`, `webVersion` and `self_update` are parameters so a test can pin them: a default
+/// build has no SHA and no fork version, and the flag follows the environment of the process.
+fn capabilities_payload(
+    build_sha: Option<&str>,
+    web_version: Option<crate::services::web_update::WebVersion>,
+    self_update: bool,
+) -> Value {
     json!({
         "mode": "web",
         "auth": "none (tailscale-only; TRUSTED_TAILNET=1 required for non-loopback bind)",
         "version": env!("CARGO_PKG_VERSION"),
         "buildSha": build_sha,
+        "webVersion": web_version.map(|v| v.to_string()),
         "selfUpdate": self_update,
         "platform": std::env::consts::OS,
         "mvp_apps": ["claude", "codex", "gemini", "opencode"],
@@ -749,6 +754,7 @@ async fn capabilities(control: Option<Extension<UpdateControl>>) -> Json<Value> 
     let self_update = control.is_some_and(|Extension(control)| control.enabled());
     Json(capabilities_payload(
         crate::services::web_update::build_sha(),
+        crate::services::web_update::web_version(),
         self_update,
     ))
 }
@@ -762,6 +768,7 @@ async fn update_check(Query(q): Query<UpdateCheckQuery>) -> ApiResult {
     update_check_with(
         &crate::services::web_update::UpdateSourceConfig::from_env(),
         crate::services::web_update::build_sha(),
+        crate::services::web_update::web_version(),
         q.force.as_deref(),
     )
     .await
@@ -779,13 +786,20 @@ async fn update_install(
         return rejection;
     }
     match control.start().await {
-        self_update::Start::Started(launch) => (
-            StatusCode::ACCEPTED,
-            Json(json!({
-                "ok": true,
-                "data": { "unit": launch.unit, "branch": launch.branch },
-            })),
-        ),
+        self_update::Start::Started(launch) => {
+            // A checkout update names the branch it pulls, a release update the repository.
+            let (branch, repo) = match &launch.source {
+                UpdateSource::Checkout { branch, .. } => (Some(branch), None),
+                UpdateSource::Release { repo, .. } => (None, Some(repo)),
+            };
+            (
+                StatusCode::ACCEPTED,
+                Json(json!({
+                    "ok": true,
+                    "data": { "unit": launch.unit, "branch": branch, "repo": repo },
+                })),
+            )
+        }
         self_update::Start::Refused(reason) => conflict(reason),
         self_update::Start::Failed(why) => fail(why),
     }
@@ -809,15 +823,16 @@ async fn update_status() -> ApiResult {
 }
 
 /// `force` is the `?force=` value: `1` or `true` skips the one-hour cache. The build
-/// commit and the source are parameters so tests can supply what the build and the
+/// commit, the fork version and the source are parameters so tests can supply what the build and the
 /// environment do not.
 async fn update_check_with(
     cfg: &crate::services::web_update::UpdateSourceConfig,
     build_sha: Option<&str>,
+    web_version: Option<crate::services::web_update::WebVersion>,
     force: Option<&str>,
 ) -> ApiResult {
     let force = matches!(force, Some("1" | "true"));
-    match crate::services::web_update::check(cfg, build_sha, force).await {
+    match crate::services::web_update::check(cfg, build_sha, web_version, force).await {
         Ok(result) => ok(result),
         Err(e) => fail(e.to_string()),
     }
@@ -5122,14 +5137,15 @@ mod tests {
         capabilities, capabilities_payload, get, update_check_with, web_oauth_account_param, Json,
         Router,
     };
+    use crate::services::web_update::WebVersion;
     use axum::http::StatusCode;
     use std::sync::Arc;
 
     #[test]
     fn capabilities_payload_carries_the_given_build_sha() {
-        let set = capabilities_payload(Some("abc1234def"), false);
+        let set = capabilities_payload(Some("abc1234def"), None, false);
         assert_eq!(set["buildSha"], serde_json::json!("abc1234def"));
-        let unset = capabilities_payload(None, false);
+        let unset = capabilities_payload(None, None, false);
         assert!(unset.as_object().unwrap().contains_key("buildSha"));
         assert!(unset["buildSha"].is_null());
     }
@@ -5137,13 +5153,23 @@ mod tests {
     #[test]
     fn capabilities_payload_carries_the_self_update_flag() {
         assert_eq!(
-            capabilities_payload(None, true)["selfUpdate"],
+            capabilities_payload(None, None, true)["selfUpdate"],
             serde_json::json!(true)
         );
         assert_eq!(
-            capabilities_payload(None, false)["selfUpdate"],
+            capabilities_payload(None, None, false)["selfUpdate"],
             serde_json::json!(false)
         );
+    }
+
+    #[test]
+    fn capabilities_payload_carries_the_web_version() {
+        let v = WebVersion::parse("4.0.35-web.1");
+        assert_eq!(
+            capabilities_payload(None, v, false)["webVersion"],
+            "4.0.35-web.1"
+        );
+        assert!(capabilities_payload(None, None, false)["webVersion"].is_null());
     }
 
     /// GitHub stand-in: `compare` answers with `status`/`body`, counting only
@@ -5189,16 +5215,16 @@ mod tests {
         let sha = "1111111aaaa";
         let count = || hits.load(std::sync::atomic::Ordering::SeqCst);
 
-        let (status, Json(first)) = update_check_with(&cfg, Some(sha), None).await;
+        let (status, Json(first)) = update_check_with(&cfg, Some(sha), None, None).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(first["data"]["status"], "up-to-date");
         assert_eq!(count(), 1);
-        let _ = update_check_with(&cfg, Some(sha), Some("0")).await;
-        let _ = update_check_with(&cfg, Some(sha), Some("")).await;
+        let _ = update_check_with(&cfg, Some(sha), None, Some("0")).await;
+        let _ = update_check_with(&cfg, Some(sha), None, Some("")).await;
         assert_eq!(count(), 1, "force=0 and an empty force use the cache");
-        let _ = update_check_with(&cfg, Some(sha), Some("1")).await;
+        let _ = update_check_with(&cfg, Some(sha), None, Some("1")).await;
         assert_eq!(count(), 2, "force=1 asks the source");
-        let _ = update_check_with(&cfg, Some(sha), Some("true")).await;
+        let _ = update_check_with(&cfg, Some(sha), None, Some("true")).await;
         assert_eq!(count(), 3, "force=true asks the source");
     }
 
@@ -5208,7 +5234,7 @@ mod tests {
         let (url, _hits) =
             update_stub(StatusCode::FORBIDDEN, r#"{"message":"rate limit"}"#.into()).await;
         let (status, Json(body)) =
-            update_check_with(&update_cfg(url), Some("2222222bbbb"), None).await;
+            update_check_with(&update_cfg(url), Some("2222222bbbb"), None, None).await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(body["ok"], false);
         assert!(

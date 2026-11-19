@@ -20,15 +20,15 @@ use std::sync::{Arc, Mutex};
 use axum::body::Body;
 use axum::http::{header, Request, StatusCode};
 use cc_switch_lib::web_api::{
-    init_error_router, router, router_with_update, SpawnError, UpdateLaunch, UpdateRunner,
-    UpdateSpawner,
+    init_error_router, router, router_with_update, BuildMode, SpawnError, UpdateLaunch,
+    UpdateRunner, UpdateSource, UpdateSpawner,
 };
 use serde_json::{json, Value};
 use serial_test::serial;
 use support::{create_test_state, ensure_test_home, reset_test_fs, web_call};
 use tower::ServiceExt;
 
-const TOUCHED: [&str; 11] = [
+const TOUCHED: [&str; 16] = [
     "CC_SWITCH_WEB_SELF_UPDATE",
     "CC_SWITCH_WEB_SOURCE_DIR",
     "CC_SWITCH_WEB_UPDATE_BRANCH",
@@ -40,6 +40,11 @@ const TOUCHED: [&str; 11] = [
     "PORT",
     "WEB_DIST",
     "CC_SWITCH_WEB_SUPERVISED",
+    "CC_SWITCH_WEB_INSTALL_DIR",
+    "CC_SWITCH_WEB_UPDATE_REPO",
+    "CC_SWITCH_WEB_UPDATE_API",
+    "CC_SWITCH_WEB_DOWNLOAD_BASE",
+    "BIN_DIR",
 ];
 const ALREADY: &str = "an update is already running";
 
@@ -88,10 +93,19 @@ impl Fixture {
         std::fs::write(path, body).unwrap();
     }
 
+    /// The checkout mode, whatever the test binary was built with.
     fn router(&self, spawner: &Arc<Fake>) -> axum::Router {
+        self.router_in(spawner, BuildMode::Checkout)
+    }
+
+    fn router_in(&self, spawner: &Arc<Fake>, mode: BuildMode) -> axum::Router {
         let state = Arc::new(create_test_state().expect("create test state"));
         let spawner: Arc<dyn UpdateSpawner> = spawner.clone();
-        router_with_update(state, None, Some(Arc::new(UpdateRunner::new(spawner))))
+        router_with_update(
+            state,
+            None,
+            Some(Arc::new(UpdateRunner::with_mode(spawner, mode))),
+        )
     }
 }
 
@@ -276,6 +290,7 @@ async fn an_enabled_install_is_202_and_the_launcher_gets_the_script_the_branch_a
     assert_eq!(body["ok"], json!(true));
     assert_eq!(body["data"]["unit"], json!("cc-switch-web-update"));
     assert_eq!(body["data"]["branch"], json!("release"));
+    assert_eq!(body["data"]["repo"], json!(null));
     let launches = fake.launches.lock().unwrap().clone();
     assert_eq!(launches.len(), 1);
     let launch = &launches[0];
@@ -284,8 +299,13 @@ async fn an_enabled_install_is_202_and_the_launcher_gets_the_script_the_branch_a
         launch.script,
         fx.source.path().join("scripts/self-update.sh")
     );
-    assert_eq!(launch.source_dir, fx.source.path());
-    assert_eq!(launch.branch, "release");
+    assert_eq!(
+        launch.source,
+        UpdateSource::Checkout {
+            source_dir: fx.source.path().to_path_buf(),
+            branch: "release".into(),
+        }
+    );
     assert_eq!(launch.status_file, fx.status_file());
     let env: Vec<(&str, String)> = launch
         .env
@@ -312,6 +332,75 @@ async fn an_enabled_install_is_202_and_the_launcher_gets_the_script_the_branch_a
 
 #[tokio::test]
 #[serial]
+async fn a_release_install_is_202_with_the_repo_and_no_branch() {
+    let fx = Fixture::new();
+    let install_dir = tempfile::tempdir().unwrap();
+    let script = install_dir.path().join("self-update.sh");
+    std::fs::write(&script, "#!/bin/sh\n").unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::env::remove_var("CC_SWITCH_WEB_SOURCE_DIR");
+    std::env::set_var("CC_SWITCH_WEB_INSTALL_DIR", install_dir.path());
+    std::env::set_var("CC_SWITCH_WEB_UPDATE_REPO", "alxwlw/cc-switch-web");
+    std::env::set_var("CC_SWITCH_WEB_UPDATE_API", "http://127.0.0.1:9/api");
+    std::env::set_var("BIN_DIR", "/home/svc/.local/bin");
+    let fake = Fake::new();
+    let router = fx.router_in(&fake, BuildMode::Release);
+    assert_eq!(self_update_flag(&router).await, json!(true));
+
+    let (code, body) = install(&router).await;
+
+    assert_eq!(code, StatusCode::ACCEPTED, "{body}");
+    assert_eq!(
+        body,
+        json!({"ok": true, "data": {
+            "unit": "cc-switch-web-update",
+            "branch": null,
+            "repo": "alxwlw/cc-switch-web",
+        }})
+    );
+    let launches = fake.launches.lock().unwrap().clone();
+    assert_eq!(launches.len(), 1);
+    assert_eq!(
+        launches[0].source,
+        UpdateSource::Release {
+            install_dir: install_dir.path().to_path_buf(),
+            repo: "alxwlw/cc-switch-web".into(),
+        }
+    );
+    assert_eq!(launches[0].script, script);
+    let env: Vec<&str> = launches[0].env.iter().map(|(k, _)| *k).collect();
+    assert_eq!(
+        env,
+        [
+            "XDG_STATE_HOME",
+            "CC_SWITCH_WEB_INSTALL_DIR",
+            "CC_SWITCH_WEB_UPDATE_API",
+            "BIN_DIR"
+        ]
+    );
+}
+
+#[tokio::test]
+#[serial]
+async fn a_release_install_without_the_install_dir_is_409_even_with_a_source_dir() {
+    let fx = Fixture::new();
+    let fake = Fake::new();
+    let router = fx.router_in(&fake, BuildMode::Release);
+
+    let (code, body) = install(&router).await;
+
+    assert_eq!(code, StatusCode::CONFLICT, "{body}");
+    assert_eq!(
+        body["error"].as_str().unwrap_or_default(),
+        "CC_SWITCH_WEB_INSTALL_DIR is not set",
+        "{body}"
+    );
+    assert_eq!(self_update_flag(&router).await, json!(false));
+    assert_eq!(fake.calls(), 0);
+}
+
+#[tokio::test]
+#[serial]
 async fn the_default_branch_is_main_and_nothing_comes_from_the_body() {
     let fx = Fixture::new();
     let fake = Fake::new();
@@ -332,8 +421,13 @@ async fn the_default_branch_is_main_and_nothing_comes_from_the_body() {
 
     assert_eq!(code, StatusCode::ACCEPTED, "{body}");
     let launch = fake.launches.lock().unwrap()[0].clone();
-    assert_eq!(launch.branch, "main");
-    assert_eq!(launch.source_dir, fx.source.path());
+    assert_eq!(
+        launch.source,
+        UpdateSource::Checkout {
+            source_dir: fx.source.path().to_path_buf(),
+            branch: "main".into(),
+        }
+    );
     assert_eq!(
         launch.script,
         fx.source.path().join("scripts/self-update.sh")
@@ -362,7 +456,10 @@ async fn the_conditions_are_read_again_on_every_request() {
     fake.running.store(false, Ordering::SeqCst);
     let (again, _) = install(&router).await;
     assert_eq!(again, StatusCode::ACCEPTED);
-    assert_eq!(fake.launches.lock().unwrap()[1].branch, "next");
+    assert!(matches!(
+        &fake.launches.lock().unwrap()[1].source,
+        UpdateSource::Checkout { branch, .. } if branch == "next"
+    ));
 }
 
 #[tokio::test]
@@ -614,6 +711,8 @@ async fn status_is_null_before_any_update_and_then_the_file_field_by_field() {
             "message": "restarting cc-switch-web",
             "fromSha": "aaa1111",
             "toSha": "bbb2222",
+            "fromVersion": null,
+            "toVersion": null,
             "startedAt": "2026-11-04T10:00:00Z",
             "finishedAt": null,
         }})

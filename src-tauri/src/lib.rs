@@ -100,7 +100,7 @@ pub use services::{
         EditorView,
     },
     skill::{migrate_skills_to_ssot, ImportSkillSelection},
-    web_update::{check as check_web_update, UpdateCheck, UpdateSourceConfig},
+    web_update::{check as check_web_update, UpdateCheck, UpdateSourceConfig, WebVersion},
     ConfigService, EndpointLatency, McpService, PromptService, ProviderService, ProxyService,
     SkillService, SpeedtestService,
 };

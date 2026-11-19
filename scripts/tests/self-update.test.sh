@@ -650,7 +650,7 @@ check_has "rollback into init-error: message still names the .prev copies" "$(fi
 check "rollback into init-error: message is plain ASCII" "$(field message | LC_ALL=C grep -c '[^ -~]')" "0"
 
 setup_case rollback-into-init-error-unknown-build
-# the build that was running reported no sha (RUNNING_SHA is empty), so the rollback is
+# the build that was running reported no sha (RUNNING_ID is empty), so the rollback is
 # confirmed by /api/health alone; the previous binary is in init-error: not rolled-back
 echo none >"$SVC"
 echo "initerr-none" >"$BIN_DIR/cc-switch-web"
