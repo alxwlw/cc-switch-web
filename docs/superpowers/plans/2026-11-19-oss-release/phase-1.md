@@ -1,5 +1,7 @@
 # Phase 1 — версия форка, обновления по релизам, установщик, релизный workflow, Docker
 
+PR: https://github.com/alxwlw/cc-switch-web/pull/43, ветка `feat-cld/oss-release-p1`
+
 Цель: всё, что нужно для релиза, кроме консоли и лица проекта. После фазы бинарник знает свою версию форка; проверка обновлений и самообновление работают по релизам; `scripts/install.sh` ставит архив релиза; `release-web.yml` на PR собирает архивы и образ и прогоняет smoke-тесты, а по тегу публикует релиз; есть `deploy/compose.yml`. Тег в этой фазе не ставится: апстримовский `release.yml` тоже срабатывает на `v*`, он удаляется в фазе 2.
 
 Спека: `docs/superpowers/specs/2026-11-19-oss-release-design.md`, разделы 1–5.
@@ -363,3 +365,8 @@ Jobs в `release-web.yml`:
 ## Notes for next phase
 
 - Пока фаза 2 не слита, сборка с `webVersion` в консоли покажет «behind by 0 commits» в режиме релизов и сырые имена новых стадий (`downloading`, `verifying`): фронтенд их ещё не знает. Релизов до фазы 3 нет, так что пользователи этого не увидят.
+- Консоль (фаза 2, `useSelfUpdate`): финальную стадию `done` хук считает «ничего не изменилось» только при `fromSha===toSha` и обоих не `null`. Релизный «already up to date» `done` приходит с `fromVersion===toVersion` и `fromSha`/`toSha` равными `null`, и страница перезагрузилась бы зря, поэтому фаза 2 сравнивает ещё и версии (то же правило записано в `phase-2.md`, Task 1). Ответ установки теперь `{unit, branch|null, repo|null}`; в статус добавлены `fromVersion`/`toVersion`; новые стадии — `downloading` и `verifying`.
+- `Release (web)` теперь срабатывает на PR, которые трогают любой вход архива или образа (`src-tauri/**`, `src/**`, `package.json`, `pnpm-lock.yaml`, `.node-version`, `vite.config.web.mts`, `rust-toolchain.toml`, `scripts/**`, `deploy/**`, `Dockerfile.web*`, сам workflow), а `workflow_dispatch` никогда не публикует: `publish=true` только при push тега, прошедшего проверки (`scripts/release-meta.sh`).
+- Первый запуск по тегу будет первым запуском входа в ghcr, push по digest, `imagetools create` и `gh release create`: до тега они не выполнялись. Образ, который уходит в ghcr, пересобирается из кеша, а не тот, что прошёл smoke. rust-cache в workflow не сохраняется ни разу (триггера на `main` нет), поэтому сборки стартуют холодными.
+- Образ по умолчанию слушает `HOST=127.0.0.1` без `TRUSTED_TAILNET` и берёт `WEB_DIST=/opt/cc-switch-web/dist-web`. Compose владельца в Dokploy переопределяет HOST/PORT/TRUSTED_TAILNET и использует `WEB_DIST` образа.
+- Хвосты фазы: DP-046 (`CC_SWITCH_WEB_UPDATE_REPO` как запасное имя для `CC_SWITCH_WEB_REPO` в `install.sh`), `unreachable!` в `web_update.rs:328`, clippy `--tests` type_complexity в `self_update/tests.rs`.

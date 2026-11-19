@@ -25,9 +25,9 @@ Scope: `src/components/settings/{AboutSection,SelfUpdatePanel}.tsx`, `src/lib/up
 
 **Files:**
 - Modify: `src/lib/api/capabilities.ts`, `src/lib/updater.ts`, `src/lib/api/selfUpdate.ts`
-- Modify: `src/components/settings/AboutSection.tsx` (web-ветка), `src/components/settings/SelfUpdatePanel.tsx`
+- Modify: `src/components/settings/AboutSection.tsx` (web-ветка), `src/components/settings/SelfUpdatePanel.tsx`, `src/hooks/useSelfUpdate.ts`
 - Modify: `src/i18n/locales/*.json` (только `web.update.*`)
-- Test: `tests/lib/capabilities.test.ts`, тест `parseWebUpdateCheck` (найти `grep -rl parseWebUpdateCheck tests/`; нет — `tests/lib/webUpdateCheck.test.ts`), `tests/components/AboutSection.web.test.tsx`, `tests/components/AboutSection.selfUpdate.test.tsx`, `tests/i18n/updateCatalog.test.tsx`
+- Test: `tests/lib/capabilities.test.ts`, тест `parseWebUpdateCheck` (найти `grep -rl parseWebUpdateCheck tests/`; нет — `tests/lib/webUpdateCheck.test.ts`), `tests/components/AboutSection.web.test.tsx`, `tests/components/AboutSection.selfUpdate.test.tsx`, `tests/hooks/useSelfUpdate.test.tsx`, `tests/i18n/updateCatalog.test.tsx`
 
 **Interfaces:**
 - Consumes (фаза 1): `webVersion` в `/api/capabilities`; в ответе проверки `mode`, `latestVersion`, `releaseUrl`, `publishedAt`; ответ установки `{unit, branch|null, repo|null}`; в статусе `fromVersion`, `toVersion`; стадии `downloading`, `verifying`.
@@ -42,6 +42,7 @@ Scope: `src/components/settings/{AboutSection,SelfUpdatePanel}.tsx`, `src/lib/up
 Поведение:
 - Строка версии в About (web): есть `webVersion` → `v<webVersion>`, иначе `version`, как сейчас.
 - `behind` в режиме релизов: заголовок `releaseBehindTitle` с `latestVersion`, ссылка `releaseNotes` на `releaseUrl` (`target="_blank" rel="noopener noreferrer"`), списка коммитов нет; кнопка самообновления и инструкции — как в режиме коммитов. `up-to-date`, `unknown`, ошибка — без изменений.
+- `useSelfUpdate` считает финальную стадию `done` «ничего не изменилось» (страницу не перезагружать) только при `fromSha === toSha` и обоих не `null`. Релизный `done` «already up to date» приходит с `fromVersion === toVersion` и `fromSha`/`toSha` равными `null`: по старому правилу страница перезагрузилась бы. Правило: «ничего не изменилось» = (`fromSha === toSha`, оба не `null`) или (`fromVersion === toVersion`, оба не `null`).
 - Подтверждение самообновления в режиме релизов: `confirmReleaseMessage` с `latestVersion` вместо ветки, sha и списка коммитов; предупреждение про БД остаётся.
 
 - [ ] **Step 1: тесты.**
@@ -49,6 +50,7 @@ Scope: `src/components/settings/{AboutSection,SelfUpdatePanel}.tsx`, `src/lib/up
   - тест `parseWebUpdateCheck`: `a check without mode is commit mode`; `release fields are read` (`mode: "release"`, `latestVersion`, `releaseUrl`, `publishedAt`).
   - `AboutSection.web.test.tsx`: `release mode behind shows the new version and the release notes link, not a commit list` — текст «Version 4.0.35-web.2 is available», ссылка «Release notes» с `href` = `releaseUrl`, нет элементов `WebCommitList`; `the version line shows the fork version when the server has one` — «v4.0.35-web.1».
   - `AboutSection.selfUpdate.test.tsx`: `release mode confirmation names the version, not the branch` — в диалоге «Install version 4.0.35-web.2?», нет имени ветки; `downloading and verifying stages have their own text` — «Downloading the release», «Checking the download».
+  - `tests/hooks/useSelfUpdate.test.tsx`: `a release done with equal versions and null shas does not reload the page`; `a release done with different versions reloads it`; commit-mode `done` с равными sha — как раньше.
   - `updateCatalog.test.tsx`: новые ключи — в списке проверяемых, во всех локалях.
 - [ ] **Step 2:** `pnpm test:unit -- tests/lib tests/components/AboutSection.web.test.tsx tests/components/AboutSection.selfUpdate.test.tsx tests/i18n/updateCatalog.test.tsx` → новые FAIL.
 - [ ] **Step 3:** реализовать.
