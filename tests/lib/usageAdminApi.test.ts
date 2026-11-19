@@ -150,16 +150,6 @@ describe("usage admin API · web adapter (WEB-12)", () => {
     });
   });
 
-  it("getDataSourceBreakdown: GET data-sources", async () => {
-    reply([]);
-    await usageApi.getDataSourceBreakdown();
-    expect(lastCall()).toEqual({
-      url: "/api/usage/data-sources",
-      method: "GET",
-      body: undefined,
-    });
-  });
-
   it("getPricingModelSource: GET /api/:app/pricing-model-source", async () => {
     reply("response");
     expect(await proxyApi.getPricingModelSource("claude")).toBe("response");

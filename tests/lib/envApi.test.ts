@@ -7,7 +7,7 @@ vi.mock("@tauri-apps/api/core", async () => {
 });
 
 import type { EnvConflict } from "@/types/env";
-import { deleteEnvVars, restoreEnvBackup } from "@/lib/api/env";
+import { deleteEnvVars } from "@/lib/api/env";
 
 describe("env API · web adapter (WEB-22)", () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
@@ -43,14 +43,5 @@ describe("env API · web adapter (WEB-22)", () => {
     expect(url).toBe("/api/env/conflicts/cleanup");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual({ conflicts });
-  });
-
-  it("restoreEnvBackup: POST /api/env/restore with {backupPath}", async () => {
-    fetchSpy.mockResolvedValue(jsonResponse({ ok: true, data: null }));
-    await restoreEnvBackup("/srv/bk.json");
-    const [url, init] = fetchSpy.mock.calls[0];
-    expect(url).toBe("/api/env/restore");
-    expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body)).toEqual({ backupPath: "/srv/bk.json" });
   });
 });

@@ -50,7 +50,7 @@ async fn bootstrap_spawns_codex_history_and_imports_populated_live_configs() {
     let claude = boot
         .state
         .db
-        .get_all_providers("claude")
+        .get_all_providers(&cc_switch_lib::AppType::Claude)
         .expect("claude providers");
     assert!(!claude.is_empty(), "claude live config must be imported");
 }

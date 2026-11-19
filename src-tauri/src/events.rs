@@ -130,7 +130,7 @@ pub fn provider_switched_payload(
     serde_json::json!({
         "appType": app_type.as_str(),
         "proxyEnabled": crate::mode::current::is_proxy(app_type),
-        "autoFailoverEnabled": state.db.get_proxy_flags_sync(app_type.as_str()).1,
+        "autoFailoverEnabled": state.db.get_proxy_flags_sync(app_type).1,
         "providerId": provider_id,
     })
 }

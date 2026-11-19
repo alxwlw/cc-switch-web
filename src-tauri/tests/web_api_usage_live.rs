@@ -203,7 +203,10 @@ async fn usage_query_hits_stub_caches_and_emits() {
     let code = usage_code(&format!("{}/usage", stub.url));
     state
         .db
-        .save_provider("claude", &script_provider("usage-stub", &code, &stub.url))
+        .save_provider(
+            &cc_switch_lib::AppType::Claude,
+            &script_provider("usage-stub", &code, &stub.url),
+        )
         .unwrap();
     let mut rx = state.events.subscribe();
 
@@ -255,7 +258,7 @@ async fn usage_query_transport_failure_is_err_and_leaves_cache_untouched() {
     state
         .db
         .save_provider(
-            "claude",
+            &cc_switch_lib::AppType::Claude,
             &script_provider("usage-dead", &code, &format!("http://127.0.0.1:{port}")),
         )
         .unwrap();
@@ -297,7 +300,7 @@ async fn usage_script_test_rejects_non_loopback_http() {
     state
         .db
         .save_provider(
-            "claude",
+            &cc_switch_lib::AppType::Claude,
             &Provider::with_id(
                 "plain".to_string(),
                 "PLAIN".to_string(),
@@ -341,7 +344,7 @@ async fn usage_script_test_infinite_loop_hits_deadline() {
     state
         .db
         .save_provider(
-            "claude",
+            &cc_switch_lib::AppType::Claude,
             &Provider::with_id(
                 "loopy".to_string(),
                 "LOOPY".to_string(),
@@ -464,53 +467,6 @@ async fn coding_plan_zenmux_against_stub() {
 
 #[tokio::test]
 #[serial]
-async fn provider_limits_reflect_seeded_rows() {
-    let _lock = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    let (state, router) = fixture();
-    let mut provider = Provider::with_id(
-        "lim".to_string(),
-        "LIM".to_string(),
-        json!({"env": {}}),
-        None,
-    );
-    let meta: ProviderMeta = serde_json::from_value(json!({
-        "limitDailyUsd": "10.00",
-        "limitMonthlyUsd": "100.00",
-    }))
-    .expect("limit meta");
-    provider.meta = Some(meta);
-    state.db.save_provider("claude", &provider).unwrap();
-
-    // Seed one $2.50 row dated today through a second connection to the same
-    // file DB (precedent: provider_service.rs opens the file directly).
-    let home = ensure_test_home();
-    let now = chrono::Utc::now().timestamp();
-    {
-        let conn =
-            rusqlite::Connection::open(home.join(".cc-switch/cc-switch.db")).expect("open db");
-        conn.execute(
-            "INSERT INTO proxy_request_logs (
-                request_id, provider_id, app_type, model,
-                input_tokens, output_tokens, total_cost_usd,
-                latency_ms, status_code, created_at
-            ) VALUES ('lim-1', 'lim', 'claude', 'claude-3', 100, 50, '2.5', 100, 200, ?)",
-            [now],
-        )
-        .expect("seed usage row");
-    }
-
-    let data = ok_data(&router, "GET", "/api/claude/providers/lim/limits", None).await;
-    assert_eq!(data["providerId"], json!("lim"), "{data}");
-    assert_eq!(data["dailyUsage"], json!("2.500000"), "{data}");
-    assert_eq!(data["dailyLimit"], json!("10.00"), "{data}");
-    assert_eq!(data["dailyExceeded"], json!(false), "{data}");
-    assert_eq!(data["monthlyUsage"], json!("2.500000"), "{data}");
-    assert_eq!(data["monthlyLimit"], json!("100.00"), "{data}");
-    assert_eq!(data["monthlyExceeded"], json!(false), "{data}");
-}
-
-#[tokio::test]
-#[serial]
 async fn stream_check_against_sse_stub_is_ok() {
     let _lock = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     let (state, router) = fixture();
@@ -527,7 +483,7 @@ async fn stream_check_against_sse_stub_is_ok() {
     state
         .db
         .save_provider(
-            "claude",
+            &cc_switch_lib::AppType::Claude,
             &Provider::with_id(
                 "streamy".to_string(),
                 "STREAMY".to_string(),

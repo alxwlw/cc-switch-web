@@ -23,7 +23,6 @@ use cc_switch_lib::web_api::{
     init_error_router, router, router_with_update, SpawnError, UpdateLaunch, UpdateRunner,
     UpdateSpawner,
 };
-use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use serial_test::serial;
 use support::{create_test_state, ensure_test_home, reset_test_fs, web_call};

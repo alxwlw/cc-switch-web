@@ -80,15 +80,18 @@ async fn test_against_a_closed_port_answers_ok_false_with_the_services_own_text(
     // The text `services/webdav.rs` builds for a refused connection: only a real PROPFIND
     // against the closed port can produce it, a canned failure cannot.
     let target = format!("http://127.0.0.1:{port}/dav");
-    assert_eq!(
-        json,
-        json!({
-            "ok": false,
-            "error": format!(
-                "WebDAV 连接失败（连接失败）: {target} (WebDAV connection failed (connection failed): {target})"
-            ),
-        })
+    // The service now appends the transport cause inside the parentheses, so pin the stable
+    // frame around it (zh + en text and the target), not the OS-dependent cause.
+    assert_eq!(json["ok"], json!(false));
+    let error = json["error"].as_str().unwrap();
+    assert!(error.starts_with("WebDAV 连接失败（连接失败"), "{error}");
+    assert!(
+        error.contains(&format!(
+            "）: {target} (WebDAV connection failed (connection failed"
+        )),
+        "{error}"
     );
+    assert!(error.contains("Connection refused"), "{error}");
     // A refused connection answers at once; the service's request timeout is 30 s.
     assert!(
         elapsed < Duration::from_secs(10),
@@ -111,13 +114,14 @@ async fn s3_test_against_a_closed_port_answers_ok_false_with_the_services_own_te
     )
     .await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    assert_eq!(
-        json,
-        json!({
-            "ok": false,
-            "error": "S3 连接失败（连接失败） (S3 connection failed (connection failed))",
-        })
+    assert_eq!(json["ok"], json!(false));
+    let error = json["error"].as_str().unwrap();
+    assert!(error.starts_with("S3 连接失败（连接失败"), "{error}");
+    assert!(
+        error.contains("(S3 connection failed (connection failed"),
+        "{error}"
     );
+    assert!(error.contains("Connection refused"), "{error}");
     assert!(started.elapsed() < Duration::from_secs(10));
 }
 
@@ -675,16 +679,19 @@ async fn download_restores_the_providers_and_projects_them_into_the_live_file() 
     // Local drift after the upload: one provider gone, one changed, a stale live file.
     fx.state
         .db
-        .delete_provider("claude", "new-provider")
+        .delete_provider(&cc_switch_lib::AppType::Claude, "new-provider")
         .unwrap();
     let mut drifted = fx
         .state
         .db
-        .get_provider_by_id("old-provider", "claude")
+        .get_provider_by_id("old-provider", &cc_switch_lib::AppType::Claude)
         .unwrap()
         .unwrap();
     drifted.settings_config = json!({ "env": { "ANTHROPIC_API_KEY": "k-drift" } });
-    fx.state.db.save_provider("claude", &drifted).unwrap();
+    fx.state
+        .db
+        .save_provider(&cc_switch_lib::AppType::Claude, &drifted)
+        .unwrap();
     write_live_claude_key("k-stale");
     assert_eq!(db_key(&fx, "new-provider"), None);
     assert_eq!(db_key(&fx, "old-provider").as_deref(), Some("k-drift"));
@@ -705,7 +712,7 @@ async fn download_restores_the_providers_and_projects_them_into_the_live_file() 
     assert_eq!(
         fx.state
             .db
-            .get_current_provider("claude")
+            .get_current_provider(&cc_switch_lib::AppType::Claude)
             .unwrap()
             .as_deref(),
         Some("old-provider")

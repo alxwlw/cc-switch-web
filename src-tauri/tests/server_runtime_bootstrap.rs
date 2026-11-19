@@ -66,7 +66,7 @@ async fn bootstrap_runs_after_the_server_runtime_is_set_as_the_tauri_runtime() {
     let claude = boot
         .state
         .db
-        .get_all_providers("claude")
+        .get_all_providers(&cc_switch_lib::AppType::Claude)
         .expect("claude providers");
     assert!(!claude.is_empty(), "claude live config must be imported");
 

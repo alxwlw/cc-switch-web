@@ -216,13 +216,13 @@ async fn import_copies_claude_cards_and_adds_the_official_seed() {
     let db = &f.state.db;
     // goes over as a direct card: a Claude model id on a plain Anthropic endpoint
     db.save_provider(
-        "claude",
+        &cc_switch_lib::AppType::Claude,
         &claude_card("direct", json!({"ANTHROPIC_MODEL": "claude-sonnet-4-6"})),
     )
     .unwrap();
     // goes over as a route card: the upstream model is not a Claude id
     db.save_provider(
-        "claude",
+        &cc_switch_lib::AppType::Claude,
         &claude_card(
             "routed",
             json!({"ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-k3"}),
@@ -234,16 +234,18 @@ async fn import_copies_claude_cards_and_adds_the_official_seed() {
     skipped.meta = Some(
         serde_json::from_value(json!({"apiFormat": "openai_chat"})).expect("meta with apiFormat"),
     );
-    db.save_provider("claude", &skipped).unwrap();
+    db.save_provider(&cc_switch_lib::AppType::Claude, &skipped)
+        .unwrap();
     // already in the Claude Desktop table: left as the user has it
     db.save_provider(
-        "claude",
+        &cc_switch_lib::AppType::Claude,
         &claude_card("kept", json!({"ANTHROPIC_MODEL": "claude-sonnet-4-6"})),
     )
     .unwrap();
     let mut mine = claude_card("kept", json!({"ANTHROPIC_MODEL": "claude-sonnet-4-6"}));
     mine.name = "My own".to_string();
-    db.save_provider("claude-desktop", &mine).unwrap();
+    db.save_provider(&cc_switch_lib::AppType::ClaudeDesktop, &mine)
+        .unwrap();
 
     let imported = ok_data(
         &f.router,
@@ -254,7 +256,9 @@ async fn import_copies_claude_cards_and_adds_the_official_seed() {
     .await;
     assert_eq!(imported, json!(2));
 
-    let desktop = db.get_all_providers("claude-desktop").unwrap();
+    let desktop = db
+        .get_all_providers(&cc_switch_lib::AppType::ClaudeDesktop)
+        .unwrap();
     let mut ids: Vec<&str> = desktop.keys().map(String::as_str).collect();
     ids.sort_unstable();
     assert_eq!(
@@ -271,7 +275,12 @@ async fn import_copies_claude_cards_and_adds_the_official_seed() {
         json!("kimi-k3")
     );
     // the Claude table itself is untouched
-    assert_eq!(db.get_all_providers("claude").unwrap().len(), 4);
+    assert_eq!(
+        db.get_all_providers(&cc_switch_lib::AppType::Claude)
+            .unwrap()
+            .len(),
+        4
+    );
 
     // a second run has nothing left to copy
     let again = ok_data(
@@ -293,20 +302,24 @@ async fn ensure_official_seed_is_idempotent_for_each_app() {
     for (app, table, id) in [
         (
             "claude-desktop",
-            "claude-desktop",
+            cc_switch_lib::AppType::ClaudeDesktop,
             "claude-desktop-official",
         ),
-        ("codex", "codex", "codex-official"),
-        ("grokbuild", "grokbuild", "grokbuild-official"),
+        ("codex", cc_switch_lib::AppType::Codex, "codex-official"),
+        (
+            "grokbuild",
+            cc_switch_lib::AppType::GrokBuild,
+            "grokbuild-official",
+        ),
     ] {
         let uri = format!("/api/official-seeds/{app}/ensure");
         assert!(
-            f.state.db.get_provider_by_id(id, table).unwrap().is_none(),
+            f.state.db.get_provider_by_id(id, &table).unwrap().is_none(),
             "{app}: no seed before"
         );
         assert_eq!(ok_data(&f.router, "POST", &uri, None).await, json!(true));
         assert!(
-            f.state.db.get_provider_by_id(id, table).unwrap().is_some(),
+            f.state.db.get_provider_by_id(id, &table).unwrap().is_some(),
             "{app}: seed row {id} in table {table}"
         );
         assert_eq!(ok_data(&f.router, "POST", &uri, None).await, json!(false));
@@ -332,7 +345,12 @@ async fn ensure_official_seed_rejects_other_apps_with_400() {
         assert!(resp["error"].as_str().unwrap().contains(app), "{resp}");
     }
     // a refused call writes nothing
-    assert!(f.state.db.get_all_providers("claude").unwrap().is_empty());
+    assert!(f
+        .state
+        .db
+        .get_all_providers(&cc_switch_lib::AppType::Claude)
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]
@@ -365,7 +383,10 @@ async fn route_mode_writes_the_profile_from_the_client_host_and_exit_restores_th
             }
         }
     }));
-    f.state.db.save_provider("claude-desktop", &routed).unwrap();
+    f.state
+        .db
+        .save_provider(&cc_switch_lib::AppType::ClaudeDesktop, &routed)
+        .unwrap();
     ok_data(
         &f.router,
         "PUT",

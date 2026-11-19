@@ -76,15 +76,6 @@ describe("vscodeApi endpoints через adapter (WEB-21)", () => {
     expect(JSON.parse(init.body)).toEqual({ url: "https://x.example" });
   });
 
-  it("updateEndpointLastUsed: POST /last-used с {url}", async () => {
-    fetchSpy.mockResolvedValue(okResponse(true));
-    await vscodeApi.updateEndpointLastUsed("gemini", "p1", "https://x.example");
-    const [url, init] = fetchSpy.mock.calls[0];
-    expect(url).toBe("/api/gemini/providers/p1/endpoints/last-used");
-    expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body)).toEqual({ url: "https://x.example" });
-  });
-
   it("ошибка сервиса (HTTP 500 {ok:false,error}) становится rejected promise", async () => {
     fetchSpy.mockResolvedValue({
       status: 500,

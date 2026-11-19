@@ -35,10 +35,13 @@ fn fixture() -> Fixture {
     for (id, key) in [("p1", "key-1"), ("p2", "key-2")] {
         state
             .db
-            .save_provider("claude", &claude_provider(id, key))
+            .save_provider(&cc_switch_lib::AppType::Claude, &claude_provider(id, key))
             .unwrap();
     }
-    state.db.set_current_provider("claude", "p1").unwrap();
+    state
+        .db
+        .set_current_provider(&cc_switch_lib::AppType::Claude, "p1")
+        .unwrap();
     let dir = home.join(".claude");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
@@ -128,7 +131,7 @@ async fn apply_switches_provider_writes_live_and_emits_in_desktop_order() {
     assert_eq!(
         f.state
             .db
-            .get_current_provider("claude")
+            .get_current_provider(&cc_switch_lib::AppType::Claude)
             .unwrap()
             .as_deref(),
         Some("p1")

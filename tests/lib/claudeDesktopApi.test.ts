@@ -75,13 +75,6 @@ describe("Claude Desktop + official seed API over the web adapter (WEB-19)", () 
       true,
     ],
     [
-      "ensure_codex_official_provider",
-      () => providersApi.ensureCodexOfficialProvider(),
-      "POST",
-      "/api/official-seeds/codex/ensure",
-      false,
-    ],
-    [
       "ensure_grokbuild_official_provider",
       () => providersApi.ensureGrokBuildOfficialProvider(),
       "POST",
@@ -109,8 +102,8 @@ describe("Claude Desktop + official seed API over the web adapter (WEB-19)", () 
       status: 400,
       json: async () => ({ ok: false, error: "no such seed: nope" }),
     });
-    await expect(providersApi.ensureCodexOfficialProvider()).rejects.toThrow(
-      "no such seed: nope",
-    );
+    await expect(
+      providersApi.ensureGrokBuildOfficialProvider(),
+    ).rejects.toThrow("no such seed: nope");
   });
 });

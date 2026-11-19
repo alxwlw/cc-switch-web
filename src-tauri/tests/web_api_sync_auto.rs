@@ -156,11 +156,14 @@ fn write_provider_key(fx: &Fixture, key: &str) {
     let mut provider = fx
         .state
         .db
-        .get_provider_by_id("old-provider", "claude")
+        .get_provider_by_id("old-provider", &cc_switch_lib::AppType::Claude)
         .unwrap()
         .unwrap();
     provider.settings_config = json!({ "env": { "ANTHROPIC_API_KEY": key } });
-    fx.state.db.save_provider("claude", &provider).unwrap();
+    fx.state
+        .db
+        .save_provider(&cc_switch_lib::AppType::Claude, &provider)
+        .unwrap();
 }
 
 /// The same write on a second connection to the database file: the change hook belongs to the

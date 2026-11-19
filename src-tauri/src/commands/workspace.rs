@@ -335,6 +335,16 @@ pub async fn write_workspace_file(filename: String, content: String) -> Result<(
 
     let path = workspace_dir.join(&filename);
 
+    // `write_text_file` writes through symlinks (upstream `atomic_write`). A link inside the
+    // workspace must not redirect a write outside it, so replace the link itself instead.
+    if std::fs::symlink_metadata(&path)
+        .map(|meta| meta.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        std::fs::remove_file(&path)
+            .map_err(|e| format!("Failed to replace symlink {filename}: {e}"))?;
+    }
+
     write_text_file(&path, &content)
         .map_err(|e| format!("Failed to write workspace file {filename}: {e}"))
 }

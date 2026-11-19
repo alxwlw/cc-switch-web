@@ -52,7 +52,7 @@ async fn put(f: &Fixture, id: &str, claude: bool, codex: bool) -> (StatusCode, V
 fn child_ids(state: &AppState, app: &str) -> Vec<String> {
     let mut ids: Vec<String> = state
         .db
-        .get_all_providers(app)
+        .get_all_providers(&app.parse::<cc_switch_lib::AppType>().unwrap())
         .unwrap()
         .keys()
         .cloned()
@@ -73,7 +73,7 @@ fn assert_synced_event(rx: &mut Receiver<cc_switch_lib::events::Event>, action: 
 }
 
 #[tokio::test]
-async fn upsert_then_get_and_list_return_the_desktop_dto_and_emit_upsert() {
+async fn upsert_then_list_returns_the_desktop_dto_and_emit_upsert() {
     let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     let mut f = fixture();
 
@@ -92,11 +92,6 @@ async fn upsert_then_get_and_list_return_the_desktop_dto_and_emit_upsert() {
         json!({"claude": true, "codex": true, "gemini": false})
     );
 
-    let (_, one) = web_call(&f.router, "GET", &format!("{LIST}/u1"), None).await;
-    assert_eq!(one["data"]["name"], "Universal u1");
-    let (status, none) = web_call(&f.router, "GET", &format!("{LIST}/missing"), None).await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(none, json!({ "ok": true, "data": null }));
     assert_no_event(&mut f.rx);
 }
 
@@ -145,7 +140,7 @@ async fn sync_rewrites_live_file_of_the_current_child() {
     web_call(&f.router, "POST", &format!("{LIST}/u1/sync"), None).await;
     f.state
         .db
-        .set_current_provider("claude", "universal-claude-u1")
+        .set_current_provider(&cc_switch_lib::AppType::Claude, "universal-claude-u1")
         .unwrap();
     while f.rx.try_recv().is_ok() {}
 
@@ -168,10 +163,13 @@ async fn partial_sync_failure_is_ok_false_with_service_text_keeps_children_and_e
     let home = ensure_test_home();
     put(&f, "u1", true, true).await;
     web_call(&f.router, "POST", &format!("{LIST}/u1/sync"), None).await;
-    for app in ["claude", "codex"] {
+    for app in [
+        cc_switch_lib::AppType::Claude,
+        cc_switch_lib::AppType::Codex,
+    ] {
         f.state
             .db
-            .set_current_provider(app, &format!("universal-{app}-u1"))
+            .set_current_provider(&app, &format!("universal-{}-u1", app.as_str()))
             .unwrap();
     }
     // Claude's live file cannot be written (a directory sits where the file goes);
@@ -203,7 +201,7 @@ async fn partial_sync_failure_is_ok_false_with_service_text_keeps_children_and_e
     let claude_child = f
         .state
         .db
-        .get_provider_by_id("universal-claude-u1", "claude")
+        .get_provider_by_id("universal-claude-u1", &cc_switch_lib::AppType::Claude)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -286,12 +284,15 @@ async fn delete_with_current_child_via_web() -> (Option<String>, Vec<String>) {
     web_call(&f.router, "POST", &format!("{LIST}/u1/sync"), None).await;
     f.state
         .db
-        .set_current_provider("claude", "universal-claude-u1")
+        .set_current_provider(&cc_switch_lib::AppType::Claude, "universal-claude-u1")
         .unwrap();
     let (_, body) = web_call(&f.router, "DELETE", &format!("{LIST}/u1"), None).await;
     assert_eq!(body["ok"], true);
     (
-        f.state.db.get_current_provider("claude").unwrap(),
+        f.state
+            .db
+            .get_current_provider(&cc_switch_lib::AppType::Claude)
+            .unwrap(),
         child_ids(&f.state, "claude"),
     )
 }
@@ -312,11 +313,14 @@ async fn delete_of_universal_provider_with_current_child_matches_desktop_command
     cc_switch_lib::sync_universal_provider_emit(&state, "u1").unwrap();
     state
         .db
-        .set_current_provider("claude", "universal-claude-u1")
+        .set_current_provider(&cc_switch_lib::AppType::Claude, "universal-claude-u1")
         .unwrap();
     cc_switch_lib::delete_universal_provider_emit(&state, "u1").unwrap();
     let desktop = (
-        state.db.get_current_provider("claude").unwrap(),
+        state
+            .db
+            .get_current_provider(&cc_switch_lib::AppType::Claude)
+            .unwrap(),
         child_ids(&state, "claude"),
     );
 

@@ -3,7 +3,6 @@ import {
   agyAccountIsRunning,
   authCancelLogin,
   authGetStatus,
-  authListAccounts,
   authLogout,
   authPollForAccount,
   authRemoveAccount,
@@ -84,16 +83,6 @@ describe("managed auth API over the web adapter (WEB-02)", () => {
       url: "/api/auth/codex_oauth/cancel",
       method: "POST",
       body: { deviceCode: "dev-2" },
-    });
-  });
-
-  it("authListAccounts -> GET .../accounts", async () => {
-    fetchSpy.mockResolvedValue(ok([]));
-    expect(await authListAccounts("xai_oauth")).toEqual([]);
-    expect(lastCall()).toEqual({
-      url: "/api/auth/xai_oauth/accounts",
-      method: "GET",
-      body: undefined,
     });
   });
 
@@ -185,6 +174,11 @@ describe("copy_text_to_clipboard over the web adapter (WEB-02)", () => {
 
   it("insecure context: hidden textarea + execCommand('copy'), textarea removed", async () => {
     setSecure(false);
+    // a non-secure page has no navigator.clipboard; copyText tries it first on Linux and falls back to the adapter command
+    Object.defineProperty(navigator, "clipboard", {
+      value: undefined,
+      configurable: true,
+    });
     let copied: string | undefined;
     execCommand.mockImplementation(() => {
       copied = document.querySelector("textarea")?.value;

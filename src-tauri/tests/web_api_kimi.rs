@@ -164,13 +164,13 @@ async fn remove_deletes_credential_provider_row_and_config_node() {
     state
         .db
         .save_provider(
-            "kimi",
+            &cc_switch_lib::AppType::Kimi,
             &Provider::with_id(THIRD.into(), "third".into(), json!({}), None),
         )
         .unwrap();
     assert!(state
         .db
-        .get_provider_by_id(THIRD, "kimi")
+        .get_provider_by_id(THIRD, &cc_switch_lib::AppType::Kimi)
         .unwrap()
         .is_some());
     let router = web_router_with(state.clone());
@@ -192,7 +192,7 @@ async fn remove_deletes_credential_provider_row_and_config_node() {
     assert!(
         state
             .db
-            .get_provider_by_id(THIRD, "kimi")
+            .get_provider_by_id(THIRD, &cc_switch_lib::AppType::Kimi)
             .unwrap()
             .is_none(),
         "provider row kept"

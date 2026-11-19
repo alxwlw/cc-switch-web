@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   useAppMode,
   useAppProxyConfig,
-  useDirectProviderId,
   useGlobalProxyConfig,
   useProxyClientHost,
   useProxyStack,
@@ -14,9 +13,6 @@ import {
 } from "@/lib/query/proxy";
 import {
   useAutoFailoverEnabled,
-  useAvailableProvidersForFailover,
-  useCircuitBreakerConfig,
-  useCircuitBreakerStats,
   useFailoverQueue,
   useProviderHealth,
 } from "@/lib/query/failover";
@@ -29,7 +25,6 @@ import {
   useXaiOauthQuotaByAccountId,
 } from "@/lib/query/subscription";
 import { useCopilotQuota } from "@/lib/query/copilot";
-import { useProviderLimits } from "@/lib/query/usage";
 import { usePiCurrentState } from "@/lib/query/pi";
 import {
   useCcSwitchSkillsDir,
@@ -81,11 +76,6 @@ const WEB04_CASES: Array<[string, string, () => unknown]> = [
     "useSubscriptionQuota",
     "get_subscription_quota",
     () => useSubscriptionQuota("claude", true, true, 1),
-  ],
-  [
-    "useProviderLimits",
-    "check_provider_limits",
-    () => useProviderLimits("p1", "claude"),
   ],
   [
     "useCodexOauthQuotaByAccountId",
@@ -206,11 +196,6 @@ describe("WEB-00: фоновые query молчат в web", () => {
       () => useProxyTakeoverStatus(),
     ],
     ["useAppMode", "get_app_mode", () => useAppMode("claude")],
-    [
-      "useDirectProviderId",
-      "get_direct_provider",
-      () => useDirectProviderId("claude", true),
-    ],
     ["useProxyStack", "get_proxy_stack", () => useProxyStack("claude", true)],
     [
       "useGlobalProxyConfig",
@@ -232,21 +217,6 @@ describe("WEB-00: фоновые query молчат в web", () => {
       "useProviderHealth",
       "get_provider_health",
       () => useProviderHealth("p1", "claude"),
-    ],
-    [
-      "useCircuitBreakerConfig",
-      "get_circuit_breaker_config",
-      () => useCircuitBreakerConfig(),
-    ],
-    [
-      "useCircuitBreakerStats",
-      "get_circuit_breaker_stats",
-      () => useCircuitBreakerStats("p1", "claude"),
-    ],
-    [
-      "useAvailableProvidersForFailover",
-      "get_available_providers_for_failover",
-      () => useAvailableProvidersForFailover("claude"),
     ],
     [
       "useAutoFailoverEnabled",

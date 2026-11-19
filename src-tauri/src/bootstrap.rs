@@ -317,8 +317,9 @@ pub fn run_codex_history_migrations(db: &Database) {
         }
     }
 
-    // 统一会话开关的官方历史迁移：开关开启但上次未完成（如文件被占用
-    // 中途失败）时在启动期重试；函数内部自门控，开关关闭时直接跳过。
+    // 统一会话开关的官方历史迁移：开关开着且勾选了迁入既有会话时，每次启动
+    // 都把留在 openai 桶的会话迁进 custom（新版 Codex 会把它们锁成只读）；
+    // 函数内部自门控，state DB 里没有 openai 线程时直接跳过。
     match m::maybe_migrate_codex_official_history_to_unified_bucket() {
         Ok(outcome) => {
             if let Some(reason) = outcome.skipped_reason {
@@ -351,6 +352,8 @@ pub fn run_post_db_bootstrap(
     // 要在任何写客户端文件的启动步骤之前。
     crate::mode::operation::recover_on_startup(db);
     report.push("recover_on_startup", StepOutcome::Done);
+    // 上次退出或崩溃前没来得及删的 Claude 空值墓碑（切换时给开着的会话写的）接着删
+    crate::services::provider::claude_direct::resume_tombstone_sweep();
 
     // 1. 初始化默认 Skills 仓库（已有内置检查：表非空则跳过）
     match db.init_default_skill_repos() {
@@ -426,7 +429,7 @@ pub fn run_post_db_bootstrap(
     report.fresh_install = fresh_install_at_startup;
 
     let mut imported_apps = 0usize;
-    for app_type in AppType::all().filter(|t| !t.is_additive_mode()) {
+    for app_type in AppType::all().filter(crate::services::provider::imports_default_config) {
         if !crate::services::provider::should_import_default_config_on_startup(state, &app_type)
             .unwrap_or(false)
         {
@@ -460,6 +463,10 @@ pub fn run_post_db_bootstrap(
             StepOutcome::Skipped("nothing imported".into())
         },
     );
+
+    if let Err(error) = crate::services::provider::initialize_dsh_profiles(state) {
+        log::warn!("Initializing DeepSeek Harness profiles failed: {error}");
+    }
 
     match db.init_default_official_providers() {
         Ok(count) if count > 0 => {
@@ -570,7 +577,7 @@ pub fn run_post_db_bootstrap(
 
     // 2. OMO 配置导入（当数据库中无 OMO provider 时，从本地文件导入）
     let has_omo = db
-        .get_all_providers("opencode")
+        .get_all_providers(&AppType::OpenCode)
         .map(|providers| {
             providers
                 .values()
@@ -605,7 +612,7 @@ pub fn run_post_db_bootstrap(
 
     // 2.3 OMO Slim config import (when no omo-slim provider in DB, import from local)
     let has_omo_slim = db
-        .get_all_providers("opencode")
+        .get_all_providers(&AppType::OpenCode)
         .map(|providers| {
             providers
                 .values()
@@ -659,12 +666,16 @@ pub fn run_post_db_bootstrap(
                 errors.push(format!("{label}: {e}"));
             }
         };
-        record("claude", M::import_from_claude(state), "Claude");
-        record("codex", M::import_from_codex(state), "Codex");
-        record("gemini", M::import_from_gemini(state), "Gemini");
-        record("grokbuild", M::import_from_grokbuild(state), "Grok Build");
-        record("opencode", M::import_from_opencode(state), "OpenCode");
-        record("hermes", M::import_from_hermes(state), "Hermes");
+        for (key, app, label) in [
+            ("claude", AppType::Claude, "Claude"),
+            ("codex", AppType::Codex, "Codex"),
+            ("gemini", AppType::Gemini, "Gemini"),
+            ("grokbuild", AppType::GrokBuild, "Grok Build"),
+            ("opencode", AppType::OpenCode, "OpenCode"),
+            ("hermes", AppType::Hermes, "Hermes"),
+        ] {
+            record(key, M::import_from_app(state, &app), label);
+        }
 
         report.push(
             "mcp_import",
@@ -696,6 +707,7 @@ pub fn run_post_db_bootstrap(
             AppType::Hermes,
             AppType::Pi,
             AppType::Mcode,
+            AppType::WorkBuddy,
         ] {
             match crate::services::prompt::PromptService::import_from_file_on_first_launch(
                 state,
@@ -766,6 +778,12 @@ pub async fn run_headless_startup(state: &AppState) {
 /// config (mode and route are kept for the next start) and stops the proxy.
 pub async fn shutdown_cleanup(state: &AppState) {
     crate::mode::controller::detach_all(state).await;
+    // 切换后几秒内退出：给开着的 Claude Code 会话写的空值墓碑现在删掉（刚写的最多等 3 秒），
+    // 不留到下次启动
+    let _ = tokio::task::spawn_blocking(
+        crate::services::provider::claude_direct::finish_tombstones_before_exit,
+    )
+    .await;
     log::info!("退出清理完成：客户端已指回直连，代理已停止");
 }
 
@@ -820,8 +838,14 @@ pub fn start_auto_sync_workers(
     db: &Arc<Database>,
     events: &crate::events::EventHub,
 ) -> StepOutcome {
-    crate::services::webdav_auto_sync::start_worker(db.clone(), events.clone());
-    crate::services::s3_auto_sync::start_worker(db.clone(), events.clone());
+    crate::services::auto_sync::start_worker::<crate::services::webdav_auto_sync::WebDavAutoSync>(
+        db.clone(),
+        events.clone(),
+    );
+    crate::services::auto_sync::start_worker::<crate::services::s3_auto_sync::S3AutoSync>(
+        db.clone(),
+        events.clone(),
+    );
     StepOutcome::Done
 }
 
@@ -924,6 +948,8 @@ pub async fn run_periodic_backup_worker(db: Arc<Database>) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(
         PERIODIC_MAINTENANCE_INTERVAL_SECS,
     ));
+    // No catch-up burst of missed daily ticks after sleep/suspend.
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     interval.tick().await; // first tick is immediate; startup round already ran
     loop {
         interval.tick().await;

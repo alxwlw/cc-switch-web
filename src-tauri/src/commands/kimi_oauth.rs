@@ -1,3 +1,4 @@
+use crate::app_config::AppType;
 use crate::services::kimi_oauth::{KimiLoginPoll, KimiLoginStart, KimiOAuthStatus, KimiRegion};
 use crate::services::subscription::SubscriptionQuota;
 use crate::store::AppState;
@@ -48,10 +49,12 @@ pub(crate) async fn kimi_oauth_remove_inner(
     state: &AppState,
     account_id: &str,
 ) -> Result<(), String> {
+    // Listing Kimi providers writes native entries back to the database too.
+    let _guard = state.proxy_service.lock_switch_for_app("kimi").await;
     state
         .kimi_oauth
         .remove(account_id, || {
-            state.db.delete_provider("kimi", account_id)?;
+            state.db.delete_provider(&AppType::Kimi, account_id)?;
             Ok(())
         })
         .await

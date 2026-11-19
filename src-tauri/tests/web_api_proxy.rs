@@ -49,6 +49,8 @@ fn claude(id: &str, url: &str, key: &str) -> Provider {
 }
 
 fn live_settings() -> Value {
+    // a switch blanks the keys it clears and deletes them a few seconds later; settle first
+    cc_switch_lib::settle_claude_tombstones().expect("settle claude tombstones");
     serde_json::from_slice(&std::fs::read(get_claude_settings_path()).unwrap()).unwrap()
 }
 
@@ -66,13 +68,22 @@ async fn fixture(upstream: &str) -> Fixture {
     let state = Arc::new(create_test_state().unwrap());
     state
         .db
-        .save_provider("claude", &claude("a", "https://a.example", "sk-a"))
+        .save_provider(
+            &cc_switch_lib::AppType::Claude,
+            &claude("a", "https://a.example", "sk-a"),
+        )
         .unwrap();
     state
         .db
-        .save_provider("claude", &claude("b", upstream, "sk-plain-b"))
+        .save_provider(
+            &cc_switch_lib::AppType::Claude,
+            &claude("b", upstream, "sk-plain-b"),
+        )
         .unwrap();
-    state.db.set_current_provider("claude", "a").unwrap();
+    state
+        .db
+        .set_current_provider(&cc_switch_lib::AppType::Claude, "a")
+        .unwrap();
     let router = web_router_with(state.clone());
     let settings = get_claude_settings_path();
     std::fs::create_dir_all(settings.parent().unwrap()).unwrap();

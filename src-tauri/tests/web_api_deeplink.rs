@@ -125,7 +125,11 @@ async fn import_provider_lands_in_db() {
     .await;
     assert_eq!(out["type"], "provider");
     let id = out["id"].as_str().expect("provider id").to_string();
-    let providers = f.state.db.get_all_providers("claude").unwrap();
+    let providers = f
+        .state
+        .db
+        .get_all_providers(&cc_switch_lib::AppType::Claude)
+        .unwrap();
     let p = providers.get(&id).expect("provider stored");
     assert_eq!(p.name, "Web Paste");
 }

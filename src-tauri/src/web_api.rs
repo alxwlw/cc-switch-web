@@ -155,10 +155,6 @@ pub fn router_with_update(
                 .post(add_endpoint)
                 .delete(remove_endpoint),
         )
-        .route(
-            "/api/:app/providers/:id/endpoints/last-used",
-            post(endpoint_last_used),
-        )
         // proxy rectifier / optimizer / log settings, server log file
         .route(
             "/api/settings/rectifier",
@@ -178,7 +174,7 @@ pub fn router_with_update(
         )
         .route(
             "/api/universal-providers/:id",
-            get(get_universal_provider).delete(delete_universal_provider),
+            delete(delete_universal_provider),
         )
         .route(
             "/api/universal-providers/:id/sync",
@@ -213,7 +209,6 @@ pub fn router_with_update(
         .route("/api/mcp/servers/:id", delete(delete_mcp_server))
         .route("/api/mcp/servers/:id/toggle", post(toggle_mcp_server))
         .route("/api/mcp/config", get(mcp_config))
-        .route("/api/mcp/validate", post(validate_mcp_command))
         .route("/api/mcp/import", post(import_mcp))
         .route("/api/mcp/resync", post(resync_mcp))
         // skills (unified store)
@@ -267,7 +262,6 @@ pub fn router_with_update(
         .route("/api/usage/sync", post(sync_session_usage))
         .route("/api/usage/last-sync", get(session_usage_last_sync))
         .route("/api/usage/rebuild-codex", post(rebuild_codex_usage))
-        .route("/api/usage/data-sources", get(usage_data_sources))
         .route(
             "/api/usage/model-pricing/batch",
             post(update_model_pricing_batch),
@@ -354,7 +348,6 @@ pub fn router_with_update(
             get(models_copilot_for_account),
         )
         .route("/api/env/conflicts/cleanup", post(env_cleanup))
-        .route("/api/env/restore", post(env_restore))
         // OMO / OMO Slim live config
         .route("/api/omo/:variant/local-file", get(omo_local_file))
         .route(
@@ -491,7 +484,6 @@ pub fn router_with_update(
             "/api/:app/providers/:id/usage-script/test",
             post(test_usage_script),
         )
-        .route("/api/:app/providers/:id/limits", get(provider_limits))
         .route(
             "/api/:app/providers/:id/stream-check",
             post(provider_stream_check),
@@ -616,20 +608,8 @@ pub fn router_with_update(
         .route("/api/sync/:backend/remote-info", get(sync_remote_info))
         // Failover queue, breaker, health (WEB-01 stage 2)
         .route(
-            "/api/failover/breaker-config",
-            get(failover_breaker_config).put(failover_set_breaker_config),
-        )
-        .route(
             "/api/failover/health/:app/:provider_id",
             get(failover_health),
-        )
-        .route(
-            "/api/failover/breaker/:app/:provider_id/reset",
-            post(failover_reset_breaker),
-        )
-        .route(
-            "/api/failover/breaker-stats/:app/:provider_id",
-            get(failover_breaker_stats),
         )
         .route("/api/failover/queue/:app", get(failover_queue))
         .route("/api/failover/available/:app", get(failover_available))
@@ -1283,23 +1263,6 @@ async fn remove_endpoint(
     }
 }
 
-async fn endpoint_last_used(
-    State(state): State<SharedState>,
-    Path((app, id)): Path<(String, String)>,
-    Json(body): Json<UrlReq>,
-) -> ApiResult {
-    let app_type = app_type!(&app);
-    match tokio::task::spawn_blocking(move || {
-        ProviderService::update_endpoint_last_used(&state, app_type, &id, body.url)
-    })
-    .await
-    {
-        Ok(Ok(())) => ok(true),
-        Ok(Err(e)) => fail(e.to_string()),
-        Err(e) => fail(format!("endpoint last-used task failed: {e}")),
-    }
-}
-
 // ---------- universal providers ----------
 
 async fn list_universal_providers(State(state): State<SharedState>) -> ApiResult {
@@ -1307,17 +1270,6 @@ async fn list_universal_providers(State(state): State<SharedState>) -> ApiResult
         Ok(Ok(map)) => ok(map),
         Ok(Err(e)) => fail(e.to_string()),
         Err(e) => fail(format!("list universal providers task failed: {e}")),
-    }
-}
-
-async fn get_universal_provider(
-    State(state): State<SharedState>,
-    Path(id): Path<String>,
-) -> ApiResult {
-    match tokio::task::spawn_blocking(move || ProviderService::get_universal(&state, &id)).await {
-        Ok(Ok(p)) => ok(p),
-        Ok(Err(e)) => fail(e.to_string()),
-        Err(e) => fail(format!("get universal provider task failed: {e}")),
     }
 }
 
@@ -1638,24 +1590,14 @@ async fn mcp_config(
     let config_path = crate::config::get_app_config_path()
         .to_string_lossy()
         .to_string();
-    // NB: get_servers is deprecated upstream in favor of get_all_servers,
-    // but it is the only per-app view; kept like the compat Tauri command.
-    #[allow(deprecated)]
-    let servers = McpService::get_servers(&state, app_type);
+    // Upstream removed the per-app `get_servers`: filter the unified list by app.
+    let servers = McpService::get_all_servers(&state).map(|all| {
+        all.into_iter()
+            .filter(|(_, server)| server.apps.is_enabled_for(&app_type))
+            .collect::<indexmap::IndexMap<_, _>>()
+    });
     match servers {
         Ok(servers) => ok(json!({ "configPath": config_path, "servers": servers })),
-        Err(e) => fail(e.to_string()),
-    }
-}
-
-#[derive(Deserialize)]
-struct ValidateMcpReq {
-    cmd: String,
-}
-
-async fn validate_mcp_command(Json(body): Json<ValidateMcpReq>) -> ApiResult {
-    match crate::claude_mcp::validate_command_in_path(&body.cmd) {
-        Ok(v) => ok(v),
         Err(e) => fail(e.to_string()),
     }
 }
@@ -1856,12 +1798,24 @@ async fn import_skills_from_apps(
     .await
 }
 
-async fn discover_skills(State(state): State<SharedState>) -> ApiResult {
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DiscoverSkillsQuery {
+    force_refresh: Option<bool>,
+}
+
+async fn discover_skills(
+    State(state): State<SharedState>,
+    Query(q): Query<DiscoverSkillsQuery>,
+) -> ApiResult {
     let repos = match state.db.get_skill_repos() {
         Ok(r) => r,
         Err(e) => return fail(e.to_string()),
     };
-    match SkillService::new().discover_available_report(repos).await {
+    match SkillService::new()
+        .discover_available_report(repos, q.force_refresh.unwrap_or(false))
+        .await
+    {
         Ok(report) => ok(report),
         Err(e) => fail(e.to_string()),
     }
@@ -2039,11 +1993,50 @@ async fn session_messages(Query(q): Query<SessionMessagesQuery>) -> ApiResult {
 
 /// NDJSON line (`\n`-terminated) for one transcript chunk.
 fn chunk_line(
-    chunk: &session_manager::model::TranscriptChunk,
+    chunk: &session_manager::model::TranscriptChunk<'_>,
 ) -> Result<axum::body::Bytes, std::io::Error> {
     let mut line = serde_json::to_vec(chunk).map_err(std::io::Error::other)?;
     line.push(b'\n');
     Ok(axum::body::Bytes::from(line))
+}
+
+/// Lazily serialises a cached transcript as Header, Messages..., Done lines.
+/// Owns the `Arc` so each borrowed `TranscriptChunk` lives only while serialised.
+struct TranscriptLines {
+    loaded: session_manager::LoadedTranscript,
+    ranges: Vec<(usize, usize)>,
+    next: usize,
+}
+
+impl Iterator for TranscriptLines {
+    type Item = Result<axum::body::Bytes, std::io::Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        use session_manager::model::TranscriptChunk;
+        let t = &self.loaded.transcript;
+        let step = self.next;
+        self.next += 1;
+        if step == 0 {
+            return Some(chunk_line(&TranscriptChunk::Header {
+                total: t.messages.len(),
+                turns: &t.turns,
+                cached: self.loaded.cached,
+                parse_ms: self.loaded.parse_ms,
+            }));
+        }
+        if let Some(&(start, end)) = self.ranges.get(step - 1) {
+            return Some(chunk_line(&TranscriptChunk::Messages {
+                start,
+                messages: &t.messages[start..end],
+            }));
+        }
+        if step == self.ranges.len() + 1 {
+            return Some(chunk_line(&TranscriptChunk::Done {
+                payload_bytes: t.approx_bytes as u64,
+            }));
+        }
+        None
+    }
 }
 
 /// `stream_session_messages` over HTTP: one serialized `TranscriptChunk` per line.
@@ -2056,19 +2049,27 @@ async fn session_stream(Query(q): Query<SessionMessagesQuery>) -> axum::response
         session_manager::load_transcript(&provider_id, &source_path)
     })
     .await;
-    let chunks: Box<dyn Iterator<Item = session_manager::model::TranscriptChunk> + Send> =
+    let chunks: Box<dyn Iterator<Item = Result<axum::body::Bytes, std::io::Error>> + Send> =
         match loaded {
-            Ok(Ok(loaded)) => Box::new(session_manager::transcript_chunks(&loaded)),
-            Ok(Err(message)) => Box::new(std::iter::once(
-                session_manager::model::TranscriptChunk::Error { message },
-            )),
-            Err(e) => Box::new(std::iter::once(
-                session_manager::model::TranscriptChunk::Error {
-                    message: format!("load transcript failed: {e}"),
-                },
-            )),
+            Ok(Ok(loaded)) => {
+                let ranges = session_manager::cache::chunk_ranges(&loaded.transcript.message_bytes);
+                Box::new(TranscriptLines {
+                    loaded,
+                    ranges,
+                    next: 0,
+                })
+            }
+            Ok(Err(message)) => Box::new(std::iter::once(chunk_line(
+                &session_manager::model::TranscriptChunk::Error { message: &message },
+            ))),
+            Err(e) => {
+                let message = format!("load transcript failed: {e}");
+                Box::new(std::iter::once(chunk_line(
+                    &session_manager::model::TranscriptChunk::Error { message: &message },
+                )))
+            }
         };
-    let stream = futures::stream::iter(chunks.map(|chunk| chunk_line(&chunk)));
+    let stream = futures::stream::iter(chunks);
     (
         [(header::CONTENT_TYPE, "application/x-ndjson")],
         axum::body::Body::from_stream(stream),
@@ -2371,19 +2372,6 @@ async fn rebuild_codex_usage(State(state): State<SharedState>) -> ApiResult {
     }
 }
 
-async fn usage_data_sources(State(state): State<SharedState>) -> ApiResult {
-    let db = state.db.clone();
-    match tokio::task::spawn_blocking(move || {
-        crate::services::session_usage::get_data_source_breakdown(&db)
-    })
-    .await
-    {
-        Ok(Ok(sources)) => ok(sources),
-        Ok(Err(e)) => fail(e.to_string()),
-        Err(e) => fail(format!("usage query failed: {e}")),
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ModelPricingReq {
@@ -2519,7 +2507,7 @@ async fn get_pricing_model_source(
     Path(app): Path<String>,
 ) -> ApiResult {
     let app_type = app_type!(&app);
-    match state.db.get_pricing_model_source(app_type.as_str()).await {
+    match state.db.get_pricing_model_source(&app_type).await {
         Ok(source) => ok(source),
         Err(e) => fail(e.to_string()),
     }
@@ -2538,7 +2526,7 @@ async fn set_pricing_model_source(
     let app_type = app_type!(&app);
     match state
         .db
-        .set_pricing_model_source(app_type.as_str(), &body.value)
+        .set_pricing_model_source(&app_type, &body.value)
         .await
     {
         Ok(()) => ok(Value::Null),
@@ -3265,7 +3253,7 @@ async fn tool_lifecycle(Json(body): Json<ToolLifecycleReq>) -> ApiResult {
     }
     let id = job_id.clone();
     tokio::spawn(async move {
-        let result = crate::commands::misc::run_tool_lifecycle_action(
+        let result = crate::commands::misc::run_tool_lifecycle_action_headless(
             body.tools,
             body.action,
             body.wsl_shell_by_tool,
@@ -3371,24 +3359,6 @@ async fn env_cleanup(Json(body): Json<EnvCleanupReq>) -> ApiResult {
         Ok(Ok(info)) => ok(info),
         Ok(Err(e)) => fail(e),
         Err(e) => fail(format!("env cleanup task failed: {e}")),
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct EnvRestoreReq {
-    backup_path: String,
-}
-
-async fn env_restore(Json(body): Json<EnvRestoreReq>) -> ApiResult {
-    match tokio::task::spawn_blocking(move || {
-        crate::services::env_manager::restore_from_backup(body.backup_path)
-    })
-    .await
-    {
-        Ok(Ok(())) => ok(serde_json::Value::Null),
-        Ok(Err(e)) => fail(e),
-        Err(e) => fail(format!("env restore task failed: {e}")),
     }
 }
 
@@ -3854,20 +3824,6 @@ async fn test_usage_script(
         .await
         .map_err(|e| e.to_string()),
     )
-}
-
-/// `GET /api/:app/providers/:id/limits`: `check_provider_limits` is a single
-/// indexed DB read, so like the other sync `ProviderService` getters it runs
-/// inline — no `spawn_blocking`.
-async fn provider_limits(
-    State(state): State<SharedState>,
-    Path((app, id)): Path<(String, String)>,
-) -> ApiResult {
-    let app_type = app_type!(&app);
-    match state.db.check_provider_limits(&id, app_type.as_str()) {
-        Ok(v) => ok(v),
-        Err(e) => fail(e.to_string()),
-    }
 }
 
 /// `GET /api/subscription/:tool/quota`: CLI-tool quotas plus the agy branch,
@@ -5088,63 +5044,18 @@ macro_rules! failover_app {
     };
 }
 
-/// Body is the whole `CircuitBreakerConfig` (camelCase). The breaker config is global.
-async fn failover_breaker_config(State(state): State<SharedState>) -> ApiResult {
-    proxy_result(
-        state
-            .db
-            .get_circuit_breaker_config()
-            .await
-            .map_err(|e| e.to_string()),
-    )
-}
-
-async fn failover_set_breaker_config(
-    State(state): State<SharedState>,
-    Json(body): Json<Value>,
-) -> ApiResult {
-    let config =
-        match serde_json::from_value::<crate::proxy::circuit_breaker::CircuitBreakerConfig>(body) {
-            Ok(c) => c,
-            Err(e) => return bad_request(format!("invalid circuit breaker config: {e}")),
-        };
-    if let Err(e) = state.db.update_circuit_breaker_config(&config).await {
-        return fail(e.to_string());
-    }
-    unit_result(
-        state
-            .proxy_service
-            .update_circuit_breaker_configs(config)
-            .await,
-    )
-}
-
 async fn failover_health(
     State(state): State<SharedState>,
     Path((app, provider_id)): Path<(String, String)>,
 ) -> ApiResult {
-    mode_app!(&app);
+    let app_type = mode_app!(&app);
     proxy_result(
         state
             .db
-            .get_provider_health(&provider_id, &app)
+            .get_provider_health(&provider_id, &app_type)
             .await
             .map_err(|e| e.to_string()),
     )
-}
-
-async fn failover_reset_breaker(
-    State(state): State<SharedState>,
-    Path((app, provider_id)): Path<(String, String)>,
-) -> ApiResult {
-    proxy_app!(&app);
-    unit_result(crate::commands::reset_circuit_breaker_inner(&state, provider_id, app).await)
-}
-
-/// Parity with the desktop command, which is a stub: always `null`.
-async fn failover_breaker_stats(Path((app, _provider_id)): Path<(String, String)>) -> ApiResult {
-    mode_app!(&app);
-    ok(Value::Null)
 }
 
 async fn failover_queue(State(state): State<SharedState>, Path(app): Path<String>) -> ApiResult {

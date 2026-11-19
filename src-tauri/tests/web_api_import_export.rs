@@ -93,7 +93,7 @@ async fn export(router: &axum::Router) -> Value {
 fn key_of(fx: &Fixture, id: &str) -> Option<String> {
     fx.state
         .db
-        .get_provider_by_id(id, "claude")
+        .get_provider_by_id(id, &cc_switch_lib::AppType::Claude)
         .expect("db read")
         .map(|p| {
             p.settings_config["env"]["ANTHROPIC_API_KEY"]
@@ -168,7 +168,7 @@ async fn export_then_import_into_clean_db_restores_providers_with_backup() {
     assert_eq!(
         dst.state
             .db
-            .get_current_provider("claude")
+            .get_current_provider(&cc_switch_lib::AppType::Claude)
             .unwrap()
             .as_deref(),
         Some("old-provider")
@@ -220,7 +220,7 @@ async fn import_of_newer_schema_dump_is_refused_with_the_desktop_message() {
     // Edit the live DB so a wrongly accepted import would be visible.
     fx.state
         .db
-        .delete_provider("claude", "new-provider")
+        .delete_provider(&cc_switch_lib::AppType::Claude, "new-provider")
         .unwrap();
 
     let error = import_failure(&fx.router, &newer).await;
@@ -268,7 +268,7 @@ async fn dump_over_two_mib_passes_the_body_limit_and_round_trips() {
     let p = fx
         .state
         .db
-        .get_provider_by_id("old-provider", "claude")
+        .get_provider_by_id("old-provider", &cc_switch_lib::AppType::Claude)
         .unwrap()
         .unwrap();
     assert_eq!(p.notes.as_deref(), Some(big.as_str()));

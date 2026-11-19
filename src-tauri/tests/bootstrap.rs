@@ -40,9 +40,17 @@ fn first_run_creates_db_and_seeds_defaults() {
             .expect("flag"),
         Some("true".to_string())
     );
-    for app in ["claude", "codex", "gemini"] {
-        let providers = boot.state.db.get_all_providers(app).expect("providers");
-        assert!(!providers.is_empty(), "{app}: official providers seeded");
+    for app in [
+        cc_switch_lib::AppType::Claude,
+        cc_switch_lib::AppType::Codex,
+        cc_switch_lib::AppType::Gemini,
+    ] {
+        let providers = boot.state.db.get_all_providers(&app).expect("providers");
+        assert!(
+            !providers.is_empty(),
+            "{}: official providers seeded",
+            app.as_str()
+        );
     }
 
     // Second run on the same HOME is idempotent: seeds are skipped, not duplicated.
@@ -160,14 +168,14 @@ async fn legacy_config_is_migrated_once_and_archived() {
     let providers = boot
         .state
         .db
-        .get_all_providers("claude")
+        .get_all_providers(&cc_switch_lib::AppType::Claude)
         .expect("providers");
     assert_eq!(providers["legacy-a"].name, "Legacy A");
     assert_eq!(providers["legacy-b"].name, "Legacy B");
     assert_eq!(
         boot.state
             .db
-            .get_current_provider("claude")
+            .get_current_provider(&cc_switch_lib::AppType::Claude)
             .expect("current"),
         Some("legacy-a".to_string())
     );
@@ -199,7 +207,7 @@ async fn legacy_config_is_migrated_once_and_archived() {
         again
             .state
             .db
-            .get_all_providers("claude")
+            .get_all_providers(&cc_switch_lib::AppType::Claude)
             .expect("providers")
             .len(),
         count

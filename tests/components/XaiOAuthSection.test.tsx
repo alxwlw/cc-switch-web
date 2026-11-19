@@ -7,6 +7,10 @@ const mockCopyText = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/clipboard", () => ({ copyText: mockCopyText }));
 
+vi.mock("@/lib/query/accountPlans", () => ({
+  useAccountQuotaPlans: () => ({}),
+}));
+
 vi.mock("@/components/providers/forms/hooks/useXaiOauth", () => ({
   useXaiOauth: mockUseXaiOauth,
 }));

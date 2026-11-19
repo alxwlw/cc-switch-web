@@ -22,6 +22,7 @@ import {
   type GroupAccountRow,
 } from "@/components/settings/auth/ManagedAccountsGroup";
 import { signedInDate } from "@/components/settings/auth/accountDetails";
+import { useAccountQuotaPlans } from "@/lib/query/accountPlans";
 import { AgyAccountQuota } from "@/components/settings/auth/AccountQuota";
 
 interface AgyOAuthSectionProps {
@@ -53,7 +54,6 @@ export const AgyOAuthSection: React.FC<AgyOAuthSectionProps> = ({
     removeAccount,
     setDefaultAccount,
     cancelAuth,
-    logout,
     refetchStatus,
   } = useManagedAuth("agy_oauth");
   const accountUsers = useManagedAccountUsers("agy_oauth", defaultAccountId);
@@ -63,11 +63,15 @@ export const AgyOAuthSection: React.FC<AgyOAuthSectionProps> = ({
   const confirmRemove = () => {
     const target = removeTarget;
     setRemoveTarget(null);
-    if (!target) return;
-    if (target.kind === "all") logout();
-    else removeAccount(target.accountId);
+    // 这组没有「删除全部」，只会是单个账号
+    if (target?.kind === "one") removeAccount(target.accountId);
   };
 
+  // 第二行的套餐（额度查到才有）
+  const plans = useAccountQuotaPlans(
+    "agy_oauth",
+    accounts.map((account) => account.id),
+  );
   const rows: GroupAccountRow[] = accounts.map((account) => {
     const date = signedInDate(account.authenticated_at, i18n.language);
     return {
@@ -80,14 +84,15 @@ export const AgyOAuthSection: React.FC<AgyOAuthSectionProps> = ({
               defaultValue: "登录凭据已失效，切不过去",
             }),
           ]
-        : date
-          ? [
-              t("authCenter.agy.addedOn", {
-                defaultValue: "{{date}}添加",
-                date,
-              }),
-            ]
-          : [],
+        : [
+            plans[account.id],
+            date
+              ? t("authCenter.agy.addedOn", {
+                  defaultValue: "{{date}}添加",
+                  date,
+                })
+              : null,
+          ].filter(Boolean),
       isDefault: defaultAccountId === account.id,
       needsReauth: account.requires_reauth,
       users: accountUsers([account.id]),
@@ -117,9 +122,6 @@ export const AgyOAuthSection: React.FC<AgyOAuthSectionProps> = ({
         defaultValue:
           "还没有 Antigravity 账号。agy 里已登录的号会自动出现在这里。",
       })}
-      loginLabel={t("authCenter.agy.login", {
-        defaultValue: "用 Google 登录",
-      })}
       onAdd={addAccount}
       loginUnavailableText={
         isWeb
@@ -129,11 +131,13 @@ export const AgyOAuthSection: React.FC<AgyOAuthSectionProps> = ({
             })
           : undefined
       }
-      defaultLabel={t("authCenter.agy.current", {
-        defaultValue: "agy 在用",
+      defaultLabel={t("authCenter.inUseBy", {
+        defaultValue: "{{app}} 在用",
+        app: "agy",
       })}
-      setDefaultLabel={t("authCenter.agy.switchTo", {
-        defaultValue: "切换 agy 到这个账号",
+      setDefaultLabel={t("authCenter.switchAppTo", {
+        defaultValue: "切换 {{app}} 到这个账号",
+        app: "agy",
       })}
       canReauth
       // 用同一个 Google 账号再登录一次就会替换掉旧凭据
@@ -142,12 +146,6 @@ export const AgyOAuthSection: React.FC<AgyOAuthSectionProps> = ({
       settingDefault={isSettingDefaultAccount}
       onRemove={(accountId, login) =>
         setRemoveTarget({ kind: "one", accountId, login })
-      }
-      onRemoveAll={() =>
-        setRemoveTarget({
-          kind: "all",
-          accountIds: accounts.map((account) => account.id),
-        })
       }
       removing={isRemovingAccount}
       login={{
@@ -183,8 +181,6 @@ export const AgyOAuthSection: React.FC<AgyOAuthSectionProps> = ({
     </ManagedAccountsGroup>
   );
 };
-
-export default AgyOAuthSection;
 
 interface AgyAccountSelectProps {
   value: string | null;
