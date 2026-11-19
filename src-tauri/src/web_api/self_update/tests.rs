@@ -30,7 +30,43 @@ fn rig() -> Rig {
 
 impl Rig {
     fn resolve(&self, branch: &str) -> Result<UpdateLaunch, String> {
-        resolve(&|k: &str| self.vars.get(k).cloned(), branch)
+        resolve(
+            &|k: &str| self.vars.get(k).cloned(),
+            branch,
+            "o/r",
+            BuildMode::Checkout,
+        )
+    }
+}
+
+/// A release install: an install dir holding an executable `self-update.sh`, no source dir.
+fn release_rig() -> Rig {
+    let dir = tempfile::tempdir().unwrap();
+    let script = dir.path().join("self-update.sh");
+    std::fs::write(&script, "#!/bin/sh\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let vars = HashMap::from([
+        (SELF_UPDATE_ENV, "1".into()),
+        (SYSTEMD_ENV, "0f3c9a5e1d2b4c6f".into()),
+        (INSTALL_DIR_ENV, dir.path().as_os_str().to_owned()),
+        ("HOME", "/home/svc".into()),
+    ]);
+    Rig { dir, vars }
+}
+
+impl Rig {
+    fn resolve_release(&self, repo: &str) -> Result<UpdateLaunch, String> {
+        // A branch that the checkout mode would refuse: the release mode must not look at it.
+        resolve(
+            &|k: &str| self.vars.get(k).cloned(),
+            "-not a branch",
+            repo,
+            BuildMode::Release,
+        )
     }
 }
 
@@ -47,9 +83,14 @@ fn a_complete_environment_resolves_to_the_launch() {
     let launch = rig.resolve("release").unwrap();
 
     assert_eq!(launch.unit, "cc-switch-web-update");
-    assert_eq!(launch.source_dir, rig.dir.path());
+    assert_eq!(
+        launch.source,
+        UpdateSource::Checkout {
+            source_dir: rig.dir.path().to_path_buf(),
+            branch: "release".into(),
+        }
+    );
     assert_eq!(launch.script, rig.dir.path().join("scripts/self-update.sh"));
-    assert_eq!(launch.branch, "release");
     assert_eq!(
         launch.status_file,
         PathBuf::from("/srv/state/cc-switch-web/update-status.json")
@@ -226,8 +267,10 @@ fn the_systemd_run_arguments_are_one_element_per_value() {
     let launch = UpdateLaunch {
         unit: UPDATE_UNIT,
         script: "/srv/cc switch/scripts/self-update.sh".into(),
-        source_dir: "/srv/cc switch".into(),
-        branch: "feat/x y".into(),
+        source: UpdateSource::Checkout {
+            source_dir: "/srv/cc switch".into(),
+            branch: "feat/x y".into(),
+        },
         env: vec![
             ("PORT", "18766".into()),
             ("CC_SWITCH_WEB_BUILD_PATH", "/a:/b c".into()),
@@ -291,6 +334,11 @@ fn a_status_file_is_read_field_by_field_and_nothing_else_passes_through() {
     )
     .unwrap();
     let status = read_status(&path).unwrap().unwrap();
+    assert_eq!(
+        status.from_version, None,
+        "a checkout run reports no versions"
+    );
+    assert_eq!(status.to_version, None);
     assert_eq!(status.stage, "building");
     assert!(status.ok);
     assert_eq!(status.message, "building 1c24a43");
@@ -329,6 +377,215 @@ fn a_broken_status_file_gives_a_fixed_error_that_does_not_quote_it() {
     );
 }
 
+#[test]
+fn a_release_build_resolves_to_the_installed_script_and_the_repo() {
+    let rig = release_rig();
+
+    let launch = rig.resolve_release("o/r").unwrap();
+
+    assert_eq!(launch.script, rig.dir.path().join("self-update.sh"));
+    assert_eq!(
+        launch.source,
+        UpdateSource::Release {
+            install_dir: rig.dir.path().to_path_buf(),
+            repo: "o/r".into(),
+        }
+    );
+    let args: Vec<String> = launch
+        .systemd_run_args()
+        .into_iter()
+        .map(|a| a.into_string().unwrap())
+        .collect();
+    let tail = &args[args.len() - 4..];
+    assert_eq!(
+        tail,
+        [
+            "--".to_string(),
+            rig.dir
+                .path()
+                .join("self-update.sh")
+                .to_str()
+                .unwrap()
+                .to_string(),
+            "--release".into(),
+            "o/r".into(),
+        ]
+    );
+}
+
+#[test]
+fn a_release_build_does_not_need_a_source_dir() {
+    let rig = release_rig();
+    assert!(!rig.vars.contains_key(SOURCE_DIR_ENV));
+
+    assert!(rig.resolve_release("o/r").is_ok());
+}
+
+#[test]
+fn a_release_build_refuses_without_the_install_dir_or_its_script() {
+    let cases: [(&str, fn(&mut Rig), &str); 5] = [
+        (
+            "no install dir",
+            |r| {
+                r.vars.remove(INSTALL_DIR_ENV);
+            },
+            "CC_SWITCH_WEB_INSTALL_DIR is not set",
+        ),
+        (
+            "relative install dir",
+            |r| {
+                r.vars.insert(INSTALL_DIR_ENV, "share/cc-switch-web".into());
+            },
+            "CC_SWITCH_WEB_INSTALL_DIR must be an absolute path",
+        ),
+        (
+            "missing install dir",
+            |r| {
+                r.vars
+                    .insert(INSTALL_DIR_ENV, "/nonexistent/cc-switch-web".into());
+            },
+            "CC_SWITCH_WEB_INSTALL_DIR is not a directory",
+        ),
+        (
+            "no script",
+            |r| {
+                std::fs::remove_file(r.dir.path().join(INSTALLED_SCRIPT)).unwrap();
+            },
+            "CC_SWITCH_WEB_INSTALL_DIR has no executable self-update.sh",
+        ),
+        (
+            "script without the exec bit",
+            |r| {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let script = r.dir.path().join(INSTALLED_SCRIPT);
+                    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o644))
+                        .unwrap();
+                }
+            },
+            "CC_SWITCH_WEB_INSTALL_DIR has no executable self-update.sh",
+        ),
+    ];
+    for (name, break_it, reason) in cases {
+        let mut rig = release_rig();
+        break_it(&mut rig);
+        let err = rig.resolve_release("o/r").expect_err(name);
+        assert_eq!(err, reason, "{name}");
+        assert!(
+            !err.contains(rig.dir.path().to_str().unwrap()),
+            "{name}: a path leaked into the reason: {err}"
+        );
+    }
+}
+
+#[test]
+fn a_release_build_has_its_own_flag_text_and_the_same_systemd_text() {
+    let mut rig = release_rig();
+    rig.vars.remove(SELF_UPDATE_ENV);
+    let err = rig.resolve_release("o/r").unwrap_err();
+    assert_eq!(
+        err,
+        "self-update is off: set CC_SWITCH_WEB_SELF_UPDATE=1 in the server's environment (install.sh --self-update), or update by hand with the commands of the update check"
+    );
+
+    let mut rig = release_rig();
+    rig.vars.remove(SYSTEMD_ENV);
+    let err = rig.resolve_release("o/r").unwrap_err();
+    assert!(err.contains("systemd user unit"), "{err}");
+}
+
+#[test]
+fn a_repo_that_is_not_owner_slash_name_is_refused() {
+    let rig = release_rig();
+    for repo in [
+        "", "o", "o/r/x", "o r/x", "o/r\n", "/r", "o/", "o/r;x", "ö/r",
+    ] {
+        let err = rig.resolve_release(repo).expect_err(repo);
+        assert_eq!(
+            err, "CC_SWITCH_WEB_UPDATE_REPO is not a usable owner/name",
+            "{repo:?}"
+        );
+    }
+    for repo in ["o/r", "alxwlw/cc-switch-web", "A_b.c-1/x.y_z-2"] {
+        assert!(rig.resolve_release(repo).is_ok(), "{repo}");
+    }
+}
+
+#[test]
+fn the_release_conditions_keep_their_order_flag_systemd_dir_repo() {
+    let mut rig = release_rig();
+    rig.vars.remove(INSTALL_DIR_ENV);
+    let err = rig.resolve_release("bad").unwrap_err();
+    assert!(
+        err.contains("INSTALL_DIR is not set"),
+        "dir before repo: {err}"
+    );
+}
+
+#[test]
+fn the_release_variables_are_forwarded_when_set() {
+    let mut rig = release_rig();
+    rig.vars
+        .insert("CC_SWITCH_WEB_UPDATE_API", "http://127.0.0.1:9/api".into());
+    rig.vars.insert(
+        "CC_SWITCH_WEB_DOWNLOAD_BASE",
+        "http://127.0.0.1:9/dl".into(),
+    );
+    rig.vars.insert("BIN_DIR", "/home/svc/.local/bin".into());
+    rig.vars.insert("PORT", "19001".into());
+
+    let launch = rig.resolve_release("o/r").unwrap();
+
+    assert_eq!(
+        launch.env,
+        [
+            ("PORT", OsString::from("19001")),
+            (
+                "CC_SWITCH_WEB_INSTALL_DIR",
+                rig.dir.path().as_os_str().to_owned()
+            ),
+            ("CC_SWITCH_WEB_UPDATE_API", "http://127.0.0.1:9/api".into()),
+            (
+                "CC_SWITCH_WEB_DOWNLOAD_BASE",
+                "http://127.0.0.1:9/dl".into()
+            ),
+            ("BIN_DIR", "/home/svc/.local/bin".into()),
+        ]
+    );
+    let blank = release_rig();
+    let launch = blank.resolve_release("o/r").unwrap();
+    assert_eq!(
+        launch.env,
+        [(
+            "CC_SWITCH_WEB_INSTALL_DIR",
+            blank.dir.path().as_os_str().to_owned()
+        )]
+    );
+}
+
+#[test]
+fn a_status_file_with_versions_is_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("update-status.json");
+    std::fs::write(
+        &path,
+        r#"{"stage":"restarting","ok":true,"message":"restarting cc-switch-web","fromSha":null,"toSha":null,"fromVersion":"4.0.35-web.1","toVersion":"4.0.35-web.2","startedAt":"2026-11-04T10:00:00Z","finishedAt":null,"token":"ghp_secret"}"#,
+    )
+    .unwrap();
+
+    let status = read_status(&path).unwrap().unwrap();
+
+    assert_eq!(status.from_version.as_deref(), Some("4.0.35-web.1"));
+    assert_eq!(status.to_version.as_deref(), Some("4.0.35-web.2"));
+    assert_eq!(status.from_sha, None);
+    assert_eq!(status.to_sha, None);
+    let echoed = serde_json::to_value(&status).unwrap();
+    assert_eq!(echoed["fromVersion"], "4.0.35-web.1");
+    assert_eq!(echoed["toVersion"], "4.0.35-web.2");
+    assert!(echoed.get("token").is_none(), "{echoed}");
+}
+
 // --- the real launcher, against scripts that play systemd ----------------------------
 
 #[cfg(unix)]
@@ -347,8 +604,10 @@ mod launcher {
         UpdateLaunch {
             unit: UPDATE_UNIT,
             script: dir.join("scripts/self-update.sh"),
-            source_dir: dir.to_path_buf(),
-            branch: "main".into(),
+            source: UpdateSource::Checkout {
+                source_dir: dir.to_path_buf(),
+                branch: "main".into(),
+            },
             env: vec![("PORT", "18766".into())],
             status_file: dir.join("update-status.json"),
         }

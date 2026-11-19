@@ -1,6 +1,8 @@
 //! WEB-28 T2: `POST /api/update/install` and `GET /api/update/status` — start
 //! `scripts/self-update.sh` in a transient systemd unit and report the status file it
-//! writes.
+//! writes. A build from source updates its checkout (`<script> <source_dir> <branch>`); a
+//! release build, installed by `scripts/install.sh`, runs the copy of the script in its
+//! install dir (`<install_dir>/self-update.sh --release <repo>`).
 //!
 //! The server never builds anything itself. When the operator has switched self-update on,
 //! the route asks `systemd-run --user` for a unit named [`UPDATE_UNIT`], which outlives the
@@ -25,18 +27,25 @@ pub const UPDATE_UNIT: &str = "cc-switch-web-update";
 
 const SELF_UPDATE_ENV: &str = "CC_SWITCH_WEB_SELF_UPDATE";
 const SOURCE_DIR_ENV: &str = "CC_SWITCH_WEB_SOURCE_DIR";
+const INSTALL_DIR_ENV: &str = "CC_SWITCH_WEB_INSTALL_DIR";
 /// Set by systemd for every unit it starts. Not `CC_SWITCH_WEB_SUPERVISED`: that one is the
 /// operator's word for Docker and others, and `systemd-run --user` needs systemd.
 const SYSTEMD_ENV: &str = "INVOCATION_ID";
 const SCRIPT_PATH: &str = "scripts/self-update.sh";
+/// `install.sh` puts the script straight into the install dir.
+const INSTALLED_SCRIPT: &str = "self-update.sh";
 /// Variables of the server's own environment the script needs and a transient unit does not
 /// inherit (it gets the manager's environment, not the service's).
-const FORWARDED_ENV: [&str; 5] = [
+const FORWARDED_ENV: [&str; 9] = [
     "HOST",
     "PORT",
     "WEB_DIST",
     "XDG_STATE_HOME",
     "CC_SWITCH_WEB_BUILD_PATH",
+    "CC_SWITCH_WEB_INSTALL_DIR",
+    "CC_SWITCH_WEB_UPDATE_API",
+    "CC_SWITCH_WEB_DOWNLOAD_BASE",
+    "BIN_DIR",
 ];
 /// Where `scripts/self-update.sh` writes, below `${XDG_STATE_HOME:-$HOME/.local/state}`.
 const STATUS_SUBPATH: &str = "cc-switch-web/update-status.json";
@@ -47,15 +56,49 @@ const CAPTURE_MAX_BYTES: u64 = 8 * 1024;
 const MESSAGE_MAX_CHARS: usize = 300;
 const ALREADY_RUNNING: &str = "an update is already running";
 
+/// How this server was built, which decides what "update" means.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuildMode {
+    /// No fork version in the binary: a checkout is pulled and rebuilt.
+    Checkout,
+    /// A release build: the latest release archive is installed.
+    Release,
+}
+
+impl BuildMode {
+    pub fn of_this_build() -> Self {
+        if crate::services::web_update::web_version().is_some() {
+            Self::Release
+        } else {
+            Self::Checkout
+        }
+    }
+}
+
+/// What the script is told to update from. Both come from the server's environment, never
+/// from a request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UpdateSource {
+    Checkout {
+        source_dir: PathBuf,
+        /// From `CC_SWITCH_WEB_UPDATE_BRANCH` (or its default).
+        branch: String,
+    },
+    Release {
+        install_dir: PathBuf,
+        /// `owner/name`, from `CC_SWITCH_WEB_UPDATE_REPO` (or its default).
+        repo: String,
+    },
+}
+
 /// What [`UpdateSpawner::spawn`] is asked to start.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdateLaunch {
     pub unit: &'static str,
-    /// `<CC_SWITCH_WEB_SOURCE_DIR>/scripts/self-update.sh`.
+    /// `<CC_SWITCH_WEB_SOURCE_DIR>/scripts/self-update.sh`, or
+    /// `<CC_SWITCH_WEB_INSTALL_DIR>/self-update.sh` for a release build.
     pub script: PathBuf,
-    pub source_dir: PathBuf,
-    /// From `CC_SWITCH_WEB_UPDATE_BRANCH` (or its default), never from a request.
-    pub branch: String,
+    pub source: UpdateSource,
     /// The forwarded variables that are set in the server's environment.
     pub env: Vec<(&'static str, OsString)>,
     /// The file the script reports into; cleared before the unit starts.
@@ -79,8 +122,16 @@ impl UpdateLaunch {
         }
         args.push("--".into());
         args.push(self.script.clone().into());
-        args.push(self.source_dir.clone().into());
-        args.push(self.branch.clone().into());
+        match &self.source {
+            UpdateSource::Checkout { source_dir, branch } => {
+                args.push(source_dir.clone().into());
+                args.push(branch.clone().into());
+            }
+            UpdateSource::Release { repo, .. } => {
+                args.push("--release".into());
+                args.push(repo.clone().into());
+            }
+        }
         args
     }
 }
@@ -255,38 +306,101 @@ pub(super) fn status_path(env: Env) -> Result<PathBuf, String> {
     Ok(base.join(STATUS_SUBPATH))
 }
 
+/// `^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`: nothing else reaches a URL or the script's argv.
+fn is_owner_slash_name(repo: &str) -> bool {
+    let mut parts = repo.split('/');
+    let usable = |part: &str| {
+        !part.is_empty()
+            && part
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
+    };
+    matches!(
+        (parts.next(), parts.next(), parts.next()),
+        (Some(owner), Some(name), None) if usable(owner) && usable(name)
+    )
+}
+
+/// An absolute directory named by `key`, holding an executable `script` (a path below it).
+fn dir_with_script(
+    env: Env,
+    key: &str,
+    script: &str,
+    script_label: &str,
+) -> Result<(PathBuf, PathBuf), String> {
+    let Some(dir) = non_empty(env, key).map(PathBuf::from) else {
+        return Err(format!("{key} is not set"));
+    };
+    if !dir.is_absolute() {
+        return Err(format!("{key} must be an absolute path"));
+    }
+    if !dir.is_dir() {
+        return Err(format!("{key} is not a directory"));
+    }
+    let script = dir.join(script);
+    if !is_executable_file(&script) {
+        return Err(format!("{key} has no executable {script_label}"));
+    }
+    Ok((dir, script))
+}
+
 /// Every condition of a self-update, in the order an operator fixes them. `Err` is the
-/// reason shown in the 409. Paths are named by variable, not echoed.
-pub(super) fn resolve(env: Env, branch: &str) -> Result<UpdateLaunch, String> {
+/// reason shown in the 409. Paths are named by variable, not echoed. `branch` and `repo`
+/// come from the update source configuration; `mode` picks which of them is used.
+pub(super) fn resolve(
+    env: Env,
+    branch: &str,
+    repo: &str,
+    mode: BuildMode,
+) -> Result<UpdateLaunch, String> {
     if env(SELF_UPDATE_ENV).as_deref() != Some("1".as_ref()) {
-        return Err(format!(
-            "self-update is off: set {SELF_UPDATE_ENV}=1 and {SOURCE_DIR_ENV} in the server's environment, or update by hand with the commands of the update check"
-        ));
+        return Err(match mode {
+            BuildMode::Checkout => format!(
+                "self-update is off: set {SELF_UPDATE_ENV}=1 and {SOURCE_DIR_ENV} in the server's environment, or update by hand with the commands of the update check"
+            ),
+            BuildMode::Release => format!(
+                "self-update is off: set {SELF_UPDATE_ENV}=1 in the server's environment (install.sh --self-update), or update by hand with the commands of the update check"
+            ),
+        });
     }
     if non_empty(env, SYSTEMD_ENV).is_none() {
         return Err(format!(
             "self-update needs the server to run as a systemd user unit ({SYSTEMD_ENV} is not set); in Docker rebuild the image with the commands of the update check"
         ));
     }
-    let Some(source_dir) = non_empty(env, SOURCE_DIR_ENV).map(PathBuf::from) else {
-        return Err(format!("{SOURCE_DIR_ENV} is not set"));
+    let (script, source) = match mode {
+        BuildMode::Checkout => {
+            let (source_dir, script) =
+                dir_with_script(env, SOURCE_DIR_ENV, SCRIPT_PATH, SCRIPT_PATH)?;
+            if branch.is_empty()
+                || branch.starts_with('-')
+                || branch.chars().any(|c| c.is_control() || c.is_whitespace())
+            {
+                return Err("CC_SWITCH_WEB_UPDATE_BRANCH is not a usable branch name".into());
+            }
+            (
+                script,
+                UpdateSource::Checkout {
+                    source_dir,
+                    branch: branch.to_string(),
+                },
+            )
+        }
+        BuildMode::Release => {
+            let (install_dir, script) =
+                dir_with_script(env, INSTALL_DIR_ENV, INSTALLED_SCRIPT, INSTALLED_SCRIPT)?;
+            if !is_owner_slash_name(repo) {
+                return Err("CC_SWITCH_WEB_UPDATE_REPO is not a usable owner/name".into());
+            }
+            (
+                script,
+                UpdateSource::Release {
+                    install_dir,
+                    repo: repo.to_string(),
+                },
+            )
+        }
     };
-    if !source_dir.is_absolute() {
-        return Err(format!("{SOURCE_DIR_ENV} must be an absolute path"));
-    }
-    if !source_dir.is_dir() {
-        return Err(format!("{SOURCE_DIR_ENV} is not a directory"));
-    }
-    let script = source_dir.join(SCRIPT_PATH);
-    if !is_executable_file(&script) {
-        return Err(format!("{SOURCE_DIR_ENV} has no executable {SCRIPT_PATH}"));
-    }
-    if branch.is_empty()
-        || branch.starts_with('-')
-        || branch.chars().any(|c| c.is_control() || c.is_whitespace())
-    {
-        return Err("CC_SWITCH_WEB_UPDATE_BRANCH is not a usable branch name".into());
-    }
     let status_file = status_path(env)?;
     let forwarded = FORWARDED_ENV
         .iter()
@@ -295,8 +409,7 @@ pub(super) fn resolve(env: Env, branch: &str) -> Result<UpdateLaunch, String> {
     Ok(UpdateLaunch {
         unit: UPDATE_UNIT,
         script,
-        source_dir,
-        branch: branch.to_string(),
+        source,
         env: forwarded,
         status_file,
     })
@@ -322,13 +435,20 @@ pub(super) struct UpdateControl(pub Option<Arc<UpdateRunner>>);
 pub struct UpdateRunner {
     spawner: Arc<dyn UpdateSpawner>,
     start: Mutex<()>,
+    mode: BuildMode,
 }
 
 impl UpdateRunner {
     pub fn new(spawner: Arc<dyn UpdateSpawner>) -> Self {
+        Self::with_mode(spawner, BuildMode::of_this_build())
+    }
+
+    /// A runner for the given build mode, for tests: the real one follows the binary.
+    pub fn with_mode(spawner: Arc<dyn UpdateSpawner>, mode: BuildMode) -> Self {
         Self {
             spawner,
             start: Mutex::new(()),
+            mode,
         }
     }
 }
@@ -345,8 +465,12 @@ impl UpdateControl {
     /// All conditions, read from the environment now. The capabilities flag is
     /// `launch().is_ok()`, the install route starts from the same value.
     pub(super) fn launch(&self) -> Result<UpdateLaunch, String> {
-        let branch = crate::services::web_update::UpdateSourceConfig::from_env().branch;
-        let launch = resolve(&process_env, &branch)?;
+        let cfg = crate::services::web_update::UpdateSourceConfig::from_env();
+        let mode = self
+            .0
+            .as_ref()
+            .map_or_else(BuildMode::of_this_build, |runner| runner.mode);
+        let launch = resolve(&process_env, &cfg.branch, &cfg.repo, mode)?;
         if self.0.is_none() {
             return Err("this server was started without an update launcher".into());
         }
@@ -420,6 +544,9 @@ pub struct UpdateRunStatus {
     pub message: String,
     pub from_sha: Option<String>,
     pub to_sha: Option<String>,
+    /// A release install reports versions (`4.0.35-web.1`), a checkout shas.
+    pub from_version: Option<String>,
+    pub to_version: Option<String>,
     pub started_at: Option<String>,
     pub finished_at: Option<String>,
 }

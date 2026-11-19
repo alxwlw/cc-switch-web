@@ -41,8 +41,8 @@ pub use restart::{
 };
 use self_update::UpdateControl;
 pub use self_update::{
-    SpawnError, SystemdRunSpawner, UpdateLaunch, UpdateRunStatus, UpdateRunner, UpdateSpawner,
-    UPDATE_UNIT,
+    BuildMode, SpawnError, SystemdRunSpawner, UpdateLaunch, UpdateRunStatus, UpdateRunner,
+    UpdateSource, UpdateSpawner, UPDATE_UNIT,
 };
 
 pub type SharedState = Arc<AppState>;
@@ -786,13 +786,20 @@ async fn update_install(
         return rejection;
     }
     match control.start().await {
-        self_update::Start::Started(launch) => (
-            StatusCode::ACCEPTED,
-            Json(json!({
-                "ok": true,
-                "data": { "unit": launch.unit, "branch": launch.branch },
-            })),
-        ),
+        self_update::Start::Started(launch) => {
+            // A checkout update names the branch it pulls, a release update the repository.
+            let (branch, repo) = match &launch.source {
+                UpdateSource::Checkout { branch, .. } => (Some(branch), None),
+                UpdateSource::Release { repo, .. } => (None, Some(repo)),
+            };
+            (
+                StatusCode::ACCEPTED,
+                Json(json!({
+                    "ok": true,
+                    "data": { "unit": launch.unit, "branch": branch, "repo": repo },
+                })),
+            )
+        }
         self_update::Start::Refused(reason) => conflict(reason),
         self_update::Start::Failed(why) => fail(why),
     }
