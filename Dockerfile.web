@@ -1,6 +1,13 @@
 # syntax=docker/dockerfile:1.7
-# Release image for the cc-switch-web fork. Built and run on 2026-11-19 (the Dokploy app on agentbox);
-# not built in CI. The other validated path is scripts/install-server.sh + systemd on the Tailscale host.
+# Release image of cc-switch-web. CI (.github/workflows/release-web.yml) builds it for linux/amd64 and
+# linux/arm64 and publishes it to ghcr.io/alxwlw/cc-switch-web; the main way to run it is deploy/compose.yml
+# (host network, your UID, your home directory). The other validated path is scripts/install.sh + systemd.
+#
+# The image listens on 127.0.0.1:18766 and does not set TRUSTED_TAILNET: it is meant for `network_mode: host`.
+# In a bridge network with `-p`, set HOST=0.0.0.0 and TRUSTED_TAILNET=1 yourself, and publish the port on a
+# loopback or tailnet address only:
+#   docker run -p 127.0.0.1:18766:18766 -e HOST=0.0.0.0 -e TRUSTED_TAILNET=1 ghcr.io/alxwlw/cc-switch-web
+#
 # Build from the repo root: `docker build -f Dockerfile.web .` (docs/deploy.md). Dockerfile.web.dockerignore
 # keeps node_modules, build output and .git out of the context.
 
@@ -43,13 +50,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       librsvg2-2 libwebkit2gtk-4.1-0 \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd -m ccswitch
-COPY --from=web /build/dist-web /home/ccswitch/dist-web
+# The console lives outside any home directory: compose runs the container as the host UID, and a home
+# directory can be closed to other users (HOME_MODE), which would stop the console being served.
+COPY --from=web /build/dist-web /opt/cc-switch-web/dist-web
 COPY --from=server /usr/local/bin/cc-switch-web /usr/local/bin/cc-switch-web
+RUN chmod -R a+rX /opt/cc-switch-web
 USER ccswitch
 WORKDIR /home/ccswitch
-ENV HOST=0.0.0.0 PORT=18766 TRUSTED_TAILNET=1 \
+ENV HOST=127.0.0.1 PORT=18766 \
     CC_SWITCH_CONFIG_DIR=/home/ccswitch/.cc-switch-web \
-    WEB_DIST=/home/ccswitch/dist-web
+    WEB_DIST=/opt/cc-switch-web/dist-web
+LABEL org.opencontainers.image.source="https://github.com/alxwlw/cc-switch-web" \
+      org.opencontainers.image.licenses="MIT"
 EXPOSE 18766
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=4 \
   CMD curl -fsS -o /dev/null "http://127.0.0.1:${PORT}/api/health" || exit 1

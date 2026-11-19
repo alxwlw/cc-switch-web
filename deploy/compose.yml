@@ -1,0 +1,24 @@
+# cc-switch-web console. It runs as your user and sees your home directory, so it
+# manages the same agent configs your agents use. It listens on 127.0.0.1 only.
+#
+#   printf 'CCS_UID=%s\nCCS_GID=%s\n' "$(id -u)" "$(id -g)" > .env
+#   docker compose up -d
+#   # on your laptop: ssh -L 18766:localhost:18766 you@server, then open http://localhost:18766
+#
+# Update: docker compose pull && docker compose up -d
+services:
+  cc-switch-web:
+    image: ${CC_SWITCH_WEB_IMAGE:-ghcr.io/alxwlw/cc-switch-web:latest}
+    network_mode: host
+    user: "${CCS_UID:?set CCS_UID to $(id -u)}:${CCS_GID:?set CCS_GID to $(id -g)}"
+    environment:
+      HOME: ${HOME}
+      CC_SWITCH_CONFIG_DIR: ${HOME}/.cc-switch-web
+      HOST: 127.0.0.1
+      PORT: "18766"
+      # Tailscale instead of an SSH tunnel: your tailnet address and the trust flag.
+      # HOST: 100.x.y.z
+      # TRUSTED_TAILNET: "1"
+    volumes:
+      - ${HOME}:${HOME}
+    restart: unless-stopped
