@@ -8,3 +8,10 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 [profile.ci]
 # 跑完全部测试再汇总失败
 fail-fast = false
+
+# server_example_* 测试在测试里再跑一遍 `cargo build --example server`：它的指纹和 nextest
+# 的构建对不上，依赖会重编，冷缓存的 macOS 上要五到七分钟（CI 日志：reqwest、rustls、rmcp、
+# cc-switch 全部 Compiling），几个测试还抢同一把 cargo 锁。默认 180 秒的上限不够，放宽到 15 分钟。
+[[profile.ci.overrides]]
+filter = "binary(server_example_data_dir) | binary(server_example_restart)"
+slow-timeout = { period = "60s", terminate-after = 15 }

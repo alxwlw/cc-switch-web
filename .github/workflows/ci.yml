@@ -197,13 +197,6 @@ jobs:
 
       # 每个测试一个进程，单测超时见 src-tauri/.config/nextest.toml。doctest 目前只有两个
       # ignored，nextest 不跑 doctest 也不漏。
-      # server_example_*.rs 测试自己跑一遍 `cargo build --example server`（nextest 不编 example）。
-      # 它的 feature 集和测试构建不同，依赖会重编，冷缓存的 macOS 上要三分钟以上，
-      # 而且几个测试抢同一把 cargo 锁，全被单测 180 秒超时杀掉。在这里先编好，测试里那次就是空操作。
-      - name: Build server example
-        if: runner.os != 'Windows'
-        run: cargo build --example server --manifest-path src-tauri/Cargo.toml
-
       - name: Run tests
         run: cargo nextest run --manifest-path src-tauri/Cargo.toml --profile ci
 
