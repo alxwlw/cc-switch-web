@@ -252,7 +252,7 @@ export function OpenTerminalDialog({
   const { data: agyStatus } = useQuery({
     queryKey: ["managed-auth-status", "agy_oauth"],
     queryFn: () => authApi.authGetStatus("agy_oauth"),
-    // WEB-00: auth_get_status не поддержан (диалог в web недостижим — вход disabled; запросы выключены на всякий случай) — снимет WEB-02
+    // WEB-00: auth_get_status is not supported (the dialog is unreachable in web, sign-in is disabled; queries are off just in case); WEB-02 lifts this
     enabled: !isWeb && boundAgyAccount !== null,
   });
   const agyWillSwitch =
@@ -262,8 +262,8 @@ export function OpenTerminalDialog({
   const { data: agyRunning } = useQuery({
     queryKey: ["agy-running", provider?.id],
     queryFn: () => authApi.agyAccountIsRunning(),
-    // WEB-00: agy_account_is_running не поддержан; в web agyStatus выключен (выше) → agyWillSwitch
-    // всегда false, отдельный гейт не нужен — desktop-only (терминал на сервере не открыть)
+    // WEB-00: agy_account_is_running is not supported; in web agyStatus is off (above), so agyWillSwitch
+    // is always false and no separate gate is needed; desktop-only (a terminal cannot be opened on the server)
     enabled: agyWillSwitch,
     staleTime: 0,
   });

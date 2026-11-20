@@ -15,19 +15,19 @@ describe("adapter invoke · desktop-only fire-and-forget (WEB-00)", () => {
   });
 
   it.each(["update_tray_menu", "set_window_theme"])(
-    "%s: null без fetch и без исключения",
+    "%s: null without fetch and without an exception",
     async (cmd) => {
       await expect(invoke(cmd, { theme: "dark" })).resolves.toBeNull();
       expect(fetchSpy).not.toHaveBeenCalled();
     },
   );
 
-  it("is_portable_mode: false без fetch (сервер не portable)", async () => {
+  it("is_portable_mode: false without fetch (the server is not portable)", async () => {
     await expect(invoke("is_portable_mode")).resolves.toBe(false);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("контроль: прочие неподдержанные команды по-прежнему кидают WebUnsupportedError", async () => {
+  it("control: other unsupported commands still throw WebUnsupportedError", async () => {
     await expect(invoke("launch_hermes_dashboard")).rejects.toBeInstanceOf(
       WebUnsupportedError,
     );

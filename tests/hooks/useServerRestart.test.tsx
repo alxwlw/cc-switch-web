@@ -201,11 +201,11 @@ describe("useServerRestart (WEB-26)", () => {
 
   it("409 shows the server's text, polls nothing and frees the button", async () => {
     restartResponse = () =>
-      json(409, { ok: false, error: "перезапустите сервер вручную" });
+      json(409, { ok: false, error: "restart the server manually" });
     const { result, done } = await start();
     await done;
 
-    expect(toastErrorMock).toHaveBeenCalledWith("перезапустите сервер вручную");
+    expect(toastErrorMock).toHaveBeenCalledWith("restart the server manually");
     expect(reloadMock).not.toHaveBeenCalled();
     await tick(3 * RESTART_POLL_INTERVAL_MS);
     expect(calls("/api/health")).toHaveLength(0);

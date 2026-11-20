@@ -23,7 +23,7 @@ describe("promptsApi.importFromFile · web adapter (WEB-31)", () => {
   const jsonResponse = (body: unknown) =>
     ({ status: 200, json: async () => body }) as Response;
 
-  it("POST /api/:app/prompts/import-from-file без тела, возвращает строку id", async () => {
+  it("POST /api/:app/prompts/import-from-file without a body, returns the id string", async () => {
     fetchSpy.mockResolvedValue(
       jsonResponse({ ok: true, data: "imported-1761350400" }),
     );
@@ -36,7 +36,7 @@ describe("promptsApi.importFromFile · web adapter (WEB-31)", () => {
     expect(init.body).toBeUndefined();
   });
 
-  it("ошибка сервиса {ok:false,error} пробрасывается дословно", async () => {
+  it("a service error {ok:false,error} is passed through verbatim", async () => {
     fetchSpy.mockResolvedValue(
       jsonResponse({ ok: false, error: "Prompt file not found" }),
     );

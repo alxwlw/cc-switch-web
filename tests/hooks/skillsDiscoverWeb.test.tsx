@@ -25,13 +25,13 @@ const discoverCalls = () =>
     (call) => call[0] === "discover_available_skills",
   );
 
-describe("WEB-05: discover skills работает в web", () => {
+describe("WEB-05: discover skills works in web", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     invokeMock.mockResolvedValue({ skills: [], failures: [] });
   });
 
-  it("useDiscoverableSkills: web зовёт discover_available_skills", async () => {
+  it("useDiscoverableSkills: web calls discover_available_skills", async () => {
     setWeb(true);
     renderHook(() => useDiscoverableSkills(), { wrapper });
     await act(async () => {

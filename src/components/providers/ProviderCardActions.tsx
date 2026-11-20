@@ -220,7 +220,7 @@ export function ProviderCardActions({
               {t("provider.duplicate")}
             </DropdownMenuItem>
           )}
-          {/* WEB-04: stream check работает в web — проверка выполняется на сервере */}
+          {/* WEB-04: stream check works in web: the check runs on the server */}
           {onTest && (
             <DropdownMenuItem
               disabled={isTesting}
@@ -232,7 +232,7 @@ export function ProviderCardActions({
               {isWeb && (
                 <span className="text-caption text-fg-3">
                   {t("provider.connectivityCheckServerNote", {
-                    defaultValue: "проверка выполняется с сервера",
+                    defaultValue: "The check runs from the server",
                   })}
                 </span>
               )}

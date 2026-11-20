@@ -109,7 +109,7 @@ describe("ClaudeDesktopProviderForm", () => {
   it.each([
     ["web", true],
     ["desktop", false],
-  ])("%s: запрашивает get_claude_desktop_default_routes", async (_l, web) => {
+  ])("%s: requests get_claude_desktop_default_routes", async (_l, web) => {
     setWeb(web);
     renderForm(undefined);
     await waitFor(() => expect(defaultRoutesMock).toHaveBeenCalledTimes(1));
@@ -119,7 +119,7 @@ describe("ClaudeDesktopProviderForm", () => {
     ["web", true],
     ["desktop", false],
   ])(
-    "новый провайдер (%s): режим «модель-маппинг» предлагается",
+    "new provider (%s): the \"model mapping\" mode is offered",
     async (_label, web) => {
       setWeb(web);
       // jsdom 没有 scrollIntoView，Radix Select 打开时会调
@@ -174,7 +174,7 @@ describe("ClaudeDesktopProviderForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("web: у уже сохранённого proxy-провайдера режим остаётся выбранным", () => {
+  it("web: an already saved proxy provider keeps its mode selected", () => {
     setWeb(true);
     renderForm({
       name: "Proxy Provider",

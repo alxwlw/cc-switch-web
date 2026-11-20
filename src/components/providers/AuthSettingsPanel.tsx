@@ -20,7 +20,7 @@ export function AuthSettingsPanel({ target, onClose }: AuthSettingsPanelProps) {
       onClose={onClose}
       motionPreset="slide-from-right"
     >
-      {/* WEB-00: если auth снова попадёт в WEB_HIDDEN_VIEWS (сейчас список пуст, auth открыт WEB-02, ф.25), ссылки «управлять аккаунтами» показывают notice */}
+      {/* WEB-00: if auth ever lands in WEB_HIDDEN_VIEWS again (the list is empty now, auth was opened by WEB-02, phase 25), the "manage accounts" links show a notice */}
       {target && !isViewAvailable("auth") ? (
         <p role="status" className="text-body text-fg-2">
           {t("web.unavailable")}

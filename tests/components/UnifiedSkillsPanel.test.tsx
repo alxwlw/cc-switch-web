@@ -1110,7 +1110,7 @@ describe("UnifiedSkillsPanel in web (WEB-05)", () => {
         const { unmount } = renderPanel();
         await userEvent.click(screen.getByRole("button", { name: trigger }));
         const found = screen.queryByRole("menuitem", {
-          // у пункта импорта справа бейдж с числом — имя начинается с ключа
+          // the import item has a badge with a number on the right: the name starts with the key
           name: (name) => name.startsWith(item),
         });
         expect(found).not.toBeNull();

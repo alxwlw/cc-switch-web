@@ -61,17 +61,17 @@ describe("data directory and restart commands · web adapter (WEB-26)", () => {
 
   it("set_app_config_dir_override rejects with the server's text on 400 and 409", async () => {
     fetchSpy.mockResolvedValueOnce(
-      reply(400, { ok: false, error: "путь не абсолютный" }),
+      reply(400, { ok: false, error: "the path is not absolute" }),
     );
     await expect(
       invoke("set_app_config_dir_override", { path: "x" }),
-    ).rejects.toThrow("путь не абсолютный");
+    ).rejects.toThrow("the path is not absolute");
     fetchSpy.mockResolvedValueOnce(
-      reply(409, { ok: false, error: "каталог задан CC_SWITCH_CONFIG_DIR" }),
+      reply(409, { ok: false, error: "the directory is set by CC_SWITCH_CONFIG_DIR" }),
     );
     await expect(
       invoke("set_app_config_dir_override", { path: "/a" }),
-    ).rejects.toThrow("каталог задан CC_SWITCH_CONFIG_DIR");
+    ).rejects.toThrow("the directory is set by CC_SWITCH_CONFIG_DIR");
   });
 
   it("restart_server POSTs /api/restart with a JSON content type and resolves the instance id", async () => {
@@ -93,10 +93,10 @@ describe("data directory and restart commands · web adapter (WEB-26)", () => {
     expect(fetchSpy.mock.calls[0][0]).toBe("/api/restart");
 
     fetchSpy.mockResolvedValueOnce(
-      reply(409, { ok: false, error: "перезапустите сервер вручную" }),
+      reply(409, { ok: false, error: "restart the server manually" }),
     );
     await expect(invoke("restart_app")).rejects.toThrow(
-      "перезапустите сервер вручную",
+      "restart the server manually",
     );
   });
 });

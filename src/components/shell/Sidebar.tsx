@@ -297,7 +297,7 @@ function MainDirectory({
     },
   ];
 
-  // WEB-00: гейт скрытых в web nav-пунктов (список WEB_HIDDEN_VIEWS сейчас пуст: auth открыт WEB-02, ф.25)
+  // WEB-00: a gate for nav items hidden in web (the WEB_HIDDEN_VIEWS list is empty now: auth was opened by WEB-02, phase 25)
   const visibleGlobals = globals.filter((g) => isViewAvailable(g.page));
 
   const isGlobalSelected = (page: GlobalPage) =>
@@ -755,14 +755,14 @@ function SettingsDirectory({
         aria-label={t("nav.settings")}
         className={cn("flex min-h-0 flex-1 flex-col", collapsed && "mt-2")}
       >
-        {/* WEB-00: скрытых в web секций сейчас нет (network открыта WEB-23; routing/data открыты с урезанным содержимым: rectifier и лог-вьювер, WEB-24), фильтр сохранён для будущих гейтов */}
+        {/* WEB-00: no sections are hidden in web now (network was opened by WEB-23; routing/data are open with trimmed content: rectifier and log viewer, WEB-24); the filter stays for future gates */}
         {SETTINGS_ITEMS.filter(({ section }) =>
           isSettingsSectionAvailable(section),
         ).map(({ section, icon }) => (
           <NavItem
             key={section}
             collapsed={collapsed}
-            // WEB-00: запрошенная скрытая секция подсвечивает general (её и рисует SettingsPage)
+            // WEB-00: a requested hidden section highlights general (which SettingsPage renders)
             selected={resolveSettingsSection(settingsSection) === section}
             icon={icon}
             label={t(`settings.sections.${section}`)}

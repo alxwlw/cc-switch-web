@@ -207,9 +207,9 @@ export function AppsPage() {
   // 首次探测还没出结果时不分组，免得各行探完一个跳一个；之后重新检查时沿用上次结果，位置不动。
   const rowInstalled = (row: Row): boolean | null => {
     if (row.kind === "desktop") {
-      // Ответа ещё не было: Desktop не объявляем «не установленным», список плоский.
-      // В web упавший запрос без данных — тоже «неизвестно»; в desktop он, как раньше,
-      // даёт «не установлен». Упавшее повторное чтение данные не стирает: группы остаются.
+      // No response yet: Desktop is not declared "not installed", the list is flat.
+      // In web a failed request without data is also "unknown"; in desktop it still
+      // gives "not installed". A failed re-read does not erase data: the groups stay.
       return desktopStatus === undefined &&
         (isDesktopStatusPending || (isWeb && isDesktopStatusError))
         ? null
@@ -392,7 +392,7 @@ export function AppsPage() {
         }
         meta={
           isWeb ? (
-            // Файлы Claude Desktop правятся на сервере, а не на машине пользователя
+            // Claude Desktop files are edited on the server, not on the user's machine
             <span className="min-w-0" data-testid="apps-web-desktop-note">
               {t("appsPage.desktopServerNote")}
               {desktopStatus?.installed === false && (

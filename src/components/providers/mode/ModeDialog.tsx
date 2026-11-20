@@ -222,8 +222,8 @@ function EnterBody({
                 ? [t("mode.dialog.stackNoteRestartCodex", { app: appName })]
                 : []),
             ];
-  // Claude Desktop ходит на прокси сервера по адресу подключения (client host): с другой машины
-  // 127.0.0.1 сервера не достучаться — подсказываем, где его задать.
+  // Claude Desktop reaches the server proxy at the connection address (client host): from another machine
+  // the server's 127.0.0.1 is unreachable, so we hint where to set it.
   if (isWeb && app === "claude-desktop") {
     notes.push(t("web.desktopRouteHost"));
   }

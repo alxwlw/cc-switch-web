@@ -8,8 +8,8 @@ import { resetProviderState } from "./msw/state";
 import "./msw/tauriMocks";
 import { setWeb } from "./helpers/web";
 
-// Реальный isWeb в jsdom всегда true (нет __TAURI_INTERNALS__) — для тестов дефолт desktop.
-// Остальной adapter (invoke, WebUnsupportedError…) настоящий; web-тесты зовут setWeb(true).
+// The real isWeb in jsdom is always true (no __TAURI_INTERNALS__); for tests the default is desktop.
+// The rest of adapter (invoke, WebUnsupportedError…) is real; web tests call setWeb(true).
 vi.mock("@/lib/api/adapter", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/adapter")>();
   return {

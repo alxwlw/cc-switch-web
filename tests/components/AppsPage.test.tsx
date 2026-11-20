@@ -724,7 +724,7 @@ describe("AppsPage concurrent CLI upgrades", () => {
     ).toBeInTheDocument();
   });
 
-  it("web: опрашивает статус Claude Desktop на сервере и группирует по installed", async () => {
+  it("web: polls the Claude Desktop status on the server and groups by installed", async () => {
     setWeb(true);
     mocks.desktopStatus = {
       supported: true,
@@ -742,11 +742,11 @@ describe("AppsPage concurrent CLI upgrades", () => {
     expect(screen.getByTestId("apps-web-desktop-note")).toHaveTextContent(
       "appsPage.desktopServerNote",
     );
-    // установлен на сервере: тревожной подписи «не найден» нет
+    // installed on the server: no alarming "not found" caption
     expect(screen.queryByTestId("apps-web-desktop-not-found")).toBeNull();
   });
 
-  it("web: installed:false — подпись «не найден на сервере» и группа «не установлены», без ошибки", async () => {
+  it("web: installed:false shows the \"not found on the server\" caption and the \"not installed\" group, no error", async () => {
     setWeb(true);
     mocks.desktopStatus = {
       supported: true,
@@ -764,13 +764,13 @@ describe("AppsPage concurrent CLI upgrades", () => {
     expect(screen.getByTestId("apps-web-desktop-not-found")).toHaveTextContent(
       "appsPage.desktopNotFoundOnServer",
     );
-    // нейтральный вид: не role=alert и без danger-цвета
+    // neutral look: not role=alert and no danger colour
     expect(note.closest("[role=alert]")).toBeNull();
     expect(note.className).not.toMatch(/danger/);
   });
 
   it.each(["pending", "error"] as const)(
-    "web: статус Claude Desktop %s — нейтральное состояние, плоский список, без «не установлен»",
+    "web: Claude Desktop status %s is a neutral state, flat list, no \"not installed\"",
     async (mode) => {
       setWeb(true);
       mocks.desktopStatusMode = mode;
@@ -780,11 +780,11 @@ describe("AppsPage concurrent CLI upgrades", () => {
         await waitFor(() =>
           expect(mocks.desktopStatusCalls).toBeGreaterThan(0),
         );
-        // WEB-25: установки грузятся на mount и в web (сервер зондирует свои CLI)
+        // WEB-25: installs load on mount in web too (the server probes its own CLIs)
         await waitFor(() =>
           expect(mocks.listToolInstallations).toHaveBeenCalled(),
         );
-        // статус неизвестен: плоский список без групп, Desktop не объявлен «не установленным»
+        // status unknown: flat list without groups, Desktop is not declared "not installed"
         expect(
           screen.queryByRole("region", {
             name: "appsPage.sectionNotInstalled",
@@ -809,7 +809,7 @@ describe("AppsPage concurrent CLI upgrades", () => {
   );
 
   it.each([true, false])(
-    "упавшее повторное чтение статуса Desktop (web=%s) не стирает группы: данные первого ответа остаются",
+    "a failed re-read of the Desktop status (web=%s) does not erase the groups: data of the first response stays",
     async (web) => {
       setWeb(web);
       const { AppsPage } = await import("@/components/apps/AppsPage");
@@ -835,7 +835,7 @@ describe("AppsPage concurrent CLI upgrades", () => {
           ),
         );
         expect(mocks.desktopStatusCalls).toBe(callsBefore + 1);
-        // данные прежнего ответа сохранены, строки не сдвинулись
+        // data of the previous response is kept, rows did not move
         expect(client.getQueryData(["claude-desktop-status"])).toEqual({
           supported: true,
           installed: true,
@@ -856,7 +856,7 @@ describe("AppsPage concurrent CLI upgrades", () => {
     },
   );
 
-  it("desktop: статус Claude Desktop error — «не установлен» и «не подключён», как до WEB-19", async () => {
+  it("desktop: Claude Desktop status error shows \"not installed\" and \"not connected\", as before WEB-19", async () => {
     mocks.desktopStatusMode = "error";
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
@@ -878,7 +878,7 @@ describe("AppsPage concurrent CLI upgrades", () => {
     }
   });
 
-  it("desktop: статус Claude Desktop pending — плоский список, подпись «не подключён», как до WEB-19", async () => {
+  it("desktop: Claude Desktop status pending is a flat list with the \"not connected\" caption, as before WEB-19", async () => {
     mocks.desktopStatusMode = "pending";
     await renderApps();
     await waitFor(() => expect(mocks.desktopStatusCalls).toBeGreaterThan(0));
@@ -894,7 +894,7 @@ describe("AppsPage concurrent CLI upgrades", () => {
     ).toBeInTheDocument();
   });
 
-  it("desktop: подписи про сервер не показываются", async () => {
+  it("desktop: the server captions are not shown", async () => {
     mocks.desktopStatus = {
       supported: true,
       installed: false,
@@ -942,7 +942,7 @@ describe("AppsPage concurrent CLI upgrades", () => {
       ).not.toBe("true");
       await user.keyboard("{Escape}");
 
-      // установки грузятся на mount в обоих режимах
+      // installs load on mount in both modes
       expect(mocks.listToolInstallations).toHaveBeenCalled();
 
       await user.click(updateButton("Claude Code"));

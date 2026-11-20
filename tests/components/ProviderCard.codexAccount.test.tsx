@@ -137,7 +137,7 @@ function renderCard(
 }
 
 describe("ProviderCard Codex Official account identity", () => {
-  it("web: запрашивает auth_get_status для привязанного аккаунта (WEB-02)", async () => {
+  it("web: queries auth_get_status for the linked account (WEB-02)", async () => {
     setWeb(true);
     const getStatus = vi
       .spyOn(authApi, "authGetStatus")
@@ -147,7 +147,7 @@ describe("ProviderCard Codex Official account identity", () => {
     getStatus.mockRestore();
   });
 
-  it("desktop: запрашивает auth_get_status для привязанного аккаунта", async () => {
+  it("desktop: queries auth_get_status for the linked account", async () => {
     const getStatus = vi
       .spyOn(authApi, "authGetStatus")
       .mockResolvedValue(authStatus("me@example.com"));

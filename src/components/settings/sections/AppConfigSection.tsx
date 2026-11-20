@@ -99,7 +99,7 @@ export function AppConfigSection({
 
   return (
     <>
-      {/* WEB-00: пути вводятся вручную (Browse скрыт, WEB-26) и относятся к серверному хосту */}
+      {/* WEB-00: paths are typed by hand (Browse is hidden, WEB-26) and refer to the server host */}
       {isWeb && (
         <p role="note" className="text-caption text-fg-2">
           {t("web.serverPath")}

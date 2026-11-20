@@ -44,24 +44,24 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   "about",
 ];
 
-// WEB-00: секции целиком из desktop-only команд скрыты в web. network открыта WEB-23 (список пуст,
-// точка гейта остаётся здесь). routing открыта WEB-01 (failover-блок скрыт до фазы 28), data открыта
-// WEB-24, её блоки сняты WEB-26/09/10/11. isWeb читается в момент вызова.
+// WEB-00: sections made entirely of desktop-only commands are hidden in web. network was opened by WEB-23 (the list is empty,
+// the gate point stays here). routing was opened by WEB-01 (the failover block is hidden until phase 28), data was opened by
+// WEB-24, its blocks were lifted by WEB-26/09/10/11. isWeb is read at call time.
 const WEB_HIDDEN_SETTINGS_SECTIONS: SettingsSection[] = [];
 
 export function isSettingsSectionAvailable(section: SettingsSection): boolean {
   return !(isWeb && WEB_HIDDEN_SETTINGS_SECTIONS.includes(section));
 }
 
-/** Скрытая в web секция (запрошенная, сохранённая, из ссылки) открывается как `general`. */
+/** A section hidden in web (requested, saved, from a link) opens as `general`. */
 export function resolveSettingsSection(
   section: SettingsSection,
 ): SettingsSection {
   return isSettingsSectionAvailable(section) ? section : "general";
 }
 
-// WEB-00: экраны целиком из desktop-only команд скрываются в web через этот список.
-// Сейчас пуст: auth открыт WEB-02 (Copilot/Codex/xAI — этап 1, Kimi — этап 2),
+// WEB-00: screens made entirely of desktop-only commands are hidden in web through this list.
+// Empty now: auth was opened by WEB-02 (Copilot/Codex/xAI in stage 1, Kimi in stage 2),
 // skillsDiscovery — WEB-05, workspace/openclawConfig — WEB-15, hermesMemory — WEB-16.
 const WEB_HIDDEN_VIEWS: View[] = [];
 
@@ -127,7 +127,7 @@ export function readStoredView(): View {
   try {
     const stored =
       parseView(localStorage.getItem(VIEW_STORAGE_KEY)) ?? "providers";
-    // WEB-00: сохранённый view из WEB_HIDDEN_VIEWS в web не восстанавливается (список сейчас пуст, auth открыт WEB-02, ф.25)
+    // WEB-00: a saved view from WEB_HIDDEN_VIEWS is not restored in web (the list is empty now, auth was opened by WEB-02, phase 25)
     return isViewAvailable(stored) ? stored : "providers";
   } catch {
     return "providers";

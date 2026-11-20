@@ -66,7 +66,7 @@ describe("OpenCode built-in provider editing", () => {
     return onSubmit;
   };
 
-  it("web: запрашивает get_opencode_live_provider_ids при открытии формы (WEB-14)", async () => {
+  it("web: queries get_opencode_live_provider_ids when the form opens (WEB-14)", async () => {
     setWeb(true);
     let requests = 0;
     server.use(

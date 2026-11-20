@@ -117,7 +117,7 @@ describe("OpenTerminalDialog", () => {
   it("web: never asks for the agy account status", async () => {
     setWeb(true);
     renderDialog(vi.fn(), agyOfficial("b"), "agy");
-    // дождаться монтирования диалога, иначе отсутствие вызова ничего не доказывает
+    // wait for the dialog to mount, otherwise a missing call proves nothing
     await screen.findByRole("dialog");
     expect(agyStatusMock).not.toHaveBeenCalled();
     expect(agyRunningMock).not.toHaveBeenCalled();

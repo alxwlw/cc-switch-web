@@ -368,7 +368,7 @@ describe("SettingsPage data directory · WEB-26", () => {
 
     it("409 shows the server's text and closes the dialog without a reload", async () => {
       restartResponse = () =>
-        json(409, { ok: false, error: "перезапустите сервер вручную" });
+        json(409, { ok: false, error: "restart the server manually" });
       renderPage();
       await tick(0);
       await act(async () => {
@@ -376,7 +376,7 @@ describe("SettingsPage data directory · WEB-26", () => {
         await vi.advanceTimersByTimeAsync(0);
       });
       expect(toastMock.error).toHaveBeenCalledWith(
-        "перезапустите сервер вручную",
+        "restart the server manually",
       );
       expect(reloadMock).not.toHaveBeenCalled();
       expect(calls("/api/health")).toHaveLength(0);

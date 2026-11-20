@@ -592,8 +592,8 @@ context_window = 500000
     expect(universalProps.onManageUniversalProviders).toBeTypeOf("function");
   });
 
-  // WEB-07: универсальные провайдеры работают через /api/universal-providers — вход есть и в web.
-  it("отдаёт форме вход в универсальные провайдеры в web", async () => {
+  // WEB-07: universal providers work through /api/universal-providers, so the entry exists in web too.
+  it("gives the form an entry to universal providers in web", async () => {
     setWeb(true);
     render(
       <AddProviderDialog

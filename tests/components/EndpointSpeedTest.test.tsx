@@ -17,7 +17,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api/vscode", () => ({ vscodeApi: api }));
 
-// Панель тянет шапку приложения; тут важны только children и footer.
+// The panel pulls in the app header; only children and footer matter here.
 vi.mock("@/components/common/FullScreenPanel", () => ({
   FullScreenPanel: ({ children, footer }: any) => (
     <div>
@@ -75,7 +75,7 @@ describe("EndpointSpeedTest (WEB-21)", () => {
     );
   });
 
-  it("показывает подпись про замер с сервера в web, но не на desktop", async () => {
+  it("shows the server-measurement caption in web, but not on desktop", async () => {
     setWeb(true);
     await renderPanel();
     expect(screen.getByTestId("endpoint-server-side-note")).toHaveTextContent(
@@ -83,7 +83,7 @@ describe("EndpointSpeedTest (WEB-21)", () => {
     );
   });
 
-  it("на desktop подписи нет", async () => {
+  it("has no caption on desktop", async () => {
     setWeb(false);
     await renderPanel();
     expect(
@@ -91,7 +91,7 @@ describe("EndpointSpeedTest (WEB-21)", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("ошибка на втором add: providers-query инвалидируется, показаны сохранённые URL", async () => {
+  it("error on the second add: the providers query is invalidated, saved URLs are shown", async () => {
     const { client, onClose } = await renderPanel();
     const invalidate = vi.spyOn(client, "invalidateQueries");
     api.addCustomEndpoint
@@ -112,7 +112,7 @@ describe("EndpointSpeedTest (WEB-21)", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("успешное сохранение тоже инвалидирует providers и закрывает панель", async () => {
+  it("a successful save also invalidates providers and closes the panel", async () => {
     const { client, onClose } = await renderPanel();
     const invalidate = vi.spyOn(client, "invalidateQueries");
 
@@ -130,7 +130,7 @@ describe("EndpointSpeedTest (WEB-21)", () => {
     });
   });
 
-  it("ошибка на remove: сохранённые add и remove перечислены, повторное Save не повторяет их", async () => {
+  it("error on remove: saved add and remove are listed, a repeated Save does not repeat them", async () => {
     api.getCustomEndpoints.mockResolvedValue([
       { url: "https://old.example", addedAt: 1 },
       { url: "https://old2.example", addedAt: 2 },
@@ -163,7 +163,7 @@ describe("EndpointSpeedTest (WEB-21)", () => {
     api.removeCustomEndpoint.mockResolvedValue(undefined);
     await userEvent.click(save);
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    // add не повторяется, из remove повторяется только упавший
+    // add is not repeated, of remove only the failed one is repeated
     expect(api.addCustomEndpoint).toHaveBeenCalledTimes(1);
     expect(api.removeCustomEndpoint).toHaveBeenCalledTimes(3);
   });

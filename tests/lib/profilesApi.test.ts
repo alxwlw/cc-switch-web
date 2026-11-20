@@ -12,7 +12,7 @@ function okResponse(data: unknown, status = 200) {
   return { status, json: async () => ({ ok: true, data }) };
 }
 
-describe("profilesApi через adapter (WEB-06)", () => {
+describe("profilesApi via adapter (WEB-06)", () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -21,7 +21,7 @@ describe("profilesApi через adapter (WEB-06)", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("list: GET /api/profiles, возвращает ProfilesResponse", async () => {
+  it("list: GET /api/profiles, returns ProfilesResponse", async () => {
     const data = {
       profiles: [],
       currentIds: { claude: "p1", claudeDesktop: null, codex: null },
@@ -34,7 +34,7 @@ describe("profilesApi через adapter (WEB-06)", () => {
     expect(init.body).toBeUndefined();
   });
 
-  it("create: POST /api/profiles с {name, scope}", async () => {
+  it("create: POST /api/profiles with {name, scope}", async () => {
     fetchSpy.mockResolvedValue(okResponse({ id: "p1" }));
     await profilesApi.create("Work", "claude-desktop");
     const [url, init] = fetchSpy.mock.calls[0];
@@ -46,7 +46,7 @@ describe("profilesApi через adapter (WEB-06)", () => {
     });
   });
 
-  it("update: PATCH c url-encoded id и телом {name, resnapshot, scope}", async () => {
+  it("update: PATCH with url-encoded id and body {name, resnapshot, scope}", async () => {
     fetchSpy.mockResolvedValue(okResponse({ id: "p/1 x" }));
     await profilesApi.update("p/1 x", {
       name: "New",
@@ -63,7 +63,7 @@ describe("profilesApi через adapter (WEB-06)", () => {
     });
   });
 
-  it("update: только rename — resnapshot и scope не уходят в body", async () => {
+  it("update: rename only: resnapshot and scope are not sent in the body", async () => {
     fetchSpy.mockResolvedValue(okResponse({ id: "p1" }));
     await profilesApi.update("p1", { name: "Only" });
     expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toEqual({
@@ -71,7 +71,7 @@ describe("profilesApi через adapter (WEB-06)", () => {
     });
   });
 
-  it("delete: DELETE c url-encoded id, без body", async () => {
+  it("delete: DELETE with url-encoded id, no body", async () => {
     fetchSpy.mockResolvedValue(okResponse(true));
     await profilesApi.delete("p/1 x");
     const [url, init] = fetchSpy.mock.calls[0];
@@ -80,7 +80,7 @@ describe("profilesApi через adapter (WEB-06)", () => {
     expect(init.body).toBeUndefined();
   });
 
-  it("apply: POST /:id/apply с {scope}, возвращает warnings", async () => {
+  it("apply: POST /:id/apply with {scope}, returns warnings", async () => {
     fetchSpy.mockResolvedValue(okResponse(["warn-1"]));
     await expect(profilesApi.apply("p/1 x", "claude")).resolves.toEqual([
       "warn-1",
@@ -91,7 +91,7 @@ describe("profilesApi через adapter (WEB-06)", () => {
     expect(JSON.parse(init.body)).toEqual({ scope: "claude" });
   });
 
-  it("clearCurrent: POST /api/profiles/clear-current с {scope}", async () => {
+  it("clearCurrent: POST /api/profiles/clear-current with {scope}", async () => {
     fetchSpy.mockResolvedValue(okResponse(true));
     await profilesApi.clearCurrent("codex");
     const [url, init] = fetchSpy.mock.calls[0];
@@ -100,7 +100,7 @@ describe("profilesApi через adapter (WEB-06)", () => {
     expect(JSON.parse(init.body)).toEqual({ scope: "codex" });
   });
 
-  it("apply: HTTP 400 {ok:false,error} отклоняется текстом сервера", async () => {
+  it("apply: HTTP 400 {ok:false,error} is rejected with the server text", async () => {
     fetchSpy.mockResolvedValue({
       status: 400,
       json: async () => ({ ok: false, error: "unknown scope: x" }),

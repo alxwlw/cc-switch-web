@@ -38,7 +38,7 @@ describe("customIconsApi · web adapter (WEB-08)", () => {
     expect(init.method).toBe("GET");
   });
 
-  it("add: POST /api/custom-icons с {name,data}, existed пробрасывается", async () => {
+  it("add: POST /api/custom-icons with {name,data}, existed is passed through", async () => {
     fetchSpy.mockResolvedValue(
       jsonResponse({ ok: true, data: { icon: entry, existed: true } }),
     );
@@ -53,7 +53,7 @@ describe("customIconsApi · web adapter (WEB-08)", () => {
     });
   });
 
-  it("rename: PUT /api/custom-icons/:id с {name}, id экранируется", async () => {
+  it("rename: PUT /api/custom-icons/:id with {name}, the id is escaped", async () => {
     fetchSpy.mockResolvedValue(
       jsonResponse({ ok: true, data: { ...entry, name: "Renamed" } }),
     );
@@ -65,7 +65,7 @@ describe("customIconsApi · web adapter (WEB-08)", () => {
     expect(JSON.parse(init.body)).toEqual({ name: "Renamed" });
   });
 
-  it("remove: DELETE /api/custom-icons/:id без тела", async () => {
+  it("remove: DELETE /api/custom-icons/:id without a body", async () => {
     fetchSpy.mockResolvedValue(jsonResponse({ ok: true, data: true }));
     await customIconsApi.remove("icon-1");
     const [url, init] = fetchSpy.mock.calls[0];
@@ -74,7 +74,7 @@ describe("customIconsApi · web adapter (WEB-08)", () => {
     expect(init.body).toBeUndefined();
   });
 
-  it("ошибка валидации {ok:false,error} (HTTP 500) пробрасывается дословно", async () => {
+  it("a validation error {ok:false,error} (HTTP 500) is passed through verbatim", async () => {
     fetchSpy.mockResolvedValue(
       jsonResponse({ ok: false, error: "Icon name must not be empty" }, 500),
     );

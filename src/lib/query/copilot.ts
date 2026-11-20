@@ -117,7 +117,7 @@ export function useCopilotQuota(
         queriedAt: Date.now(),
       };
     },
-    // WEB-00: copilot_get_usage* не поддержаны — снимет WEB-02/04
+    // WEB-00: copilot_get_usage* is not supported; WEB-02/04 lift this
     enabled: enabled && !isWeb,
     refetchInterval: autoQuery ? REFETCH_INTERVAL : false,
     refetchIntervalInBackground: autoQuery,

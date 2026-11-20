@@ -146,7 +146,7 @@ const createMetadataMock = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-// Не обслуживается в web (desktop-only); data dir закрыт WEB-26, plugin/onboarding — WEB-20.
+// Not served in web (desktop-only); the data dir is closed by WEB-26, plugin/onboarding by WEB-20.
 const DESKTOP_ONLY = () => [setAutoLaunchMock];
 const SIDE_EFFECTS = () => [
   setAppConfigDirOverrideMock,
@@ -156,7 +156,7 @@ const SIDE_EFFECTS = () => [
   clearClaudeOnboardingSkipMock,
 ];
 
-// Форма и сервер расходятся по всем полям, у которых в full save есть desktop-only side effect.
+// The form and the server diverge on every field that has a desktop-only side effect in a full save.
 function arrange() {
   serverSettings = {
     ...serverSettings,
@@ -258,7 +258,7 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
   it("web: a refused data dir (400) keeps the other settings, names only the directory in the toast and opens no restart", async () => {
     setWeb(true);
     setAppConfigDirOverrideMock.mockRejectedValue(
-      new Error("путь «x» не абсолютный"),
+      new Error("path 'x' is not absolute"),
     );
     const { result } = renderHook(() => useSettings());
     let saveResult: { requiresRestart: boolean } | null = null;
@@ -281,7 +281,7 @@ describe("useSettings hook · WEB-00 desktop-only side effects", () => {
     // one toast: the server's text verbatim, no "saved" and no "save failed"
     expect(toastSuccessMock).not.toHaveBeenCalled();
     expect(toastErrorMock).toHaveBeenCalledTimes(1);
-    expect(toastErrorMock.mock.calls[0][0]).toContain("путь «x» не абсолютный");
+    expect(toastErrorMock.mock.calls[0][0]).toContain("path 'x' is not absolute");
     expect(toastErrorMock.mock.calls[0][0]).not.toContain("保存设置失败");
   });
 

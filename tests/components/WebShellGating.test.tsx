@@ -350,7 +350,7 @@ describe("SettingsPage · WEB-00", () => {
     expect(
       screen.getByRole("switch", { name: "settings.silentStartup" }),
     ).toBeDisabled();
-    // рабочие тоглы остаются активными
+    // working toggles stay active
     expect(
       screen.getByRole("switch", { name: "settings.general.checkToolUpdates" }),
     ).toBeEnabled();
@@ -447,7 +447,7 @@ describe("SettingsPage · WEB-00", () => {
       screen.queryAllByRole("button", { name: "settings.browseDirectory" }),
     ).toHaveLength(0);
 
-    // ручной ввод пути работает
+    // manual path input works
     const input = screen.getByDisplayValue("/home/srv/.claude");
     expect(input).toBeEnabled();
     await userEvent.type(input, "x");

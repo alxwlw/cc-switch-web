@@ -57,7 +57,7 @@ const CodexOauthAccountQuota: React.FC<CodexOauthAccountQuotaProps> = ({
           data-testid="quota-server-note"
         >
           {t("authCenter.quota.serverNote", {
-            defaultValue: "данные запрашиваются на сервере",
+            defaultValue: "Data is fetched on the server",
           })}
         </span>
       )}

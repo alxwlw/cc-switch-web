@@ -257,7 +257,7 @@ describe("ModelsDevAutoSyncPanel", () => {
           name: "usage.pricing.moreActions",
         }),
       );
-      // контрольная точка: меню открыто
+      // checkpoint: the menu is open
       await screen.findByRole("menuitem", {
         name: "usage.modelsDevAutoSync.reloadLocalFile",
       });
