@@ -7,7 +7,8 @@
 //! a temp HOME and checks that the log file, the database and the tail route all
 //! sit under the override, and that the default directory gets no log or database.
 //!
-//! The child gets its own `HOME` / `XDG_CONFIG_HOME` and none of
+//! The override file goes where the child's `dirs::config_dir()` points, which
+//! differs on macOS. The child gets its own `HOME` / `XDG_CONFIG_HOME` and none of
 //! `CC_SWITCH_CONFIG_DIR`, `CC_SWITCH_TEST_HOME`, `RUST_LOG`: nothing from the
 //! developer's environment reaches it. A guard kills and reaps it on every exit.
 
@@ -62,7 +63,14 @@ fn server_with_an_override_file_keeps_log_database_and_log_tail_under_it() {
     let target = root.path().join("ov");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::create_dir_all(&target).unwrap();
-    let override_file = xdg.join("cc-switch-web").join("app_paths.json");
+    // The server finds the file under `dirs::config_dir()`: `$HOME/Library/Application
+    // Support` on macOS, `$XDG_CONFIG_HOME` on the other unixes.
+    let config_dir = if cfg!(target_os = "macos") {
+        home.join("Library").join("Application Support")
+    } else {
+        xdg.clone()
+    };
+    let override_file = config_dir.join("cc-switch-web").join("app_paths.json");
     std::fs::create_dir_all(override_file.parent().unwrap()).unwrap();
     std::fs::write(
         &override_file,
