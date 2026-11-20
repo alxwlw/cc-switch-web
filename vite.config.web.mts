@@ -1,6 +1,7 @@
 import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { webTitlePlugin } from "./scripts/web-title";
 
 // Web build for the cc-switch-web fork (Tailscale-only server mode).
 // Mirrors the desktop renderer pipeline, but swaps every `@tauri-apps/api/*`
@@ -8,7 +9,7 @@ import react from "@vitejs/plugin-react";
 // console talks to the Axum HTTP API instead of the Tauri IPC bridge.
 export default defineConfig({
   root: "src",
-  plugins: [react()],
+  plugins: [react(), webTitlePlugin()],
   base: "/",
   build: {
     outDir: "../dist-web",
