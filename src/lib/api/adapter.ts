@@ -229,6 +229,19 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return { method: "GET", url: "/api/claude-account/default-plan" };
     case "get_claude_login_switch":
       return { method: "GET", url: "/api/claude-account/login-switch" };
+
+    // ---------- WorkBuddy accounts (open-app / prepare-new-login are desktop-only) ----------
+    case "workbuddy_account_live_state":
+      return { method: "GET", url: "/api/workbuddy/live-state" };
+    case "workbuddy_account_import_current":
+      return { method: "POST", url: "/api/workbuddy/import-current" };
+    case "workbuddy_account_quota":
+      return {
+        method: "GET",
+        url: `/api/workbuddy/accounts/${enc(a.accountId)}/quota${query({ force: a.force })}`,
+      };
+    case "workbuddy_model_owners":
+      return { method: "GET", url: "/api/workbuddy/model-owners" };
     case "claude_account_submit_paste":
       return {
         method: "POST",

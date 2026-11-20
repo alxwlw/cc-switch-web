@@ -349,6 +349,18 @@ pub fn router_with_update(
             get(claude_account_login_switch),
         )
         .route("/api/claude-account/paste", post(claude_account_paste))
+        // WorkBuddy accounts: import and read what the server host's own WorkBuddy login holds;
+        // opening the app and preparing a new login drive a GUI there, so they have no route
+        .route("/api/workbuddy/live-state", get(workbuddy_live_state))
+        .route(
+            "/api/workbuddy/import-current",
+            post(workbuddy_import_current),
+        )
+        .route(
+            "/api/workbuddy/accounts/:account_id/quota",
+            get(workbuddy_quota),
+        )
+        .route("/api/workbuddy/model-owners", get(workbuddy_model_owners))
         // Kimi Code OAuth (WEB-02 stage 2): same manager and remove path as the desktop commands
         .route("/api/kimi/oauth/status", get(kimi_status))
         .route("/api/kimi/oauth/start", post(kimi_start))
@@ -2919,6 +2931,49 @@ async fn claude_account_paste(
         .await
     {
         Ok(()) => ok(serde_json::Value::Null),
+        Err(e) => fail(e),
+    }
+}
+
+async fn workbuddy_live_state(State(state): State<SharedState>) -> ApiResult {
+    match crate::commands::workbuddy_live_state_inner(&state.workbuddy_account).await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn workbuddy_import_current(State(state): State<SharedState>) -> ApiResult {
+    match crate::commands::workbuddy_import_current_inner(&state.workbuddy_account).await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct WorkBuddyQuotaQuery {
+    force: Option<bool>,
+}
+
+async fn workbuddy_quota(
+    State(state): State<SharedState>,
+    Path(account_id): Path<String>,
+    Query(q): Query<WorkBuddyQuotaQuery>,
+) -> ApiResult {
+    match crate::commands::workbuddy_quota_inner(
+        &state.workbuddy_account,
+        account_id,
+        q.force.unwrap_or(false),
+    )
+    .await
+    {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn workbuddy_model_owners() -> ApiResult {
+    match crate::commands::workbuddy_model_owners().await {
+        Ok(r) => ok(r),
         Err(e) => fail(e),
     }
 }

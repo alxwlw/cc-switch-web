@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { authApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { useManagedAuth } from "@/components/providers/forms/hooks/useManagedAuth";
@@ -331,7 +332,7 @@ export function WorkBuddyAccountSection({
         dismissLabel={t("common.close", { defaultValue: "关闭" })}
         actions={
           <>
-            {addHint === "already" && (
+            {!isWeb && addHint === "already" && (
               <Button
                 type="button"
                 variant="neutral"
@@ -344,18 +345,20 @@ export function WorkBuddyAccountSection({
                 })}
               </Button>
             )}
-            <Button
-              type="button"
-              variant="quiet"
-              size="compact"
-              className="gap-1"
-              onClick={() => void openApp()}
-            >
-              <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
-              {t("authCenter.workbuddy.openApp", {
-                defaultValue: "打开 WorkBuddy",
-              })}
-            </Button>
+            {!isWeb && (
+              <Button
+                type="button"
+                variant="quiet"
+                size="compact"
+                className="gap-1"
+                onClick={() => void openApp()}
+              >
+                <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
+                {t("authCenter.workbuddy.openApp", {
+                  defaultValue: "打开 WorkBuddy",
+                })}
+              </Button>
+            )}
           </>
         }
       >
@@ -409,7 +412,7 @@ export function WorkBuddyAccountSection({
           accountId;
         void switchToAccount(accountId, login);
       }}
-      canReauth
+      canReauth={!isWeb}
       onReauth={(accountId) => {
         if (!reauthMutation.isPending) reauthMutation.mutate(accountId);
       }}

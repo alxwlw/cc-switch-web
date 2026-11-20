@@ -5,6 +5,7 @@ import { ExternalLink } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { authApi } from "@/lib/api";
 import type { ManagedAuthAccount } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Notice } from "@/components/ui/notice";
@@ -171,25 +172,29 @@ export function WorkBuddyOfficialSection({
         }
         actions={
           <>
-            <Button
-              type="button"
-              variant="neutral"
-              size="compact"
-              disabled={prepare.isPending || live?.running === true}
-              onClick={() => prepare.mutate()}
-            >
-              {t("authCenter.workbuddy.prepareNewLogin")}
-            </Button>
-            <Button
-              type="button"
-              variant="quiet"
-              size="compact"
-              className="gap-1"
-              onClick={() => void openWorkBuddyApp()}
-            >
-              <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
-              {t("authCenter.workbuddy.openApp")}
-            </Button>
+            {!isWeb && (
+              <>
+                <Button
+                  type="button"
+                  variant="neutral"
+                  size="compact"
+                  disabled={prepare.isPending || live?.running === true}
+                  onClick={() => prepare.mutate()}
+                >
+                  {t("authCenter.workbuddy.prepareNewLogin")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="quiet"
+                  size="compact"
+                  className="gap-1"
+                  onClick={() => void openWorkBuddyApp()}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  {t("authCenter.workbuddy.openApp")}
+                </Button>
+              </>
+            )}
           </>
         }
       >
