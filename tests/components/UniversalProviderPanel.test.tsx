@@ -81,7 +81,7 @@ describe("UniversalProviderPanel", () => {
     api.sync.mockResolvedValue(true);
   });
 
-  it("частичный отказ sync после upsert: warning с текстом сервера и перезагрузка списка", async () => {
+  it("partial sync failure after upsert: warning with the server text and list reload", async () => {
     render(<UniversalProviderPanel />);
     await screen.findByText("Univ");
     api.sync.mockRejectedValue(new Error(SERVER_TEXT));
@@ -98,7 +98,7 @@ describe("UniversalProviderPanel", () => {
     await waitFor(() => expect(api.getAll).toHaveBeenCalledTimes(2));
   });
 
-  it("upsert упал: error, sync не вызывается, список не перезагружается", async () => {
+  it("upsert failed: error, sync is not called, list is not reloaded", async () => {
     render(<UniversalProviderPanel />);
     await screen.findByText("Univ");
     api.upsert.mockRejectedValue(new Error("db"));
@@ -111,7 +111,7 @@ describe("UniversalProviderPanel", () => {
     expect(api.getAll).toHaveBeenCalledTimes(1);
   });
 
-  it("saveAndSync: частичный отказ sync тоже даёт warning и перезагрузку", async () => {
+  it("saveAndSync: a partial sync failure also gives a warning and a reload", async () => {
     render(<UniversalProviderPanel />);
     await screen.findByText("Univ");
     api.sync.mockRejectedValue(new Error(SERVER_TEXT));
@@ -124,7 +124,7 @@ describe("UniversalProviderPanel", () => {
     await waitFor(() => expect(api.getAll).toHaveBeenCalledTimes(2));
   });
 
-  it("duplicate = upsert нового id + sync этого id", async () => {
+  it("duplicate = upsert of a new id + sync of that id", async () => {
     render(<UniversalProviderPanel />);
     await screen.findByText("Univ");
 
@@ -139,7 +139,7 @@ describe("UniversalProviderPanel", () => {
     await waitFor(() => expect(api.getAll).toHaveBeenCalledTimes(2));
   });
 
-  it("duplicate: sync упал после upsert — warning и перезагрузка", async () => {
+  it("duplicate: sync failed after upsert gives a warning and a reload", async () => {
     render(<UniversalProviderPanel />);
     await screen.findByText("Univ");
     api.sync.mockRejectedValue(new Error(SERVER_TEXT));
@@ -151,7 +151,7 @@ describe("UniversalProviderPanel", () => {
     await waitFor(() => expect(api.getAll).toHaveBeenCalledTimes(2));
   });
 
-  it("кнопка sync: отказ — error с текстом сервера, без перезагрузки", async () => {
+  it("sync button: failure gives an error with the server text, no reload", async () => {
     render(<UniversalProviderPanel />);
     await screen.findByText("Univ");
     api.sync.mockRejectedValue(new Error(SERVER_TEXT));
@@ -167,8 +167,8 @@ describe("UniversalProviderPanel", () => {
     expect(api.getAll).toHaveBeenCalledTimes(1);
   });
 
-  // Реальная модалка закрывается сама (onClose сразу после onSave), здесь — только состояние панели.
-  it("правка: upsert без sync, панель сбрасывает editingProvider только при успехе", async () => {
+  // The real modal closes itself (onClose right after onSave); here only the panel state matters.
+  it("edit: upsert without sync, the panel resets editingProvider only on success", async () => {
     render(<UniversalProviderPanel />);
     await screen.findByText("Univ");
     fireEvent.click(screen.getByText("edit"));

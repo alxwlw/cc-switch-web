@@ -230,8 +230,8 @@ export function quotaFailureReason(
  * - `CodexOauthQuotaFooter`（cc-switch 自管 OAuth 路径，by ChatGPT account）
  */
 /**
- * WEB-04: в web额度查自服务器 — CLI凭据读服务器上的文件，OAuth读服务器上的托管令牌。
- * Подпись через t() + defaultValue (урок фазы 29, образец provider.form.agy.cliServerNote).
+ * WEB-04: in web the quota is read from the server: CLI credentials from files on the server, OAuth from managed tokens on the server.
+ * The caption goes through t() + defaultValue (lesson of phase 29, model: provider.form.agy.cliServerNote).
  */
 function WebQuotaServerNote({
   appIdForExpiredHint,
@@ -248,10 +248,10 @@ function WebQuotaServerNote({
     <p className="m-0 text-xs text-fg-3" data-testid="quota-server-note">
       {isCli
         ? t("subscription.cliServerNote", {
-            defaultValue: "по учётным данным CLI на сервере",
+            defaultValue: "Based on the CLI's credentials on the server",
           })
         : t("subscription.serverNote", {
-            defaultValue: "данные запрашиваются на сервере",
+            defaultValue: "Data is fetched on the server",
           })}
     </p>
   );

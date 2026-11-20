@@ -23,7 +23,7 @@ const m = vi.hoisted(() => ({
   ],
 }));
 
-// t стабильна между рендерами: useBillingSources держит её в deps эффекта
+// t is stable between renders: useBillingSources keeps it in the effect deps
 const i18nStub = vi.hoisted(() => {
   const t = (key: string) => key;
   return { t, i18n: { resolvedLanguage: "en", language: "en" } };

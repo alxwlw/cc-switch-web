@@ -650,7 +650,7 @@ export interface LaunchInput {
   t: TFunction;
   providers: Provider[];
   openTerminal: (provider: Provider) => void;
-  /** WEB-00: терминал на сервере не открыть — текст причины (только в web), кнопка disabled (desktop-only) */
+  /** WEB-00: a terminal cannot be opened on the server, so this is the reason text (web only), the button is disabled (desktop-only) */
   terminalUnavailableReason?: string;
 }
 
@@ -711,9 +711,9 @@ export interface AdditiveInput {
   /** Kimi：原生 default_model 别名所属的供应商。 */
   kimiCurrentId?: string | null;
   /**
-   * WEB-00: web не читает живой конфиг (get_*_live_provider_ids), «в конфиге ли» неизвестно. Не
-   * делим на «добавленные/доступные» (иначе все ложно «не в конфиге»): одна секция, у каждой
-   * карточки и «добавить», и «убрать» — снимет WEB-14 (openclaw открыт WEB-15, hermes — WEB-16)
+   * WEB-00: web does not read the live config (get_*_live_provider_ids), so "is it in the config" is unknown. We do not
+   * split into "added/available" (otherwise all would falsely be "not in config"): one section, each
+   * card has both "add" and "remove"; WEB-14 lifts this (openclaw was opened by WEB-15, hermes by WEB-16)
    */
   membershipUnknown?: boolean;
   /** WorkBuddy 官方登录卡：已收录账号、当前登录、是否在运行 */
@@ -1021,8 +1021,8 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
               key: "remove",
               label: t("providerCard.action.remove"),
               onClick: () => actions.remove(p),
-              // Секция «членство неизвестно» в web осталась только у opencode (openclaw — WEB-15,
-              // hermes — WEB-16 читают живой конфиг); guard-а на удаление «default» у opencode нет
+              // The "membership unknown" section in web is left only for opencode (openclaw is WEB-15,
+              // hermes is WEB-16; they read the live config); opencode has no guard against deleting "default"
               disabledReason: readOnlyReason,
             },
           ],
@@ -1145,7 +1145,7 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
   }
 
   if (unknownMembership.length > 0) {
-    // OMO-карточки (состояние известно: get_current_omo_*) остаются в своих секциях, если они есть
+    // OMO cards (state known: get_current_omo_*) stay in their own sections, if there are any
     return [
       {
         key: "unknownMembership",

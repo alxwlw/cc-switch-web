@@ -62,8 +62,14 @@ async fn memory_write_then_read_is_atomic() {
     let (router, dir) = fresh();
     let uri = "/api/hermes/memory/memory";
     assert_eq!(data(&router, "GET", uri, None).await, json!(""));
-    data(&router, "PUT", uri, Some(json!({"content": "hello\nмир"}))).await;
-    assert_eq!(data(&router, "GET", uri, None).await, json!("hello\nмир"));
+    data(
+        &router,
+        "PUT",
+        uri,
+        Some(json!({"content": "hello\nwörld"})),
+    )
+    .await;
+    assert_eq!(data(&router, "GET", uri, None).await, json!("hello\nwörld"));
     // the other kind is untouched
     assert_eq!(
         data(&router, "GET", "/api/hermes/memory/user", None).await,

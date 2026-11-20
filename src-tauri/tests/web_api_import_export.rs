@@ -244,7 +244,7 @@ async fn import_of_newer_schema_dump_is_refused_with_the_desktop_message() {
 async fn dump_over_two_mib_passes_the_body_limit_and_round_trips() {
     let fx = fresh();
     // ~3 MB of multibyte text in one provider note: the dump exceeds axum's 2 MiB default.
-    let big = "ж😀".repeat(500_000);
+    let big = "ß😀".repeat(500_000);
     {
         let conn = rusqlite::Connection::open(ensure_test_home().join(".cc-switch/cc-switch.db"))
             .expect("open db file");

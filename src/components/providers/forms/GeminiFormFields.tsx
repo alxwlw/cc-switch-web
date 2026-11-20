@@ -225,7 +225,7 @@ export function GeminiFormFields({
               data-testid="agy-cli-server-note"
             >
               {t("provider.form.agy.cliServerNote", {
-                defaultValue: "список берётся у CLI на сервере",
+                defaultValue: "The list comes from the CLI on the server",
               })}
             </p>
           )}

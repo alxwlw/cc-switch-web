@@ -124,7 +124,7 @@ export function SettingsSwitchRow({
   checked: boolean;
   onCheckedChange: (value: boolean) => void;
   disabled?: boolean;
-  /** WEB-00: desktop-only тогл — в web disabled + подсказка `web.unavailable`. */
+  /** WEB-00: desktop-only toggle: in web it is disabled with the `web.unavailable` hint. */
   unavailableInWeb?: boolean;
 }) {
   const webLocked = !!unavailableInWeb && isWeb;

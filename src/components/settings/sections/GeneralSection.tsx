@@ -235,7 +235,7 @@ export function GeneralSection({
         <SettingsCard>
           <SettingsSwitchRow
             label={t("settings.launchOnStartup")}
-            // WEB-00: set_auto_launch — автозапуск ОС (desktop-only), в web не обслуживается
+            // WEB-00: set_auto_launch is the OS autostart (desktop-only), not served in web
             unavailableInWeb
             checked={!!settings.launchOnStartup}
             onCheckedChange={(value) =>
@@ -245,7 +245,7 @@ export function GeneralSection({
           {settings.launchOnStartup && (
             <SettingsSwitchRow
               label={t("settings.silentStartup")}
-              // WEB-00: зависит от автозапуска (set_auto_launch), в web не обслуживается
+              // WEB-00: depends on autostart (set_auto_launch), not served in web
               unavailableInWeb
               help={{
                 title: t("settings.silentStartup"),
@@ -259,7 +259,7 @@ export function GeneralSection({
           )}
           <SettingsSwitchRow
             label={t("settings.minimizeToTray")}
-            // WEB-00: трей — desktop-only, в браузере настройка ни на что не влияет — снимет WEB-28
+            // WEB-00: the tray is desktop-only, in a browser the setting affects nothing; WEB-28 lifts this
             unavailableInWeb
             help={{
               title: t("settings.minimizeToTray"),
@@ -279,7 +279,7 @@ export function GeneralSection({
                 body: t("settings.general.trayStyleHelp"),
               }}
               control={
-                // WEB-00: трей — desktop-only; контрол disabled + подсказка — снимет WEB-28
+                // WEB-00: the tray is desktop-only; the control is disabled with a hint; WEB-28 lifts this
                 <WebUnavailableTip active={isWeb}>
                   <SegmentedControl
                     size="sm"
@@ -306,7 +306,7 @@ export function GeneralSection({
           {isLinux() && (
             <SettingsSwitchRow
               label={t("settings.useAppWindowControls")}
-              // WEB-00: в web useAppWindowControls принудительно false (нет окна приложения)
+              // WEB-00: in web useAppWindowControls is forced to false (no app window)
               unavailableInWeb
               help={{
                 title: t("settings.useAppWindowControls"),
@@ -325,7 +325,7 @@ export function GeneralSection({
               body: t("settings.general.terminalHelp"),
             }}
             control={
-              // WEB-00: запуск терминала desktop-only (resume в web — copy-command; терминал на сервере не открыть)
+              // WEB-00: terminal launch is desktop-only (resume in web is a copy-command; a terminal cannot be opened on the server)
               <WebUnavailableTip active={isWeb}>
                 <TerminalSelect
                   className="h-8 w-[160px]"

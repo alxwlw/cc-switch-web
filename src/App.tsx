@@ -281,7 +281,7 @@ function App() {
   const { data: settingsData } = useSettingsQuery();
   // Windows 一律去掉系统标题栏，用页头里的应用内窗口按钮；Linux 由设置决定
   const useAppWindowControls =
-    // WEB-00: в браузере нет окна приложения — min/max/close не работают
+    // WEB-00: a browser has no app window, so min/max/close do nothing
     !isWeb &&
     (isWindows() ||
       (isLinux() && (settingsData?.useAppWindowControls ?? false)));
@@ -615,7 +615,7 @@ function App() {
   useEffect(() => {
     // settingsData 未加载时跳过，避免用 fallback false 覆盖 Rust 侧已设好的装饰状态
     if (!settingsData) return;
-    // WEB-00: window-shim без setDecorations — в web нечего синхронизировать
+    // WEB-00: the window shim has no setDecorations, so there is nothing to sync in web
     if (isWeb) return;
 
     const syncWindowDecorations = async () => {
@@ -1222,9 +1222,9 @@ function App() {
     ) {
       let liveProviderIds: string[] = [];
       try {
-        // Шаг проверяет коллизию ключа копии с записями живого конфига; в web копия получает ключ,
-        // свободный среди провайдеров БД (addToLive=false, в живой конфиг не пишется). opencode live-ids в web работают (WEB-14).
-        // Hermes (WEB-16), openclaw (WEB-15) и pi/omp (WEB-17) live-ids в web работают
+        // The step checks whether the copy's key collides with entries of the live config; in web the copy gets a key
+        // that is free among the DB providers (addToLive=false, nothing is written to the live config). opencode live ids work in web (WEB-14).
+        // Hermes (WEB-16), openclaw (WEB-15) and pi/omp (WEB-17) live ids work in web
         liveProviderIds =
           activeApp === "opencode"
             ? await queryClient.ensureQueryData({
@@ -1562,7 +1562,7 @@ function App() {
   // OpenClaw / Hermes 没有模式 tab，那一行放它们自己的页面导航。
   // 换整块内容的是页面导航，用下划线页签；分段控件只留给模式和页内筛选。
   const renderAppSegments = () => {
-    // Web: вкладки есть только у openclaw (WEB-15) и hermes (WEB-16)
+    // Web: only openclaw (WEB-15) and hermes (WEB-16) have tabs
     if (isWeb && activeApp !== "hermes" && activeApp !== "openclaw")
       return null;
     if (activeApp === "openclaw") {

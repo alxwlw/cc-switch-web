@@ -511,7 +511,7 @@ describe("ProviderList Component", () => {
       );
 
       expect(await screen.findByTestId("remove-live")).toBeInTheDocument();
-      // Владелец default-model: статус и чип, без «добавить»
+      // Owner of the default model: status and chip, no "add"
       expect(screen.getByTestId("status-live")).toHaveTextContent(
         "providerCard.status.default",
       );
@@ -521,7 +521,7 @@ describe("ProviderList Component", () => {
         tone: "outline",
       });
       expect(screen.queryByTestId("add-live")).not.toBeInTheDocument();
-      // Остальные: «设为默认» в меню «больше»
+      // The others: "设为默认" in the "more" menu
       expect(screen.getByTestId("remove-a")).toBeInTheDocument();
       lastProps("a")
         ?.presentation.menuItems.find(

@@ -74,7 +74,7 @@ import { appHas } from "@/config/appSpecs";
 /** 切换式应用（Claude Code / Codex / Gemini CLI / Grok Build）的模式状态和动作，由供应商页传入。 */
 export type SwitchModeProps = Omit<SwitchModeInput, "app" | "t" | "providers">;
 
-/** Приложения, у которых «в конфиге ли» берётся из живого конфига, недоступного в web. Сейчас таких нет: opencode открыт WEB-14 (openclaw/hermes — своими хуками). */
+/** Apps whose "is it in the config" comes from a live config that web cannot read. There are none now: opencode was opened by WEB-14 (openclaw/hermes use their own hooks). */
 const WEB_LIVE_MEMBERSHIP_APPS: AppId[] = [];
 
 const verticalDragModifiers: Modifier[] = [
@@ -192,7 +192,7 @@ export function ProviderList({
   // 累加式应用要等 live 里有哪些供应商读回来（成功或失败）才知道卡片该进哪个分区；
   // 在那之前按加载中画骨架，不然卡片先全落进「可添加」，读回来再整体搬到「已添加」。
   // 一张卡都没有时不用等，直接出空状态
-  // В web opencode тоже ждёт живые ids (читаются с сервера, WEB-14)
+  // In web opencode also waits for live ids (read from the server, WEB-14)
   const isLiveMembershipPending =
     (appId === "hermes" && isHermesLiveIdsPending) ||
     (appId === "openclaw" && isOpenclawLiveIdsPending) ||
@@ -388,7 +388,7 @@ export function ProviderList({
         t,
         providers: filteredProviders,
         openTerminal: (provider) => onOpenTerminal?.(provider),
-        // WEB-00: open_provider_terminal: desktop-only (терминал на сервере не открыть)
+        // WEB-00: open_provider_terminal: desktop-only (a terminal cannot be opened on the server)
         terminalUnavailableReason: isWeb ? t("web.unavailable") : undefined,
       });
     }
@@ -436,7 +436,7 @@ export function ProviderList({
           hermesLiveIds.includes(provider.id)),
       piStateUnavailable: appHas(appId, "piFamily") && !isPiStateReady,
       kimiCurrentId: currentProviderId,
-      // opencode в web читает живой конфиг (WEB-14): членство известно; список пуст — ветка для будущих live-membership приложений
+      // opencode in web reads the live config (WEB-14): membership is known; the list is empty, a branch for future live-membership apps
       membershipUnknown: isWeb && WEB_LIVE_MEMBERSHIP_APPS.includes(appId),
       workbuddyOfficial,
       copilotDefaultId: appId === "copilot" ? currentProviderId : null,

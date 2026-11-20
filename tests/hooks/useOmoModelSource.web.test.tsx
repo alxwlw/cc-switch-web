@@ -57,7 +57,7 @@ describe("useOmoModelSource — web", () => {
       { wrapper: wrapper() },
     );
 
-    // Живые ids исключают custom: настроенные модели отфильтрованы (раньше в web живой набор не читался)
+    // Live ids exclude custom: configured models are filtered out (before, web did not read the live set)
     await waitFor(() => expect(liveIdsRequests).toBeGreaterThan(0));
     await waitFor(() =>
       expect(result.current.omoModelOptions.map((o) => o.value)).toEqual([]),

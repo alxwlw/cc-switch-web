@@ -12,7 +12,7 @@ function okResponse(data: unknown) {
   return { status: 200, json: async () => ({ ok: true, data }) };
 }
 
-describe("vscodeApi endpoints через adapter (WEB-21)", () => {
+describe("vscodeApi endpoints via adapter (WEB-21)", () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -32,7 +32,7 @@ describe("vscodeApi endpoints через adapter (WEB-21)", () => {
     expect(init.body).toBeUndefined();
   });
 
-  it("testApiEndpoints: POST /api/endpoints/speedtest с {urls, timeoutSecs}", async () => {
+  it("testApiEndpoints: POST /api/endpoints/speedtest with {urls, timeoutSecs}", async () => {
     const rows = [{ url: "https://a.example", latency: 42, status: 200 }];
     fetchSpy.mockResolvedValue(okResponse(rows));
     await expect(
@@ -49,7 +49,7 @@ describe("vscodeApi endpoints через adapter (WEB-21)", () => {
     });
   });
 
-  it("getCustomEndpoints: GET с url-encoded id провайдера", async () => {
+  it("getCustomEndpoints: GET with the url-encoded provider id", async () => {
     fetchSpy.mockResolvedValue(okResponse([]));
     await vscodeApi.getCustomEndpoints("codex", "p/1 x");
     const [url, init] = fetchSpy.mock.calls[0];
@@ -57,7 +57,7 @@ describe("vscodeApi endpoints через adapter (WEB-21)", () => {
     expect(init.method).toBe("GET");
   });
 
-  it("addCustomEndpoint: POST с {url} в теле", async () => {
+  it("addCustomEndpoint: POST with {url} in the body", async () => {
     fetchSpy.mockResolvedValue(okResponse(true));
     await vscodeApi.addCustomEndpoint("claude", "p1", "https://x.example");
     const [url, init] = fetchSpy.mock.calls[0];
@@ -66,7 +66,7 @@ describe("vscodeApi endpoints через adapter (WEB-21)", () => {
     expect(JSON.parse(init.body)).toEqual({ url: "https://x.example" });
   });
 
-  it("removeCustomEndpoint: DELETE несёт {url} в JSON-теле", async () => {
+  it("removeCustomEndpoint: DELETE carries {url} in the JSON body", async () => {
     fetchSpy.mockResolvedValue(okResponse(true));
     await vscodeApi.removeCustomEndpoint("claude", "p1", "https://x.example");
     const [url, init] = fetchSpy.mock.calls[0];
@@ -76,7 +76,7 @@ describe("vscodeApi endpoints через adapter (WEB-21)", () => {
     expect(JSON.parse(init.body)).toEqual({ url: "https://x.example" });
   });
 
-  it("ошибка сервиса (HTTP 500 {ok:false,error}) становится rejected promise", async () => {
+  it("a service error (HTTP 500 {ok:false,error}) becomes a rejected promise", async () => {
     fetchSpy.mockResolvedValue({
       status: 500,
       json: async () => ({ ok: false, error: "invalid endpoint url" }),

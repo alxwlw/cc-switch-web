@@ -307,7 +307,7 @@ fn without_a_supervisor_restart_is_409_and_the_server_keeps_serving() {
     assert!(
         body["error"]
             .as_str()
-            .is_some_and(|e| e.contains("перезапустите сервер вручную")),
+            .is_some_and(|e| e.contains("restart the server manually")),
         "{body}"
     );
     // Still up: the refused request did not start a shutdown.

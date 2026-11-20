@@ -144,7 +144,7 @@ export const PathChip = memo(function PathChip({
             (searchQuery ? highlightText(display, searchQuery) : display)}
         </span>
       </button>
-      {/* WEB-00: reveal_session_path открывает файловый менеджер на хосте — в web скрыт (copy остаётся) — снимет WEB-13 */}
+      {/* WEB-00: reveal_session_path opens a file manager on the host, so it is hidden in web (copy stays); WEB-13 lifts this */}
       {!isWeb && (
         <HoverTip content={revealLabel}>
           <button

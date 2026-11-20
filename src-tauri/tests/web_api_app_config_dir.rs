@@ -20,7 +20,7 @@ use serial_test::serial;
 use support::{ensure_test_home, reset_test_fs, web_call, web_call_raw, web_router};
 
 const URI: &str = "/api/app-config-dir";
-const ENV_LOCKED_TEXT: &str = "каталог задан CC_SWITCH_CONFIG_DIR в unit сервера";
+const ENV_LOCKED_TEXT: &str = "the directory is set by CC_SWITCH_CONFIG_DIR in the server unit";
 
 /// Clean slate for one test; puts `CC_SWITCH_CONFIG_DIR` back on drop so a failing
 /// test cannot leak it into the next one.
@@ -283,12 +283,12 @@ async fn put_refuses_paths_that_are_not_absolute_or_not_a_directory() {
     std::fs::write(&a_file, "x").unwrap();
 
     for (path, needle) in [
-        ("relative/dir", "не абсолютный"),
-        ("./dir", "не абсолютный"),
-        ("~someone/dir", "не поддерживается"),
+        ("relative/dir", "is not absolute"),
+        ("./dir", "is not absolute"),
+        ("~someone/dir", "is not supported"),
         // The server ships on Linux only: a backslash is a file name character there.
-        ("~\\dir", "не поддерживается"),
-        (s(&a_file), "файл"),
+        ("~\\dir", "is not supported"),
+        (s(&a_file), "is a file"),
     ] {
         let (status, body) = put(&router, json!(path)).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{path}: {body}");
@@ -335,7 +335,7 @@ async fn put_refuses_a_directory_without_write_access() {
     // Back to writable before any assertion can unwind, so the test home can be cleaned.
     std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
     assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
-    assert!(error_text(&body).contains("нельзя записывать"), "{body}");
+    assert!(error_text(&body).contains("cannot write to"), "{body}");
     assert!(error_text(&body).contains(s(&target)), "{body}");
     assert_eq!(read_headless_override_file(), None);
 }

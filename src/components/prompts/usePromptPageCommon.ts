@@ -26,7 +26,7 @@ export function usePromptPageCommon(appId: AppId) {
     copyPath: { label: string; path: string | undefined },
   ): PromptMoreItem[] => [
     importItem,
-    // WEB-00: open_config_folder открывает файловый менеджер на хосте — в web скрыт (copy path остаётся) — desktop-only (cross-phase rule «Server-host semantics»)
+    // WEB-00: open_config_folder opens a file manager on the host, so it is hidden in web (copy path stays); desktop-only (cross-phase rule "Server-host semantics")
     ...(isWeb
       ? []
       : [

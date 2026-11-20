@@ -18,7 +18,7 @@ describe("adapter invoke · open_external (WEB-30)", () => {
     vi.restoreAllMocks();
   });
 
-  it("https-ссылка: window.open c noopener,noreferrer, результат true, без fetch", async () => {
+  it("https link: window.open with noopener,noreferrer, result true, no fetch", async () => {
     const result = await invoke<boolean>("open_external", {
       url: "https://example.com/releases",
     });
@@ -31,7 +31,7 @@ describe("adapter invoke · open_external (WEB-30)", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("http-ссылка тоже открывается", async () => {
+  it("an http link is opened too", async () => {
     await invoke("open_external", { url: "http://10.0.0.5:3000/" });
     expect(openSpy).toHaveBeenCalledWith(
       "http://10.0.0.5:3000/",
@@ -45,9 +45,9 @@ describe("adapter invoke · open_external (WEB-30)", () => {
     ["javascript:alert(1)"],
     ["mailto:someone@example.com"],
     ["file:///etc/passwd"],
-    ["не-url"],
+    ["not-a-url"],
     [""],
-  ])("не-http(s) URL %s отклоняется без window.open", async (url) => {
+  ])("a non-http(s) URL %s is rejected without window.open", async (url) => {
     await expect(invoke("open_external", { url })).rejects.toThrow(Error);
     await expect(invoke("open_external", { url })).rejects.not.toBeInstanceOf(
       WebUnsupportedError,
@@ -55,20 +55,20 @@ describe("adapter invoke · open_external (WEB-30)", () => {
     expect(openSpy).not.toHaveBeenCalled();
   });
 
-  it("отсутствующий/не-строковый url отклоняется", async () => {
+  it("a missing/non-string url is rejected", async () => {
     await expect(invoke("open_external", {})).rejects.toThrow(Error);
     await expect(invoke("open_external", { url: 42 })).rejects.toThrow(Error);
     expect(openSpy).not.toHaveBeenCalled();
   });
 
-  it("браузер заблокировал всплывающее окно (window.open вернул null) — честная ошибка", async () => {
+  it("the browser blocked the popup (window.open returned null): an honest error", async () => {
     openSpy.mockReturnValue(null);
     await expect(
       invoke("open_external", { url: "https://example.com" }),
-    ).rejects.toThrow(/заблоки/i);
+    ).rejects.toThrow(/blocked/i);
   });
 
-  it("не ломает существующее поведение других команд (маппинг в fetch)", async () => {
+  it("does not break the existing behaviour of other commands (mapping to fetch)", async () => {
     fetchSpy.mockResolvedValue({
       json: async () => ({ ok: true, data: [] }),
     } as Response);
@@ -80,7 +80,7 @@ describe("adapter invoke · open_external (WEB-30)", () => {
     expect(openSpy).not.toHaveBeenCalled();
   });
 
-  it("немаппинговая команда по-прежнему WebUnsupportedError", async () => {
+  it("an unmapped command is still WebUnsupportedError", async () => {
     await expect(invoke("definitely_not_mapped_cmd")).rejects.toBeInstanceOf(
       WebUnsupportedError,
     );

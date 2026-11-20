@@ -54,9 +54,9 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-// Каждый кейс: хук и команда, которую он обязан звать на desktop и не звать в web.
-// WEB-04 снял гейты с usage/quota (ниже — WEB-04-кейсы зовут и в web); здесь остаются
-// только copilot (OUT of scope WEB-04). Desktop config открыт WEB-19 (ниже).
+// Each case: the hook and the command it must call on desktop and must not call in web.
+// WEB-04 lifted the gates from usage/quota (below, the WEB-04 cases call in web too); only
+// copilot stays here (OUT of scope of WEB-04). Desktop config was opened by WEB-19 (below).
 const CASES: Array<[string, string, () => unknown]> = [
   [
     "useCopilotQuota",
@@ -65,7 +65,7 @@ const CASES: Array<[string, string, () => unknown]> = [
   ],
 ];
 
-// WEB-04: usage/quota работают в web — те же хуки зовут свои команды и в web.
+// WEB-04: usage/quota work in web: the same hooks call their commands in web too.
 const WEB04_CASES: Array<[string, string, () => unknown]> = [
   [
     "useUsageQuery",
@@ -104,7 +104,7 @@ function wrapperFor() {
 
 const calledCommands = () => invokeMock.mock.calls.map((call) => call[0]);
 
-describe("WEB-00: фоновые query молчат в web", () => {
+describe("WEB-00: background queries stay silent in web", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     invokeMock.mockReset();
@@ -115,7 +115,7 @@ describe("WEB-00: фоновые query молчат в web", () => {
     vi.useRealTimers();
   });
 
-  it.each(CASES)("%s: desktop зовёт %s", async (_name, command, useHook) => {
+  it.each(CASES)("%s: desktop calls %s", async (_name, command, useHook) => {
     const { wrapper } = wrapperFor();
     renderHook(useHook, { wrapper });
     await act(async () => {
@@ -125,12 +125,12 @@ describe("WEB-00: фоновые query молчат в web", () => {
   });
 
   it.each(CASES)(
-    "%s: web не зовёт %s и не стартует интервалы",
+    "%s: web does not call %s and does not start intervals",
     async (_name, command, useHook) => {
       setWeb(true);
       const { client, wrapper } = wrapperFor();
       renderHook(useHook, { wrapper });
-      // дольше самого длинного интервала (5 мин у quota при autoQuery)
+      // longer than the longest interval (5 min for quota with autoQuery)
       await act(async () => {
         await vi.advanceTimersByTimeAsync(6 * 60 * 1000);
       });
@@ -224,7 +224,7 @@ describe("WEB-00: фоновые query молчат в web", () => {
       () => useAutoFailoverEnabled("claude"),
     ],
   ] as Array<[string, string, () => unknown]>)(
-    "%s в web зовёт %s (гейт снят: WEB-15 / WEB-17 / WEB-05 / WEB-02 / WEB-01 / фаза 28 failover)",
+    "%s in web calls %s (gate lifted: WEB-15 / WEB-17 / WEB-05 / WEB-02 / WEB-01 / phase 28 failover)",
     async (_name, command, useHook) => {
       setWeb(true);
       const { wrapper } = wrapperFor();
@@ -236,7 +236,7 @@ describe("WEB-00: фоновые query молчат в web", () => {
     },
   );
 
-  it("useProfilesQuery в web зовёт list_profiles (WEB-06, гейт снят)", async () => {
+  it("useProfilesQuery in web calls list_profiles (WEB-06, gate lifted)", async () => {
     setWeb(true);
     const { wrapper } = wrapperFor();
     renderHook(() => useProfilesQuery(), { wrapper });
@@ -246,7 +246,7 @@ describe("WEB-00: фоновые query молчат в web", () => {
     expect(calledCommands()).toContain("list_profiles");
   });
 
-  it("useSidebarStatus в web зовёт proxy status, get_app_mode и auth_get_status (WEB-01)", async () => {
+  it("useSidebarStatus in web calls proxy status, get_app_mode and auth_get_status (WEB-01)", async () => {
     setWeb(true);
     const { wrapper } = wrapperFor();
     renderHook(() => useSidebarStatus(), { wrapper });
@@ -259,7 +259,7 @@ describe("WEB-00: фоновые query молчат в web", () => {
     expect(commands).toContain("auth_get_status");
   });
 
-  it("useSidebarStatus на desktop зовёт get_app_mode и auth_get_status", async () => {
+  it("useSidebarStatus on desktop calls get_app_mode and auth_get_status", async () => {
     const { wrapper } = wrapperFor();
     renderHook(() => useSidebarStatus(), { wrapper });
     await act(async () => {
@@ -278,7 +278,7 @@ describe("WEB-00: фоновые query молчат в web", () => {
       () => useKimiAccountQuota("a1", { autoQuery: true }),
     ],
   ] as Array<[string, string, () => unknown]>)(
-    "%s: Kimi открыт в web (WEB-02 этап 2), зовёт %s",
+    "%s: Kimi is open in web (WEB-02 stage 2), calls %s",
     async (_name, command, useHook) => {
       setWeb(true);
       const { wrapper } = wrapperFor();
@@ -291,7 +291,7 @@ describe("WEB-00: фоновые query молчат в web", () => {
   );
 
   it.each(WEB04_CASES)(
-    "%s: WEB-04 открыт в web, зовёт %s",
+    "%s: WEB-04 is open in web, calls %s",
     async (_name, command, useHook) => {
       setWeb(true);
       const { wrapper } = wrapperFor();
@@ -303,7 +303,7 @@ describe("WEB-00: фоновые query молчат в web", () => {
     },
   );
 
-  it("useDesktopConfigMessages: WEB-19 открыт в web — зовёт get_claude_desktop_status и продолжает опрос", async () => {
+  it("useDesktopConfigMessages: WEB-19 is open in web, calls get_claude_desktop_status and keeps polling", async () => {
     for (const web of [false, true]) {
       invokeMock.mockClear();
       setWeb(web);
@@ -323,7 +323,7 @@ describe("WEB-00: фоновые query молчат в web", () => {
     }
   });
 
-  it("useDesktopConfigMessages(false): не опрашивает ни на desktop, ни в web", async () => {
+  it("useDesktopConfigMessages(false): does not poll on desktop or in web", async () => {
     for (const web of [false, true]) {
       invokeMock.mockClear();
       setWeb(web);
@@ -336,7 +336,7 @@ describe("WEB-00: фоновые query молчат в web", () => {
     }
   });
 
-  it("useStreamCheck: гейта нет (no isWeb) — зовёт stream_check_provider и в web", async () => {
+  it("useStreamCheck: no gate (no isWeb), calls stream_check_provider in web too", async () => {
     const { useStreamCheck } = await import("@/hooks/useStreamCheck");
     for (const web of [false, true]) {
       invokeMock.mockClear();

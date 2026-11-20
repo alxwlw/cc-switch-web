@@ -223,7 +223,7 @@ export function useSettings(): UseSettingsResult {
         await saveMutation.mutateAsync(payload);
 
         // 如果开机自启状态改变，调用系统 API
-        // WEB-00: set_auto_launch не поддержан (автозапуск ОС — desktop-only, в web не обслуживается)
+        // WEB-00: set_auto_launch is not supported (OS autostart is desktop-only, not served in web)
         if (
           !isWeb &&
           payload.launchOnStartup !== undefined &&
@@ -377,7 +377,7 @@ export function useSettings(): UseSettingsResult {
         }
 
         // 只在开机自启状态真正改变时调用系统 API
-        // WEB-00: set_auto_launch не поддержан (автозапуск ОС — desktop-only, в web не обслуживается)
+        // WEB-00: set_auto_launch is not supported (OS autostart is desktop-only, not served in web)
         if (
           !isWeb &&
           payload.launchOnStartup !== undefined &&

@@ -354,7 +354,7 @@ export function CopilotAccountQuota({
   );
 }
 
-/** WEB-04: в web额度查自服务器 — подпись после соседних authCenter.quota.* ключей. */
+/** WEB-04: in web the quota is read from the server: the caption comes after the neighbouring authCenter.quota.* keys. */
 function WebAuthQuotaServerNote() {
   const { t } = useTranslation();
   if (!isWeb) return null;
@@ -364,7 +364,7 @@ function WebAuthQuotaServerNote() {
       data-testid="quota-server-note"
     >
       {t("authCenter.quota.serverNote", {
-        defaultValue: "данные запрашиваются на сервере",
+        defaultValue: "Data is fetched on the server",
       })}
     </span>
   );

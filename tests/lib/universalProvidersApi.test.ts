@@ -23,7 +23,7 @@ function okResponse(data: unknown, status = 200) {
   return { status, json: async () => ({ ok: true, data }) };
 }
 
-describe("universalProvidersApi через adapter (WEB-07)", () => {
+describe("universalProvidersApi via adapter (WEB-07)", () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -32,7 +32,7 @@ describe("universalProvidersApi через adapter (WEB-07)", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("getAll: GET /api/universal-providers, возвращает карту", async () => {
+  it("getAll: GET /api/universal-providers, returns the map", async () => {
     fetchSpy.mockResolvedValue(okResponse({ a: provider }));
     await expect(universalProvidersApi.getAll()).resolves.toEqual({
       a: provider,
@@ -43,7 +43,7 @@ describe("universalProvidersApi через adapter (WEB-07)", () => {
     expect(init.body).toBeUndefined();
   });
 
-  it("upsert: PUT с body {provider}", async () => {
+  it("upsert: PUT with body {provider}", async () => {
     fetchSpy.mockResolvedValue(okResponse(true));
     await expect(universalProvidersApi.upsert(provider)).resolves.toBe(true);
     const [url, init] = fetchSpy.mock.calls[0];
@@ -52,7 +52,7 @@ describe("universalProvidersApi через adapter (WEB-07)", () => {
     expect(JSON.parse(init.body)).toEqual({ provider });
   });
 
-  it("delete: DELETE c url-encoded id, без body", async () => {
+  it("delete: DELETE with url-encoded id, no body", async () => {
     fetchSpy.mockResolvedValue(okResponse(true));
     await expect(universalProvidersApi.delete("u/1 x")).resolves.toBe(true);
     const [url, init] = fetchSpy.mock.calls[0];
@@ -69,7 +69,7 @@ describe("universalProvidersApi через adapter (WEB-07)", () => {
     expect(init.method).toBe("POST");
   });
 
-  it("sync: HTTP 500 {ok:false,error} отклоняется дословным текстом сервера", async () => {
+  it("sync: HTTP 500 {ok:false,error} is rejected with the verbatim server text", async () => {
     const text =
       "统一供应商已保存到数据库，但以下应用的配置文件未能写入：codex: disk full";
     fetchSpy.mockResolvedValue({

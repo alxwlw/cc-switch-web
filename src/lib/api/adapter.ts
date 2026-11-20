@@ -1336,7 +1336,7 @@ export class WebUnsupportedError extends Error {
   readonly command: string;
   constructor(command: string) {
     super(
-      `«${command}» недоступно в web-режиме (desktop-only: трей, диалоги, терминал, OAuth, обновления)`,
+      `"${command}" is not available in web mode (desktop-only: tray, dialogs, terminal, OAuth, updates)`,
     );
     this.name = "WebUnsupportedError";
     this.command = command;
@@ -1363,7 +1363,7 @@ function openExternalInBrowser(url: unknown): boolean {
     "noopener,noreferrer",
   );
   if (!opened)
-    throw new Error("Браузер заблокировал открытие ссылки (popup blocker)");
+    throw new Error("The browser blocked opening the link (popup blocker)");
   return true;
 }
 
@@ -1408,10 +1408,10 @@ async function streamSessionMessages(args: Args): Promise<void> {
   try {
     res = await fetch(url, { method: "GET" });
   } catch (e) {
-    throw new Error(`Web API недоступно (GET ${url}): ${String(e)}`);
+    throw new Error(`Web API unavailable (GET ${url}): ${String(e)}`);
   }
   if (!res.ok || !res.body) {
-    throw new Error(`Web API ошибка (stream_session_messages): ${res.status}`);
+    throw new Error(`Web API error (stream_session_messages): ${res.status}`);
   }
   const deliver = (line: string) => {
     if (!line.trim()) return;
@@ -1463,17 +1463,17 @@ async function runToolLifecycleAction(args: Args): Promise<void> {
       }),
     });
   } catch (e) {
-    throw new Error(`Web API недоступно (POST ${startUrl}): ${String(e)}`);
+    throw new Error(`Web API unavailable (POST ${startUrl}): ${String(e)}`);
   }
   let started: any = null;
   try {
     started = await res.json();
   } catch {
-    throw new Error(`Web API вернул не-JSON (${res.status} ${startUrl})`);
+    throw new Error(`Web API returned non-JSON (${res.status} ${startUrl})`);
   }
   if (!started || started.ok !== true || !started.data?.jobId) {
     throw new Error(
-      started?.error ?? "Web API ошибка (run_tool_lifecycle_action)",
+      started?.error ?? "Web API error (run_tool_lifecycle_action)",
     );
   }
   const statusUrl = `${startUrl}/${encodeURIComponent(started.data.jobId)}`;
@@ -1507,7 +1507,7 @@ async function runToolLifecycleAction(args: Args): Promise<void> {
     if (state === "done") return;
     if (state === "failed") {
       throw new Error(
-        payload.data.error ?? "Web API ошибка (run_tool_lifecycle_action)",
+        payload.data.error ?? "Web API error (run_tool_lifecycle_action)",
       );
     }
   }
@@ -1567,7 +1567,7 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
     res = await fetch(mapped.url, init);
   } catch (e) {
     throw new Error(
-      `Web API недоступно (${mapped.method} ${mapped.url}): ${String(e)}`,
+      `Web API unavailable (${mapped.method} ${mapped.url}): ${String(e)}`,
     );
   }
   if (mapped.responseType === "arrayBuffer" && res.ok) {
@@ -1577,14 +1577,14 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
   try {
     payload = await res.json();
   } catch {
-    throw new Error(`Web API вернул не-JSON (${res.status} ${mapped.url})`);
+    throw new Error(`Web API returned non-JSON (${res.status} ${mapped.url})`);
   }
   if (!payload || payload.ok !== true) {
     // Desktop rejects with the serialized object (StackWriteError {partial, message}); keep it.
     if (payload?.error && typeof payload.error === "object") {
       throw payload.error;
     }
-    throw new Error(payload?.error ?? `Web API ошибка (${cmd})`);
+    throw new Error(payload?.error ?? `Web API error (${cmd})`);
   }
   const data = payload.data;
   if (mapped.transform) return mapped.transform(data) as T;

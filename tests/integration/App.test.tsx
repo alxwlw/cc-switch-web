@@ -766,7 +766,7 @@ describe("App integration with MSW", () => {
       const { default: App } = await import("@/App");
       renderApp(App);
       await screen.findByTestId("provider-list");
-      // настройки (showProfileSwitcher) уже должны быть загружены, иначе отсутствие ничего не доказывает
+      // settings (showProfileSwitcher) must already be loaded, otherwise a missing item proves nothing
       await waitFor(() => expect(settingsServed).toBeGreaterThan(0));
       await act(async () => {
         await Promise.resolve();
@@ -775,14 +775,14 @@ describe("App integration with MSW", () => {
       const switcher = () =>
         screen.queryByRole("combobox", {
           name: /profiles\.switcherAriaLabel/,
-          // первый запуск открывает модалку и помечает страницу aria-hidden
+          // first launch opens a modal and marks the page aria-hidden
           hidden: true,
         });
       await waitFor(() => expect(switcher()).not.toBeNull());
     });
   });
 
-  // Обработчик общий для desktop и web; в web событие доставляет SSE-shim (webShimsEvent.test.ts)
+  // The handler is shared by desktop and web; in web the event is delivered by the SSE shim (webShimsEvent.test.ts)
   it("profile-applied event invalidates proxy status and takeover queries", async () => {
     setWeb(true);
     const invalidate = vi.spyOn(QueryClient.prototype, "invalidateQueries");

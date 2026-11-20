@@ -60,7 +60,7 @@ export function DatabaseUpgrade({ payload }: DatabaseUpgradeProps) {
 
   // 启动时检查可用更新，决定 upgradable / incompatible
   useEffect(() => {
-    // WEB-00: в web экран без кнопок: проверка обновлений есть в «О программе» (WEB-28), сервер обновляет оператор; установку вернёт фаза 37
+    // WEB-00: in web the screen has no buttons: update checks live in "About" (WEB-28), the operator updates the server; phase 37 brings installation back
     if (isWeb) return;
     let cancelled = false;
     (async () => {
@@ -179,7 +179,7 @@ export function DatabaseUpgrade({ payload }: DatabaseUpgradeProps) {
           )}
         </div>
 
-        {/* WEB-00: в web обновление/перезапуск/папка/выход недоступны — снимет WEB-28 */}
+        {/* WEB-00: update/restart/folder/quit are unavailable in web; WEB-28 lifts this */}
         {isWeb ? (
           <p className="text-sm text-fg-2">{t("web.update.unsupported")}</p>
         ) : (

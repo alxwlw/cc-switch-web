@@ -160,7 +160,7 @@ describe("AgyAccountSelect status query (WEB-00)", () => {
       </QueryClientProvider>,
     );
 
-  it("desktop: запрашивает статус agy_oauth", async () => {
+  it("desktop: queries the agy_oauth status", async () => {
     const spy = vi
       .spyOn(authApi, "authGetStatus")
       .mockResolvedValue({ accounts: [] } as never);
@@ -169,7 +169,7 @@ describe("AgyAccountSelect status query (WEB-00)", () => {
     spy.mockRestore();
   });
 
-  it("web: запрашивает статус agy_oauth (WEB-02)", async () => {
+  it("web: queries the agy_oauth status (WEB-02)", async () => {
     setWeb(true);
     const spy = vi
       .spyOn(authApi, "authGetStatus")

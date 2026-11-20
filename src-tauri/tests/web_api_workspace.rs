@@ -78,8 +78,14 @@ async fn workspace_write_then_read_is_atomic() {
     let (router, dir) = fresh();
     let uri = "/api/openclaw/workspace/AGENTS.md";
     assert_eq!(data(&router, "GET", uri, None).await, Value::Null);
-    data(&router, "PUT", uri, Some(json!({"content": "hello\nмир"}))).await;
-    assert_eq!(data(&router, "GET", uri, None).await, json!("hello\nмир"));
+    data(
+        &router,
+        "PUT",
+        uri,
+        Some(json!({"content": "hello\nwörld"})),
+    )
+    .await;
+    assert_eq!(data(&router, "GET", uri, None).await, json!("hello\nwörld"));
     data(&router, "PUT", uri, Some(json!({"content": "second"}))).await;
     assert_eq!(data(&router, "GET", uri, None).await, json!("second"));
     assert_eq!(

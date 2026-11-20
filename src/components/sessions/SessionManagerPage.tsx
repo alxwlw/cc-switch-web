@@ -411,8 +411,8 @@ export function SessionManagerPage({
   }, [sessions]);
 
   const terminalName = useMemo(() => {
-    // WEB-00: launch_session_terminal не замаплен, а isMac() читает UA браузера, не хост —
-    // в web всегда copy-фоллбэк, без кнопки запуска — снимет WEB-13
+    // WEB-00: launch_session_terminal is not mapped, and isMac() reads the browser UA, not the host:
+    // in web it is always the copy fallback, no launch button; WEB-13 lifts this
     if (isWeb || !isMac()) return null;
     const value = settings?.preferredTerminal || "terminal";
     const key = `settings.terminal.options.macos.${value}`;

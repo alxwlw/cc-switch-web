@@ -304,7 +304,7 @@ describe("SessionManagerPage", () => {
     discovery.mockRestore();
   });
 
-  it("web: зовёт get_pi_session_discovery для Pi (WEB-17)", async () => {
+  it("web: calls get_pi_session_discovery for Pi (WEB-17)", async () => {
     setWeb(true);
     const discovery = vi.spyOn(piApi, "getSessionDiscovery").mockResolvedValue({
       status: "requires_project_context",

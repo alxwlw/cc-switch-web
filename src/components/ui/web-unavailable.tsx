@@ -3,9 +3,9 @@ import { useTranslation } from "react-i18next";
 import { HoverTip } from "@/components/ui/hover-tip";
 
 /**
- * WEB-00: при `active` (вызывающий передаёт `isWeb`, прочитанный при рендере) оборачивает
- * уже disabled контрол в подсказку `web.unavailable`. disabled-кнопка не получает
- * pointer-события, поэтому подсказка вешается на обёртку. Без `active` — children как есть.
+ * WEB-00: when `active` (the caller passes `isWeb`, read at render) it wraps
+ * an already disabled control in the `web.unavailable` hint. A disabled button gets no
+ * pointer events, so the hint goes on the wrapper. Without `active` the children are returned as is.
  */
 export function WebUnavailableTip({
   active,

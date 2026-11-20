@@ -25,7 +25,7 @@ import { isViewAvailable, readStoredView } from "@/lib/navigation";
 import { createTestQueryClient } from "../utils/testQueryClient";
 import { setWeb } from "../helpers/web";
 
-// Карточка рисуется кнопками по presentation: проверяем, что SwitchModePanel отдаёт в web
+// The card is drawn with buttons from presentation: check that SwitchModePanel gives web
 vi.mock("@/components/providers/ProviderCard", () => ({
   ProviderCard: ({ provider, presentation }: any) => (
     <div data-testid={`card-${provider.id}`}>
@@ -103,12 +103,12 @@ describe("ProviderCardActions — web", () => {
     const test = within(menu).getByRole("menuitem", {
       name: /provider\.connectivityCheck/,
     });
-    // WEB-04: stream check работает в web — пункт включён, подпись про сервер.
+    // WEB-04: stream check works in web: the item is enabled, with a caption about the server.
     expect(test).not.toHaveAttribute("aria-disabled", "true");
-    expect(test).toHaveTextContent("проверка выполняется с сервера");
+    expect(test).toHaveTextContent("The check runs from the server");
     await user.click(test);
     expect(onTest).toHaveBeenCalledTimes(1);
-    // Соседнее покрытие: терминал остаётся desktop-only.
+    // Neighbouring coverage: the terminal stays desktop-only.
     expect(terminal).toHaveAttribute("aria-disabled", "true");
     await user.click(terminal!);
     expect(onOpenTerminal).not.toHaveBeenCalled();

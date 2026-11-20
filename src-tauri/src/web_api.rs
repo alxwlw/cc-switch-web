@@ -703,7 +703,7 @@ async fn health() -> Json<Value> {
     Json(json!({ "status": "ok", "instanceId": instance_id() }))
 }
 
-const RESTART_NEEDS_SUPERVISOR: &str = "перезапустите сервер вручную: он запущен без supervisor (systemd, Docker с restart policy), который поднял бы его снова";
+const RESTART_NEEDS_SUPERVISOR: &str = "restart the server manually: it was started without a supervisor (systemd, Docker with a restart policy) that would bring it back up";
 
 /// `POST /api/restart` (WEB-26). Checks in this order: the JSON content type (a CORS-simple
 /// POST without a body from another site must not restart the server), a supervisor and a
@@ -3068,7 +3068,8 @@ async fn paths() -> ApiResult {
 // ---------- data directory (WEB-26) ----------
 
 /// Verbatim to the frontend: the plan fixes this text.
-const APP_CONFIG_DIR_ENV_LOCKED: &str = "каталог задан CC_SWITCH_CONFIG_DIR в unit сервера";
+const APP_CONFIG_DIR_ENV_LOCKED: &str =
+    "the directory is set by CC_SWITCH_CONFIG_DIR in the server unit";
 
 fn conflict(msg: impl ToString) -> ApiResult {
     (
@@ -3126,14 +3127,14 @@ fn validate_app_config_dir(raw: &str) -> Result<std::path::PathBuf, String> {
         crate::config::get_home_dir().join(rest)
     } else if raw.starts_with('~') {
         return Err(format!(
-            "путь «{raw}» не поддерживается: «~» раскрывается только в домашний каталог пользователя сервера (~ или ~/подкаталог)"
+            "path '{raw}' is not supported: '~' expands only to the home directory of the server user (~ or ~/subdir)"
         ));
     } else {
         PathBuf::from(raw)
     };
     if !expanded.is_absolute() {
         return Err(format!(
-            "путь «{raw}» не абсолютный: укажите полный путь или начните с «~/»"
+            "path '{raw}' is not absolute: give a full path or start with '~/'"
         ));
     }
     // Drops `.` and a trailing separator; `..` stays for the OS to resolve.
@@ -3141,31 +3142,36 @@ fn validate_app_config_dir(raw: &str) -> Result<std::path::PathBuf, String> {
 
     match std::fs::metadata(&dir) {
         Ok(meta) if meta.is_dir() => {}
-        Ok(_) => return Err(format!("{} — это файл, а не каталог", dir.display())),
+        Ok(_) => return Err(format!("{} is a file, not a directory", dir.display())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             std::fs::create_dir_all(&dir)
-                .map_err(|e| format!("не удалось создать каталог {}: {e}", dir.display()))?;
+                .map_err(|e| format!("cannot create directory {}: {e}", dir.display()))?;
         }
-        Err(e) => return Err(format!("каталог {} недоступен: {e}", dir.display())),
+        Err(e) => {
+            return Err(format!(
+                "directory {} is not accessible: {e}",
+                dir.display()
+            ))
+        }
     }
 
     // An unnamed temp file: nothing is left in the directory, not even after a crash.
     tempfile::tempfile_in(&dir)
-        .map_err(|e| format!("в каталог {} нельзя записывать: {e}", dir.display()))?;
+        .map_err(|e| format!("cannot write to directory {}: {e}", dir.display()))?;
 
     let db_path = dir.join("cc-switch.db");
     match crate::database::Database::stored_user_version_exceeds_supported(&db_path) {
         Ok(None) => {}
         Ok(Some(version)) => {
             return Err(format!(
-                "в каталоге {} лежит база данных версии {version}, а этот сервер поддерживает не новее {}: обновите cc-switch-web или выберите другой каталог",
+                "directory {} holds a database of version {version}, but this server supports {} at most: update cc-switch-web or choose another directory",
                 dir.display(),
                 crate::database::SCHEMA_VERSION
             ))
         }
         Err(e) => {
             return Err(format!(
-                "{} не открывается как база данных SQLite: {e}",
+                "{} cannot be opened as a SQLite database: {e}",
                 db_path.display()
             ))
         }
