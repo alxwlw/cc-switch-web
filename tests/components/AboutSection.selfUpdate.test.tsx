@@ -265,8 +265,6 @@ describe("AboutSection · self-update (WEB-28)", () => {
       latestSha: null,
       latestVersion: "4.0.35-web.2",
       releaseUrl: "https://example.test/r",
-      behindBy: 0,
-      commits: [],
     });
     await open();
     fireEvent.click(screen.getByText("web.update.install.button"));
@@ -278,6 +276,7 @@ describe("AboutSection · self-update (WEB-28)", () => {
     ).toBeTruthy();
     expect(dialog.textContent).not.toContain("web-parity");
     expect(within(dialog).queryByText("web.update.commitsTitle")).toBeNull();
+    expect(within(dialog).queryByText("feat: newest")).toBeNull();
     expect(
       within(dialog).getByText("web.update.install.confirmDbWarning"),
     ).toBeTruthy();

@@ -229,8 +229,6 @@ describe("AboutSection · update controls", () => {
         releaseUrl:
           "https://github.com/alxwlw/cc-switch-web/releases/tag/v4.0.35-web.2",
         publishedAt: "2026-11-20T09:00:00Z",
-        behindBy: 0,
-        commits: [],
       }),
     );
     renderAbout();
@@ -249,7 +247,9 @@ describe("AboutSection · update controls", () => {
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
     // No commit list, no commit-mode title; the manual instructions stay.
+    // (the fixture still carries commits: a list would show them)
     expect(screen.queryByText("web.update.commitsTitle")).toBeNull();
+    expect(screen.queryByText("feat: newest")).toBeNull();
     expect(screen.queryByText(/web\.update\.behindTitle/)).toBeNull();
     expect(
       Array.from(document.querySelectorAll("pre")).map((p) => p.textContent),

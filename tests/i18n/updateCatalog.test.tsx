@@ -194,8 +194,6 @@ describe("self-update confirmation · real catalog render", () => {
             mode: "release",
             latestSha: null,
             latestVersion: "4.0.35-web.2",
-            commits: [],
-            behindBy: 0,
           }}
           state={{ kind: "idle" }}
           onStart={async () => {}}
@@ -208,6 +206,7 @@ describe("self-update confirmation · real catalog render", () => {
       "Install version 4.0.35-web.2? The server restarts and the page reloads by itself.",
     );
     expect(dialog).not.toHaveTextContent("web-parity");
+    expect(dialog).not.toHaveTextContent("feat: newest");
     expect(dialog).not.toHaveTextContent("{{");
     expect(
       within(dialog).getByText(/may migrate the database/),
