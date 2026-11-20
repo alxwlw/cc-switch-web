@@ -135,7 +135,7 @@ async fn default_model_without_slash_surfaces_validation_text() {
         &router,
         "PUT",
         "/api/opencode/default-model",
-        Some(json!({"model": "без-слеша"})),
+        Some(json!({"model": "no-slash-ü"})),
     )
     .await;
     assert_eq!(resp["ok"], json!(false), "PUT invalid model: {resp}");
@@ -143,7 +143,7 @@ async fn default_model_without_slash_surfaces_validation_text() {
         resp["error"]
             .as_str()
             .unwrap_or("")
-            .contains("OpenCode model must be \"<provider>/<model>\": без-слеша"),
+            .contains("OpenCode model must be \"<provider>/<model>\": no-slash-ü"),
         "validation text verbatim: {resp}"
     );
     // The mapped AppError surfaces via `fail`.

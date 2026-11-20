@@ -26,7 +26,7 @@ use tower::ServiceExt;
 
 const SYSTEMD_ENV: &str = "INVOCATION_ID";
 const SUPERVISED_ENV: &str = "CC_SWITCH_WEB_SUPERVISED";
-const MANUAL_TEXT: &str = "перезапустите сервер вручную";
+const MANUAL_TEXT: &str = "restart the server manually";
 
 struct Fixture {
     saved: Vec<(&'static str, Option<OsString>)>,
