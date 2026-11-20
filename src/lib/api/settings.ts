@@ -15,6 +15,24 @@ export interface ConfigTransferResult {
   backupId?: string;
 }
 
+export interface ConfigExportPayload {
+  filename: string;
+  content: string;
+}
+
+/** `GET /api/app-config-dir` (web only): which data directory the server process uses. */
+export interface AppConfigDirStatus {
+  /** What this process uses now. */
+  effective: string;
+  source: "env" | "override" | "default";
+  /** The stored override: what applies after the next restart. */
+  override: string | null;
+  /** The directory is fixed by `CC_SWITCH_CONFIG_DIR` in the server's unit. */
+  envLocked: boolean;
+  /** The server's own `~/.cc-switch`. */
+  default: string;
+}
+
 export interface WebDavTestResult {
   success: boolean;
   message?: string;
@@ -72,6 +90,11 @@ export const settingsApi = {
 
   async restart(): Promise<boolean> {
     return await invoke("restart_app");
+  },
+
+  /** Web: `POST /api/restart`; resolves with the id of the process that accepted it. */
+  async restartServer(): Promise<{ instanceId: string }> {
+    return await invoke("restart_server");
   },
 
   async installUpdateAndRestart(): Promise<boolean> {
@@ -137,6 +160,11 @@ export const settingsApi = {
     return await invoke("set_app_config_dir_override", { path });
   },
 
+  /** Web only: the server's data directory, where it comes from and whether the env fixes it. */
+  async getAppConfigDirStatus(): Promise<AppConfigDirStatus> {
+    return await invoke("get_app_config_dir_status");
+  },
+
   async applyClaudePluginConfig(options: {
     official: boolean;
   }): Promise<boolean> {
@@ -166,6 +194,16 @@ export const settingsApi = {
 
   async importConfigFromFile(filePath: string): Promise<ConfigTransferResult> {
     return await invoke("import_config_from_file", { filePath });
+  },
+
+  /** Web build: dump the server DB as text; the browser saves it as `filename`. */
+  async exportConfigForDownload(): Promise<ConfigExportPayload> {
+    return await invoke("export_config_to_string");
+  },
+
+  /** Web build: import an uploaded SQL dump (file text) into the server DB. */
+  async importConfigFromText(content: string): Promise<ConfigTransferResult> {
+    return await invoke("import_config_from_string", { content });
   },
 
   // ─── WebDAV sync ──────────────────────────────────────────
@@ -353,6 +391,11 @@ export const settingsApi = {
     return await invoke("set_optimizer_config", { config });
   },
 
+  /** Web only: last lines of the server's own log file (`GET /api/logs/tail`). */
+  async getServerLogTail(lines?: number): Promise<ServerLogTail> {
+    return await invoke("get_server_log_tail", { lines });
+  },
+
   async getPrivacyFilterConfig(): Promise<PrivacyFilterConfig> {
     return await invoke("get_privacy_filter_config");
   },
@@ -428,6 +471,15 @@ export interface OptimizerConfig {
   thinkingOptimizer: boolean;
   cacheInjection: boolean;
 }
+
+export interface ServerLogTail {
+  /** Absolute path of the log file on the server host. */
+  path: string;
+  lines: string[];
+}
+
+/** Web only: streams the whole server log as an attachment (plain link, no auth headers). */
+export const SERVER_LOG_DOWNLOAD_URL = "/api/logs/download";
 
 export interface PrivacyFilterConfig {
   enabled: boolean;

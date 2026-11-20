@@ -61,7 +61,7 @@ export function useAppMode(appType: string, enabled = true) {
   return useQuery({
     queryKey: ["providers", appType, "mode"] as const,
     queryFn: () => proxyApi.getAppMode(appType),
-    enabled,
+    enabled: enabled,
     placeholderData: (previous: AppModeView | undefined) => previous,
   });
 }
@@ -73,7 +73,7 @@ export function useProxyStack(appType: string, enabled: boolean) {
   return useQuery({
     queryKey: ["providers", appType, "stack"] as const,
     queryFn: () => proxyApi.getProxyStack(appType),
-    enabled,
+    enabled: enabled,
   });
 }
 

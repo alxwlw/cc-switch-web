@@ -21,9 +21,9 @@ pub async fn agy_account_is_running() -> Result<bool, String> {
 #[tauri::command(rename_all = "camelCase")]
 pub async fn agy_account_quota(
     account_id: String,
-    state: tauri::State<'_, AgyAccountState>,
+    state: tauri::State<'_, crate::store::AppState>,
 ) -> Result<SubscriptionQuota, String> {
-    agy_quota(&state.0, Some(&account_id)).await
+    agy_quota(&state.agy_account, Some(&account_id)).await
 }
 
 /// Antigravity 官方登录的额度。指定账号就查它；不指定就查 agy 现在登着的号。都用 CC Switch

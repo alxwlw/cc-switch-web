@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { isWeb } from "@/lib/api/adapter";
 import type {
   CardButton,
   CardMenuItem,
@@ -163,7 +164,10 @@ export function ProviderCardActions({
               ? "provider.openTerminalIsolated"
               : "provider.openTerminal",
           )}
-          disabledReason={openTerminalDisabledReason}
+          // WEB-00: open_provider_terminal starts a terminal on the app host; there is none in web
+          disabledReason={
+            isWeb ? t("web.unavailable") : openTerminalDisabledReason
+          }
         >
           <Button
             variant="quiet"
@@ -216,10 +220,22 @@ export function ProviderCardActions({
               {t("provider.duplicate")}
             </DropdownMenuItem>
           )}
+          {/* WEB-04: stream check works in web: the check runs on the server */}
           {onTest && (
-            <DropdownMenuItem disabled={isTesting} onSelect={onTest}>
+            <DropdownMenuItem
+              disabled={isTesting}
+              onSelect={onTest}
+              className={cn(isWeb && "flex-col items-start gap-0.5")}
+            >
               {isTesting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {t("provider.connectivityCheck")}
+              {isWeb && (
+                <span className="text-caption text-fg-3">
+                  {t("provider.connectivityCheckServerNote", {
+                    defaultValue: "The check runs from the server",
+                  })}
+                </span>
+              )}
             </DropdownMenuItem>
           )}
           {onConfigureUsage && (

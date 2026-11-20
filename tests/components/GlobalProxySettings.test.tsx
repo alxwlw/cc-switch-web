@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setWeb } from "../helpers/web";
 import { GlobalProxySettings } from "@/components/settings/GlobalProxySettings";
 
 vi.mock("react-i18next", () => ({
@@ -34,6 +35,19 @@ describe("GlobalProxySettings", () => {
     mutateAsyncMock.mockReset();
     testMutateAsyncMock.mockReset();
     scanMutateAsyncMock.mockReset();
+  });
+
+  it("web: shows the server-side caption", () => {
+    setWeb(true);
+    render(<GlobalProxySettings />);
+    expect(
+      screen.getByTestId("global-proxy-server-side-note"),
+    ).toHaveTextContent("settings.globalProxy.serverSideNote");
+  });
+
+  it("desktop: no server-side caption", () => {
+    render(<GlobalProxySettings />);
+    expect(screen.queryByTestId("global-proxy-server-side-note")).toBeNull();
   });
 
   it("renders proxy URL input with saved value", async () => {

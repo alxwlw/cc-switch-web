@@ -40,6 +40,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { isWeb } from "@/lib/api/adapter";
 import { settingsApi } from "@/lib/api/settings";
 import { usageApi } from "@/lib/api/usage";
 import {
@@ -665,13 +666,15 @@ export function ModelsDevAutoSyncPanel() {
                   </span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-body"
-                  onSelect={() => void openLocalFileFolder()}
-                >
-                  <FolderOpen className="h-4 w-4" strokeWidth={1.5} />
-                  {t("usage.modelsDevAutoSync.openFolder")}
-                </DropdownMenuItem>
+                {!isWeb && (
+                  <DropdownMenuItem
+                    className="text-body"
+                    onSelect={() => void openLocalFileFolder()}
+                  >
+                    <FolderOpen className="h-4 w-4" strokeWidth={1.5} />
+                    {t("usage.modelsDevAutoSync.openFolder")}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   className="text-body"
                   disabled={isReloading}

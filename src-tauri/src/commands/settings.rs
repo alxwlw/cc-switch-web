@@ -22,7 +22,7 @@ struct CodexUnifyMigrationFinished {
     error: Option<String>,
 }
 
-fn merge_settings_for_save(
+pub(crate) fn merge_settings_for_save(
     mut incoming: crate::settings::AppSettings,
     existing: &crate::settings::AppSettings,
 ) -> crate::settings::AppSettings {
@@ -902,12 +902,7 @@ pub async fn set_log_config(
     state: tauri::State<'_, crate::AppState>,
     config: crate::proxy::types::LogConfig,
 ) -> Result<bool, String> {
-    state.db.set_log_config(&config)?;
-    log::set_max_level(config.to_level_filter());
-    log::info!(
-        "日志配置已更新: enabled={}, level={}",
-        config.enabled,
-        config.level
-    );
+    crate::services::ConfigService::set_log_config(&state.db, &config)
+        .map_err(|e| e.to_string())?;
     Ok(true)
 }

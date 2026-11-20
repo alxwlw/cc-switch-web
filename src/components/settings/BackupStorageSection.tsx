@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
-import { ChevronRight, FolderOpen, Trash2 } from "lucide-react";
+import { ChevronRight, Copy, FolderOpen, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,8 @@ import {
 import { HoverTip } from "@/components/ui/hover-tip";
 import { backupsApi, type BackupLocation } from "@/lib/api/settings";
 import { useBackupLocations } from "@/hooks/useBackupManager";
+import { isWeb } from "@/lib/api/adapter";
+import { copyText } from "@/lib/clipboard";
 import { extractErrorMessage } from "@/utils/errorUtils";
 
 export function formatBytes(bytes: number): string {
@@ -51,6 +53,16 @@ export function BackupStorageSection() {
       toast.error(
         extractErrorMessage(error) || t("settings.backupStorage.revealFailed"),
       );
+    }
+  };
+
+  // Web: no file manager on the server host — copy the server-side path instead.
+  const handleCopyPath = async (path: string) => {
+    try {
+      await copyText(path);
+      toast.success(t("workspace.pathCopied"));
+    } catch {
+      toast.error(t("workspace.pathCopyFailed"));
     }
   };
 
@@ -138,17 +150,31 @@ export function BackupStorageSection() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <HoverTip content={revealLabel}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => void handleReveal(location.id)}
-                      aria-label={revealLabel}
-                    >
-                      <FolderOpen className="h-3 w-3" />
-                    </Button>
-                  </HoverTip>
+                  {isWeb ? (
+                    <HoverTip content={t("workspace.copyPath")}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => void handleCopyPath(location.path)}
+                        aria-label={t("workspace.copyPath")}
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </HoverTip>
+                  ) : (
+                    <HoverTip content={revealLabel}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => void handleReveal(location.id)}
+                        aria-label={revealLabel}
+                      >
+                        <FolderOpen className="h-3 w-3" />
+                      </Button>
+                    </HoverTip>
+                  )}
                   {location.deletable && (
                     <HoverTip content={deleteLabel}>
                       <Button

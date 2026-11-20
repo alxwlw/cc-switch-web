@@ -495,6 +495,45 @@ pub async fn run_tool_lifecycle_action(
     uninstall_plan: Option<ToolUninstallPlan>,
 ) -> Result<(), String> {
     let requested = normalize_requested_tools(&tools);
+    let progress = ToolLifecycleProgress::from_app(app, &requested);
+    run_tool_lifecycle_action_with_progress(
+        progress,
+        tools,
+        action,
+        wsl_shell_by_tool,
+        uninstall_plan,
+    )
+    .await
+}
+
+/// Same as the desktop command but without an `AppHandle` (web route): progress events are
+/// dropped, the lifecycle lock, timeout and error codes are shared.
+pub async fn run_tool_lifecycle_action_headless(
+    tools: Vec<String>,
+    action: String,
+    wsl_shell_by_tool: Option<HashMap<String, WslShellPreferenceInput>>,
+    uninstall_plan: Option<ToolUninstallPlan>,
+) -> Result<(), String> {
+    let requested = normalize_requested_tools(&tools);
+    let progress = ToolLifecycleProgress::with_sink(&requested, Arc::new(|_| {}));
+    run_tool_lifecycle_action_with_progress(
+        progress,
+        tools,
+        action,
+        wsl_shell_by_tool,
+        uninstall_plan,
+    )
+    .await
+}
+
+async fn run_tool_lifecycle_action_with_progress(
+    progress: ToolLifecycleProgress,
+    tools: Vec<String>,
+    action: String,
+    wsl_shell_by_tool: Option<HashMap<String, WslShellPreferenceInput>>,
+    uninstall_plan: Option<ToolUninstallPlan>,
+) -> Result<(), String> {
+    let requested = normalize_requested_tools(&tools);
     if requested.is_empty() {
         return Err("No supported tools selected".to_string());
     }
@@ -504,7 +543,6 @@ pub async fn run_tool_lifecycle_action(
         if requested.len() != 1 || requested[0] != plan.tool {
             return Err("The uninstall plan does not match the selected tool.".into());
         }
-        let progress = ToolLifecycleProgress::from_app(app, &requested);
         let queued = progress.clone();
         return TOOL_LIFECYCLE
             .run_with_queue_notice(
@@ -536,7 +574,6 @@ pub async fn run_tool_lifecycle_action(
     };
 
     // 排队结束后再探测安装目标，与执行一起持锁，避免读到另一升级的中间状态。
-    let progress = ToolLifecycleProgress::from_app(app, &requested);
     let queued = progress.clone();
     TOOL_LIFECYCLE
         .run_with_queue_notice(
@@ -544,12 +581,57 @@ pub async fn run_tool_lifecycle_action(
             move || queued.queued(),
             move |tools| {
                 progress.running();
-                let command_line =
-                    build_tool_lifecycle_command(tools, action, wsl_shell_by_tool.as_ref())?;
+                let command_line = match tool_lifecycle_command_override() {
+                    Some(script) => script,
+                    None => {
+                        build_tool_lifecycle_command(tools, action, wsl_shell_by_tool.as_ref())?
+                    }
+                };
                 run_tool_lifecycle_silently(&command_line, label, &progress)
             },
         )
         .await
+}
+
+/// Process-global script override for the install/update branch; only the test hook sets it.
+static TOOL_LIFECYCLE_COMMAND_OVERRIDE: std::sync::Mutex<Option<String>> =
+    std::sync::Mutex::new(None);
+
+fn tool_lifecycle_command_override() -> Option<String> {
+    TOOL_LIFECYCLE_COMMAND_OVERRIDE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+}
+
+/// Test seam: while `Some`, install/update run this script instead of the generated
+/// installer command. Production never sets it and no HTTP route reaches it.
+#[cfg_attr(not(feature = "test-hooks"), doc(hidden))]
+pub fn tool_lifecycle_command_test_hook(script: Option<String>) {
+    *TOOL_LIFECYCLE_COMMAND_OVERRIDE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = script;
+}
+
+/// 单次安装/更新/卸载脚本的总时限。超时后杀掉整个进程树并返回稳定错误码
+/// `TOOL_ACTION_TIMEOUT`，避免卡住的安装器永久占用生命周期锁。
+const TOOL_LIFECYCLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
+/// 把 `run_with_progress_timeout` 的结果转成 `Result`：超时映射为稳定错误码
+/// `TOOL_ACTION_TIMEOUT: <label> exceeded <N> s`（不带输出尾部：超时后不 join 管道读线程）。
+fn finish_lifecycle_run(
+    result: std::io::Result<std::process::Output>,
+    label: &str,
+    timeout: std::time::Duration,
+) -> Result<(), String> {
+    match result {
+        Ok(output) => finish_lifecycle_output(&output),
+        Err(error) if error.kind() == std::io::ErrorKind::TimedOut => Err(format!(
+            "TOOL_ACTION_TIMEOUT: {label} exceeded {} s",
+            timeout.as_secs()
+        )),
+        Err(error) => Err(format!("启动安装进程失败: {error}")),
+    }
 }
 
 /// 静默执行工具安装/更新脚本：直接捕获子进程输出并阻塞到命令真正结束，
@@ -557,11 +639,20 @@ pub async fn run_tool_lifecycle_action(
 /// 后者仍保留给 provider 切换等需要交互式终端的场景）。
 /// 失败时回传 stderr/stdout 末尾若干行，供前端 toast 提示。
 /// 不开终端窗口，但每行输出会经 `progress` 推给界面显示。
-#[cfg(not(target_os = "windows"))]
 fn run_tool_lifecycle_silently(
     command_line: &str,
-    _label: &str,
+    label: &str,
     progress: &ToolLifecycleProgress,
+) -> Result<(), String> {
+    run_tool_lifecycle_silently_with_timeout(command_line, label, progress, TOOL_LIFECYCLE_TIMEOUT)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn run_tool_lifecycle_silently_with_timeout(
+    command_line: &str,
+    label: &str,
+    progress: &ToolLifecycleProgress,
+    timeout: std::time::Duration,
 ) -> Result<(), String> {
     use std::process::Command;
     // command_line 是 bash 风格脚本（含 `set -e` 与多行命令）；强制用 bash 执行，
@@ -575,18 +666,23 @@ fn run_tool_lifecycle_silently(
         let inherited = std::env::var("PATH").unwrap_or_default();
         cmd.env("PATH", merge_path_segments(&login_path, &inherited));
     }
-    let output = tool_lifecycle_progress::run_with_progress(cmd, progress)
-        .map_err(|e| format!("启动安装进程失败: {e}"))?;
-    finish_lifecycle_output(&output)
+    // stdin 由 `run_with_progress_timeout` 设为 /dev/null；放进独立进程组，超时时整组击杀。
+    isolate_child_process_group(&mut cmd);
+    finish_lifecycle_run(
+        tool_lifecycle_progress::run_with_progress_timeout(cmd, progress, Some(timeout)),
+        label,
+        timeout,
+    )
 }
 
 /// Windows 静默执行：command_line 是 .bat 内容（chcp 65001 + @echo off + call/wsl 行，CRLF 分隔），
 /// 写临时 .bat 后用 `cmd /C` 执行，`CREATE_NO_WINDOW` 抑制 console 窗口。
 #[cfg(target_os = "windows")]
-fn run_tool_lifecycle_silently(
+fn run_tool_lifecycle_silently_with_timeout(
     command_line: &str,
     label: &str,
     progress: &ToolLifecycleProgress,
+    timeout: std::time::Duration,
 ) -> Result<(), String> {
     // 每次调用使用独立目录，避免同进程并发升级时覆盖或删除另一工具的脚本。
     let script_dir = tempfile::Builder::new()
@@ -596,12 +692,16 @@ fn run_tool_lifecycle_silently(
     let bat_file = script_dir.path().join(format!("{label}.bat"));
     std::fs::write(&bat_file, command_line).map_err(|e| format!("写入批处理文件失败: {e}"))?;
 
-    let output = tool_lifecycle_progress::run_with_progress(
-        windows_lifecycle_command(&bat_file, &effective_path_string()),
-        progress,
-    );
-
-    finish_lifecycle_output(&output.map_err(|e| format!("启动安装进程失败: {e}"))?)
+    // script_dir 活到等待结束；超时后 taskkill /T 杀整树再清理。
+    finish_lifecycle_run(
+        tool_lifecycle_progress::run_with_progress_timeout(
+            windows_lifecycle_command(&bat_file, &effective_path_string()),
+            progress,
+            Some(timeout),
+        ),
+        label,
+        timeout,
+    )
 }
 
 #[cfg(target_os = "windows")]
@@ -1298,6 +1398,105 @@ mod tests {
             .unwrap_err()
             .contains("tool lifecycle task join error"));
         coordinator.run(vec!["claude"], |_| Ok(())).await.unwrap();
+    }
+
+    #[cfg(unix)]
+    fn silent_progress() -> ToolLifecycleProgress {
+        ToolLifecycleProgress::with_sink(&[], Arc::new(|_| {}))
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lifecycle_timeout_returns_stable_code_quickly() {
+        let started = std::time::Instant::now();
+        let err = run_tool_lifecycle_silently_with_timeout(
+            "sleep 30",
+            "tool_install",
+            &silent_progress(),
+            std::time::Duration::from_secs(1),
+        )
+        .unwrap_err();
+        assert_eq!(err, "TOOL_ACTION_TIMEOUT: tool_install exceeded 1 s");
+        // The call includes the login-shell PATH probe, which can take seconds on a loaded CI
+        // runner. The point is that it returned long before `sleep 30` finished.
+        assert!(started.elapsed() < std::time::Duration::from_secs(15));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lifecycle_timeout_kills_the_whole_process_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let pid_file = dir.path().join("pid");
+        let script = format!("sleep 30 &\necho $! > '{}'\nwait", pid_file.display());
+        let err = run_tool_lifecycle_silently_with_timeout(
+            &script,
+            "tool_update",
+            &silent_progress(),
+            std::time::Duration::from_secs(1),
+        )
+        .unwrap_err();
+        assert!(err.starts_with("TOOL_ACTION_TIMEOUT"), "{err}");
+        let pid: libc::pid_t = std::fs::read_to_string(&pid_file)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        // 进程组被 SIGKILL 后，孙进程会被 init 回收；给内核一点时间。
+        let mut gone = false;
+        for _ in 0..50 {
+            // SAFETY: signal 0 only probes for existence.
+            if unsafe { libc::kill(pid, 0) } != 0 {
+                gone = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        assert!(gone, "background child {pid} survived the timeout");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lifecycle_stdin_is_dev_null() {
+        // The harness' own stdin may already be /dev/null, which would hide an
+        // `inherit()` regression. Point fd 0 at a pipe for the duration of the
+        // call (restored afterwards), then have the script check that its fd 0
+        // is the same inode as /dev/null (bash `-ef`: Linux and macOS).
+        // SAFETY: plain fd juggling on fd 0, which the test harness never reads.
+        let (saved, read_end) = unsafe {
+            let mut fds = [0 as libc::c_int; 2];
+            assert_eq!(libc::pipe(fds.as_mut_ptr()), 0);
+            let saved = libc::dup(0);
+            assert!(saved >= 0);
+            assert!(libc::dup2(fds[0], 0) >= 0);
+            libc::close(fds[1]);
+            (saved, fds[0])
+        };
+        let result = run_tool_lifecycle_silently_with_timeout(
+            "[[ /dev/stdin -ef /dev/null ]] || { echo stdin-not-null >&2; exit 7; }",
+            "tool_install",
+            &silent_progress(),
+            std::time::Duration::from_secs(10),
+        );
+        // SAFETY: restores the descriptors saved above.
+        unsafe {
+            libc::dup2(saved, 0);
+            libc::close(saved);
+            libc::close(read_end);
+        }
+        result.unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lifecycle_failure_still_reports_output_tail() {
+        let err = run_tool_lifecycle_silently_with_timeout(
+            "echo err-tail >&2; exit 3",
+            "tool_install",
+            &silent_progress(),
+            std::time::Duration::from_secs(10),
+        )
+        .unwrap_err();
+        assert!(err.contains("err-tail"), "{err}");
     }
 
     #[cfg(target_os = "windows")]

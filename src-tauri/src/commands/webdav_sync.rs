@@ -75,12 +75,22 @@ pub async fn webdav_test_connection(
 
 #[tauri::command]
 pub async fn webdav_sync_upload(state: State<'_, AppState>) -> Result<Value, String> {
-    sync_support::sync_upload::<WebDavBackend>(&state).await
+    webdav_sync_upload_impl(state.inner()).await
+}
+
+/// Body of `webdav_sync_upload`, shared with the web API handler (WEB-11).
+pub(crate) async fn webdav_sync_upload_impl(state: &AppState) -> Result<Value, String> {
+    sync_support::sync_upload::<WebDavBackend>(state).await
 }
 
 #[tauri::command]
 pub async fn webdav_sync_download(state: State<'_, AppState>) -> Result<Value, String> {
-    sync_support::sync_download::<WebDavBackend>(&state).await
+    webdav_sync_download_impl(state.inner()).await
+}
+
+/// Body of `webdav_sync_download`, shared with the web API handler (WEB-11).
+pub(crate) async fn webdav_sync_download_impl(state: &AppState) -> Result<Value, String> {
+    sync_support::sync_download::<WebDavBackend>(state).await
 }
 
 #[tauri::command]

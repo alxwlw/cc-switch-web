@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import "@testing-library/jest-dom";
 import { GeneralSection } from "@/components/settings/sections/GeneralSection";
 import type { SettingsFormState } from "@/hooks/useSettings";
+import { setWeb } from "../helpers/web";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -75,5 +76,20 @@ describe("GeneralSection tray style", () => {
     expect(
       screen.queryByRole("group", { name: "settings.general.trayStyle" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("GeneralSection profile switcher toggle", () => {
+  it.each([
+    ["web", true],
+    ["desktop", false],
+  ])("is enabled in %s (WEB-06)", (_label, web) => {
+    setWeb(web);
+    renderSection();
+    expect(
+      screen.getByRole("switch", {
+        name: "settings.appVisibility.showProfileSwitcher",
+      }),
+    ).toBeEnabled();
   });
 });

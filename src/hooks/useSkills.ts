@@ -128,7 +128,10 @@ const discoverableQuery = {
 };
 
 export function useDiscoverableSkills() {
-  return useQuery({ ...discoverableQuery, select: selectDiscoveredSkills });
+  return useQuery({
+    ...discoverableQuery,
+    select: selectDiscoveredSkills,
+  });
 }
 
 /**
@@ -195,7 +198,10 @@ const selectDiscoveryFailures = (result: SkillDiscoveryResult) =>
  * 发现时没读到的仓库（和 useDiscoverableSkills 共用一次请求）
  */
 export function useDiscoverableSkillsFailures() {
-  return useQuery({ ...discoverableQuery, select: selectDiscoveryFailures });
+  return useQuery({
+    ...discoverableQuery,
+    select: selectDiscoveryFailures,
+  });
 }
 
 /**
@@ -519,13 +525,19 @@ export function useRemoveSkillRepo() {
 export function useInstallSkillsFromZip() {
   const queryClient = useQueryClient();
   return useMutation({
+    // desktop passes a host path, web passes the browser-picked File
     mutationFn: ({
       filePath,
+      file,
       currentApp,
     }: {
-      filePath: string;
+      filePath?: string;
+      file?: File;
       currentApp: AppId;
-    }) => skillsApi.installFromZip(filePath, currentApp),
+    }) =>
+      file
+        ? skillsApi.installFromZipUpload(file, currentApp)
+        : skillsApi.installFromZip(filePath ?? "", currentApp),
     onSuccess: (result) => {
       queryClient.setQueryData<InstalledSkill[]>(
         ["skills", "installed"],

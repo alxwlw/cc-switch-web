@@ -9,6 +9,7 @@ const METRICS = ["tokens", "requests", "cost"] as const;
 
 describe("remembered usage choices", () => {
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
     localStorage.removeItem(KEY);
   });
@@ -25,11 +26,15 @@ describe("remembered usage choices", () => {
   });
 
   it("keeps working when storage is unavailable", () => {
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-      throw new Error("denied");
-    });
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new Error("denied");
+    // stubGlobal, not a Storage.prototype spy: where Node ships its own localStorage the
+    // test setup replaces it with a plain object (tests/setupGlobals.ts) that has no Storage prototype
+    vi.stubGlobal("localStorage", {
+      getItem: () => {
+        throw new Error("denied");
+      },
+      setItem: () => {
+        throw new Error("denied");
+      },
     });
     expect(() => writeRememberedChoice(KEY, "cost")).not.toThrow();
     expect(readRememberedChoice(KEY, METRICS, "tokens")).toBe("tokens");

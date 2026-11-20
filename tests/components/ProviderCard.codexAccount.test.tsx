@@ -1,13 +1,14 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ProviderCard } from "@/components/providers/ProviderCard";
 import { http, HttpResponse } from "msw";
-import type { AppId, ManagedAuthStatus } from "@/lib/api";
+import { authApi, type AppId, type ManagedAuthStatus } from "@/lib/api";
 import { server } from "../msw/server";
 import type { Provider } from "@/types";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 const codexQuotaFooterProps = vi.hoisted(() => vi.fn());
 
@@ -136,6 +137,25 @@ function renderCard(
 }
 
 describe("ProviderCard Codex Official account identity", () => {
+  it("web: queries auth_get_status for the linked account (WEB-02)", async () => {
+    setWeb(true);
+    const getStatus = vi
+      .spyOn(authApi, "authGetStatus")
+      .mockResolvedValue(authStatus("me@example.com"));
+    renderCard(managedProvider("OpenAI Official"), { isCurrent: true });
+    await waitFor(() => expect(getStatus).toHaveBeenCalledWith("codex_oauth"));
+    getStatus.mockRestore();
+  });
+
+  it("desktop: queries auth_get_status for the linked account", async () => {
+    const getStatus = vi
+      .spyOn(authApi, "authGetStatus")
+      .mockResolvedValue(authStatus("me@example.com"));
+    renderCard(managedProvider("OpenAI Official"), { isCurrent: true });
+    await waitFor(() => expect(getStatus).toHaveBeenCalledWith("codex_oauth"));
+    getStatus.mockRestore();
+  });
+
   const proxyProvider = (): Provider => ({
     ...managedProvider("Codex"),
     category: "third_party",

@@ -19,7 +19,7 @@ const ALLOWED_FILES: &[&str] = &[
     "BOOT.md",
 ];
 
-fn validate_filename(filename: &str) -> Result<(), String> {
+pub(crate) fn validate_filename(filename: &str) -> Result<(), String> {
     if !ALLOWED_FILES.contains(&filename) {
         return Err(format!(
             "Invalid workspace filename: {filename}. Allowed: {}",
@@ -34,7 +34,7 @@ fn validate_filename(filename: &str) -> Result<(), String> {
 static DAILY_MEMORY_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2}\.md$").unwrap());
 
-fn validate_daily_memory_filename(filename: &str) -> Result<(), String> {
+pub(crate) fn validate_daily_memory_filename(filename: &str) -> Result<(), String> {
     if !DAILY_MEMORY_RE.is_match(filename) {
         return Err(format!(
             "Invalid daily memory filename: {filename}. Expected: YYYY-MM-DD.md"
@@ -335,8 +335,28 @@ pub async fn write_workspace_file(filename: String, content: String) -> Result<(
 
     let path = workspace_dir.join(&filename);
 
+    // `write_text_file` writes through symlinks (upstream `atomic_write`). A link inside the
+    // workspace must not redirect a write outside it, so replace the link itself instead.
+    if std::fs::symlink_metadata(&path)
+        .map(|meta| meta.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        std::fs::remove_file(&path)
+            .map_err(|e| format!("Failed to replace symlink {filename}: {e}"))?;
+    }
+
     write_text_file(&path, &content)
         .map_err(|e| format!("Failed to write workspace file {filename}: {e}"))
+}
+
+/// Directory for a `subdir` key: "memory" is `workspace/memory/`, anything
+/// else is `workspace/`. Shared by `open_workspace_directory` and the web
+/// `workspace-paths` route.
+pub(crate) fn workspace_subdir(subdir: &str) -> std::path::PathBuf {
+    match subdir {
+        "memory" => get_openclaw_dir().join("workspace").join("memory"),
+        _ => get_openclaw_dir().join("workspace"),
+    }
 }
 
 /// Open the workspace or memory directory in the system file manager.
@@ -344,10 +364,7 @@ pub async fn write_workspace_file(filename: String, content: String) -> Result<(
 ///           "memory" opens `~/.openclaw/workspace/memory/`.
 #[tauri::command]
 pub async fn open_workspace_directory(handle: AppHandle, subdir: String) -> Result<bool, String> {
-    let dir = match subdir.as_str() {
-        "memory" => get_openclaw_dir().join("workspace").join("memory"),
-        _ => get_openclaw_dir().join("workspace"),
-    };
+    let dir = workspace_subdir(&subdir);
 
     if !dir.exists() {
         std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create directory: {e}"))?;

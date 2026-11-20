@@ -29,18 +29,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { settingsApi, type AppId } from "@/lib/api";
 import { useSettingsQuery } from "@/lib/query";
-import type { SettingsSection } from "@/lib/navigation";
+import { resolveSettingsSection, type SettingsSection } from "@/lib/navigation";
 import { AppPageHeader } from "@/components/shell/AppPageHeader";
 import { DirectoryInput } from "@/components/settings/DirectorySettings";
+import { AppConfigDirNotes } from "@/components/settings/AppConfigDirNotes";
+import { DeepLinkPasteEntry } from "@/components/deeplink/DeepLinkPasteEntry";
 import { ImportExportSection } from "@/components/settings/ImportExportSection";
 import { BackupListSection } from "@/components/settings/BackupListSection";
 import { WebdavSyncSection } from "@/components/settings/WebdavSyncSection";
 import { AboutSection } from "@/components/settings/AboutSection";
-import { RoutingSection } from "@/components/settings/sections/RoutingSection";
 import { PrivacyFilterConfigPanel } from "@/components/settings/PrivacyFilterConfigPanel";
 import { GlobalProxySettings } from "@/components/settings/GlobalProxySettings";
 import { IpDiagnostics } from "@/components/settings/IpDiagnostics";
 import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
+import { ServerLogViewer } from "@/components/settings/ServerLogViewer";
+import { RoutingSection } from "@/components/settings/sections/RoutingSection";
+import { isWeb } from "@/lib/api/adapter";
 import { GeneralSection } from "@/components/settings/sections/GeneralSection";
 import { AppConfigSection } from "@/components/settings/sections/AppConfigSection";
 import {
@@ -50,6 +54,7 @@ import {
   SettingsRow,
 } from "@/components/settings/SettingsLayout";
 import { useSettings } from "@/hooks/useSettings";
+import { useServerRestart } from "@/hooks/useServerRestart";
 import { useImportExport } from "@/hooks/useImportExport";
 import type { SettingsFormState } from "@/hooks/useSettings";
 import { isTextEditableTarget } from "@/utils/domUtils";
@@ -82,13 +87,15 @@ interface SettingsPageProps {
  * 开关类即时保存；路径类改完点本节的「保存」。
  */
 export function SettingsPage({
-  section,
+  section: requestedSection,
   appConfigScrollTarget,
   onImportSuccess,
   onOpenApps,
   onOpenApp,
 }: SettingsPageProps) {
   const { t } = useTranslation();
+  // WEB-00: a section hidden in web (from any entry point) is shown as general; none are hidden now (network was opened by WEB-23), the fallback stays for future gates
+  const section = resolveSettingsSection(requestedSection);
   const {
     settings,
     isLoading,
@@ -96,6 +103,7 @@ export function SettingsPage({
     isPortable,
     appConfigDir,
     initialAppConfigDir,
+    appConfigDirStatus,
     resolvedDirs,
     updateSettings,
     updateDirectory,
@@ -125,6 +133,9 @@ export function SettingsPage({
   } = useImportExport({ onImportSuccess });
 
   const [showRestartPrompt, setShowRestartPrompt] = useState(false);
+  const { restart: restartServer, restarting: serverRestarting } =
+    useServerRestart();
+  const [logViewerOpen, setLogViewerOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -294,6 +305,16 @@ export function SettingsPage({
   }, [afterSave]);
 
   const handleRestartNow = useCallback(async () => {
+    if (isWeb) {
+      // WEB-26: the server restarts under its supervisor, whatever build serves the console, so
+      // this must not go through the DEV branch below (a dev console would never restart).
+      // The dialog stays up, with the button blocked, until the flow is over.
+      // A click while a restart is under way changes nothing: the dialog stays up for the first.
+      if (!(await restartServer())) return;
+      setShowRestartPrompt(false);
+      afterSave();
+      return;
+    }
     setShowRestartPrompt(false);
     if (import.meta.env.DEV) {
       toast.success(t("settings.devModeRestartHint"), { closeButton: true });
@@ -309,7 +330,7 @@ export function SettingsPage({
     } finally {
       afterSave();
     }
-  }, [afterSave, t]);
+  }, [afterSave, restartServer, t]);
 
   const handleRevealLogFile = useCallback(async () => {
     try {
@@ -362,9 +383,12 @@ export function SettingsPage({
   const isBusy = useMemo(() => isLoading && !settings, [isLoading, settings]);
   const SectionIcon = SECTION_ICON[section];
 
+  // Web: a directory fixed by CC_SWITCH_CONFIG_DIR is shown, not edited (every PUT is a 409).
+  const appConfigLocked = isWeb && appConfigDirStatus?.envLocked === true;
   const appConfigDirty =
+    !appConfigLocked &&
     (appConfigDir?.trim() || undefined) !==
-    (initialAppConfigDir?.trim() || undefined);
+      (initialAppConfigDir?.trim() || undefined);
 
   const renderSection = () => {
     if (!settings) return null;
@@ -413,6 +437,7 @@ export function SettingsPage({
       case "data":
         return (
           <>
+            {/* Web: the server's data directory (WEB-26): typed path, applied after a restart; a directory fixed by the unit's env is read-only. */}
             <SettingsBlock
               title={t("settings.data.location")}
               actions={
@@ -434,10 +459,14 @@ export function SettingsPage({
               <SettingsCard>
                 <SettingsRow
                   label={t("settings.appConfigDir")}
-                  help={{
-                    title: t("settings.appConfigDir"),
-                    body: t("settings.appConfigDirDescription"),
-                  }}
+                  help={
+                    isWeb
+                      ? undefined
+                      : {
+                          title: t("settings.appConfigDir"),
+                          body: t("settings.appConfigDirDescription"),
+                        }
+                  }
                 >
                   <DirectoryInput
                     label=""
@@ -447,7 +476,13 @@ export function SettingsPage({
                     onChange={updateAppConfigDir}
                     onBrowse={browseAppConfigDir}
                     onReset={resetAppConfigDir}
+                    readOnly={appConfigLocked}
                   />
+                  {isWeb && (
+                    <div className="mt-2">
+                      <AppConfigDirNotes status={appConfigDirStatus ?? null} />
+                    </div>
+                  )}
                 </SettingsRow>
               </SettingsCard>
             </SettingsBlock>
@@ -470,6 +505,11 @@ export function SettingsPage({
                   onExport={exportConfig}
                   onClear={clearSelection}
                 />
+                {isWeb && (
+                  <div className="mt-4">
+                    <DeepLinkPasteEntry />
+                  </div>
+                )}
               </div>
             </SettingsBlock>
             <SettingsBlock
@@ -522,7 +562,9 @@ export function SettingsPage({
                 <Button
                   variant="neutral"
                   size="compact"
-                  onClick={() => void handleRevealLogFile()}
+                  onClick={() =>
+                    isWeb ? setLogViewerOpen(true) : void handleRevealLogFile()
+                  }
                 >
                   <FolderOpen className="h-3.5 w-3.5" />
                   {t("settings.advanced.logConfig.openLog")}
@@ -532,6 +574,12 @@ export function SettingsPage({
               <div className="rounded-panel border border-border bg-surface p-5">
                 <LogConfigPanel />
               </div>
+              {isWeb && (
+                <ServerLogViewer
+                  open={logViewerOpen}
+                  onClose={() => setLogViewerOpen(false)}
+                />
+              )}
             </SettingsBlock>
           </>
         );
@@ -568,7 +616,9 @@ export function SettingsPage({
 
       <Dialog
         open={showRestartPrompt}
-        onOpenChange={(open) => !open && handleRestartLater()}
+        onOpenChange={(open) =>
+          !open && !serverRestarting && handleRestartLater()
+        }
       >
         <DialogContent zIndex="alert" className="max-w-md">
           <DialogHeader>
@@ -576,13 +626,16 @@ export function SettingsPage({
           </DialogHeader>
           <div className="px-6">
             <p className="text-body text-fg-2">
-              {t("settings.restartRequiredMessage")}
+              {isWeb
+                ? t("web.dataDir.restartRequiredMessage")
+                : t("settings.restartRequiredMessage")}
             </p>
           </div>
           <DialogFooter>
             <Button
               variant="neutral"
               size="regular"
+              disabled={serverRestarting}
               onClick={handleRestartLater}
             >
               {t("settings.restartLater")}
@@ -590,9 +643,17 @@ export function SettingsPage({
             <Button
               variant="solid"
               size="regular"
+              disabled={serverRestarting}
               onClick={() => void handleRestartNow()}
             >
-              {t("settings.restartNow")}
+              {serverRestarting ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {t("web.dataDir.restarting")}
+                </>
+              ) : (
+                t("settings.restartNow")
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,9 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
+import { isWeb } from "@/lib/api/adapter";
 import type {
   HermesMemoryKind,
   HermesMemoryLimits,
   HermesModelConfig,
 } from "@/types";
+
+/** Web: the server's Hermes Web UI does not answer on its port (WEB-16). */
+export class HermesWebUiUnreachableError extends Error {
+  readonly port: number;
+  constructor(port: number) {
+    super("hermes_web_unreachable");
+    this.name = "HermesWebUiUnreachableError";
+    this.port = port;
+  }
+}
 
 /**
  * Hermes Agent configuration API (CC Switch side).
@@ -25,6 +36,18 @@ export const hermesApi = {
    * Optional `path` lets callers deep-link to specific pages like `/config`.
    */
   async openWebUI(path?: string): Promise<void> {
+    if (isWeb) {
+      // The server probes Hermes on its own loopback and returns the URL the
+      // browser reaches it at (request host + Hermes port).
+      const probe = await invoke<{
+        reachable: boolean;
+        port: number;
+        url: string;
+      }>("open_hermes_web_ui", { path: path ?? null });
+      if (!probe.reachable) throw new HermesWebUiUnreachableError(probe.port);
+      await invoke("open_external", { url: probe.url });
+      return;
+    }
     await invoke("open_hermes_web_ui", { path: path ?? null });
   },
 

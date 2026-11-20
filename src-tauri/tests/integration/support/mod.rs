@@ -69,6 +69,7 @@ pub fn reset_test_fs() {
     let _ = update_settings(AppSettings::default());
 }
 
+#[allow(dead_code)]
 pub fn enable_codex_official_auth_preservation() {
     update_settings(AppSettings {
         preserve_codex_official_auth_on_switch: true,
@@ -78,6 +79,7 @@ pub fn enable_codex_official_auth_preservation() {
 }
 
 /// 全局互斥锁，避免多测试并发写入相同的 HOME 目录。
+#[allow(dead_code)]
 pub fn test_mutex() -> &'static Mutex<()> {
     static MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
     MUTEX.get_or_init(|| Mutex::new(()))
@@ -90,10 +92,92 @@ pub fn create_test_state() -> Result<AppState, Box<dyn std::error::Error>> {
 }
 
 /// 创建测试用的 AppState，并从 MultiAppConfig 迁移数据
+#[allow(dead_code)]
 pub fn create_test_state_with_config(
     config: &MultiAppConfig,
 ) -> Result<AppState, Box<dyn std::error::Error>> {
     let db = Arc::new(Database::init()?);
     db.migrate_from_json(config)?;
     Ok(AppState::new(db))
+}
+
+/// axum router over a fresh test state (web_api harness; reused by web_api_* tests).
+/// Order matters: hold `test_mutex()`, call `reset_test_fs()` and `ensure_test_home()`,
+/// prepare live files, then build the router — the DB is opened from `HOME` at this call.
+#[allow(dead_code)]
+pub fn web_router() -> axum::Router {
+    cc_switch_lib::web_api::router(Arc::new(create_test_state().expect("create test state")))
+}
+
+/// Like [`web_router`], but over a state the test keeps (to reach `state.db`).
+#[allow(dead_code)]
+pub fn web_router_with(state: Arc<AppState>) -> axum::Router {
+    cc_switch_lib::web_api::router(state)
+}
+
+/// One request through `router` (oneshot); returns status and the parsed JSON body.
+#[allow(dead_code)]
+pub async fn web_call(
+    router: &axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<serde_json::Value>,
+) -> (axum::http::StatusCode, serde_json::Value) {
+    use axum::body::Body;
+    use axum::http::{header, Request};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let mut req = Request::builder().method(method).uri(uri);
+    let body = match body {
+        Some(v) => {
+            req = req.header(header::CONTENT_TYPE, "application/json");
+            Body::from(v.to_string())
+        }
+        None => Body::empty(),
+    };
+    let resp = router
+        .clone()
+        .oneshot(req.body(body).unwrap())
+        .await
+        .expect("router is infallible");
+    let status = resp.status();
+    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    (status, serde_json::from_slice(&bytes).expect("json body"))
+}
+
+/// Like [`web_call`], but returns the raw response (status, headers, body bytes) for
+/// non-JSON routes (NDJSON stream, image bytes). `web_call` is unchanged.
+#[allow(dead_code)]
+pub async fn web_call_raw(
+    router: &axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<serde_json::Value>,
+) -> (
+    axum::http::StatusCode,
+    axum::http::HeaderMap,
+    axum::body::Bytes,
+) {
+    use axum::body::Body;
+    use axum::http::{header, Request};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    let mut req = Request::builder().method(method).uri(uri);
+    let body = match body {
+        Some(v) => {
+            req = req.header(header::CONTENT_TYPE, "application/json");
+            Body::from(v.to_string())
+        }
+        None => Body::empty(),
+    };
+    let resp = router
+        .clone()
+        .oneshot(req.body(body).unwrap())
+        .await
+        .expect("router is infallible");
+    let (parts, body) = resp.into_parts();
+    let bytes = body.collect().await.unwrap().to_bytes();
+    (parts.status, parts.headers, bytes)
 }

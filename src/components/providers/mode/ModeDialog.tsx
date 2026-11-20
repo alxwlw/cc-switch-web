@@ -21,6 +21,7 @@ import {
 import { APP_DISPLAY_NAME } from "@/components/shell/AppGlyph";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { logFrontendInfo } from "@/lib/frontendLogger";
+import { isWeb } from "@/lib/api/adapter";
 import { isOfficialAccount } from "@/utils/providerCapabilities";
 import {
   StackSubagentFields,
@@ -221,6 +222,11 @@ function EnterBody({
                 ? [t("mode.dialog.stackNoteRestartCodex", { app: appName })]
                 : []),
             ];
+  // Claude Desktop reaches the server proxy at the connection address (client host): from another machine
+  // the server's 127.0.0.1 is unreachable, so we hint where to set it.
+  if (isWeb && app === "claude-desktop") {
+    notes.push(t("web.desktopRouteHost"));
+  }
   if (active === "stack" && target === "route") {
     notes.push(
       t(

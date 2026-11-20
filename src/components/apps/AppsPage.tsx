@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { settingsApi, type AppId } from "@/lib/api";
 import { providersApi } from "@/lib/api/providers";
+import { isWeb } from "@/lib/api/adapter";
 import type { ToolInstallationReport } from "@/lib/api/settings";
 import type { VisibleApps } from "@/types";
 import { DEFAULT_VISIBLE_APPS, orderAppIds } from "@/config/appConfig";
@@ -186,7 +187,11 @@ export function AppsPage() {
   const tools = useToolManagement();
   const { settings, updateSettings, autoSaveSettings } = useSettings();
   const tableRef = useRef<HTMLDivElement>(null);
-  const { data: desktopStatus, isPending: isDesktopStatusPending } = useQuery({
+  const {
+    data: desktopStatus,
+    isPending: isDesktopStatusPending,
+    isError: isDesktopStatusError,
+  } = useQuery({
     queryKey: ["claude-desktop-status"],
     queryFn: () => providersApi.getClaudeDesktopStatus(),
     staleTime: 30_000,
@@ -202,7 +207,13 @@ export function AppsPage() {
   // 首次探测还没出结果时不分组，免得各行探完一个跳一个；之后重新检查时沿用上次结果，位置不动。
   const rowInstalled = (row: Row): boolean | null => {
     if (row.kind === "desktop") {
-      return isDesktopStatusPending ? null : Boolean(desktopStatus?.installed);
+      // No response yet: Desktop is not declared "not installed", the list is flat.
+      // In web a failed request without data is also "unknown"; in desktop it still
+      // gives "not installed". A failed re-read does not erase data: the groups stay.
+      return desktopStatus === undefined &&
+        (isDesktopStatusPending || (isWeb && isDesktopStatusError))
+        ? null
+        : Boolean(desktopStatus?.installed);
     }
     // WorkBuddy 同样没有命令可探，按配置目录（~/.workbuddy）在不在判断
     if (row.kind === "workbuddy") {
@@ -379,13 +390,31 @@ export function AppsPage() {
         name={
           <span className="truncate">{APP_DISPLAY_NAME["claude-desktop"]}</span>
         }
+        meta={
+          isWeb ? (
+            // Claude Desktop files are edited on the server, not on the user's machine
+            <span className="min-w-0" data-testid="apps-web-desktop-note">
+              {t("appsPage.desktopServerNote")}
+              {desktopStatus?.installed === false && (
+                <>
+                  {" · "}
+                  <span data-testid="apps-web-desktop-not-found">
+                    {t("appsPage.desktopNotFoundOnServer")}
+                  </span>
+                </>
+              )}
+            </span>
+          ) : undefined
+        }
         version={
           <span className="inline-flex items-center gap-1 text-caption text-fg-2">
-            {desktopStatus?.supported === false
-              ? t("appsPage.desktopUnsupported")
-              : desktopStatus?.configured
-                ? t("appsPage.desktopConnected")
-                : t("appsPage.desktopNotConnected")}
+            {isWeb && !desktopStatus
+              ? null
+              : desktopStatus?.supported === false
+                ? t("appsPage.desktopUnsupported")
+                : desktopStatus?.configured
+                  ? t("appsPage.desktopConnected")
+                  : t("appsPage.desktopNotConnected")}
             <HelpTip title={APP_DISPLAY_NAME["claude-desktop"]} align="end">
               {t("appsPage.desktopHelp")}
             </HelpTip>
@@ -519,6 +548,16 @@ export function AppsPage() {
         className="min-h-0 flex-1 overflow-y-auto scroll-stable"
       >
         <div ref={tableRef} className="px-6 pb-10 pt-4">
+          {isWeb && (
+            <p
+              className="mb-3 text-caption text-fg-2"
+              data-testid="apps-web-server-note"
+            >
+              {t("appsPage.webServerNote")}
+              {(tools.batchAction || tools.busyTools.size > 0) &&
+                ` ${t("appsPage.webLifecycleSlow")}`}
+            </p>
+          )}
           <div
             className={cn(
               APP_ROW_GRID,

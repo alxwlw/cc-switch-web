@@ -7,10 +7,11 @@ import React, {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
-import { Calendar, Trash2, Plus, Search, X, FolderOpen } from "lucide-react";
+import { Calendar, Trash2, Plus, Search, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { HoverTip } from "@/components/ui/hover-tip";
+import WorkspaceDirLink from "./WorkspaceDirLink";
 import { Input } from "@/components/ui/input";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -357,15 +358,11 @@ const DailyMemoryPanel: React.FC<DailyMemoryPanelProps> = ({
         <div className="space-y-4">
           {/* Header with path, search, and create button */}
           <div className="flex items-center justify-between gap-2">
-            <HoverTip content={t("workspace.openDirectory")}>
-              <p
-                className="text-sm text-fg-2 shrink-0 cursor-pointer hover:text-fg-1 transition-colors inline-flex items-center gap-1"
-                onClick={() => workspaceApi.openDirectory("memory")}
-              >
-                ~/.openclaw/workspace/memory/
-                <FolderOpen className="w-3.5 h-3.5" />
-              </p>
-            </HoverTip>
+            <WorkspaceDirLink
+              subdir="memory"
+              label="~/.openclaw/workspace/memory/"
+              className="shrink-0"
+            />
             <div className="flex items-center gap-1.5">
               <HoverTip content={t("workspace.dailyMemory.searchScopeHint")}>
                 <Button

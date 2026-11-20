@@ -6,9 +6,9 @@ import { XaiOAuthSection } from "@/components/providers/forms/XaiOAuthSection";
 import { AgyOAuthSection } from "@/components/providers/forms/AgyOAuthSection";
 import { ClaudeOfficialSection } from "@/components/providers/forms/ClaudeOfficialSection";
 import { KimiAccountLogin } from "@/components/providers/KimiAccountLogin";
+import { useAgyAccountsAvailable } from "@/hooks/useServerCapabilities";
 import { DshAccountLogin } from "@/components/providers/DshAccount";
 import { WorkBuddyAccountSection } from "@/components/settings/auth/WorkBuddyAccountSection";
-import { canSwitchAgyAccount } from "@/lib/authBinding";
 import { Switch } from "@/components/ui/switch";
 import { useAuthOpenBrowser, writeAuthOpenBrowser } from "@/lib/authLoginLink";
 import type { AuthCenterTarget } from "@/lib/api";
@@ -74,7 +74,7 @@ function findScrollContainer(element: HTMLElement): HTMLElement | null {
 
 /**
  * 授权中心：Claude 官方账号、GitHub Copilot、ChatGPT、xAI、Kimi Code、DeepSeek Harness、WorkBuddy，一组一张卡片；
- * macOS、Windows 上另有 Antigravity 一组（切 agy 的官方登录：macOS 钥匙串、Windows 凭据管理器）。
+ * macOS、Windows（web 里看服务器的系统）上另有 Antigravity 一组（切 agy 的官方登录：macOS 钥匙串、Windows 凭据管理器）。
  * WorkBuddy 收录桌面端登录的快照再切换（macOS 已确认路径，Windows / Linux 按推断路径）。
  * 侧栏的「授权中心」页和供应商表单里「管理账号」打开的全屏页共用。
  */
@@ -92,7 +92,7 @@ export function AuthCenterPanel({
   const kimiOauthSectionRef = useRef<HTMLDivElement | null>(null);
   const workbuddySectionRef = useRef<HTMLDivElement | null>(null);
   const dshAccountSectionRef = useRef<HTMLDivElement | null>(null);
-  const showAgy = canSwitchAgyAccount();
+  const showAgy = useAgyAccountsAvailable();
 
   useEffect(() => {
     if (!authScrollTarget) return;

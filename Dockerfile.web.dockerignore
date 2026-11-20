@@ -1,0 +1,12 @@
+# Context of `docker build -f Dockerfile.web .`: sources only. node_modules would overwrite the image's own
+# install, and target/ alone is gigabytes.
+.git
+.worktrees
+node_modules
+dist
+dist-web
+dist-web.*
+release
+src-tauri/target
+flatpak-build
+flatpak-repo

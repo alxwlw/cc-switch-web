@@ -109,9 +109,22 @@ impl ToolLifecycleProgress {
 
 /// 和 `Command::output()` 一样执行到结束并收齐 stdout / stderr，
 /// 同时把清洗后的每一行（按 `\n` 或 `\r` 断行）节流后交给 `progress`。
+#[cfg(any(test, target_os = "windows"))]
 pub(super) fn run_with_progress(
+    command: Command,
+    progress: &ToolLifecycleProgress,
+) -> std::io::Result<Output> {
+    run_with_progress_timeout(command, progress, None)
+}
+
+/// `run_with_progress` with an optional total time limit. On expiry the whole process tree is
+/// killed (`terminate_child_tree`; on unix the caller must have put the command in its own
+/// process group via `isolate_child_process_group`) and an `ErrorKind::TimedOut` error is
+/// returned without joining the pipe readers (a surviving descendant could keep them open).
+pub(super) fn run_with_progress_timeout(
     mut command: Command,
     progress: &ToolLifecycleProgress,
+    timeout: Option<Duration>,
 ) -> std::io::Result<Output> {
     command
         .stdin(Stdio::null())
@@ -136,7 +149,31 @@ pub(super) fn run_with_progress(
             std::thread::spawn(move || read_lines(pipe, &progress, &throttle))
         })
     });
-    let status = child.wait()?;
+    let status = match timeout {
+        None => child.wait()?,
+        Some(limit) => {
+            let expires_at = Instant::now() + limit;
+            loop {
+                if let Some(status) = child.try_wait()? {
+                    break status;
+                }
+                let Some(remaining) = expires_at
+                    .checked_duration_since(Instant::now())
+                    .filter(|remaining| !remaining.is_zero())
+                else {
+                    if super::terminate_child_tree(&mut child) {
+                        let _ = child.wait();
+                    }
+                    drop(readers);
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        format!("Command timed out after {}s", limit.as_secs()),
+                    ));
+                };
+                std::thread::sleep(remaining.min(Duration::from_millis(50)));
+            }
+        }
+    };
     let [stdout, stderr] = readers.map(|reader| {
         reader
             .and_then(|handle| handle.join().ok())

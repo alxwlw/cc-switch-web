@@ -299,6 +299,28 @@ export const handlers = [
     },
   ),
 
+  http.post(`${TAURI_ENDPOINT}/get_app_config_dir_status`, () =>
+    success({
+      effective: "/home/test/.cc-switch",
+      source: "default",
+      override: getAppConfigDirOverride(),
+      envLocked: false,
+      default: "/home/test/.cc-switch",
+    }),
+  ),
+
+  // Web mode: GET /api/capabilities returns a bare object (no {ok,data} envelope).
+  http.get("*/api/capabilities", () =>
+    HttpResponse.json({
+      mode: "web",
+      version: "0.0.0-test",
+      buildSha: null,
+      runtime_boundaries: "",
+      platform: "linux",
+      selfUpdate: false,
+    }),
+  ),
+
   http.post(`${TAURI_ENDPOINT}/get_app_config_dir_override`, () =>
     success(getAppConfigDirOverride()),
   ),

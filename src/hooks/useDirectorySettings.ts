@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { homeDir, join } from "@tauri-apps/api/path";
 import { settingsApi } from "@/lib/api";
+import type { AppConfigDirStatus } from "@/lib/api/settings";
+import { isWeb } from "@/lib/api/adapter";
 import {
   DIRECTORY_APP,
   DIRECTORY_APPS,
@@ -36,6 +38,34 @@ const computeDefaultAppConfigDir = async (): Promise<string | undefined> => {
   }
 };
 
+/**
+ * The stored data-directory override. Web (WEB-26): the server's own status, which also says
+ * whether `CC_SWITCH_CONFIG_DIR` fixes the directory (then there is no override to edit). A
+ * failed status read is logged and must not empty the other directories, as the missing
+ * route did before.
+ */
+const loadAppConfigDir = async (): Promise<{
+  status: AppConfigDirStatus | null;
+  override: string | null;
+}> => {
+  if (!isWeb) {
+    return {
+      status: null,
+      override: await settingsApi.getAppConfigDirOverride(),
+    };
+  }
+  try {
+    const status = await settingsApi.getAppConfigDirStatus();
+    return { status, override: status.envLocked ? null : status.override };
+  } catch (error) {
+    console.error(
+      "[useDirectorySettings] Failed to load app config dir status",
+      error,
+    );
+    return { status: null, override: null };
+  }
+};
+
 const computeDefaultConfigDir = async (
   app: DirectoryAppId,
 ): Promise<string | undefined> => {
@@ -61,6 +91,8 @@ export interface UseDirectorySettingsResult {
   resolvedDirs: ResolvedDirectories;
   isLoading: boolean;
   initialAppConfigDir?: string;
+  /** Web only: the server's data directory status (null on desktop or when it failed to load). */
+  appConfigDirStatus: AppConfigDirStatus | null;
   /** 保存成功后把已保存的数据目录换成刚存的值 */
   commitAppConfigDir: (value: string | undefined) => void;
   updateDirectory: (app: DirectoryAppId, value?: string) => void;
@@ -96,6 +128,8 @@ export function useDirectorySettings({
   );
   const [resolvedDirs, setResolvedDirs] =
     useState<ResolvedDirectories>(emptyDirectories);
+  const [appConfigDirStatus, setAppConfigDirStatus] =
+    useState<AppConfigDirStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const defaultsRef = useRef<ResolvedDirectories>(emptyDirectories());
@@ -117,9 +151,9 @@ export function useDirectorySettings({
 
     const load = async () => {
       try {
-        const [overrideRaw, remoteDirs, defaultAppConfig, defaultDirs] =
+        const [appDirSource, remoteDirs, defaultAppConfig, defaultDirs] =
           await Promise.all([
-            settingsApi.getAppConfigDirOverride(),
+            loadAppConfigDir(),
             Promise.all(
               DIRECTORY_APPS.map(({ app }) => settingsApi.getConfigDir(app)),
             ),
@@ -131,11 +165,19 @@ export function useDirectorySettings({
 
         if (!active) return;
 
+        const { status, override: overrideRaw } = appDirSource;
         const normalizedOverride = sanitizeDir(overrideRaw ?? undefined);
+        setAppConfigDirStatus(status);
 
         const defaults = emptyDirectories();
         const resolved = emptyDirectories();
-        defaults.appConfig = defaultAppConfig ?? "";
+        // Web: the server's `~/.cc-switch` (the shim's `homeDir` is not the server's home); a
+        // directory fixed by the env has no default to go back to, so it shows the env value.
+        defaults.appConfig = status
+          ? status.envLocked
+            ? status.effective
+            : status.default
+          : ((isWeb ? "" : defaultAppConfig) ?? "");
         resolved.appConfig = normalizedOverride ?? defaults.appConfig;
         DIRECTORY_APPS.forEach(({ app }, i) => {
           defaults[app] = defaultDirs[i] ?? "";
@@ -325,7 +367,8 @@ export function useDirectorySettings({
   );
 
   const resetAppConfigDir = useCallback(async () => {
-    if (!defaultsRef.current.appConfig) {
+    // Web: the default comes from the server; the shim's `homeDir` is not the server's home.
+    if (!isWeb && !defaultsRef.current.appConfig) {
       const fallback = await computeDefaultAppConfigDir();
       if (fallback) {
         defaultsRef.current = {
@@ -360,6 +403,7 @@ export function useDirectorySettings({
     resolvedDirs,
     isLoading,
     initialAppConfigDir,
+    appConfigDirStatus,
     commitAppConfigDir,
     updateDirectory,
     updateAppConfigDir,

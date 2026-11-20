@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { Zap, Loader2, Plus, X, AlertCircle, Save } from "lucide-react";
 import type { AppId } from "@/lib/api";
 import { vscodeApi } from "@/lib/api/vscode";
+import { isWeb } from "@/lib/api/adapter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
@@ -105,6 +107,7 @@ const EndpointSpeedTest: React.FC<EndpointSpeedTestProps> = ({
   onCustomEndpointsChange,
 }) => {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [entries, setEntries] = useState<EndpointEntry[]>(() =>
     buildInitialEntries(initialEndpoints, value),
   );
@@ -423,14 +426,43 @@ const EndpointSpeedTest: React.FC<EndpointSpeedTestProps> = ({
           (url) => !currentCustomUrls.has(url),
         );
 
-        // 批量添加
-        for (const url of toAdd) {
-          await vscodeApi.addCustomEndpoint(appId, providerId, url);
-        }
+        // 已落库的变更：中途失败时据此校正 initialCustomUrls 并告知用户
+        const applied = new Set(initialCustomUrls);
+        const saved: string[] = [];
+        try {
+          // 批量添加
+          for (const url of toAdd) {
+            await vscodeApi.addCustomEndpoint(appId, providerId, url);
+            applied.add(url);
+            saved.push(url);
+          }
 
-        // 批量删除
-        for (const url of toRemove) {
-          await vscodeApi.removeCustomEndpoint(appId, providerId, url);
+          // 批量删除
+          for (const url of toRemove) {
+            await vscodeApi.removeCustomEndpoint(appId, providerId, url);
+            applied.delete(url);
+            saved.push(url);
+          }
+        } catch (error) {
+          setInitialCustomUrls(applied);
+          const message =
+            error instanceof Error
+              ? error.message
+              : t("endpointTest.saveFailed");
+          setLastError(
+            saved.length > 0
+              ? t("endpointTest.savePartial", {
+                  error: message,
+                  saved: saved.join(", "),
+                })
+              : message,
+          );
+          return;
+        } finally {
+          // 即使中途失败，已保存的端点也会改变 providers 缓存
+          await queryClient.invalidateQueries({
+            queryKey: ["providers", appId],
+          });
         }
 
         // 更新初始端点列表
@@ -439,7 +471,6 @@ const EndpointSpeedTest: React.FC<EndpointSpeedTestProps> = ({
         const message =
           error instanceof Error ? error.message : t("endpointTest.saveFailed");
         setLastError(message);
-        setIsSaving(false);
         return;
       } finally {
         setIsSaving(false);
@@ -448,7 +479,16 @@ const EndpointSpeedTest: React.FC<EndpointSpeedTestProps> = ({
 
     // 关闭弹窗
     onClose();
-  }, [isEditMode, providerId, entries, initialCustomUrls, appId, onClose, t]);
+  }, [
+    isEditMode,
+    providerId,
+    entries,
+    initialCustomUrls,
+    appId,
+    onClose,
+    queryClient,
+    t,
+  ]);
 
   if (!visible) return null;
 
@@ -494,6 +534,15 @@ const EndpointSpeedTest: React.FC<EndpointSpeedTestProps> = ({
       footer={footer}
     >
       <div className="glass rounded-xl p-6 border border-white/10 flex flex-col gap-6">
+        {isWeb && (
+          <p
+            className="text-xs text-fg-3"
+            data-testid="endpoint-server-side-note"
+          >
+            {t("endpointTest.serverSideNote")}
+          </p>
+        )}
+
         {/* 测速控制栏 */}
         <div className="flex items-center justify-between">
           <div className="text-sm text-fg-2">

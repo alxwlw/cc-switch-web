@@ -72,12 +72,22 @@ pub async fn s3_test_connection(
 
 #[tauri::command]
 pub async fn s3_sync_upload(state: State<'_, AppState>) -> Result<Value, String> {
-    sync_support::sync_upload::<S3Backend>(&state).await
+    s3_sync_upload_impl(state.inner()).await
+}
+
+/// Body of `s3_sync_upload`, shared with the web API handler (WEB-11).
+pub(crate) async fn s3_sync_upload_impl(state: &AppState) -> Result<Value, String> {
+    sync_support::sync_upload::<S3Backend>(state).await
 }
 
 #[tauri::command]
 pub async fn s3_sync_download(state: State<'_, AppState>) -> Result<Value, String> {
-    sync_support::sync_download::<S3Backend>(&state).await
+    s3_sync_download_impl(state.inner()).await
+}
+
+/// Body of `s3_sync_download`, shared with the web API handler (WEB-11).
+pub(crate) async fn s3_sync_download_impl(state: &AppState) -> Result<Value, String> {
+    sync_support::sync_download::<S3Backend>(state).await
 }
 
 #[tauri::command]

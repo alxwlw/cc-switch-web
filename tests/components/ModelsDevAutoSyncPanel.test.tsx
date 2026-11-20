@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 const {
   getModelsDevSyncConfig,
@@ -242,5 +243,28 @@ describe("ModelsDevAutoSyncPanel", () => {
     expect(
       screen.getAllByText("usage.modelsDevAutoSync.commonBadge"),
     ).toHaveLength(2);
+  });
+
+  describe.each([true, false])("open folder item (web=%s)", (web) => {
+    beforeEach(() => setWeb(web));
+
+    it("is hidden in web and shown on desktop", async () => {
+      const user = userEvent.setup();
+      renderPanel();
+
+      await user.click(
+        await screen.findByRole("button", {
+          name: "usage.pricing.moreActions",
+        }),
+      );
+      // checkpoint: the menu is open
+      await screen.findByRole("menuitem", {
+        name: "usage.modelsDevAutoSync.reloadLocalFile",
+      });
+      const openFolder = screen.queryByRole("menuitem", {
+        name: "usage.modelsDevAutoSync.openFolder",
+      });
+      expect(openFolder !== null).toBe(!web);
+    });
   });
 });

@@ -99,6 +99,7 @@
   },
   "provider": {
     "connectivityCheck": "檢測連通",
+    "connectivityCheckServerNote": "檢測由伺服器發起",
     "tabProvider": "供應商",
     "tabUniversal": "通用供應商",
     "noProviders": "還沒有供應商",
@@ -231,7 +232,8 @@
         "account": "帳號",
         "accountFollow": "跟隨 agy 目前登入",
         "accountMissing": "不在這台電腦上的帳號",
-        "accountHelp": "選了帳號的話，「開啟終端機」前會先把 agy 的登入切換到它（全域生效，之後新開的 agy 都用它）。帳號在授權中心新增。"
+        "accountHelp": "選了帳號的話，「開啟終端機」前會先把 agy 的登入切換到它（全域生效，之後新開的 agy 都用它）。帳號在授權中心新增。",
+        "cliServerNote": "清單取自伺服器上的 CLI"
       },
       "gemini": {
         "model": "模型",
@@ -416,6 +418,7 @@
       "title": "關閉統一會話歷史",
       "message": "關閉後，官方訂閱與第三方的會話重新分成兩組：新版 Codex 只能繼續目前供應商那一組，另一組只能檢視。開啟期間產生的會話無法區分來源，將留在第三方那組。",
       "restoreBackup": "把遷入的官方會話還原回官方組（按備份精確還原）",
+      "restoreBackupWeb": "在伺服器上把遷入的官方會話還原回官方組（按備份精確還原）",
       "confirm": "關閉"
     },
     "usage": {
@@ -540,6 +543,15 @@
         "enabledDescription": "控制 cc-switch.log；不影響請求用量記錄和 crash.log",
         "openLog": "開啟日誌",
         "openLogFailed": "開啟日誌所在位置失敗：{{error}}",
+        "viewer": {
+          "title": "伺服器日誌",
+          "serverNote": "這是執行 cc-switch-web 的伺服器上的日誌，不是本瀏覽器的日誌。",
+          "path": "伺服器上的路徑",
+          "unavailable": "尚無日誌，或無法讀取。",
+          "empty": "日誌檔案為空。",
+          "refresh": "重新整理",
+          "download": "下載"
+        },
         "level": "日誌層級",
         "levelDescription": "設定輸出的最低日誌層級",
         "levels": {
@@ -578,6 +590,10 @@
     "importPartialSuccess": "設定已匯入，但同步至目前供應商失敗。",
     "importPartialHint": "請手動重新選擇一次供應商以重新整理對應設定。",
     "configExported": "設定已匯出至：",
+    "configDownloaded": "設定已下載：",
+    "importFileReadFailed": "讀取檔案失敗：{{message}}",
+    "importFileTooLarge": "檔案過大，無法匯入（上限 {{limit}} MiB）",
+    "importFileNotUtf8": "檔案不是有效的 UTF-8 文字。請從 CC Switch 重新匯出設定，然後匯入該檔案。",
     "exportFailed": "匯出失敗",
     "selectFileFailed": "請選擇有效的 SQL 備份檔案",
     "configCorrupted": "SQL 檔案可能已損壞或格式不正確",
@@ -1062,6 +1078,7 @@
     "toolActionBinCollision": "{{path}} 已經有一個同名檔案，多半來自另一種安裝方式，npm 不會覆寫它。請先確認它是什麼，改名備份後再重試；不要用 npm 的 --force，它會直接覆寫這個檔案。",
     "toolActionInProgress": "應用程式操作仍在進行中",
     "toolActionInProgressDetail": "{{tool}} 已有安裝、升級或解除安裝作業正在背景處理，請等待完成，無需重複操作。",
+    "toolActionTimeout": "{{tool}} 未在 15 分鐘內完成，程序已停止",
     "toolNotRunnable": "已安裝但無法執行（未偵測到版本）",
     "toolActionVersionUnchangedTitle": "版本未變更",
     "toolActionVersionUnchanged": "仍為 {{version}}（最新版本：{{latest}}）。上游更新程式可能回報成功，但實際上並未套用更新。",
@@ -1106,6 +1123,7 @@
     "globalProxy": {
       "label": "全域代理伺服器",
       "hint": "代理所有請求（API、Skills 下載等）。開啟本地路由時，應用程式的請求也會經過此代理伺服器。留空表示直連。",
+      "serverSideNote": "代理作用於 cc-switch-web 伺服器發出的請求，而不是此瀏覽器。掃描會在伺服器本機（其 127.0.0.1）上尋找代理。",
       "username": "使用者名稱（選填）",
       "password": "密碼（選填）",
       "test": "測試連線",
@@ -2158,7 +2176,9 @@
     "pleaseAddEndpoint": "請先新增端點",
     "noResult": "未回傳結果",
     "testFailed": "測速失敗：{{error}}",
-    "empty": "暫無端點"
+    "empty": "暫無端點",
+    "serverSideNote": "延遲由 cc-switch-web 伺服器量測，而非目前的瀏覽器，可能與你的實際體驗不同。http://127.0.0.1、localhost 等位址指向伺服器本機的服務。",
+    "savePartial": "出錯前已儲存：{{saved}}。錯誤：{{error}}"
   },
   "codexConfig": {
     "authJson": "auth.json (JSON) *",
@@ -3248,6 +3268,9 @@
     "saveFailed": "儲存失敗",
     "loadFailed": "讀取失敗",
     "openDirectory": "在檔案管理員中開啟",
+    "copyPath": "複製路徑",
+    "pathCopied": "路徑已複製",
+    "pathCopyFailed": "複製路徑失敗",
     "dailyMemory": {
       "title": "每日記憶",
       "cardTitle": "每日記憶檔案",
@@ -3406,6 +3429,7 @@
       "open": "開啟 Hermes Web UI",
       "offline": "Hermes Web UI 未啟動，請先執行 `hermes dashboard` 啟動服務。",
       "openFailed": "開啟 Hermes Web UI 失敗",
+      "unreachableRemote": "伺服器上的 Hermes Web UI 沒有回應（連接埠 {{port}}）。若它只監聽 localhost，請透過 tailscale serve 開啟，或讓它監聽 0.0.0.0。",
       "launchConfirmTitle": "Hermes Dashboard 未啟動",
       "launchConfirmMessage": "是否開啟終端機並執行 `hermes dashboard` 啟動服務？\n\n啟動完成後會自動開啟瀏覽器。\n\n若終端機提示找不到 hermes 或缺少 web 相依套件，請先執行：\npip install hermes-agent[web]",
       "launchConfirmAction": "開啟終端機並啟動",
@@ -3473,6 +3497,7 @@
       "title": "確認刪除環境變數",
       "message": "確定要刪除 {{count}} 個環境變數嗎？",
       "backupNotice": "刪除前將自動備份，您可以稍後還原。刪除後需要重新啟動應用程式或終端機才能生效。",
+      "webHostWarning": "Web 模式：變數將從執行 cc-switch 伺服器之主機的作業系統使用者環境（shell 設定檔）中刪除，而非目前瀏覽器所在的電腦。",
       "confirm": "確認刪除"
     },
     "error": {
@@ -3677,6 +3702,9 @@
       "locationUnified": "通用目錄",
       "openFolder": "打開",
       "openFolderAria": "打開 {{path}}",
+      "copyPath": "複製路徑",
+      "copyPathAria": "複製伺服器路徑 {{path}}",
+      "pathCopied": "已複製路徑",
       "unifiedWarning": "Codex、Gemini CLI、OpenCode 等會直接讀這個目錄，各應用的開關對它們不再完全生效。",
       "move": "移動並切換",
       "moving": "正在移動…",
@@ -3696,6 +3724,15 @@
     "updatesIncomplete": "沒有發現更新，但有 {{count}} 個倉庫沒有讀到"
   },
   "deeplink": {
+    "paste": {
+      "title": "從 ccswitch:// 連結匯入",
+      "placeholder": "貼上 ccswitch://… 連結",
+      "open": "開啟",
+      "upload": "選擇檔案",
+      "noLink": "找不到 ccswitch:// 連結。",
+      "fileTooLarge": "檔案過大，不是有效的深層連結檔案（上限 {{limit}} KiB）。",
+      "fileReadFailed": "無法讀取該檔案。"
+    },
     "confirmImport": "確認匯入供應商設定",
     "confirmImportDescription": "以下設定將匯入至 CC Switch",
     "importPrompt": "匯入提示詞",
@@ -4338,7 +4375,9 @@
     "expiredHint": "請執行 {{tool}} 命令重新整理登入",
     "expiredHintAccounts": "請在授權中心重新登入這個帳號",
     "queryFailed": "查詢失敗",
-    "refresh": "重新整理"
+    "refresh": "重新整理",
+    "serverNote": "資料由伺服器查詢",
+    "cliServerNote": "依據伺服器上的 CLI 憑證"
   },
   "nav": {
     "mainLabel": "主導覽",
@@ -4368,6 +4407,8 @@
     "plugins": "外掛"
   },
   "appsPage": {
+    "webServerNote": "命令列工具安裝在 cc-switch-web 伺服器上，而不是這台電腦上。",
+    "webLifecycleSlow": "安裝和更新最多可能需要 15 分鐘。",
     "showInSidebar": "在側欄顯示 {{name}}",
     "lastChecked": "上次檢查 {{time}}",
     "neverChecked": "還沒檢查過更新",
@@ -4389,6 +4430,8 @@
     "desktopUnsupported": "目前系統不支援",
     "desktopConnected": "已接入",
     "desktopNotConnected": "未接入",
+    "desktopServerNote": "cc-switch-web 伺服器上的 Claude Desktop",
+    "desktopNotFoundOnServer": "伺服器上未找到 Claude Desktop；它出現後，設定會自動生效。",
     "newVersion": "有新版本 {{version}}",
     "notRunnable": "無法執行",
     "updateNeedsNode": "新版本 {{version}} 需要 Node {{required}}，這處安裝用的是 Node {{current}}，需要先升級 Node。",
@@ -5219,7 +5262,8 @@
       "loading": "正在查詢額度…",
       "refresh": "重新整理額度",
       "refreshAria": "重新整理 {{login}} 的額度",
-      "refreshAll": "全部重新整理"
+      "refreshAll": "全部重新整理",
+      "serverNote": "資料由伺服器查詢"
     },
     "agy": {
       "reauthNote": "登入憑證已失效，無法切換過去",
@@ -5228,7 +5272,8 @@
       "empty": "還沒有 Antigravity 帳號。agy 裡已登入的帳號會自動出現在這裡。",
       "removeNote": "不會讓 agy 登出：agy 目前登入的帳號刪除後仍然可用。",
       "switched": "已切換，新開的 agy 會使用這個帳號。",
-      "switchedWhileRunning": "已切換。偵測到 agy 正在執行：已開啟的 agy 仍使用原帳號，還可能把原帳號寫回去，請結束後重新開啟。"
+      "switchedWhileRunning": "已切換。偵測到 agy 正在執行：已開啟的 agy 仍使用原帳號，還可能把原帳號寫回去，請結束後重新開啟。",
+      "webLoginUnavailable": "Antigravity 登入透過伺服器上的本機回環回呼完成，請在伺服器的桌面應用程式中登入；這裡可以切換和移除帳號。"
     },
     "workbuddy": {
       "addedOn": "{{date}}收錄",
@@ -5302,6 +5347,7 @@
       "cancelled": "登入已取消或被其他登入取代，請重新登入。",
       "success": "Kimi Code 登入成功，已新增官方模型。",
       "removeConfirm": "刪除 {{name}}？會從 Kimi Code 裡刪掉這個帳號的供應商和模型，並刪除它的本機登入憑證和卡片。其他帳號不受影響。",
+      "removeConfirmWeb": "這裡的 Kimi Code 憑證與伺服器上的 Kimi Code CLI 共用：移除此帳號後，伺服器上的 CLI 也會登出。",
       "dismissConfirm": "把 {{name}} 移出列表？這是 Kimi Code 自己的登入，CC Switch 不會替它登出，憑證和模型都會保留；如需登出，請在 Kimi Code 裡執行 /logout。之後重新登入會讓它回到列表。",
       "primaryHidden": "Kimi Code 自己的登入已移出列表，重新登入同一帳號即可找回",
       "removeCurrentHint": "這個帳號正在使用，請先切換到其他帳號再刪除",
@@ -5376,6 +5422,97 @@
       "renameProvider": "Oh My Pi 供應商識別碼不能重新命名。",
       "providerMissing": "此 Oh My Pi 供應商已不在儲存的清單中。",
       "legacyModelsJson": "Oh My Pi 目錄裡仍是舊的 models.json，omp 會在下次啟動時將它遷移為 models.yml。請先執行一次 omp，再回來新增供應商。"
+    }
+  },
+  "web": {
+    "unavailable": "Web 模式下無法使用",
+    "serverPath": "路徑需手動輸入，指的是伺服器主機上的路徑，而非目前裝置",
+    "dataDir": {
+      "current": "目前使用：{{path}}（{{source}}）",
+      "source": {
+        "env": "由環境變數 CC_SWITCH_CONFIG_DIR 指定",
+        "override": "在此主控台中儲存的目錄",
+        "default": "預設目錄"
+      },
+      "envLocked": "目錄由伺服器 unit 中的 CC_SWITCH_CONFIG_DIR 固定，無法在此頁面修改。需由伺服器維運人員修改 unit（見 docs/deploy.md）。",
+      "scope": "新目錄會有自己的資料庫、日誌、技能、資料庫備份、模型價格和其他應用程式檔案，現有資料庫不會被複製。settings.json、live-state.json、裝置備份和其他裝置檔案仍保存在伺服器的 ~/.cc-switch 中。變更在伺服器重新啟動後生效。",
+      "applyFailed": "其他設定已儲存，但資料目錄沒有變更：{{error}}",
+      "restartRequiredMessage": "新的資料目錄在伺服器重新啟動後生效。主控台會有幾秒鐘無法使用，伺服器恢復後自動重新整理。是否立即重新啟動？",
+      "restarting": "正在重新啟動…",
+      "restartTimeout": "伺服器在一分鐘內沒有恢復。請在伺服器主機上查看狀態（例如 systemctl --user status cc-switch-web），然後重新整理此頁面。"
+    },
+    "update": {
+      "unsupported": "Web 模式下無法檢查更新：伺服器由維運人員負責升級",
+      "behindTitle": "目前建置落後分支 {{count}} 個提交",
+      "shown": "顯示 {{shown}} / {{total}} 個",
+      "commitsTitle": "分支上的新提交",
+      "upToDateTitle": "目前建置已是最新",
+      "unknownTitle": "無法確定建置版本",
+      "unknownHint": "伺服器建置時沒有記錄提交、簽出目錄含本機變更，或所用提交不在該分支上，因此無法與分支比較。",
+      "buildSha": "建置 {{sha}}",
+      "checkedAt": "檢查於 {{time}}",
+      "instructionsTitle": "更新方法（在伺服器主機上執行）",
+      "systemd": "systemd 服務",
+      "docker": "Docker",
+      "copy": "複製",
+      "copied": "已複製到剪貼簿",
+      "copyFailed": "無法複製到剪貼簿",
+      "checkFailedTitle": "檢查更新失敗",
+      "releaseBehindTitle": "版本 {{version}} 可用",
+      "releaseNotes": "版本說明",
+      "releaseUnknownTitle": "無法將此建置與最新發行版比較",
+      "releaseUnknownHint": "已發布的最新發行版比此建置舊，或其標籤不是分叉版本，因此沒有更新的版本可安裝。",
+      "install": {
+        "button": "立即更新",
+        "confirmTitle": "更新伺服器？",
+        "confirmMessage": "伺服器將拉取分支 {{branch}}（至 {{sha}}，{{behind}} 個新提交），自行重新建置並重新啟動。建置期間無法連線，可能需要數分鐘。若新版本無法啟動，伺服器會回復到先前的版本。",
+        "confirmReleaseMessage": "安裝版本 {{version}}？伺服器將重新啟動，頁面會自動重新載入。",
+        "confirmDbWarning": "新版本可能會遷移資料庫。將執行檔回復到舊版不會回復資料庫。",
+        "confirmButton": "重新建置並重新啟動",
+        "releaseConfirmButton": "安裝並重新啟動",
+        "runningTitle": "正在更新伺服器",
+        "starting": "正在開始更新...",
+        "reloading": "已更新。正在重新載入頁面...",
+        "branch": "分支：{{branch}}",
+        "waiting": "伺服器沒有回應（可能正在重新啟動）。等待中...",
+        "stage": {
+          "checking": "正在檢查更新...",
+          "fetching": "正在取得分支...",
+          "merging": "正在快轉工作目錄...",
+          "downloading": "正在下載發行版...",
+          "verifying": "正在檢查下載內容...",
+          "building": "正在建置網頁主控台與伺服器（需要數分鐘）...",
+          "installing": "正在替換執行檔與網頁主控台...",
+          "restarting": "正在重新啟動服務並確認其有回應...",
+          "rolling-back": "新版本未能啟動。正在還原先前的版本..."
+        },
+        "refusedTitle": "未能開始更新",
+        "failedTitle": "更新失敗",
+        "rolledBackTitle": "更新已回復",
+        "finishedAt": "結束於 {{time}}",
+        "rollbackFailedTitle": "回復失敗：伺服器可能無法運作",
+        "rollbackFailedHint": "請在伺服器主機上依上述說明手動還原先前的檔案，然後重新啟動服務。",
+        "unchangedTitle": "沒有可更新的內容：伺服器已是最新",
+        "stuckTitle": "沒有取得更新結果",
+        "stuckStalled": "更新長時間沒有變更階段，或伺服器沒有回應。請在伺服器主機上查看其記錄：",
+        "stuckNoStatus": "更新沒有回報任何進度，可能未能啟動。請在伺服器主機上查看其記錄："
+      }
+    },
+    "proxyCaption": "代理運行在伺服器上，並重新設定伺服器上的 CLI；不會影響你本機上的 CLI。",
+    "desktopRouteHost": "Claude Desktop 會依「連線位址」和連接埠連到伺服器上的代理。如果 Claude Desktop 裝在另一台機器上，請在 設定 → 本地路由 中把連線位址（client host）改成那台機器能連到的主機。",
+    "syncHost": "連線測試、上傳和下載都在 cc-switch-web 伺服器上執行，而不是在目前的瀏覽器中。伺服器必須能連到該 WebDAV 或 S3 端點，下載會覆蓋伺服器上的資料。",
+    "syncDownloadWarning": "還原將覆蓋 cc-switch-web 伺服器上的所有資料和技能設定",
+    "proxyListenWarning": "監聽 {{address}} 會讓整個網路（包括 tailnet）無需驗證即可存取該代理。建議使用 127.0.0.1。",
+    "liveUnknownTitle": "供應商（Web 模式下無法讀取實際設定狀態）",
+    "sessionResumeCopied": "已複製恢復指令。請在伺服器主機上的專案目錄下，貼到終端機執行",
+    "hostNotice": "檔案、CLI 工具和代理位於伺服器主機上，而不是執行此瀏覽器的電腦上。",
+    "hostNoticeDismiss": "關閉",
+    "initError": {
+      "message": "無法讀取設定檔：\n{{path}}\n\n錯誤詳情：\n{{detail}}\n\n請在伺服器主機上修復（檢查 JSON 是否有效，或從同目錄的備份檔如 config.json.bak 還原），然後重新啟動伺服器。"
+    },
+    "mode": {
+      "title": "Web 模式",
+      "basedOn": "基於 CC Switch"
     }
   },
   "dsh": {
