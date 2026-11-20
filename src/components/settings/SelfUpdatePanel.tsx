@@ -80,7 +80,11 @@ export function SelfUpdateButton({
                 behind: webUpdate.behindBy,
               })
         }
-        confirmText={t("web.update.install.confirmButton")}
+        confirmText={t(
+          release
+            ? "web.update.install.releaseConfirmButton"
+            : "web.update.install.confirmButton",
+        )}
         onCancel={() => setConfirming(false)}
         onConfirm={() => {
           setConfirming(false);

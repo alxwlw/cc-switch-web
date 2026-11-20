@@ -2,7 +2,10 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import i18next from "i18next";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it } from "vitest";
-import { SelfUpdateButton } from "@/components/settings/SelfUpdatePanel";
+import {
+  SelfUpdateButton,
+  SelfUpdateNotice,
+} from "@/components/settings/SelfUpdatePanel";
 import en from "@/i18n/locales/en.json";
 import ja from "@/i18n/locales/ja.json";
 import tr from "@/i18n/locales/tr.json";
@@ -85,6 +88,13 @@ const RELEASE_KEYS = {
   "web.update.install.stage.downloading": [],
   "web.update.install.stage.verifying": [],
   "web.update.install.confirmReleaseMessage": ["{{version}}"],
+  "web.update.releaseUnknownTitle": [],
+  "web.update.releaseUnknownHint": [],
+  "web.update.install.releaseConfirmButton": [],
+  // Shared with the commit mode, reworded so that both modes can show them.
+  "web.update.upToDateTitle": [],
+  "web.update.install.unchangedTitle": [],
+  "web.update.install.stage.checking": [],
 } as const;
 
 describe("catalogs · release update strings", () => {
@@ -211,5 +221,107 @@ describe("self-update confirmation · real catalog render", () => {
     expect(
       within(dialog).getByText(/may migrate the database/),
     ).toBeInTheDocument();
+  });
+
+  it("in release mode the confirm button says install, not rebuild", async () => {
+    const i18n = await enInstance();
+    render(
+      <I18nextProvider i18n={i18n}>
+        <SelfUpdateButton
+          webUpdate={{
+            ...webUpdate,
+            mode: "release",
+            latestSha: null,
+            latestVersion: "4.0.35-web.2",
+          }}
+          state={{ kind: "idle" }}
+          onStart={async () => {}}
+        />
+      </I18nextProvider>,
+    );
+    fireEvent.click(screen.getByText("Update now"));
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByRole("button", { name: "Install and restart" }),
+    ).toBeInTheDocument();
+    expect(dialog.textContent).not.toMatch(FORBIDDEN_IN_RELEASE);
+  });
+});
+
+// Release mode says nothing of a branch, a checkout, a commit or a rebuild: an install from a
+// release has none of them.
+const FORBIDDEN_IN_RELEASE = /branch|checkout|commit|rebuild/i;
+
+async function enInstance() {
+  const i18n = i18next.createInstance();
+  await i18n.init({
+    lng: "en",
+    resources: { en: { translation: en } },
+    interpolation: { escapeValue: false },
+  });
+  return i18n;
+}
+
+describe("release mode copy · real catalog render", () => {
+  // The keys a release install can show; the component tests pin which key each state picks.
+  const RELEASE_MODE_KEYS = [
+    "web.update.upToDateTitle",
+    "web.update.releaseUnknownTitle",
+    "web.update.releaseUnknownHint",
+    "web.update.releaseBehindTitle",
+    "web.update.releaseNotes",
+    "web.update.install.confirmReleaseMessage",
+    "web.update.install.releaseConfirmButton",
+    "web.update.install.stage.checking",
+    "web.update.install.stage.downloading",
+    "web.update.install.stage.verifying",
+    "web.update.install.unchangedTitle",
+  ];
+
+  it.each(RELEASE_MODE_KEYS)(
+    "en %s has no branch, checkout, commit or rebuild",
+    (key) => {
+      expect(lookup(en, key) as string).not.toMatch(FORBIDDEN_IN_RELEASE);
+    },
+  );
+
+  it("a release run that found nothing to install reads 'up to date'", async () => {
+    const i18n = await enInstance();
+    render(
+      <I18nextProvider i18n={i18n}>
+        <SelfUpdateNotice
+          state={{
+            kind: "ended",
+            outcome: "unchanged",
+            message: "already up to date",
+            finishedAt: null,
+          }}
+        />
+      </I18nextProvider>,
+    );
+    const notice = screen.getByRole("status");
+    expect(notice).toHaveTextContent(
+      "Nothing to update: the server is already up to date",
+    );
+    expect(notice.textContent).not.toMatch(FORBIDDEN_IN_RELEASE);
+  });
+
+  it("the first stage of a run reads 'checking for updates'", async () => {
+    const i18n = await enInstance();
+    render(
+      <I18nextProvider i18n={i18n}>
+        <SelfUpdateNotice
+          state={{
+            kind: "running",
+            stage: "checking",
+            branch: null,
+            waiting: false,
+          }}
+        />
+      </I18nextProvider>,
+    );
+    const notice = screen.getByRole("status");
+    expect(notice).toHaveTextContent("Checking for updates...");
+    expect(notice.textContent).not.toMatch(FORBIDDEN_IN_RELEASE);
   });
 });

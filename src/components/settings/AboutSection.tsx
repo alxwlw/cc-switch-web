@@ -119,8 +119,20 @@ function WebUpdateStatus({
   if (webUpdate.status === "unknown") {
     return (
       <div className="space-y-1 px-5 py-4 text-body">
-        <p className="font-medium text-fg-1">{t("web.update.unknownTitle")}</p>
-        <p className="text-fg-2">{t("web.update.unknownHint")}</p>
+        <p className="font-medium text-fg-1">
+          {t(
+            webUpdate.mode === "release"
+              ? "web.update.releaseUnknownTitle"
+              : "web.update.unknownTitle",
+          )}
+        </p>
+        <p className="text-fg-2">
+          {t(
+            webUpdate.mode === "release"
+              ? "web.update.releaseUnknownHint"
+              : "web.update.unknownHint",
+          )}
+        </p>
         {footer}
       </div>
     );

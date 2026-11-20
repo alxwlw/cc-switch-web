@@ -171,8 +171,40 @@ describe("AboutSection · self-update (WEB-28)", () => {
     expect(calls("/api/update/status")).toHaveLength(0);
   });
 
+  const COMMIT_UNKNOWN = [
+    "web.update.unknownTitle",
+    "web.update.unknownHint",
+  ] as const;
+  const RELEASE_UNKNOWN = [
+    "web.update.releaseUnknownTitle",
+    "web.update.releaseUnknownHint",
+  ] as const;
+  const RELEASE_BASE = {
+    mode: "release",
+    latestSha: null,
+    behindBy: 0,
+    commits: [],
+  };
+
+  // Row: label, server answer, texts that must show, texts of the other states that must not.
   it.each([
-    ["up-to-date", { status: "up-to-date", behindBy: 0, commits: [] }],
+    [
+      "up-to-date",
+      { status: "up-to-date", behindBy: 0, commits: [] },
+      ["web.update.upToDateTitle"],
+      [...COMMIT_UNKNOWN, ...RELEASE_UNKNOWN],
+    ],
+    [
+      "up-to-date in release mode",
+      {
+        ...RELEASE_BASE,
+        status: "up-to-date",
+        latestVersion: "4.0.35-web.1",
+        releaseUrl: "https://example.test/r",
+      },
+      ["web.update.upToDateTitle"],
+      [...COMMIT_UNKNOWN, ...RELEASE_UNKNOWN],
+    ],
     [
       "unknown",
       {
@@ -182,40 +214,42 @@ describe("AboutSection · self-update (WEB-28)", () => {
         behindBy: 0,
         commits: [],
       },
+      COMMIT_UNKNOWN,
+      ["web.update.upToDateTitle", ...RELEASE_UNKNOWN],
     ],
     [
       "unknown in release mode (latest release is older)",
       {
-        mode: "release",
+        ...RELEASE_BASE,
         status: "unknown",
-        latestSha: null,
         latestVersion: "4.0.34-web.1",
         releaseUrl: "https://example.test/r",
-        behindBy: 0,
-        commits: [],
       },
+      RELEASE_UNKNOWN,
+      ["web.update.upToDateTitle", ...COMMIT_UNKNOWN],
     ],
     [
       "unknown in release mode (tag is not a fork version)",
       {
-        mode: "release",
+        ...RELEASE_BASE,
         status: "unknown",
-        latestSha: null,
         latestVersion: null,
         releaseUrl: null,
-        behindBy: 0,
-        commits: [],
       },
+      RELEASE_UNKNOWN,
+      ["web.update.upToDateTitle", ...COMMIT_UNKNOWN],
     ],
-  ])("self-update on, but the build is %s: no button", async (n, over) => {
-    check = updateData(over);
-    await open();
-    expect(installButton()).toBeNull();
-    if (n.startsWith("unknown")) {
-      expect(screen.getByText("web.update.unknownTitle")).toBeTruthy();
+  ])(
+    "self-update on, but the build is %s: no button, the text of its own mode",
+    async (_label, over, shown, hidden) => {
+      check = updateData(over);
+      await open();
+      expect(installButton()).toBeNull();
       expect(screen.queryByText(/releaseBehindTitle/)).toBeNull();
-    }
-  });
+      for (const key of shown) expect(screen.getByText(key)).toBeTruthy();
+      for (const key of hidden) expect(screen.queryByText(key)).toBeNull();
+    },
+  );
 
   it("self-update on and behind: the button shows next to the manual instructions", async () => {
     await open();
@@ -303,6 +337,12 @@ describe("AboutSection · self-update (WEB-28)", () => {
       ),
     ).toBeTruthy();
     expect(dialog.textContent).not.toContain("web-parity");
+    expect(
+      within(dialog).getByText("web.update.install.releaseConfirmButton"),
+    ).toBeTruthy();
+    expect(
+      within(dialog).queryByText("web.update.install.confirmButton"),
+    ).toBeNull();
     expect(within(dialog).queryByText("web.update.commitsTitle")).toBeNull();
     expect(within(dialog).queryByText("feat: newest")).toBeNull();
     expect(
