@@ -23,7 +23,29 @@ describe("fetchCapabilities", () => {
       runtime_boundaries: "",
       platform: "macos",
       selfUpdate: false,
+      webVersion: null,
     });
+  });
+
+  it("webVersion is passed through and anything but a string is null", async () => {
+    const answer = (webVersion: unknown) =>
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ mode: "web", version: "1.2.3", webVersion }),
+        }),
+      );
+    answer("4.0.35-web.1");
+    await expect(fetchCapabilities()).resolves.toMatchObject({
+      webVersion: "4.0.35-web.1",
+    });
+    for (const loose of [undefined, 1, null]) {
+      answer(loose);
+      await expect(fetchCapabilities()).resolves.toMatchObject({
+        webVersion: null,
+      });
+    }
   });
 
   it("selfUpdate is true only for the boolean true", async () => {

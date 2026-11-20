@@ -7,20 +7,27 @@ export interface UpdateRunStatus {
   message: string;
   fromSha: string | null;
   toSha: string | null;
+  /** Release runs: the version before and after (a git run leaves them `null`). */
+  fromVersion: string | null;
+  toVersion: string | null;
   startedAt: string | null;
   finishedAt: string | null;
 }
 
 /*
  * Stages, as `scripts/self-update.sh` writes them. Progress: checking, fetching, merging,
- * building, installing, restarting, rolling-back. Final (`finishedAt` is set): done, failed,
- * rolled-back, rollback-failed. `useSelfUpdate` is where each one is acted on.
+ * downloading, verifying, building, installing, restarting, rolling-back. Final (`finishedAt` is
+ * set): done, failed, rolled-back, rollback-failed. `useSelfUpdate` is where each one is acted on.
  */
 
-/** `POST /api/update/install` answered 202: the unit that runs the script and the branch it pulls. */
+/**
+ * `POST /api/update/install` answered 202: the unit that runs the script and, in commit mode, the
+ * branch it pulls and the repo; both are `null` in release mode.
+ */
 export interface InstallLaunch {
   unit: string;
-  branch: string;
+  branch: string | null;
+  repo: string | null;
 }
 
 /**
@@ -33,7 +40,8 @@ export async function installWebUpdate(): Promise<InstallLaunch> {
   );
   return {
     unit: typeof data?.unit === "string" ? data.unit : "",
-    branch: typeof data?.branch === "string" ? data.branch : "",
+    branch: typeof data?.branch === "string" ? data.branch : null,
+    repo: typeof data?.repo === "string" ? data.repo : null,
   };
 }
 
@@ -74,6 +82,8 @@ export async function fetchUpdateStatus(
     message: typeof r.message === "string" ? r.message : "",
     fromSha: strOrNull(r.fromSha),
     toSha: strOrNull(r.toSha),
+    fromVersion: strOrNull(r.fromVersion),
+    toVersion: strOrNull(r.toVersion),
     startedAt: strOrNull(r.startedAt),
     finishedAt: strOrNull(r.finishedAt),
   };

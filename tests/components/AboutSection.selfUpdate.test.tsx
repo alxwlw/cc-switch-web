@@ -258,6 +258,43 @@ describe("AboutSection · self-update (WEB-28)", () => {
     expect(screen.getByText("web.update.install.reloading")).toBeTruthy();
   });
 
+  it("release mode confirmation names the version, not the branch", async () => {
+    check = updateData({
+      mode: "release",
+      currentVersion: "4.0.35-web.1",
+      latestSha: null,
+      latestVersion: "4.0.35-web.2",
+      releaseUrl: "https://example.test/r",
+      behindBy: 0,
+      commits: [],
+    });
+    await open();
+    fireEvent.click(screen.getByText("web.update.install.button"));
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByText(
+        'web.update.install.confirmReleaseMessage {"version":"4.0.35-web.2"}',
+      ),
+    ).toBeTruthy();
+    expect(dialog.textContent).not.toContain("web-parity");
+    expect(within(dialog).queryByText("web.update.commitsTitle")).toBeNull();
+    expect(
+      within(dialog).getByText("web.update.install.confirmDbWarning"),
+    ).toBeTruthy();
+  });
+
+  it("downloading and verifying stages have their own text", async () => {
+    await open();
+    await startUpdate();
+    for (const stage of ["downloading", "verifying"]) {
+      runs = runStatus(stage);
+      await tick(2_000);
+      expect(
+        screen.getByText(`web.update.install.stage.${stage}`),
+      ).toBeTruthy();
+    }
+  });
+
   it("a stage the script may gain later is shown by its own name", async () => {
     await open();
     await startUpdate();

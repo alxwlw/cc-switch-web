@@ -418,6 +418,96 @@ describe("useSelfUpdate (WEB-28)", () => {
     expect(onNothing).toHaveBeenCalledTimes(1);
   });
 
+  it("a release done with equal versions and null shas does not reload the page", async () => {
+    const hook = await setup();
+    await start(hook);
+    answerData(
+      status("checking", {
+        fromSha: null,
+        toSha: null,
+        fromVersion: "4.0.35-web.1",
+        toVersion: null,
+      }),
+    );
+    await poll();
+    answerData(
+      status("done", {
+        fromSha: null,
+        toSha: null,
+        fromVersion: "4.0.35-web.1",
+        toVersion: "4.0.35-web.1",
+        message: "already up to date",
+      }),
+    );
+    await poll();
+    expect(hook.result.current.state).toEqual({
+      kind: "ended",
+      outcome: "unchanged",
+      message: "already up to date",
+      finishedAt: "2026-11-04T10:05:00Z",
+    });
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(onNothing).toHaveBeenCalledTimes(1);
+  });
+
+  it("a release done with different versions reloads it", async () => {
+    const hook = await setup();
+    await start(hook);
+    answerData(
+      status("done", {
+        fromSha: null,
+        toSha: null,
+        fromVersion: "4.0.35-web.1",
+        toVersion: "4.0.35-web.2",
+      }),
+    );
+    await poll();
+    expect(hook.result.current.state).toEqual({ kind: "reloading" });
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+    expect(onNothing).not.toHaveBeenCalled();
+  });
+
+  it("a release done at equal versions after a rebuild stage reloads it", async () => {
+    const hook = await setup();
+    await start(hook);
+    answerData(
+      status("installing", {
+        fromSha: null,
+        toSha: null,
+        fromVersion: "4.0.35-web.2",
+        toVersion: "4.0.35-web.2",
+      }),
+    );
+    await poll();
+    answerData(
+      status("done", {
+        fromSha: null,
+        toSha: null,
+        fromVersion: "4.0.35-web.2",
+        toVersion: "4.0.35-web.2",
+      }),
+    );
+    await poll();
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+    expect(onNothing).not.toHaveBeenCalled();
+  });
+
+  it("a launch without a branch (release mode) shows no branch", async () => {
+    installAnswer = () =>
+      json(202, {
+        ok: true,
+        data: { unit: "cc-switch-web-update", branch: null, repo: null },
+      });
+    const hook = await setup();
+    await start(hook);
+    expect(hook.result.current.state).toEqual({
+      kind: "running",
+      stage: null,
+      branch: null,
+      waiting: false,
+    });
+  });
+
   it.each(["building", "installing", "restarting"])(
     "done at the same commit after %s is a rebuild (the retry after a rollback): reload once, no re-check",
     async (stage) => {
