@@ -3,6 +3,12 @@
 Changes of cc-switch-web. Changes of the cc-switch desktop app it is based on are in the upstream
 [CHANGELOG](https://github.com/farion1231/cc-switch/blob/main/CHANGELOG.md).
 
+## v4.0.36-web.1 — 2026-11-20
+
+- Based on cc-switch [v4.0.36](https://github.com/farion1231/cc-switch/releases/tag/v4.0.36).
+- The new Plugins page works in the console: install, enable, update and uninstall plugins of Claude Code, Codex, Grok Build, MiniMax Code, OpenClaw and Pi, and manage their marketplaces. Each action runs that agent's own CLI on the server, so the CLI has to be installed there.
+- The README warns users of zuoliangyu/cc-switch-web, a different project with the same name and the same data directory `~/.cc-switch-web`.
+
 ## v4.0.35-web.2 — 2026-11-20
 
 - About now points at this fork, not at the upstream app:

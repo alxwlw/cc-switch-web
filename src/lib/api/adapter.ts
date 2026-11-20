@@ -370,6 +370,55 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         body: { apps: a.apps ?? null },
       };
 
+    // ---------- plugins (each call runs the app's own CLI on the server) ----------
+    case "list_installed_plugins":
+      return { method: "GET", url: `/api/plugins/${enc(a.app)}/installed` };
+    case "list_plugin_catalog":
+      return { method: "GET", url: `/api/plugins/${enc(a.app)}/catalog` };
+    case "list_plugin_marketplaces":
+      return { method: "GET", url: `/api/plugins/${enc(a.app)}/marketplaces` };
+    case "add_plugin_marketplace":
+      return {
+        method: "POST",
+        url: `/api/plugins/${enc(a.app)}/marketplaces`,
+        body: { source: a.source },
+      };
+    case "remove_plugin_marketplace":
+      return {
+        method: "POST",
+        url: `/api/plugins/${enc(a.app)}/marketplaces/remove`,
+        body: { name: a.name },
+      };
+    case "refresh_plugin_marketplaces":
+      return {
+        method: "POST",
+        url: `/api/plugins/${enc(a.app)}/marketplaces/refresh`,
+      };
+    case "install_plugin":
+      return {
+        method: "POST",
+        url: `/api/plugins/${enc(a.app)}/install`,
+        body: { id: a.id },
+      };
+    case "uninstall_plugin":
+      return {
+        method: "POST",
+        url: `/api/plugins/${enc(a.app)}/uninstall`,
+        body: { id: a.id },
+      };
+    case "update_plugin":
+      return {
+        method: "POST",
+        url: `/api/plugins/${enc(a.app)}/update`,
+        body: { id: a.id },
+      };
+    case "set_plugin_enabled":
+      return {
+        method: "POST",
+        url: `/api/plugins/${enc(a.app)}/enabled`,
+        body: { id: a.id, enabled: a.enabled },
+      };
+
     // ---------- skills ----------
     case "get_installed_skills":
       return { method: "GET", url: "/api/skills/installed" };

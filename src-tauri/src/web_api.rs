@@ -23,6 +23,7 @@ use crate::database::Database;
 use crate::error::AppError;
 use crate::prompt::Prompt;
 use crate::provider::{Provider, UniversalProvider};
+use crate::services::plugin_manager::{self, PluginApp};
 use crate::services::profile::{ProfileDto, ProfileScope, ProfileService};
 use crate::services::prompt::PromptService;
 use crate::services::provider::icon;
@@ -241,6 +242,25 @@ pub fn router_with_update(
         .route("/api/skills/search", get(search_skills_sh))
         .route("/api/skills/repos", get(skill_repos).post(add_skill_repo))
         .route("/api/skills/repos/:owner/:name", delete(remove_skill_repo))
+        // plugins: every call runs the app's own CLI on the server host
+        .route("/api/plugins/:app/installed", get(plugins_installed))
+        .route("/api/plugins/:app/catalog", get(plugins_catalog))
+        .route(
+            "/api/plugins/:app/marketplaces",
+            get(plugin_marketplaces).post(plugin_marketplace_add),
+        )
+        .route(
+            "/api/plugins/:app/marketplaces/remove",
+            post(plugin_marketplace_remove),
+        )
+        .route(
+            "/api/plugins/:app/marketplaces/refresh",
+            post(plugin_marketplaces_refresh),
+        )
+        .route("/api/plugins/:app/install", post(plugin_install))
+        .route("/api/plugins/:app/uninstall", post(plugin_uninstall))
+        .route("/api/plugins/:app/enabled", post(plugin_set_enabled))
+        .route("/api/plugins/:app/update", post(plugin_update))
         // sessions
         .route("/api/sessions", get(list_sessions).delete(delete_sessions))
         .route("/api/sessions/one", delete(delete_session))
@@ -1644,6 +1664,135 @@ async fn resync_mcp(State(state): State<SharedState>, Json(body): Json<ResyncMcp
         outcomes.push(McpService::resync_app(&state, &app));
     }
     ok(outcomes)
+}
+
+// ---------- plugins ----------
+
+/// `:app` of `/api/plugins/:app/*` takes the values of the desktop's `PluginApp`
+/// (`claude`, `codex`, `grokbuild`, `mcode`, `openclaw`, `pi`).
+macro_rules! plugin_app {
+    ($app:expr) => {
+        match serde_json::from_value::<PluginApp>(Value::String($app.to_string())) {
+            Ok(app) => app,
+            Err(_) => return bad_request(format!("unsupported plugin app: {}", $app)),
+        }
+    };
+}
+
+#[derive(Deserialize)]
+struct PluginIdReq {
+    id: String,
+}
+
+#[derive(Deserialize)]
+struct PluginEnabledReq {
+    id: String,
+    enabled: bool,
+}
+
+#[derive(Deserialize)]
+struct PluginMarketplaceAddReq {
+    source: String,
+}
+
+#[derive(Deserialize)]
+struct PluginMarketplaceRemoveReq {
+    name: String,
+}
+
+async fn plugins_installed(Path(app): Path<String>) -> ApiResult {
+    let app = plugin_app!(app);
+    blocking_api("plugin list", move || plugin_manager::list_installed(app)).await
+}
+
+async fn plugins_catalog(Path(app): Path<String>) -> ApiResult {
+    let app = plugin_app!(app);
+    blocking_api("plugin catalog", move || plugin_manager::list_catalog(app)).await
+}
+
+async fn plugin_marketplaces(Path(app): Path<String>) -> ApiResult {
+    let app = plugin_app!(app);
+    blocking_api("plugin marketplaces", move || {
+        plugin_manager::list_marketplaces(app)
+    })
+    .await
+}
+
+async fn plugin_marketplace_add(
+    Path(app): Path<String>,
+    Json(body): Json<PluginMarketplaceAddReq>,
+) -> ApiResult {
+    let app = plugin_app!(app);
+    blocking_api("plugin marketplace add", move || {
+        plugin_manager::add_marketplace(app, &body.source)
+    })
+    .await
+}
+
+async fn plugin_marketplace_remove(
+    Path(app): Path<String>,
+    Json(body): Json<PluginMarketplaceRemoveReq>,
+) -> ApiResult {
+    let app = plugin_app!(app);
+    blocking_api("plugin marketplace remove", move || {
+        plugin_manager::remove_marketplace(app, &body.name)
+    })
+    .await
+}
+
+async fn plugin_marketplaces_refresh(Path(app): Path<String>) -> ApiResult {
+    let app = plugin_app!(app);
+    blocking_api("plugin marketplace refresh", move || {
+        plugin_manager::refresh_marketplaces(app)
+    })
+    .await
+}
+
+async fn plugin_install(Path(app): Path<String>, Json(body): Json<PluginIdReq>) -> ApiResult {
+    let app = plugin_app!(app);
+    blocking_api("plugin install", move || {
+        plugin_manager::install_plugin(app, &body.id)
+    })
+    .await
+}
+
+async fn plugin_uninstall(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+    Json(body): Json<PluginIdReq>,
+) -> ApiResult {
+    let app = plugin_app!(app);
+    let db = state.db.clone();
+    blocking_api("plugin uninstall", move || {
+        plugin_manager::uninstall_plugin(&db, app, &body.id)
+    })
+    .await
+}
+
+async fn plugin_set_enabled(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+    Json(body): Json<PluginEnabledReq>,
+) -> ApiResult {
+    let app = plugin_app!(app);
+    let db = state.db.clone();
+    blocking_api("plugin enable", move || {
+        plugin_manager::set_plugin_enabled(&db, app, &body.id, body.enabled)
+    })
+    .await
+}
+
+async fn plugin_update(
+    State(state): State<SharedState>,
+    Path(app): Path<String>,
+    Json(body): Json<PluginIdReq>,
+) -> ApiResult {
+    let app = plugin_app!(app);
+    let db = state.db.clone();
+    blocking_api("plugin update", move || {
+        plugin_manager::update_plugin(&db, app, &body.id)
+    })
+    .await
 }
 
 // ---------- skills ----------
