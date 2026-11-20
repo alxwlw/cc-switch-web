@@ -31,6 +31,15 @@ use tokio::sync::{oneshot, Mutex};
 use crate::error::AppError;
 use login::RunningLogin;
 
+/// Test seam: the `open_browser` of the latest `start_login`, taken by
+/// `take_last_login_open_browser`. Production never reads it.
+static LAST_LOGIN_OPEN_BROWSER: std::sync::Mutex<Option<bool>> = std::sync::Mutex::new(None);
+
+/// Returns and clears the `open_browser` of the latest `start_login` call.
+pub fn take_last_login_open_browser() -> Option<bool> {
+    LAST_LOGIN_OPEN_BROWSER.lock_recover().take()
+}
+
 const STORE_FILENAME: &str = "claude_accounts.json";
 /// 浏览器登录最多等这么久，过了就当放弃。
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(10 * 60);
@@ -250,6 +259,7 @@ impl ClaudeAccountManager {
     /// 新建账号目录，在里面启动 `claude auth login`，拿到登录链接后返回。
     /// `open_browser` 为假（授权中心关了「登录时自动打开浏览器」）时不让 Claude Code 自己打开浏览器。
     pub async fn start_login(&self, open_browser: bool) -> Result<LoginStart, AppError> {
+        *LAST_LOGIN_OPEN_BROWSER.lock_recover() = Some(open_browser);
         let local_id = layout::new_local_id();
         let home = layout::account_home(&self.data_dir, &local_id);
         let config_dir = layout::config_dir(&self.data_dir, &local_id);

@@ -91,3 +91,11 @@ pub async fn get_claude_login_switch() -> Result<ClaudeLoginSwitchStatus, String
         .await
         .map_err(|error| error.to_string())
 }
+
+/// Test seam: whether the latest Claude account login asked `claude auth login` to open a
+/// browser (`None` when none was started since the last call). Production never calls it
+/// and no HTTP route reaches it.
+#[cfg_attr(not(feature = "test-hooks"), doc(hidden))]
+pub fn claude_login_open_browser_test_hook() -> Option<bool> {
+    crate::services::claude_account::take_last_login_open_browser()
+}

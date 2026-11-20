@@ -89,3 +89,64 @@ async fn paste_for_an_unknown_flow_is_an_error() {
         "{body}"
     );
 }
+
+/// Puts a `claude` that exits at once first on PATH (so no real login ever starts) and
+/// restores PATH when dropped.
+struct FakeClaudeOnPath {
+    old_path: Option<std::ffi::OsString>,
+}
+
+impl FakeClaudeOnPath {
+    fn install() -> Self {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = ensure_test_home().join("fake-bin");
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = dir.join("claude");
+        std::fs::write(&script, "#!/bin/sh\nexit 1\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let old_path = std::env::var_os("PATH");
+        let mut paths = vec![dir];
+        paths.extend(std::env::split_paths(&old_path.clone().unwrap_or_default()));
+        std::env::set_var("PATH", std::env::join_paths(paths).unwrap());
+        Self { old_path }
+    }
+}
+
+impl Drop for FakeClaudeOnPath {
+    fn drop(&mut self) {
+        match &self.old_path {
+            Some(path) => std::env::set_var("PATH", path),
+            None => std::env::remove_var("PATH"),
+        }
+    }
+}
+
+/// The web login of `claude_official` must never ask `claude auth login` to open a browser
+/// on the server host, whatever the client sends. Unix only: it needs a fake `claude` script.
+#[cfg(unix)]
+#[tokio::test]
+#[serial]
+async fn web_claude_login_never_opens_a_browser_on_the_server() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    ensure_test_home();
+    let _path = FakeClaudeOnPath::install();
+    let router = web_router();
+
+    for body in [json!({}), json!({"loginMethod": "device_code"})] {
+        let _ = cc_switch_lib::claude_login_open_browser_test_hook();
+        let _ = web_call(
+            &router,
+            "POST",
+            "/api/auth/claude_official/login",
+            Some(body.clone()),
+        )
+        .await;
+
+        assert_eq!(
+            cc_switch_lib::claude_login_open_browser_test_hook(),
+            Some(false),
+            "login body {body}"
+        );
+    }
+}
