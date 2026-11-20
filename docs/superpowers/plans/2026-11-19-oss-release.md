@@ -44,7 +44,7 @@
 - [x] [Phase 2 — консоль, лицо проекта, `.github/`, синхронизация](2026-11-19-oss-release/phase-2.md) — после слияния синхронизации с апстримом.
   - PR: https://github.com/alxwlw/cc-switch-web/pull/44, branch feat-cld/oss-release-p2
 - [x] [Phase 3 — первый релиз, переезд развёртываний, проверка самообновления](2026-11-19-oss-release/phase-3.md) — после слияния фазы 2; каждый тег — после «выпускай».
-  - PR: https://github.com/alxwlw/cc-switch-web/pull/45 (v4.0.35-web.1), https://github.com/alxwlw/cc-switch-web/pull/46 (v4.0.35-web.2) and the closing PR, branch feat-cld/oss-release-p3
+  - PR: https://github.com/alxwlw/cc-switch-web/pull/45 (v4.0.35-web.1), https://github.com/alxwlw/cc-switch-web/pull/46 (v4.0.35-web.2), https://github.com/alxwlw/cc-switch-web/pull/47 (закрытие плана), branch feat-cld/oss-release-p3
 
 ## Notes for next phase
 
