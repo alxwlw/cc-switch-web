@@ -1,8 +1,160 @@
-# Deploy (Tailscale-only)
+# Deploy
 
-Server has no in-app auth by design. Reachable only inside your Tailnet.
+cc-switch-web runs as one user on a Linux server and manages that user's agent configs. It has
+no login of its own, so by default it listens on `127.0.0.1:18766` and you reach it through an
+SSH tunnel or a tailnet (see "Access"). Two ways to run a release: the installer with a systemd
+user service, and Docker Compose. Building from source is the third, for contributors.
 
-## Install on the host
+Only Linux on `x86_64` and `aarch64` is supported.
+
+## Install from a release
+
+```bash
+curl -fsSL https://github.com/alxwlw/cc-switch-web/releases/latest/download/install.sh | bash
+```
+
+Pass flags after `bash -s --`, for example `... | bash -s -- --tailscale --port 18800`.
+
+| Flag                               | Effect                                                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `--loopback`                       | Listen on `127.0.0.1` only. The default on a first install.                                           |
+| `--tailscale`                      | Listen on this machine's tailnet address (`tailscale ip -4`) and set `TRUSTED_TAILNET=1`.             |
+| `--port N`                         | Port to listen on (default `18766`).                                                                  |
+| `--self-update`, `--no-self-update`| Let the console update this install from a release (the default), or not.                            |
+| `--version vX.Y.Z-web.N`           | Install this release instead of the latest.                                                           |
+| `--uninstall`                      | Remove the install; see "Uninstall".                                                                  |
+
+A re-run without flags keeps the address, port and self-update setting of the installed unit.
+The installer downloads the archive for this machine and `SHA256SUMS` of the release, checks
+the checksum, and installs nothing when it does not match. These environment variables change
+where it looks: `CC_SWITCH_WEB_REPO` (`alxwlw/cc-switch-web`), `CC_SWITCH_WEB_UPDATE_API`
+(`https://api.github.com`), `CC_SWITCH_WEB_DOWNLOAD_BASE`
+(`https://github.com/$CC_SWITCH_WEB_REPO/releases/download`) and `CC_SWITCH_WEB_HEALTH_TIMEOUT`
+(seconds to wait for the service to come up, 30).
+
+**Layout**
+
+| Path                                              | What                                              |
+| ------------------------------------------------- | ------------------------------------------------- |
+| `~/.local/bin/cc-switch-web`                      | The server binary.                                |
+| `~/.local/share/cc-switch-web/`                   | `dist-web/` (the console), `install.sh`, `self-update.sh`. |
+| `~/.config/systemd/user/cc-switch-web.service`    | The systemd user unit.                            |
+| `~/.cc-switch-web`                                | Your data (see "Data directory").                 |
+
+**The unit** sets `HOST`, `PORT`, `TRUSTED_TAILNET=1` (only with `--tailscale`),
+`CC_SWITCH_CONFIG_DIR`, `WEB_DIST`, `CC_SWITCH_WEB_INSTALL_DIR`, `CC_SWITCH_WEB_UPDATE_REPO`,
+`CC_SWITCH_WEB_SELF_UPDATE` and `RUST_LOG`, with `Restart=always` and `RestartSec=3`. The
+installer enables and restarts it, then waits until `/api/capabilities` reports the new version
+and `/api/health` answers. Logs: `journalctl --user -u cc-switch-web -n 100`.
+
+**Linger.** A user service stops when the user's last session ends unless lingering is on. The
+installer runs `loginctl enable-linger` for you; if that needs more rights it prints
+`sudo loginctl enable-linger <user>` for you to run.
+
+**System packages.** The binary needs `libssl3 libgtk-3-0 libayatana-appindicator3-1 librsvg2-2
+libwebkit2gtk-4.1-0`. When `ldd` finds a library missing, the installer installs the list with
+`apt-get` (through `sudo` unless you are root; a few hundred MB). On a system without `apt-get`
+it stops and names the libraries to install with your package manager. Without a systemd user
+session (a container) it installs the files and prints the command to run the server in the
+foreground.
+
+## Docker Compose
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/alxwlw/cc-switch-web/main/deploy/compose.yml
+printf 'CCS_UID=%s\nCCS_GID=%s\n' "$(id -u)" "$(id -g)" > .env
+docker compose up -d
+```
+
+The image is `ghcr.io/alxwlw/cc-switch-web:latest` (`linux/amd64` and `linux/arm64`);
+`CC_SWITCH_WEB_IMAGE` in `.env` or the environment picks another tag. The compose file:
+
+- **`network_mode: host`.** The built-in proxy listens on `127.0.0.1:15721`, and takeover points
+  the configs of your agents at that address. Your agents run on the host, so the proxy has to
+  be on the host's loopback; in a bridge network it would be unreachable to them.
+- **Your UID and GID** (`CCS_UID`, `CCS_GID`; compose refuses to start without them). The
+  container runs as you, so the files it writes in your home directory belong to you.
+- **`$HOME` is mounted at the same path** and `HOME` is set to it, so the agent configs of the
+  host are the ones the console edits. Data goes to `$HOME/.cc-switch-web`.
+- It listens on `127.0.0.1:18766` (`HOST`, `PORT`). For Tailscale, set `HOST` to your tailnet
+  address and `TRUSTED_TAILNET: "1"` (the commented lines in the file).
+- `restart: unless-stopped`; the image has a health check on `/api/health`.
+
+Logs: `docker compose logs`. In a bridge network with `-p` the image needs `HOST=0.0.0.0` and
+`TRUSTED_TAILNET=1`, and the port published on a loopback or tailnet address only; the proxy
+and takeover do not work that way, so prefer the compose file.
+
+## Access
+
+The server has no login: whoever reaches the port controls the agent configs of that user and
+can start an update to a published release (see [SECURITY.md](../SECURITY.md)). Never publish
+the port.
+
+**SSH tunnel** (the default). The server listens on `127.0.0.1` of the host; from your laptop:
+
+```bash
+ssh -L 18766:localhost:18766 you@your-server   # then open http://localhost:18766
+```
+
+**Tailscale.** Install with `--tailscale` (or set `HOST` and `TRUSTED_TAILNET=1` in the compose
+file) and open `http://<tailscale-ip>:18766/` from any machine on your tailnet. A non-loopback
+`HOST` without `TRUSTED_TAILNET=1` makes the server refuse to start. Every member of the tailnet
+can reach the port, so restrict it with Tailscale ACLs to the people who may manage your agents.
+
+**Check** it is up:
+
+```bash
+curl http://127.0.0.1:18766/api/health         # use the tailnet address with --tailscale
+curl http://127.0.0.1:18766/api/capabilities
+systemctl --user status cc-switch-web          # a release or source install
+```
+
+## Updates
+
+Settings → About asks GitHub for the latest release (`GET /api/update/check`, cached for an
+hour) and shows what is new. A release install updates itself from there with "Update now":
+the console runs `self-update.sh --release`, which downloads the archive and `SHA256SUMS`,
+verifies them, swaps in the binary and `dist-web`, restarts the service and rolls back when the
+new version does not come up healthy. Progress is in `GET /api/update/status`; build and
+download output is in `journalctl --user -u cc-switch-web-update`. The stages are `checking`,
+`downloading`, `verifying`, `installing`, `restarting` and, after a failure past the swap,
+`rolling-back`, then `done`, `failed`, `rolled-back` or `rollback-failed`. Nothing is replaced
+before the archive is verified and complete. Anyone who can reach the port can start this update,
+but cannot choose what is installed: it is always the latest published release of
+`CC_SWITCH_WEB_UPDATE_REPO`. To turn the button off, re-run the installer with
+`--no-self-update`. The database notes and the way back by hand under "Build from source" below
+apply to a release install too (the previous build is kept as `cc-switch-web.prev` next to the
+binary and `dist-web.prev` in `~/.local/share/cc-switch-web/`).
+
+By hand, run the installer again (it keeps the unit's settings); `--version` pins a release:
+
+```bash
+curl -fsSL https://github.com/alxwlw/cc-switch-web/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/alxwlw/cc-switch-web/releases/latest/download/install.sh | bash -s -- --version v4.0.35-web.1
+```
+
+Docker: `docker compose pull && docker compose up -d`. Self-update does not exist in a
+container: the install route answers `409` and About shows the commands.
+
+## Uninstall
+
+```bash
+curl -fsSL https://github.com/alxwlw/cc-switch-web/releases/latest/download/install.sh | bash -s -- --uninstall
+```
+
+This stops and disables the unit and removes it, the binary and `~/.local/share/cc-switch-web`.
+Your data in `~/.cc-switch-web` is kept; delete it by hand if you do not need it. With Docker:
+`docker compose down`.
+
+## Build from source
+
+For contributors and for running a branch of your own. The console and the server are built on
+the host, from a git checkout (see [CONTRIBUTING.md](../CONTRIBUTING.md) for the toolchain).
+This section covers what differs from a release install: a source build has no fork version, so
+the console compares its commit with a branch instead of with a release, and its self-update
+fast-forwards a checkout and rebuilds.
+
+### Install on the host
 
 ```bash
 ./scripts/install-server.sh
@@ -21,7 +173,7 @@ by the script only for its closing message: the unit comes from
 re-run of `install-server.sh` renders the unit from the template again, so an edit that
 removed that line is undone (see "Data directory" below).
 
-## Build commit
+### Build commit
 
 The console compares the running build with the fork's branch, so the binary carries the
 commit it was built from (`buildSha` in `GET /api/capabilities`, `null` when unknown). It
@@ -71,14 +223,14 @@ read from the environment of the server on every request:
 | `CC_SWITCH_WEB_UPDATE_REPO`   | `alxwlw/cc-switch-web`   |
 | `CC_SWITCH_WEB_UPDATE_BRANCH` | `main`                   |
 
-## Self-update from the console (systemd user unit only, off by default)
+### Self-update from the console in a build from source (off by default)
 
 When it is on, a build that is behind gets an "Update now" button in Settings → About.
 The confirmation names the branch, lists the missing commits and warns that the database
 may be migrated. After the click the page follows the stages, survives the restart of the
 service and reloads itself when the new build answers.
 
-**The risk, stated plainly.** The server has no authentication (see the top of this file)
+**The risk, stated plainly.** The server has no authentication (see "Access" above)
 and `POST /api/update/install` is an ordinary route of it: **anyone who can reach the
 port, that is every member of the tailnet, can start a build on the host and make the
 service restart.** They cannot choose what is built: the request body is ignored, the
@@ -90,7 +242,7 @@ and a build costs minutes of CPU and disk. That is why self-update is opt-in and
 part of `install-server.sh`. Do not switch it on for a tailnet you do not trust, or for a
 branch you do not control.
 
-### Switch it on
+#### Switch it on
 
 Put the settings in a drop-in, not in `cc-switch-web.service`: `install-server.sh`
 renders that file from the template on every run and would erase them.
@@ -139,7 +291,7 @@ console shows the button from that flag. With self-update off, no button appears
 manual commands stay in About and `POST /api/update/install` answers `409` with the
 reason.
 
-### What `scripts/self-update.sh` does
+#### What `scripts/self-update.sh` does
 
 The server starts it as the transient unit `cc-switch-web-update` and it writes its
 progress to `${XDG_STATE_HOME:-~/.local/state}/cc-switch-web/update-status.json`
@@ -191,7 +343,7 @@ If `scripts/cc-switch-web.service.template` changed in the update, the final mes
 unit. Run `scripts/install-server.sh` by hand (then `systemctl --user daemon-reload &&
 systemctl --user restart cc-switch-web`). The drop-in survives that.
 
-### The database and an update
+#### The database and an update
 
 This is what the code does (`src-tauri/src/database`), not a promise of the script. The
 script makes no backup of its own.
@@ -246,7 +398,10 @@ script makes no backup of its own.
   Then put the previous binary and `dist-web` back with the recipe below. Everything
   written between the backup and the stop is lost; `cc-switch.db.too-new` keeps it.
 
-### Go back by hand
+#### Go back by hand
+
+In a release install `DIST` below is `$HOME/.local/share/cc-switch-web/dist-web`, and there is
+no checkout: to go back to an older release run the installer with `--version`.
 
 `.prev` holds the build that was running before the last update (the binary
 `cc-switch-web.prev` next to the installed one, `dist-web.prev` next to `dist-web`). To
@@ -282,7 +437,11 @@ The checkout is not touched by this recipe: it stays on the commit of the update
 console will say "behind" again, because the running build is older than the branch; a
 click then rebuilds that same commit, so fix a bad commit on the branch first.
 
-## Data isolation
+## Data directory
+
+The data of a release install, a source build and the container is the same kind of directory; the two parts below say what lives where and how to move it.
+
+### Data isolation
 
 The fork does not keep its database in `~/.cc-switch` unless you point it there, but a few
 files of the device always live there (see the second list below):
@@ -312,7 +471,7 @@ state of upstream, not moved on purpose):
 So `~/.cc-switch` can appear on a host that runs only the fork, and a desktop cc-switch
 on the same account shares those files with it.
 
-## Data directory
+### Choosing the directory
 
 `GET /api/app-config-dir` (and Settings → Data in the console) shows the directory the
 running process uses (`effective`), where it comes from (`source`) and the value that will
@@ -413,19 +572,6 @@ console polls `/api/health` once a second, up to 60 s, and reloads the page when
 `instanceId` changed or the new process answers `503` (init-error); after 60 s it shows
 a toast and does not reload.
 
-## Check
-
-```bash
-curl http://$(tailscale ip -4):18766/api/health
-curl http://$(tailscale ip -4):18766/api/capabilities
-systemctl --user status cc-switch-web
-```
-
-Console: `http://<tailscale-ip>:18766/` in the browser (no login).
-
 ## Sync upstream
 
-See `docs/upstream.lock`. `upstream-main` is a fast-forward-only mirror of
-`farion1231/cc-switch`; product work lives on `main` behind adapters
-(`src-tauri/src/web_api.rs`, `examples/server.rs`, `src/lib/api/adapter.ts`,
-`src/lib/web-shims/`, `vite.config.web.mts`, `scripts/*`).
+See [CONTRIBUTING.md](../CONTRIBUTING.md) and `docs/upstream.lock`.
