@@ -38,13 +38,15 @@ curl -fsSL https://github.com/alxwlw/cc-switch-web/releases/latest/download/inst
 
 Open the address the installer prints. `--port N` changes the port (default 18766).
 
+**Used zuoliangyu/cc-switch-web before?** That is a different project with the same name, and it keeps its data in the same `~/.cc-switch-web`. Stop it and move that directory away before you install: this console upgrades the database it finds there in place, and the other project may not open it afterwards.
+
 ## Based on cc-switch
 
 cc-switch-web is based on [farion1231/cc-switch](https://github.com/farion1231/cc-switch), the desktop app by Jason Young and its contributors, and could not exist without it. This fork runs the same app in a browser on a Linux server, and it is synchronized with the upstream project regularly. For the desktop app, its documentation and its issues, go to upstream.
 
 ## What works and what does not
 
-The console manages files on the server host only. Providers, MCP servers, prompts, skills, sessions, usage, proxy settings, backups, import and export, and the sign-in flows of the managed accounts work in the browser.
+The console manages files on the server host only. Providers, MCP servers, prompts, skills, plugins (through each agent's own CLI on the server), sessions, usage, proxy settings, backups, import and export, and the sign-in flows of the managed accounts work in the browser.
 
 What needs a desktop session is not there:
 
