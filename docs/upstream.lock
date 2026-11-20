@@ -24,6 +24,7 @@ fork_owned = [
   "CHANGELOG.md",
   "LICENSE",
   "docs/deploy.md",
+  "tests/config/readmeParity.test.ts",
   ".github/*",
 ]
 

@@ -54,7 +54,7 @@ What needs a desktop session is not there:
 - registering the `ccswitch://` link handler in the OS (deep-link import works by paste or upload);
 - signing in to Antigravity, which needs a loopback callback on the host.
 
-The same list comes from the server: `GET /api/capabilities` returns it in `runtime_boundaries`.
+`GET /api/capabilities` returns a short summary of these limits in `runtime_boundaries`.
 
 ## Updating
 
