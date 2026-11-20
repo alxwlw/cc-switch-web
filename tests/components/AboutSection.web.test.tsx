@@ -60,6 +60,7 @@ function renderAbout() {
 
 const fetchMock = vi.fn();
 
+const STAR_PROMPT_DISMISSED_KEY = "ccswitch:about:starPromptDismissed";
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const LATEST = "fedcba9876543210fedcba9876543210fedcba98";
 const SYSTEMD =
@@ -142,6 +143,7 @@ describe("AboutSection · update controls", () => {
     mocks.toastSuccess.mockReset();
     mocks.toastError.mockReset();
     mocks.openExternal.mockReset().mockResolvedValue(undefined);
+    localStorage.removeItem(STAR_PROMPT_DISMISSED_KEY);
     fetchMock.mockReset();
     serveCheck(updateData({ status: "up-to-date", behindBy: 0, commits: [] }));
     vi.stubGlobal("fetch", fetchMock);
@@ -587,6 +589,22 @@ describe("AboutSection · update controls", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("settings.starPrompt")).toBeInTheDocument();
     fireEvent.click(screen.getByText("settings.starOnGithub"));
+    expect(mocks.openExternal).toHaveBeenCalledWith(
+      "https://github.com/farion1231/cc-switch",
+    );
+  });
+
+  it("desktop: GitHub is hidden while the star banner shows, and appears once the banner is closed", async () => {
+    renderAbout();
+    expect(screen.getByText("settings.starPrompt")).toBeInTheDocument();
+    expect(screen.queryByText("settings.github")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "common.close" }));
+    expect(screen.queryByText("settings.starPrompt")).toBeNull();
+    expect(localStorage.getItem(STAR_PROMPT_DISMISSED_KEY)).toBe("1");
+
+    fireEvent.click(await screen.findByText("settings.github"));
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1);
     expect(mocks.openExternal).toHaveBeenCalledWith(
       "https://github.com/farion1231/cc-switch",
     );
