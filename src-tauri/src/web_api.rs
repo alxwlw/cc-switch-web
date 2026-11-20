@@ -727,12 +727,14 @@ async fn restart_server(
     )
 }
 
-/// `buildSha`, `webVersion` and `self_update` are parameters so a test can pin them: a default
-/// build has no SHA and no fork version, and the flag follows the environment of the process.
+/// `buildSha`, `webVersion`, `self_update` and `project_url` are parameters so a test can pin
+/// them: a default build has no SHA and no fork version, and the flag and the repository follow
+/// the environment of the process.
 fn capabilities_payload(
     build_sha: Option<&str>,
     web_version: Option<crate::services::web_update::WebVersion>,
     self_update: bool,
+    project_url: &str,
 ) -> Value {
     json!({
         "mode": "web",
@@ -741,6 +743,7 @@ fn capabilities_payload(
         "buildSha": build_sha,
         "webVersion": web_version.map(|v| v.to_string()),
         "selfUpdate": self_update,
+        "projectUrl": project_url,
         "platform": std::env::consts::OS,
         "mvp_apps": ["claude", "codex", "gemini", "opencode"],
         "runtime_boundaries": "manages files on the server host only; no tray, no native file pickers, no file dialogs, no terminal launch; updates: check in UI, install by operator, or from the UI when selfUpdate is true",
@@ -756,6 +759,7 @@ async fn capabilities(control: Option<Extension<UpdateControl>>) -> Json<Value> 
         crate::services::web_update::build_sha(),
         crate::services::web_update::web_version(),
         self_update,
+        &crate::services::web_update::UpdateSourceConfig::from_env().project_url(),
     ))
 }
 
@@ -5141,11 +5145,13 @@ mod tests {
     use axum::http::StatusCode;
     use std::sync::Arc;
 
+    const URL: &str = "https://github.com/example/fork";
+
     #[test]
     fn capabilities_payload_carries_the_given_build_sha() {
-        let set = capabilities_payload(Some("abc1234def"), None, false);
+        let set = capabilities_payload(Some("abc1234def"), None, false, URL);
         assert_eq!(set["buildSha"], serde_json::json!("abc1234def"));
-        let unset = capabilities_payload(None, None, false);
+        let unset = capabilities_payload(None, None, false, URL);
         assert!(unset.as_object().unwrap().contains_key("buildSha"));
         assert!(unset["buildSha"].is_null());
     }
@@ -5153,11 +5159,11 @@ mod tests {
     #[test]
     fn capabilities_payload_carries_the_self_update_flag() {
         assert_eq!(
-            capabilities_payload(None, None, true)["selfUpdate"],
+            capabilities_payload(None, None, true, URL)["selfUpdate"],
             serde_json::json!(true)
         );
         assert_eq!(
-            capabilities_payload(None, None, false)["selfUpdate"],
+            capabilities_payload(None, None, false, URL)["selfUpdate"],
             serde_json::json!(false)
         );
     }
@@ -5166,10 +5172,34 @@ mod tests {
     fn capabilities_payload_carries_the_web_version() {
         let v = WebVersion::parse("4.0.35-web.1");
         assert_eq!(
-            capabilities_payload(None, v, false)["webVersion"],
+            capabilities_payload(None, v, false, URL)["webVersion"],
             "4.0.35-web.1"
         );
-        assert!(capabilities_payload(None, None, false)["webVersion"].is_null());
+        assert!(capabilities_payload(None, None, false, URL)["webVersion"].is_null());
+    }
+
+    #[test]
+    fn capabilities_payload_carries_the_project_url() {
+        let payload = capabilities_payload(None, None, false, "https://github.com/o/r");
+        assert_eq!(payload["projectUrl"], "https://github.com/o/r");
+        assert_eq!(payload["mode"], "web");
+        assert!(payload["runtime_boundaries"]
+            .as_str()
+            .is_some_and(|s| !s.is_empty()));
+    }
+
+    #[test]
+    fn project_url_follows_the_update_repository() {
+        use crate::services::web_update::UpdateSourceConfig;
+        let config = UpdateSourceConfig {
+            api_base: "https://api.github.com".into(),
+            repo: "someone/their-fork".into(),
+            branch: "main".into(),
+        };
+        assert_eq!(
+            config.project_url(),
+            "https://github.com/someone/their-fork"
+        );
     }
 
     /// GitHub stand-in: `compare` answers with `status`/`body`, counting only
