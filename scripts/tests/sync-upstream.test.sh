@@ -155,5 +155,33 @@ check "a missing upstream-main is created at the ref" "$(git -C "$TMP/c7/fork" r
 check_has "a missing upstream-main: the script says it created it" "$OUT" "created upstream-main at"
 case_done "a missing upstream-main is created at the ref and the script says so"
 
+# 8. the lock names the fork-owned documents and the test that checks one of them; code is not owned
+# shellcheck source=../sync-upstream.sh
+owned() { (cd "$TMP/c1/fork" && source "$SCRIPT" && is_fork_owned "$1" && echo yes || echo no); }
+check "docs/deploy.md is fork-owned" "$(owned docs/deploy.md)" "yes"
+check "tests/config/readmeParity.test.ts is fork-owned" "$(owned tests/config/readmeParity.test.ts)" "yes"
+check "a source file is not fork-owned" "$(owned src/a.rs)" "no"
+case_done "the lock names docs/deploy.md and the readme parity test as fork-owned"
+
+# 9. a ref that main already contains merges nothing
+setup_case c9
+run_sync c9 --ref main
+check "main already contains the ref: exit code" "$RC" "0"
+check_has "main already contains the ref: the script says so" "$OUT" "main already contains main, nothing to merge"
+check "main already contains the ref: no sync branch" "$(git -C "$TMP/c9/fork" branch --list 'sync/*')" ""
+check "main already contains the ref: no merge started" "$(git -C "$TMP/c9/fork" rev-parse -q --verify MERGE_HEAD || echo none)" "none"
+case_done "a ref that main already contains merges nothing"
+
+# 10. an existing sync branch is refused before anything is switched or merged
+setup_case c10
+git -C "$TMP/c10/fork" fetch -q upstream
+git -C "$TMP/c10/fork" branch "sync/upstream-$(git -C "$TMP/c10/fork" rev-parse --short=7 upstream/main)" main
+run_sync c10
+check "an existing sync branch: exit code" "$RC" "1"
+check_has "an existing sync branch: the script names it" "$OUT" "refused, branch sync/upstream-"
+check "an existing sync branch: still on main" "$(git -C "$TMP/c10/fork" branch --show-current)" "main"
+check "an existing sync branch: no merge started" "$(git -C "$TMP/c10/fork" rev-parse -q --verify MERGE_HEAD || echo none)" "none"
+case_done "an existing sync branch is refused before anything is merged"
+
 echo "$passes passed, $fails failed"
 [ "$fails" -eq 0 ]
