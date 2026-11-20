@@ -15,14 +15,14 @@ curl -fsSL https://github.com/alxwlw/cc-switch-web/releases/latest/download/inst
 
 Pass flags after `bash -s --`, for example `... | bash -s -- --tailscale --port 18800`.
 
-| Flag                               | Effect                                                                                                |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `--loopback`                       | Listen on `127.0.0.1` only. The default on a first install.                                           |
-| `--tailscale`                      | Listen on this machine's tailnet address (`tailscale ip -4`) and set `TRUSTED_TAILNET=1`.             |
-| `--port N`                         | Port to listen on (default `18766`).                                                                  |
-| `--self-update`, `--no-self-update`| Let the console update this install from a release (the default), or not.                            |
-| `--version vX.Y.Z-web.N`           | Install this release instead of the latest.                                                           |
-| `--uninstall`                      | Remove the install; see "Uninstall".                                                                  |
+| Flag                                | Effect                                                                                    |
+| ----------------------------------- | ----------------------------------------------------------------------------------------- |
+| `--loopback`                        | Listen on `127.0.0.1` only. The default on a first install.                               |
+| `--tailscale`                       | Listen on this machine's tailnet address (`tailscale ip -4`) and set `TRUSTED_TAILNET=1`. |
+| `--port N`                          | Port to listen on (default `18766`).                                                      |
+| `--self-update`, `--no-self-update` | Let the console update this install from a release (the default), or not.                 |
+| `--version vX.Y.Z-web.N`            | Install this release instead of the latest.                                               |
+| `--uninstall`                       | Remove the install; see "Uninstall".                                                      |
 
 A re-run without flags keeps the address, port and self-update setting of the installed unit.
 The installer downloads the archive for this machine and `SHA256SUMS` of the release, checks
@@ -34,12 +34,12 @@ where it looks: `CC_SWITCH_WEB_REPO` (`alxwlw/cc-switch-web`), `CC_SWITCH_WEB_UP
 
 **Layout**
 
-| Path                                              | What                                              |
-| ------------------------------------------------- | ------------------------------------------------- |
-| `~/.local/bin/cc-switch-web`                      | The server binary.                                |
-| `~/.local/share/cc-switch-web/`                   | `dist-web/` (the console), `install.sh`, `self-update.sh`. |
-| `~/.config/systemd/user/cc-switch-web.service`    | The systemd user unit.                            |
-| `~/.cc-switch-web`                                | Your data (see "Data directory").                 |
+| Path                                           | What                                                       |
+| ---------------------------------------------- | ---------------------------------------------------------- |
+| `~/.local/bin/cc-switch-web`                   | The server binary.                                         |
+| `~/.local/share/cc-switch-web/`                | `dist-web/` (the console), `install.sh`, `self-update.sh`. |
+| `~/.config/systemd/user/cc-switch-web.service` | The systemd user unit.                                     |
+| `~/.cc-switch-web`                             | Your data (see "Data directory").                          |
 
 **The unit** sets `HOST`, `PORT`, `TRUSTED_TAILNET=1` (only with `--tailscale`),
 `CC_SWITCH_CONFIG_DIR`, `WEB_DIST`, `CC_SWITCH_WEB_INSTALL_DIR`, `CC_SWITCH_WEB_UPDATE_REPO`,
@@ -263,7 +263,7 @@ systemctl --user restart cc-switch-web
 - `CC_SWITCH_WEB_SOURCE_DIR` is the absolute path of the git checkout the service was
   installed from (the one that holds `scripts/self-update.sh` and the `dist-web` the unit
   serves). It must be on the update branch with no changed tracked files, and `git fetch
-  origin` must work without a prompt (an ssh key or a stored token).
+origin` must work without a prompt (an ssh key or a stored token).
 - `CC_SWITCH_WEB_BUILD_PATH` is a colon-separated list of directories put in front of
   `PATH` for the build. The update runs in a transient unit (`systemd-run --user`), which
   gets the user manager's `PATH`, not your login shell's, so `pnpm`, `node` and `cargo`
@@ -319,7 +319,7 @@ not survive the restart). Build output goes to the journal:
    directory) `cc-switch-web` becomes `cc-switch-web.prev` and the new binary takes its
    place; `dist-web` becomes `dist-web.prev` and `dist-web.new` takes its place.
 6. `restarting`: `systemctl --user daemon-reload`, `systemctl --user restart
-   cc-switch-web`, then up to 60 s (`HEALTH_TIMEOUT`) of polling until `/api/capabilities`
+cc-switch-web`, then up to 60 s (`HEALTH_TIMEOUT`) of polling until `/api/capabilities`
    reports the new `buildSha` **and** `/api/health` answers 2xx. Both are needed: a server
    whose startup failed (a database newer than the binary) serves in init-error mode,
    where `/api/capabilities` still answers with the build's own sha but `/api/health`,
@@ -376,7 +376,7 @@ script makes no backup of its own.
   the database restore below. (The same check also stops "already up to date" from being
   reported for a service that is in init-error mode.)
 - **Check for a migration before you click**: `git fetch origin && git diff HEAD
-  origin/<branch> -- src-tauri/src/database` shows a changed `SCHEMA_VERSION` or
+origin/<branch> -- src-tauri/src/database` shows a changed `SCHEMA_VERSION` or
   schema; if so, take your own backup first. The command needs no `sqlite3` binary (the
   host may not have one); it also prints the database's `user_version`, to compare with
   `SCHEMA_VERSION` in `src-tauri/src/database/mod.rs` of the new commit:
@@ -384,6 +384,7 @@ script makes no backup of its own.
   ```bash
   python3 -c 'import os, sqlite3; db = os.path.expanduser("~/.cc-switch-web/cc-switch.db"); src = sqlite3.connect("file:" + db + "?mode=ro", uri=True); src.backup(sqlite3.connect(os.path.expanduser("~/cc-switch-before-update.db"))); print("user_version", src.execute("PRAGMA user_version").fetchone()[0])'
   ```
+
 - **Restore the database** (service stopped; the file to use is the newest
   `db_backup_*.db` from before the update, or your own copy):
 
@@ -499,7 +500,7 @@ data, stop the service and copy the files first (`sqlite3 <old>/cc-switch.db ".b
 directory you already use.
 
 **Moving a unit from env-locked to override without landing on `~/.cc-switch`.** With the
-variable set the UI cannot write the file, and with the variable removed and no file the
+variable set the UI cannot write the file, and with the variable absent and no file the
 server falls back to `~/.cc-switch`, which on a shared account may be the desktop
 app's database. So the order is:
 
@@ -513,20 +514,51 @@ app's database. So the order is:
      > ~/.config/cc-switch-web/app_paths.json
    ```
 
-3. Remove the `Environment=CC_SWITCH_CONFIG_DIR=…` line from
-   `~/.config/systemd/user/cc-switch-web.service`, then
-   `systemctl --user daemon-reload && systemctl --user restart cc-switch-web`.
+3. Clear the variable in a systemd drop-in, not in the unit file. The installer writes the
+   unit file again on every run (a manual update is "run the installer again"), and a line
+   deleted from it comes back; it never touches the `.service.d` directory:
+
+   ```bash
+   mkdir -p ~/.config/systemd/user/cc-switch-web.service.d
+   printf '[Service]\nEnvironment=CC_SWITCH_CONFIG_DIR=\n' \
+     > ~/.config/systemd/user/cc-switch-web.service.d/data-dir.conf
+   systemctl --user daemon-reload && systemctl --user restart cc-switch-web
+   ```
+
+   The line must keep the `=` and the name: a bare `Environment=` would reset every
+   variable of the unit (the address, the port). The later assignment wins over the unit's
+   own, and the server reads an empty `CC_SWITCH_CONFIG_DIR` as not set.
+
 4. Check `GET /api/app-config-dir`: `source` is `override`, `effective` is your path.
+
+To go back to env-locked, delete `~/.config/systemd/user/cc-switch-web.service.d/data-dir.conf`
+and reload and restart as above. `--uninstall` removes the unit file and leaves the drop-in
+and your data; delete the drop-in by hand if you reinstall and want the default again.
+`./scripts/install-server.sh` (a source build) also rewrites only the unit file, so the
+drop-in holds there too.
 
 A directory that was deleted after the file was written is ignored at start with a warning
 in the log, and the server uses `~/.cc-switch`: look at `effective` before you trust
-the data. `./scripts/install-server.sh` puts the variable back into the unit every time it
-runs (the template carries it), which returns the unit to env-locked mode.
+the data.
 
-**Docker.** `Dockerfile.web` sets `CC_SWITCH_CONFIG_DIR=/home/ccswitch/.cc-switch-web`, so
-the container is env-locked. To use the override, drop that variable from your image or
-`docker run` and mount `/home/ccswitch/.config/cc-switch-web` as a volume, or the file is
-lost with the container. The image does not set `CC_SWITCH_WEB_SUPERVISED`.
+**Docker.** `deploy/compose.yml` sets `CC_SWITCH_CONFIG_DIR: ${HOME}/.cc-switch-web` and
+mounts your home directory at the same path, so the container is env-locked and the data is
+`~/.cc-switch-web` on the host. To use the override, put a `compose.override.yml` next to the
+compose file (compose merges it by itself) that clears the variable:
+
+```yaml
+services:
+  cc-switch-web:
+    environment:
+      CC_SWITCH_CONFIG_DIR: ""
+```
+
+then write `~/.config/cc-switch-web/app_paths.json` on the host as in step 2 (the home
+directory is mounted, so the container reads it and the file survives the container). The
+bare image is different: `Dockerfile.web` sets `CC_SWITCH_CONFIG_DIR=/home/ccswitch/.cc-switch-web`;
+with `docker run` clear it with `-e CC_SWITCH_CONFIG_DIR=` and mount
+`/home/ccswitch/.config/cc-switch-web` as a volume, or the file is lost with the container.
+The image does not set `CC_SWITCH_WEB_SUPERVISED`.
 
 **Bad override.** The PUT refuses a directory whose database is newer than this build,
 but a hand-edited file, or a database upgraded by another app after the PUT, can still
