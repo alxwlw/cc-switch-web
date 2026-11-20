@@ -1,0 +1,18 @@
+{
+	"version": 1,
+	"base": "main",
+	"push": "required",
+	"setup": "npx -y pnpm@10.12.3 install --frozen-lockfile",
+	"projects": [
+		{ "name": "web", "path": "." },
+		{ "name": "backend", "path": "src-tauri" },
+		{ "name": "scripts", "path": "scripts" }
+	],
+	"workspace": ["~/.claude/skills/review-task/scripts/cite-check \"$(git merge-base HEAD origin/main)\""],
+	"project": {
+		"typecheck": "bash scripts/verify-check.sh {project} typecheck",
+		"lint": "bash scripts/verify-check.sh {project} lint",
+		"format": "bash scripts/verify-check.sh {project} format",
+		"test": "bash scripts/verify-check.sh {project} test"
+	}
+}

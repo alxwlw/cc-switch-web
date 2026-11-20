@@ -13,7 +13,8 @@ release/
 CLAUDE.md
 AGENTS.md
 GEMINI.md
-/.claude
+/.claude/*
+!/.claude/verify.json
 /.codex
 /.gemini
 /.cc-switch
