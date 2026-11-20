@@ -51,11 +51,6 @@ const DESKTOP_ONLY = new Set([
 
 /** v4.0.35 commands still to be mapped; each task removes the names it maps. */
 const PENDING = new Set([
-  // Task 2
-  "get_claude_account_quota",
-  "get_claude_default_plan",
-  "get_claude_login_switch",
-  "claude_account_submit_paste",
   // Task 3
   "workbuddy_account_import_current",
   "workbuddy_account_live_state",

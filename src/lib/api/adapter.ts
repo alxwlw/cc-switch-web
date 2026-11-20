@@ -219,6 +219,23 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
     case "agy_account_is_running":
       return { method: "GET", url: "/api/auth/agy/running" };
 
+    // ---------- Claude official accounts (login itself goes through auth_*) ----------
+    case "get_claude_account_quota":
+      return {
+        method: "GET",
+        url: `/api/claude-account/quota/${enc(a.accountId)}`,
+      };
+    case "get_claude_default_plan":
+      return { method: "GET", url: "/api/claude-account/default-plan" };
+    case "get_claude_login_switch":
+      return { method: "GET", url: "/api/claude-account/login-switch" };
+    case "claude_account_submit_paste":
+      return {
+        method: "POST",
+        url: "/api/claude-account/paste",
+        body: { flowId: a.flowId, pasted: a.pasted },
+      };
+
     // ---------- Kimi Code OAuth (WEB-02 stage 2) ----------
     case "kimi_oauth_status":
       return { method: "GET", url: "/api/kimi/oauth/status" };

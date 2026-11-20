@@ -22,10 +22,8 @@ pub async fn claude_account_submit_paste(
 
 /// 绑了账号的 Claude 官方卡的额度：按那个账号自己的登录查，带上它的套餐。
 /// 结果按账号写进托盘缓存（同 Codex 托管账号）：卡片和托盘悬停查到的是同一份。
-#[tauri::command(rename_all = "camelCase")]
-pub async fn get_claude_account_quota(
-    app: tauri::AppHandle,
-    app_state: tauri::State<'_, crate::store::AppState>,
+pub(crate) async fn get_claude_account_quota_inner(
+    state: &crate::store::AppState,
     account_id: String,
 ) -> Result<crate::services::subscription::ClaudeAccountQuota, String> {
     let account_id = account_id.trim().to_string();
@@ -35,9 +33,21 @@ pub async fn get_claude_account_quota(
     )
     .await;
     if let Ok(quota) = &result {
-        app_state
+        state
             .usage_cache
             .put_claude_account(account_id, quota.quota.clone());
+    }
+    result
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn get_claude_account_quota(
+    app: tauri::AppHandle,
+    app_state: tauri::State<'_, crate::store::AppState>,
+    account_id: String,
+) -> Result<crate::services::subscription::ClaudeAccountQuota, String> {
+    let result = get_claude_account_quota_inner(&app_state, account_id).await;
+    if result.is_ok() {
         crate::tray::schedule_tray_refresh(&app);
     }
     result

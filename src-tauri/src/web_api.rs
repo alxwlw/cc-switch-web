@@ -336,6 +336,19 @@ pub fn router_with_update(
         )
         .route("/api/auth/:provider/default", put(auth_set_default))
         .route("/api/auth/:provider/logout", post(auth_logout))
+        .route(
+            "/api/claude-account/quota/:account_id",
+            get(claude_account_quota),
+        )
+        .route(
+            "/api/claude-account/default-plan",
+            get(claude_account_default_plan),
+        )
+        .route(
+            "/api/claude-account/login-switch",
+            get(claude_account_login_switch),
+        )
+        .route("/api/claude-account/paste", post(claude_account_paste))
         // Kimi Code OAuth (WEB-02 stage 2): same manager and remove path as the desktop commands
         .route("/api/kimi/oauth/status", get(kimi_status))
         .route("/api/kimi/oauth/start", post(kimi_start))
@@ -2800,12 +2813,23 @@ async fn auth_login(
         &provider,
         body.github_domain.as_deref(),
         body.target_account_id.as_deref(),
-        body.login_method.as_deref(),
+        web_login_method(&provider, body.login_method.as_deref()),
     )
     .await
     {
         Ok(r) => ok(r),
         Err(e) => fail(e),
+    }
+}
+
+/// Login method handed to `start_login_inner`. The browser of a web session is not on the
+/// server host, so the landing redirect of `claude auth login` cannot reach it: Claude
+/// always runs in `copy_link` mode and finishes through the pasted URL or code.
+fn web_login_method<'a>(provider: &str, requested: Option<&'a str>) -> Option<&'a str> {
+    if provider == crate::commands::AUTH_PROVIDER_CLAUDE_OFFICIAL {
+        Some("copy_link")
+    } else {
+        requested
     }
 }
 
@@ -2851,6 +2875,51 @@ async fn auth_cancel(
         Ok(r) => ok(r),
         // the only inner error is "provider has no cancellable flow"
         Err(e) => bad_request(e),
+    }
+}
+
+async fn claude_account_quota(
+    State(state): State<SharedState>,
+    Path(account_id): Path<String>,
+) -> ApiResult {
+    match crate::commands::get_claude_account_quota_inner(&state, account_id).await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn claude_account_default_plan() -> ApiResult {
+    match crate::commands::get_claude_default_plan().await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn claude_account_login_switch() -> ApiResult {
+    match crate::commands::get_claude_login_switch().await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClaudePasteBody {
+    flow_id: String,
+    pasted: String,
+}
+
+async fn claude_account_paste(
+    State(state): State<SharedState>,
+    Json(body): Json<ClaudePasteBody>,
+) -> ApiResult {
+    match state
+        .claude_account
+        .submit_paste(&body.flow_id, &body.pasted)
+        .await
+    {
+        Ok(()) => ok(serde_json::Value::Null),
+        Err(e) => fail(e),
     }
 }
 
@@ -5293,14 +5362,28 @@ async fn failover_set_auto(
 #[cfg(test)]
 mod tests {
     use super::{
-        capabilities, capabilities_payload, get, update_check_with, web_oauth_account_param, Json,
-        Router,
+        capabilities, capabilities_payload, get, update_check_with, web_login_method,
+        web_oauth_account_param, Json, Router,
     };
     use crate::services::web_update::WebVersion;
     use axum::http::StatusCode;
     use std::sync::Arc;
 
     const URL: &str = "https://github.com/example/fork";
+
+    #[test]
+    fn web_login_method_forces_copy_link_for_claude() {
+        assert_eq!(web_login_method("claude_official", None), Some("copy_link"));
+        assert_eq!(
+            web_login_method("claude_official", Some("device_code")),
+            Some("copy_link")
+        );
+        assert_eq!(
+            web_login_method("github_copilot", Some("device_code")),
+            Some("device_code")
+        );
+        assert_eq!(web_login_method("codex_oauth", None), None);
+    }
 
     #[test]
     fn capabilities_payload_carries_the_given_build_sha() {
