@@ -149,7 +149,7 @@ Scope: `src/components/settings/{AboutSection,SelfUpdatePanel}.tsx`, `src/lib/up
    ```
    Docker: команды из шапки `deploy/compose.yml` (`curl -fsSLO https://raw.githubusercontent.com/alxwlw/cc-switch-web/main/deploy/compose.yml`, `.env`, `docker compose up -d`). Tailscale: `… | bash -s -- --tailscale` и адрес из вывода установщика.
 5. «Based on [farion1231/cc-switch](https://github.com/farion1231/cc-switch)» — благодарность автору апстрима одним абзацем: форк повторяет десктопное приложение в браузере и регулярно синхронизируется с ним.
-6. Ниже: «What works and what does not» (что из десктопа недоступно в web — по `runtime_boundaries` в `/api/capabilities` и таблице `docs/superpowers/plans/2026-10-25-web-parity-m5/phase-6.md`: desktop-only строки), «Updating» (Settings → About, самообновление, ручные команды), «Uninstalling», «Security» (два предложения + ссылка на `SECURITY.md`), «Building from source» (ссылка на `CONTRIBUTING.md`), «License» (MIT).
+6. Ниже: «What works and what does not» (что из десктопа недоступно в web — по `runtime_boundaries` в `/api/capabilities` и таблице desktop-only строк из закрытого плана web-parity M5, удалённого из дерева: см. историю git), «Updating» (Settings → About, самообновление, ручные команды), «Uninstalling», «Security» (два предложения + ссылка на `SECURITY.md`), «Building from source» (ссылка на `CONTRIBUTING.md`), «License» (MIT).
 Спонсоров, Trendshift, star-history, ссылок на ccswitch.io и переводов нет.
 
 `CHANGELOG.md`:
