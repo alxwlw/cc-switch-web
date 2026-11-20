@@ -90,10 +90,23 @@ describe("AboutSection · Release notes without a known version", () => {
     expect(mocks.toastError).not.toHaveBeenCalled();
   });
 
-  it("web: opens the releases list, no error toast", async () => {
+  it("web: opens the fork's releases list, no error toast", async () => {
     setWeb(true);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          mode: "web",
+          version: "9.9.9",
+          projectUrl: "https://github.com/example/fork",
+        }),
+      })),
+    );
     await openReleaseNotes();
-    expect(mocks.openExternal).toHaveBeenCalledWith(RELEASES);
+    expect(mocks.openExternal).toHaveBeenCalledWith(
+      "https://github.com/example/fork/releases",
+    );
     expect(mocks.toastError).not.toHaveBeenCalled();
   });
 });

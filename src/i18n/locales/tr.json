@@ -5359,7 +5359,7 @@
     },
     "mode": {
       "title": "Web modu",
-      "serverVersion": "Sunucu sürümü"
+      "basedOn": "CC Switch tabanlı"
     }
   },
   "dsh": {

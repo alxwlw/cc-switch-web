@@ -46,6 +46,11 @@ impl UpdateSourceConfig {
             branch: read("CC_SWITCH_WEB_UPDATE_BRANCH", DEFAULT_BRANCH),
         }
     }
+
+    /// The fork's project page on github.com: the same repository the update check reads.
+    pub fn project_url(&self) -> String {
+        format!("https://github.com/{}", self.repo)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

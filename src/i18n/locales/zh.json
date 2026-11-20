@@ -5428,7 +5428,7 @@
     },
     "mode": {
       "title": "Web 模式",
-      "serverVersion": "服务器版本"
+      "basedOn": "基于 CC Switch"
     }
   },
   "dsh": {

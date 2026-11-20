@@ -5,6 +5,8 @@ export interface ServerCapabilities {
   buildSha: string | null;
   /** Fork version of the running build (`4.0.35-web.1`); `null` when the server does not report one. */
   webVersion: string | null;
+  /** The fork's project page (`https://github.com/<repo>`); `null` when the server does not report one. */
+  projectUrl: string | null;
   runtime_boundaries: string;
   /** `std::env::consts::OS` of the server: "linux" | "macos" | "windows". */
   platform: string;
@@ -34,6 +36,10 @@ export async function fetchCapabilities(): Promise<ServerCapabilities> {
         ? body.buildSha
         : null,
     webVersion: typeof body.webVersion === "string" ? body.webVersion : null,
+    projectUrl:
+      typeof body.projectUrl === "string" && body.projectUrl !== ""
+        ? body.projectUrl
+        : null,
     runtime_boundaries: String(body.runtime_boundaries ?? ""),
     platform: String(body.platform ?? ""),
     selfUpdate: body.selfUpdate === true,

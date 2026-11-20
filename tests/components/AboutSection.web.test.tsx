@@ -60,6 +60,7 @@ function renderAbout() {
 
 const fetchMock = vi.fn();
 
+const STAR_PROMPT_DISMISSED_KEY = "ccswitch:about:starPromptDismissed";
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const LATEST = "fedcba9876543210fedcba9876543210fedcba98";
 const SYSTEMD =
@@ -115,6 +116,12 @@ function serve(
   });
 }
 
+const FORK_URL = "https://github.com/example/fork";
+const FORK_CAPABILITIES = {
+  projectUrl: FORK_URL,
+  webVersion: "4.0.35-web.2",
+};
+
 const serveCheck = (data: unknown) =>
   serve({ ok: true, body: { ok: true, data } });
 
@@ -136,6 +143,7 @@ describe("AboutSection · update controls", () => {
     mocks.toastSuccess.mockReset();
     mocks.toastError.mockReset();
     mocks.openExternal.mockReset().mockResolvedValue(undefined);
+    localStorage.removeItem(STAR_PROMPT_DISMISSED_KEY);
     fetchMock.mockReset();
     serveCheck(updateData({ status: "up-to-date", behindBy: 0, commits: [] }));
     vi.stubGlobal("fetch", fetchMock);
@@ -407,30 +415,41 @@ describe("AboutSection · update controls", () => {
     expect(document.querySelector("pre")).toBeNull();
   });
 
-  it("web, behind: Release notes opens the running version's page, not <version>+<sha>", async () => {
+  it("web, behind: Release notes opens the fork's page of the running version, not <version>+<sha>", async () => {
     setWeb(true);
-    serveCheck(updateData());
+    serve(
+      { ok: true, body: { ok: true, data: updateData() } },
+      FORK_CAPABILITIES,
+    );
     renderAbout();
     await clickCheck();
     await screen.findByText('web.update.behindTitle {"count":3}');
-    fireEvent.click(screen.getByText("settings.releaseNotes"));
+    fireEvent.click(await screen.findByText("settings.releaseNotes"));
     await waitFor(() => expect(mocks.openExternal).toHaveBeenCalledTimes(1));
     const url = mocks.openExternal.mock.calls[0][0] as string;
-    expect(url).toBe(
-      "https://github.com/farion1231/cc-switch/releases/tag/v3.0.0",
-    );
+    expect(url).toBe(`${FORK_URL}/releases/tag/v4.0.35-web.2`);
     expect(url).not.toContain("+");
   });
 
-  it("web, up to date: Release notes opens the running version's page", async () => {
+  it("web, up to date: Release notes opens the fork's page of the running version", async () => {
     setWeb(true);
+    serve(
+      {
+        ok: true,
+        body: {
+          ok: true,
+          data: updateData({ status: "up-to-date", behindBy: 0, commits: [] }),
+        },
+      },
+      FORK_CAPABILITIES,
+    );
     renderAbout();
     await clickCheck();
     await screen.findByText("web.update.upToDateTitle");
-    fireEvent.click(screen.getByText("settings.releaseNotes"));
+    fireEvent.click(await screen.findByText("settings.releaseNotes"));
     await waitFor(() =>
       expect(mocks.openExternal).toHaveBeenCalledWith(
-        "https://github.com/farion1231/cc-switch/releases/tag/v3.0.0",
+        `${FORK_URL}/releases/tag/v4.0.35-web.2`,
       ),
     );
     expect(mocks.openExternal).toHaveBeenCalledTimes(1);
@@ -482,15 +501,15 @@ describe("AboutSection · update controls", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("web: shows statement, server version and runtime_boundaries", async () => {
+  it("web: shows the statement and the upstream version, not the raw runtime_boundaries", async () => {
     setWeb(true);
     renderAbout();
     expect(screen.getByText("web.mode.title")).toBeInTheDocument();
     expect(screen.getByText("web.hostNotice")).toBeInTheDocument();
     expect(
-      await screen.findByText("web.mode.serverVersion v9.9.9"),
+      await screen.findByText("web.mode.basedOn v9.9.9"),
     ).toBeInTheDocument();
-    expect(screen.getByText("server host only")).toBeInTheDocument();
+    expect(screen.queryByText("server host only")).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith("/api/capabilities");
   });
 
@@ -500,7 +519,7 @@ describe("AboutSection · update controls", () => {
     renderAbout();
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(screen.getByText("web.hostNotice")).toBeInTheDocument();
-    expect(screen.queryByText(/web\.mode\.serverVersion/)).toBeNull();
+    expect(screen.queryByText(/web\.mode\.basedOn/)).toBeNull();
   });
 
   it.each([
@@ -515,22 +534,79 @@ describe("AboutSection · update controls", () => {
       await waitFor(() => expect(fetchMock).toHaveBeenCalled());
       await new Promise((r) => setTimeout(r, 0));
       expect(screen.getByText("web.hostNotice")).toBeInTheDocument();
-      expect(screen.queryByText(/web\.mode\.serverVersion/)).toBeNull();
+      expect(screen.queryByText(/web\.mode\.basedOn/)).toBeNull();
     },
   );
 
-  it("web: blank runtime_boundaries renders no empty paragraph", async () => {
+  it("web: the info block is the title, the notice and the version line only", async () => {
     setWeb(true);
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        mode: "web",
-        version: "9.9.9",
-        runtime_boundaries: "  ",
-      }),
-    });
     renderAbout();
-    const ver = await screen.findByText("web.mode.serverVersion v9.9.9");
+    const ver = await screen.findByText("web.mode.basedOn v9.9.9");
     expect(ver.parentElement?.querySelectorAll("p")).toHaveLength(2);
+  });
+
+  it("web: no Official Website and no star banner; GitHub is always there and opens the fork", async () => {
+    setWeb(true);
+    serve(
+      { ok: true, body: { ok: true, data: updateData() } },
+      FORK_CAPABILITIES,
+    );
+    renderAbout();
+    fireEvent.click(await screen.findByText("settings.github"));
+    expect(mocks.openExternal).toHaveBeenCalledWith(FORK_URL);
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("settings.officialWebsite")).toBeNull();
+    expect(screen.queryByText("settings.starPrompt")).toBeNull();
+    expect(screen.queryByText("settings.starOnGithub")).toBeNull();
+  });
+
+  it("web: without a version (a source build) Release notes opens the fork's releases list", async () => {
+    setWeb(true);
+    serve(
+      { ok: true, body: { ok: true, data: updateData() } },
+      { projectUrl: FORK_URL },
+    );
+    renderAbout();
+    fireEvent.click(await screen.findByText("settings.releaseNotes"));
+    await waitFor(() =>
+      expect(mocks.openExternal).toHaveBeenCalledWith(`${FORK_URL}/releases`),
+    );
+  });
+
+  it("web: without a projectUrl there is neither GitHub nor Release notes", async () => {
+    setWeb(true);
+    renderAbout();
+    await screen.findByText("web.mode.basedOn v9.9.9");
+    expect(screen.queryByText("settings.github")).toBeNull();
+    expect(screen.queryByText("settings.releaseNotes")).toBeNull();
+    expect(screen.queryByText("settings.officialWebsite")).toBeNull();
+  });
+
+  it("desktop: keeps Official Website and the star banner, GitHub opens upstream", async () => {
+    renderAbout();
+    expect(
+      await screen.findByText("settings.officialWebsite"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("settings.starPrompt")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("settings.starOnGithub"));
+    expect(mocks.openExternal).toHaveBeenCalledWith(
+      "https://github.com/farion1231/cc-switch",
+    );
+  });
+
+  it("desktop: GitHub is hidden while the star banner shows, and appears once the banner is closed", async () => {
+    renderAbout();
+    expect(screen.getByText("settings.starPrompt")).toBeInTheDocument();
+    expect(screen.queryByText("settings.github")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "common.close" }));
+    expect(screen.queryByText("settings.starPrompt")).toBeNull();
+    expect(localStorage.getItem(STAR_PROMPT_DISMISSED_KEY)).toBe("1");
+
+    fireEvent.click(await screen.findByText("settings.github"));
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1);
+    expect(mocks.openExternal).toHaveBeenCalledWith(
+      "https://github.com/farion1231/cc-switch",
+    );
   });
 });

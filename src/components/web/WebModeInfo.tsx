@@ -15,10 +15,7 @@ export function WebModeInfo() {
       </div>
       <p>{t("web.hostNotice")}</p>
       {data && (
-        <>
-          <p className="tabular-nums">{`${t("web.mode.serverVersion")} v${data.version}`}</p>
-          {data.runtime_boundaries.trim() && <p>{data.runtime_boundaries}</p>}
-        </>
+        <p className="tabular-nums">{`${t("web.mode.basedOn")} v${data.version}`}</p>
       )}
     </div>
   );
