@@ -1562,20 +1562,58 @@ async function runToolLifecycleAction(args: Args): Promise<void> {
   }
 }
 
+/**
+ * Silent local noops: desktop-only fire-and-forget calls that must not
+ * spam the console in web mode (tray, window theme, deep links).
+ * `plugin:*` commands are noops too (see `isLocalCommand`).
+ */
+const NOOP_COMMANDS: ReadonlySet<string> = new Set([
+  "tray_app_page_seen",
+  "take_tray_navigation",
+  "peek_pending_deeplink",
+  "ack_pending_deeplink",
+  "check_for_updates",
+  "update_tray_menu",
+  "set_window_theme",
+]);
+
+/** Browser-side commands with no HTTP endpoint, answered inside `invoke`. */
+const BROWSER_COMMANDS: ReadonlySet<string> = new Set([
+  "is_portable_mode",
+  "open_external",
+  "copy_text_to_clipboard",
+  "stream_session_messages",
+  "run_tool_lifecycle_action",
+  "export_session_markdown",
+]);
+
+/** Every command `invoke` answers without a network round trip. */
+const LOCAL_COMMANDS: ReadonlySet<string> = new Set([
+  ...NOOP_COMMANDS,
+  ...BROWSER_COMMANDS,
+]);
+
+function isLocalCommand(cmd: string): boolean {
+  return LOCAL_COMMANDS.has(cmd) || cmd.startsWith("plugin:");
+}
+
+/**
+ * True when `invoke(cmd)` answers without throwing `WebUnsupportedError`:
+ * a local command or a `mapCommand` case. `mapCommand` is probed with empty
+ * args; a throw from inside a case means the case exists.
+ */
+export function isWebHandled(cmd: string): boolean {
+  if (isLocalCommand(cmd)) return true;
+  try {
+    return mapCommand(cmd, {}) !== null;
+  } catch {
+    return true;
+  }
+}
+
 /** Drop-in replacement for Tauri's `invoke` used by every `src/lib/api/*` module. */
 export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
-  // Silent local noops: desktop-only fire-and-forget calls that must not
-  // spam the console in web mode (tray, window theme, deep links, plugin internals).
-  if (
-    cmd === "tray_app_page_seen" ||
-    cmd === "take_tray_navigation" ||
-    cmd === "peek_pending_deeplink" ||
-    cmd === "ack_pending_deeplink" ||
-    cmd === "check_for_updates" ||
-    cmd === "update_tray_menu" ||
-    cmd === "set_window_theme" ||
-    cmd.startsWith("plugin:")
-  ) {
+  if (NOOP_COMMANDS.has(cmd) || cmd.startsWith("plugin:")) {
     return null as T;
   }
   // Browser-side commands with no HTTP endpoint.
