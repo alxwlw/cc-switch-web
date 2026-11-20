@@ -24,7 +24,29 @@ describe("fetchCapabilities", () => {
       platform: "macos",
       selfUpdate: false,
       webVersion: null,
+      projectUrl: null,
     });
+  });
+
+  it("projectUrl is passed through and anything but a non-empty string is null", async () => {
+    const answer = (projectUrl: unknown) =>
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ mode: "web", version: "1.2.3", projectUrl }),
+        }),
+      );
+    answer("https://github.com/o/r");
+    await expect(fetchCapabilities()).resolves.toMatchObject({
+      projectUrl: "https://github.com/o/r",
+    });
+    for (const loose of [undefined, 1, null, ""]) {
+      answer(loose);
+      await expect(fetchCapabilities()).resolves.toMatchObject({
+        projectUrl: null,
+      });
+    }
   });
 
   it("webVersion is passed through and anything but a string is null", async () => {

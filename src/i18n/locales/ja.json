@@ -5428,7 +5428,7 @@
     },
     "mode": {
       "title": "Web モード",
-      "serverVersion": "サーバーバージョン"
+      "basedOn": "CC Switch ベース"
     }
   },
   "dsh": {

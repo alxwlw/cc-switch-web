@@ -5428,7 +5428,7 @@
     },
     "mode": {
       "title": "Веб-режим",
-      "serverVersion": "Версия сервера"
+      "basedOn": "На основе CC Switch"
     }
   },
   "dsh": {

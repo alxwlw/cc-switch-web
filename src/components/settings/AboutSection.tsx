@@ -265,6 +265,9 @@ export function AboutSection({
   // web: the server says whether the install route would accept a request now.
   const capabilities = useServerCapabilities();
   const selfUpdateEnabled = isWeb && capabilities.data?.selfUpdate === true;
+  // web: the fork's own version when the server reports one; `version` is the upstream app's.
+  const webVersion = isWeb ? (capabilities.data?.webVersion ?? null) : null;
+  const projectUrl = isWeb ? (capabilities.data?.projectUrl ?? null) : null;
   const selfUpdate = useSelfUpdate(selfUpdateEnabled, {
     // Nothing was merged: the server's cached `behind` is stale, ask again past its cache.
     onNothingToUpdate: () => {
@@ -319,9 +322,17 @@ export function AboutSection({
     try {
       // web: `availableVersion` is the build string `<version>+<sha>`, not a release tag;
       // the link is the running version's page, as when up to date.
-      const targetVersion = isWeb
-        ? (version ?? "")
-        : (updateInfo?.availableVersion ?? version ?? "");
+      if (isWeb) {
+        // web: the fork's own releases, not the upstream app's.
+        if (!projectUrl) return;
+        await settingsApi.openExternal(
+          webVersion
+            ? `${projectUrl}/releases/tag/v${webVersion}`
+            : `${projectUrl}/releases`,
+        );
+        return;
+      }
+      const targetVersion = updateInfo?.availableVersion ?? version ?? "";
       const displayVersion = targetVersion.startsWith("v")
         ? targetVersion
         : targetVersion
@@ -342,11 +353,15 @@ export function AboutSection({
       console.error("[AboutSection] Failed to open release notes", error);
       toast.error(t("settings.openReleaseNotesFailed"));
     }
-  }, [t, updateInfo?.availableVersion, version]);
+  }, [t, updateInfo?.availableVersion, version, projectUrl, webVersion]);
 
   const handleOpenGithub = useCallback(() => {
-    void settingsApi.openExternal("https://github.com/farion1231/cc-switch");
-  }, []);
+    void settingsApi.openExternal(
+      isWeb && projectUrl
+        ? projectUrl
+        : "https://github.com/farion1231/cc-switch",
+    );
+  }, [projectUrl]);
 
   const handleDismissStarPrompt = useCallback(() => {
     setStarPromptDismissed(true);
@@ -429,8 +444,6 @@ export function AboutSection({
     updateInfo?.availableVersion,
   ]);
 
-  // web: the fork's own version when the server reports one; `version` is the upstream app's.
-  const webVersion = isWeb ? (capabilities.data?.webVersion ?? null) : null;
   const displayVersion = webVersion ?? version ?? t("common.unknown");
 
   return (
@@ -566,7 +579,7 @@ export function AboutSection({
       )}
 
       <div className="flex flex-wrap items-center gap-2 px-5 py-4">
-        {starPromptDismissed && (
+        {(isWeb ? projectUrl !== null : starPromptDismissed) && (
           <Button
             type="button"
             variant="neutral"
@@ -577,24 +590,28 @@ export function AboutSection({
             {t("settings.github")}
           </Button>
         )}
-        <Button
-          type="button"
-          variant="neutral"
-          size="compact"
-          onClick={() => settingsApi.openExternal("https://ccswitch.io")}
-        >
-          <Globe className="h-3.5 w-3.5" />
-          {t("settings.officialWebsite")}
-        </Button>
-        <Button
-          type="button"
-          variant="neutral"
-          size="compact"
-          onClick={handleOpenReleaseNotes}
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          {t("settings.releaseNotes")}
-        </Button>
+        {!isWeb && (
+          <Button
+            type="button"
+            variant="neutral"
+            size="compact"
+            onClick={() => settingsApi.openExternal("https://ccswitch.io")}
+          >
+            <Globe className="h-3.5 w-3.5" />
+            {t("settings.officialWebsite")}
+          </Button>
+        )}
+        {(!isWeb || projectUrl !== null) && (
+          <Button
+            type="button"
+            variant="neutral"
+            size="compact"
+            onClick={handleOpenReleaseNotes}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            {t("settings.releaseNotes")}
+          </Button>
+        )}
         {recentEntries.length > 0 && (
           <Button
             type="button"
@@ -610,7 +627,7 @@ export function AboutSection({
 
       {/* 下载与更新都走 ccswitch.io，用户不再经过仓库页，邀 Star 单独占一行；按钮即 GitHub 入口。
           关掉后链接行补回 GitHub 按钮 */}
-      {!starPromptDismissed && (
+      {!isWeb && !starPromptDismissed && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 bg-action-soft py-3.5 ps-5 pe-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <Star
