@@ -52,14 +52,26 @@ that variable, not `HOME`). CI runs the same commands.
 
 ## Where the fork's code lives
 
-The fork keeps its own code behind adapters, so that upstream merges stay mechanical:
+The fork's own code is the set of paths upstream does not have. This command lists them
+(`upstream-main` is the clean mirror of upstream that `scripts/sync-upstream.sh` keeps; run the
+script once, or `git fetch upstream` and use `upstream/main`, if it is not there yet):
 
-- `src-tauri/src/web_api*`, `src-tauri/src/services/web_update.rs`, `src-tauri/examples/server.rs`
-- `scripts/` and `deploy/`
-- the web-specific files of `src/`: the web branch of `AboutSection.tsx`, `SelfUpdatePanel.tsx`,
-  `WebCommitList.tsx`, `src/lib/updater.ts`, `src/lib/api/capabilities.ts`,
-  `src/lib/api/selfUpdate.ts`, `src/hooks/useSelfUpdate.ts`
-- the `web.*` keys of the locale files
+```bash
+git diff --name-only --diff-filter=A upstream-main...main
+```
+
+The main ones:
+
+- the web adapter and its shims: `src/lib/api/adapter.ts`, `src/lib/web-shims/`,
+  `src/components/web/`, `vite.config.web.mts`
+- the server: `src-tauri/src/web_api*`, `src-tauri/src/services/web_update.rs`,
+  `src-tauri/src/bootstrap.rs`, `src-tauri/src/events.rs`, `src-tauri/src/server_log.rs`,
+  `src-tauri/examples/server.rs` and the `src-tauri/tests/web_api_*.rs` tests
+- packaging and deployment: `Dockerfile.web`, `scripts/`, `deploy/`
+- the web-specific parts of files upstream also has: the web branch of
+  `src/components/settings/AboutSection.tsx`, `SelfUpdatePanel.tsx`, `WebCommitList.tsx`,
+  `src/lib/updater.ts`, `src/lib/api/capabilities.ts`, `src/lib/api/selfUpdate.ts`,
+  `src/hooks/useSelfUpdate.ts`, and the `web.*` keys of the locale files
 
 Everything else is upstream's code. Do not edit it in passing (a formatting fix, a rename, a
 refactor): every such line becomes a conflict in the next sync. If a change in upstream's code is
@@ -75,7 +87,8 @@ The fork follows upstream every few weeks. `docs/upstream.lock` records the upst
 commit, the branch policy and the `fork_owned` paths.
 
 ```bash
-scripts/sync-upstream.sh [--ref <upstream-ref>]    # default upstream/main
+git remote add upstream https://github.com/farion1231/cc-switch.git   # once per clone
+scripts/sync-upstream.sh [--ref <upstream-ref>]                       # default upstream/main
 ```
 
 The script fetches upstream, fast-forwards `upstream-main` (a clean mirror), starts
@@ -92,6 +105,10 @@ commits: review the result, run the tests, commit and open a pull request.
 - Update `docs/deploy.md` when installation or deployment changes, and `CHANGELOG.md` for a
   user-visible change.
 - Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`).
+- Leave the database version to maintainers: do not change `SCHEMA_VERSION`. A pull request from
+  a non-collaborator that adds a `const SCHEMA_VERSION` line is closed automatically
+  (`.github/workflows/schema-version.yml`). If your change needs a schema change, explain why in
+  the pull request and mention the maintainer (`@alxwlw`); it is reopened if appropriate.
 - A change that is not about the web console but about the desktop app belongs upstream.
 
 By contributing you agree that your contribution is licensed under the [MIT License](LICENSE).

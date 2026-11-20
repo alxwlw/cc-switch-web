@@ -66,7 +66,9 @@ To update by hand, run the installer again. It keeps the address, port and self-
 curl -fsSL https://github.com/alxwlw/cc-switch-web/releases/latest/download/install.sh | bash
 ```
 
-Docker: `docker compose pull && docker compose up -d`. `--version vX.Y.Z-web.N` installs a specific release.
+To install a specific release instead of the latest, add `--version vX.Y.Z-web.N` to the installer (`bash -s -- --version vX.Y.Z-web.N`).
+
+Docker: `docker compose pull && docker compose up -d`.
 
 ## Uninstalling
 

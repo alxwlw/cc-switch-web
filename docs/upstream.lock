@@ -33,4 +33,6 @@ fork_owned = [
 #    (ff-only), starts sync/upstream-<sha> from main, merges without committing and restores the
 #    fork-owned paths above; exit 2 means code conflicts are left to resolve by hand.
 # 2. resolve the reported conflicts only in code, review `kept fork version` lines, commit
-# 3. cargo test + stream-check + tag v*
+# 3. cargo test + stream-check. A sync is never tagged: a release tag (v<upstream>-web.<N>) is
+#    set only after the owner's explicit go-ahead, because a v*-web.* tag publishes a release
+#    that every self-updating install takes
