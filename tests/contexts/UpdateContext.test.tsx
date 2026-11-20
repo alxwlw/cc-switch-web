@@ -148,6 +148,29 @@ describe("updater · checkForUpdate (web)", () => {
     });
   });
 
+  it.each([
+    ["the latest release is older", "4.0.34-web.1"],
+    ["the tag is not a fork version", null],
+  ])(
+    "release mode unknown (%s) is unknown, never available",
+    async (_n, latestVersion) => {
+      answer(
+        webCheck({
+          mode: "release",
+          status: "unknown",
+          latestSha: null,
+          latestVersion,
+          behindBy: 0,
+          commits: [],
+        }),
+      );
+      await expect(checkForUpdate()).resolves.toMatchObject({
+        status: "unknown",
+        web: { mode: "release", status: "unknown", latestVersion },
+      });
+    },
+  );
+
   it("up-to-date and unknown keep the server's data and never become an update", async () => {
     answer(webCheck({ status: "up-to-date", behindBy: 0, commits: [] }));
     await expect(checkForUpdate()).resolves.toMatchObject({

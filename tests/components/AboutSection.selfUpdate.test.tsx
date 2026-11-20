@@ -183,10 +183,38 @@ describe("AboutSection · self-update (WEB-28)", () => {
         commits: [],
       },
     ],
-  ])("self-update on, but the build is %s: no button", async (_n, over) => {
+    [
+      "unknown in release mode (latest release is older)",
+      {
+        mode: "release",
+        status: "unknown",
+        latestSha: null,
+        latestVersion: "4.0.34-web.1",
+        releaseUrl: "https://example.test/r",
+        behindBy: 0,
+        commits: [],
+      },
+    ],
+    [
+      "unknown in release mode (tag is not a fork version)",
+      {
+        mode: "release",
+        status: "unknown",
+        latestSha: null,
+        latestVersion: null,
+        releaseUrl: null,
+        behindBy: 0,
+        commits: [],
+      },
+    ],
+  ])("self-update on, but the build is %s: no button", async (n, over) => {
     check = updateData(over);
     await open();
     expect(installButton()).toBeNull();
+    if (n.startsWith("unknown")) {
+      expect(screen.getByText("web.update.unknownTitle")).toBeTruthy();
+      expect(screen.queryByText(/releaseBehindTitle/)).toBeNull();
+    }
   });
 
   it("self-update on and behind: the button shows next to the manual instructions", async () => {
