@@ -1,6 +1,6 @@
 # План: cc-switch-web как самостоятельный OSS-продукт
 
-**Status:** active
+**Status:** closed
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -43,9 +43,11 @@
   - PR: https://github.com/alxwlw/cc-switch-web/pull/43, branch feat-cld/oss-release-p1
 - [x] [Phase 2 — консоль, лицо проекта, `.github/`, синхронизация](2026-11-19-oss-release/phase-2.md) — после слияния синхронизации с апстримом.
   - PR: https://github.com/alxwlw/cc-switch-web/pull/44, branch feat-cld/oss-release-p2
-- [ ] [Phase 3 — первый релиз, переезд развёртываний, проверка самообновления](2026-11-19-oss-release/phase-3.md) — после слияния фазы 2; каждый тег — после «выпускай».
+- [x] [Phase 3 — первый релиз, переезд развёртываний, проверка самообновления](2026-11-19-oss-release/phase-3.md) — после слияния фазы 2; каждый тег — после «выпускай».
+  - PR: https://github.com/alxwlw/cc-switch-web/pull/45 (v4.0.35-web.1), https://github.com/alxwlw/cc-switch-web/pull/46 (v4.0.35-web.2) and the closing PR, branch feat-cld/oss-release-p3
 
 ## Notes for next phase
 
 - Способ исполнения: одна фаза за сессию через `/phase`.
 - Plane: задачи под этот план не заведены. Если владелец захочет — модуль в проекте DX «tooling».
+- План закрыт 2026-11-20: релизы v4.0.35-web.1 и v4.0.35-web.2, критерий 4 проверен на agentbox. Открыто: отвязка репозитория от сети форков (GitHub всё ещё считает его форком, isFork=true) — вопрос задачи 6 фазы 2.

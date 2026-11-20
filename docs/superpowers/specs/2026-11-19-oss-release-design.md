@@ -1,6 +1,6 @@
 # Дизайн: cc-switch-web как самостоятельный OSS-продукт
 
-**Status:** draft (2026-11-19)
+**Status:** implemented (2026-11-20)
 **Ветка:** `feat-cld/oss-release` (worktree `.worktrees/oss-release`, от `origin/main@b43896c1`)
 
 Пометки: **[владелец]** — решил владелец в разговоре; **[моё]** — решил автор дизайна, владелец может
