@@ -17,10 +17,8 @@ na() { echo "$part has no $kind check: n/a"; }
 common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
 export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$(dirname "$common_dir")/src-tauri/target}
 
-# CI runners have umask 022 and no ~/.bun/bin on PATH, and some upstream tests assume both: the golden file-mode
-# snapshots (a failure there also poisons the shared test mutex for the tests after it) and the Bun search paths.
+# CI runners have no ~/.bun/bin on PATH, and some upstream tests assume that (the Bun search paths).
 ci_env() {
-  umask 022
   PATH=$(printf %s "$PATH" | tr : '\n' | grep -v '/\.bun/bin$' | paste -sd:)
   export PATH
 }
