@@ -41,7 +41,8 @@
 
 - [x] [Phase 1 — версия, обновления по релизам, установщик, релизный workflow, Docker](2026-11-19-oss-release/phase-1.md) — можно начинать сразу; файлы фазы синхронизация не трогает, кроме одного места в `web_api.rs` (`capabilities_payload`, `update_check_with`).
   - PR: https://github.com/alxwlw/cc-switch-web/pull/43, branch feat-cld/oss-release-p1
-- [ ] [Phase 2 — консоль, лицо проекта, `.github/`, синхронизация](2026-11-19-oss-release/phase-2.md) — после слияния синхронизации с апстримом.
+- [x] [Phase 2 — консоль, лицо проекта, `.github/`, синхронизация](2026-11-19-oss-release/phase-2.md) — после слияния синхронизации с апстримом.
+  - PR: https://github.com/alxwlw/cc-switch-web/pull/44, branch feat-cld/oss-release-p2
 - [ ] [Phase 3 — первый релиз, переезд развёртываний, проверка самообновления](2026-11-19-oss-release/phase-3.md) — после слияния фазы 2; каждый тег — после «выпускай».
 
 ## Notes for next phase
