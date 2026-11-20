@@ -51,9 +51,14 @@ export interface WebUpdateCommit {
   date: string | null;
 }
 
+/** `release`: the build is compared with the latest release; `commit`: with the head of a branch. */
+export type WebUpdateMode = "release" | "commit";
+
 /** `GET /api/update/check` (`UpdateCheck` in `services/web_update.rs`). */
 export interface WebUpdateCheck {
   status: WebUpdateStatus;
+  /** A server that does not send it predates release mode: `commit`. */
+  mode: WebUpdateMode;
   currentVersion: string;
   currentSha: string | null;
   latestSha: string | null;
@@ -65,6 +70,10 @@ export interface WebUpdateCheck {
   /** The branch the server compared against, and would pull on self-update. */
   branch: string;
   instructions: { systemd: string; docker: string };
+  /** Release mode: the latest release's version (no `v`), its notes page and publish time. */
+  latestVersion: string | null;
+  releaseUrl: string | null;
+  publishedAt: string | null;
 }
 
 export type CheckResult =
@@ -111,10 +120,18 @@ export function parseWebUpdateCheck(raw: unknown): WebUpdateCheck {
   if (!Array.isArray(r.commits)) return fail("commits");
   const instr = r.instructions as Record<string, unknown> | null | undefined;
   if (!instr || typeof instr !== "object") return fail("instructions");
+  const mode: WebUpdateMode = r.mode === "release" ? "release" : "commit";
   const latestSha = strOrNull(r.latestSha, "latestSha");
-  if (status === "behind" && !latestSha) return fail("latestSha");
+  const latestVersion = strOrNull(r.latestVersion, "latestVersion");
+  if (status === "behind") {
+    // A release has no commit to name; a commit check has no version.
+    if (mode === "release" ? !latestVersion : !latestSha) {
+      return fail(mode === "release" ? "latestVersion" : "latestSha");
+    }
+  }
   return {
     status,
+    mode,
     currentVersion: str(r.currentVersion, "currentVersion"),
     currentSha: strOrNull(r.currentSha, "currentSha"),
     latestSha,
@@ -133,6 +150,9 @@ export function parseWebUpdateCheck(raw: unknown): WebUpdateCheck {
       systemd: str(instr.systemd, "instructions.systemd"),
       docker: str(instr.docker, "instructions.docker"),
     },
+    latestVersion,
+    releaseUrl: strOrNull(r.releaseUrl, "releaseUrl"),
+    publishedAt: strOrNull(r.publishedAt, "publishedAt"),
   };
 }
 
@@ -175,6 +195,17 @@ async function checkWebUpdate(opts: CheckOptions): Promise<CheckResult> {
   );
   if (web.status === "unknown") return { status: "unknown", web };
   if (web.status === "up-to-date") return { status: "up-to-date", web };
+  if (web.mode === "release") {
+    return {
+      status: "available",
+      web,
+      info: {
+        currentVersion: web.currentVersion,
+        availableVersion: web.latestVersion as string,
+        pubDate: web.publishedAt ?? undefined,
+      },
+    };
+  }
   const latest = web.latestSha as string;
   return {
     status: "available",

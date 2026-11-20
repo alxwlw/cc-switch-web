@@ -1,30 +1,13 @@
-## Human Note / 本人说明
+## Summary
 
-<!-- Required. In your own words, say what you want to do. No AI-generated text. -->
-<!-- 必填。用你自己的话说清楚你想要做什么，不允许 AI 生成。 -->
+<!-- What this PR changes and why. Link the issue with "Fixes #123". -->
 
-## Summary / 概述
+## How it was tested
 
-<!-- Briefly describe what this PR does and why. / 简要描述这个 PR 做了什么以及为什么。 -->
+<!-- Commands you ran and what you saw. -->
 
-## Related Issue / 关联 Issue
+## Checklist
 
-<!-- Link the related issue. Use "Fixes #123" to auto-close it when merged. -->
-<!-- 关联相关 Issue。使用 "Fixes #123" 可在合并时自动关闭。 -->
-
-Fixes #
-
-## Screenshots / 截图
-
-<!-- If applicable, add before/after screenshots. / 如有需要，请添加修改前后的截图。 -->
-
-| Before / 修改前 | After / 修改后 |
-|-----------------|---------------|
-|                 |               |
-
-## Checklist / 检查清单
-
-- [ ] `pnpm typecheck` passes / 通过 TypeScript 类型检查
-- [ ] `pnpm format:check` passes / 通过代码格式检查
-- [ ] `cargo clippy` passes (if Rust code changed) / 通过 Clippy 检查（如修改了 Rust 代码）
-- [ ] Updated i18n files if user-facing text changed / 如修改了用户可见文本，已更新国际化文件
+- [ ] Tests added or updated, and they pass
+- [ ] `docs/deploy.md` updated if installation or deployment changed
+- [ ] `CHANGELOG.md` updated for a user-visible change

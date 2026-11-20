@@ -216,3 +216,12 @@ Changes of cc-switch-web. Changes of the cc-switch desktop app it is based on ar
 ## Notes for next phase
 
 - Первый тег — `v<Cargo version>-web.1`; строка `## v…-web.1 — unreleased` в `CHANGELOG.md` перед тегом получает дату вместо «unreleased».
+- Фаза закрыта PR https://github.com/alxwlw/cc-switch-web/pull/44 (ветка `feat-cld/oss-release-p2`).
+- Проба синхронизации (upstream `main` fa4a237, 2026-11-20): конфликтов нет, но апстрим поднимает версию до 4.0.36. Если синхронизация сольётся до первого тега, тег — `v4.0.36-web.1`, и заголовок в `CHANGELOG.md` меняется вместе с ним.
+- `.github/*` — собственный путь форка: синхронизация отбрасывает правки апстрима в `ci.yml` и других workflows и печатает их строкой `kept fork version (upstream changed)`. Нужное переносится руками.
+- В `fork_owned` сверх списка плана — `docs/deploy.md` (спека §7) и `tests/config/readmeParity.test.ts` (апстримовский тест требует удалённые переводы README; синхронизация удаляет его снова).
+- Консоль в режиме релизов не говорит о ветке, checkout, коммите и пересборке. Общие ключи `web.update.upToDateTitle`, `install.unchangedTitle`, `install.stage.checking` переписаны нейтрально для обоих режимов; добавлены `releaseUnknownTitle`, `releaseUnknownHint`, `install.releaseConfirmButton`. Переводы на 7 языков сделаны исполнителем, носители их не проверяли.
+- Каталог данных у установки из релиза переопределяется drop-in `~/.config/systemd/user/cc-switch-web.service.d/data-dir.conf` с `Environment=CC_SWITCH_CONFIG_DIR=`: `install.sh` переписывает сам unit на каждом запуске, а `.d` не трогает (`docs/deploy.md`, Data directory).
+- Не сделано, вне фазы: About в web по-прежнему показывает ссылку на сайт ccswitch.io, заметки к релизам и ссылки GitHub апстрима, а также просьбу поставить звезду (`AboutSection.tsx`, web-ветка). Для релиза форка ссылка на заметки апстрима неверна. Кандидат в фазу 3 или в бэклог.
+- Task 6 Step 3 (отвязка от сети форков через GitHub Support) ждёт владельца: вопрос в `plan-state` задачи 6. PR от неё не зависит.
+- Мелочи, отложенные ревью: `upstream-main` сдвигается раньше поздних отказов скрипта (безвредно); `fork-identity.test.sh` без `grep -I`; prettier в `docs/deploy.md` поставил продолжения inline-кода в колонку 0 внутри списков; `tests/integration/App.test.tsx` падает в полном `test:unit` под нагрузкой машины, а отдельно проходит.

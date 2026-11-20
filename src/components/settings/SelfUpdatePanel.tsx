@@ -15,6 +15,8 @@ const PROGRESS_STAGES = [
   "checking",
   "fetching",
   "merging",
+  "downloading",
+  "verifying",
   "building",
   "installing",
   "restarting",
@@ -48,6 +50,7 @@ export function SelfUpdateButton({
   const { t } = useTranslation();
   const [confirming, setConfirming] = useState(false);
   if (!canStartSelfUpdate(state)) return null;
+  const release = webUpdate.mode === "release";
 
   return (
     <>
@@ -66,12 +69,22 @@ export function SelfUpdateButton({
         isOpen={confirming}
         variant="info"
         title={t("web.update.install.confirmTitle")}
-        message={t("web.update.install.confirmMessage", {
-          branch: webUpdate.branch,
-          sha: (webUpdate.latestSha ?? "").slice(0, 7),
-          behind: webUpdate.behindBy,
-        })}
-        confirmText={t("web.update.install.confirmButton")}
+        message={
+          release
+            ? t("web.update.install.confirmReleaseMessage", {
+                version: webUpdate.latestVersion ?? "",
+              })
+            : t("web.update.install.confirmMessage", {
+                branch: webUpdate.branch,
+                sha: (webUpdate.latestSha ?? "").slice(0, 7),
+                behind: webUpdate.behindBy,
+              })
+        }
+        confirmText={t(
+          release
+            ? "web.update.install.releaseConfirmButton"
+            : "web.update.install.confirmButton",
+        )}
         onCancel={() => setConfirming(false)}
         onConfirm={() => {
           setConfirming(false);
@@ -79,10 +92,12 @@ export function SelfUpdateButton({
         }}
       >
         <div className="space-y-3 text-sm">
-          <WebCommitList
-            commits={webUpdate.commits}
-            behindBy={webUpdate.behindBy}
-          />
+          {!release && (
+            <WebCommitList
+              commits={webUpdate.commits}
+              behindBy={webUpdate.behindBy}
+            />
+          )}
           <p className="flex gap-2 text-fg-1">
             <AlertTriangle
               aria-hidden="true"

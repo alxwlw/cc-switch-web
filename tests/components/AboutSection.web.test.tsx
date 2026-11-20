@@ -88,7 +88,10 @@ function updateData(over: Record<string, unknown> = {}) {
 }
 
 /** Answers `/api/capabilities` and `/api/update/check*` like the server does. */
-function serve(check: { ok: boolean; status?: number; body: unknown }) {
+function serve(
+  check: { ok: boolean; status?: number; body: unknown },
+  capabilities: Record<string, unknown> = {},
+) {
   fetchMock.mockImplementation(async (url: string) => {
     if (url === "/api/capabilities") {
       return {
@@ -97,6 +100,7 @@ function serve(check: { ok: boolean; status?: number; body: unknown }) {
           mode: "web",
           version: "9.9.9",
           runtime_boundaries: "server host only",
+          ...capabilities,
         }),
       };
     }
@@ -212,6 +216,64 @@ describe("AboutSection · update controls", () => {
     expect(screen.queryByText("settings.updating")).toBeNull();
     expect(mocks.install).not.toHaveBeenCalled();
     expect(screen.queryByText("web.update.upToDateTitle")).toBeNull();
+  });
+
+  it("release mode behind shows the new version and the release notes link, not a commit list", async () => {
+    setWeb(true);
+    serveCheck(
+      updateData({
+        mode: "release",
+        currentVersion: "4.0.35-web.1",
+        latestSha: null,
+        latestVersion: "4.0.35-web.2",
+        releaseUrl:
+          "https://github.com/alxwlw/cc-switch-web/releases/tag/v4.0.35-web.2",
+        publishedAt: "2026-11-20T09:00:00Z",
+      }),
+    );
+    renderAbout();
+    await clickCheck();
+
+    expect(
+      await screen.findByText(
+        'web.update.releaseBehindTitle {"version":"4.0.35-web.2"}',
+      ),
+    ).toBeInTheDocument();
+    const link = screen.getByText("web.update.releaseNotes").closest("a");
+    expect(link).toHaveAttribute(
+      "href",
+      "https://github.com/alxwlw/cc-switch-web/releases/tag/v4.0.35-web.2",
+    );
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    // No commit list, no commit-mode title; the manual instructions stay.
+    // (the fixture still carries commits: a list would show them)
+    expect(screen.queryByText("web.update.commitsTitle")).toBeNull();
+    expect(screen.queryByText("feat: newest")).toBeNull();
+    expect(screen.queryByText(/web\.update\.behindTitle/)).toBeNull();
+    expect(
+      Array.from(document.querySelectorAll("pre")).map((p) => p.textContent),
+    ).toEqual([SYSTEMD, DOCKER]);
+  });
+
+  it("the version line shows the fork version when the server has one", async () => {
+    setWeb(true);
+    serve(
+      { ok: true, body: { ok: true, data: updateData() } },
+      { webVersion: "4.0.35-web.1" },
+    );
+    renderAbout();
+    expect(
+      await screen.findByText("common.version v4.0.35-web.1"),
+    ).toBeInTheDocument();
+  });
+
+  it("the version line stays the app version when the server has no fork version", async () => {
+    setWeb(true);
+    renderAbout();
+    expect(
+      await screen.findByText("common.version v3.0.0"),
+    ).toBeInTheDocument();
   });
 
   it("web, behind: a copied command is confirmed, a failed copy says why", async () => {

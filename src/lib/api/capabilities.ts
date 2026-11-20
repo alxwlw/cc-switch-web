@@ -3,6 +3,8 @@ export interface ServerCapabilities {
   version: string;
   /** Commit the server binary was built from; `null` when the build has none. */
   buildSha: string | null;
+  /** Fork version of the running build (`4.0.35-web.1`); `null` when the server does not report one. */
+  webVersion: string | null;
   runtime_boundaries: string;
   /** `std::env::consts::OS` of the server: "linux" | "macos" | "windows". */
   platform: string;
@@ -31,6 +33,7 @@ export async function fetchCapabilities(): Promise<ServerCapabilities> {
       typeof body.buildSha === "string" && body.buildSha !== ""
         ? body.buildSha
         : null,
+    webVersion: typeof body.webVersion === "string" ? body.webVersion : null,
     runtime_boundaries: String(body.runtime_boundaries ?? ""),
     platform: String(body.platform ?? ""),
     selfUpdate: body.selfUpdate === true,

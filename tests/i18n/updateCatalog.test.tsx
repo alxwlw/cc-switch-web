@@ -2,18 +2,26 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import i18next from "i18next";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it } from "vitest";
-import { SelfUpdateButton } from "@/components/settings/SelfUpdatePanel";
+import {
+  SelfUpdateButton,
+  SelfUpdateNotice,
+} from "@/components/settings/SelfUpdatePanel";
 import en from "@/i18n/locales/en.json";
 import ja from "@/i18n/locales/ja.json";
 import tr from "@/i18n/locales/tr.json";
 import zhTW from "@/i18n/locales/zh-TW.json";
 import zh from "@/i18n/locales/zh.json";
+import de from "@/i18n/locales/de.json";
+import ko from "@/i18n/locales/ko.json";
+import ru from "@/i18n/locales/ru.json";
 import type { WebUpdateCheck } from "@/lib/updater";
 
 // The real catalogs and the real i18next: nothing here mocks `t`, so a key whose text was
 // replaced (or lost its placeholder) shows up. Component tests that mock react-i18next return
 // the key and the options and cannot see either.
 const catalogs = { en, ja, tr, "zh-TW": zhTW, zh } as const;
+// Every locale of the build, for the keys added with release updates.
+const allCatalogs = { ...catalogs, de, ko, ru } as const;
 type Catalog = { [key: string]: unknown };
 
 function lookup(catalog: Catalog, path: string): unknown {
@@ -74,6 +82,61 @@ describe("catalogs · self-update strings (WEB-28)", () => {
   );
 });
 
+const RELEASE_KEYS = {
+  "web.update.releaseBehindTitle": ["{{version}}"],
+  "web.update.releaseNotes": [],
+  "web.update.install.stage.downloading": [],
+  "web.update.install.stage.verifying": [],
+  "web.update.install.confirmReleaseMessage": ["{{version}}"],
+  "web.update.releaseUnknownTitle": [],
+  "web.update.releaseUnknownHint": [],
+  "web.update.install.releaseConfirmButton": [],
+  // Shared with the commit mode, reworded so that both modes can show them.
+  "web.update.upToDateTitle": [],
+  "web.update.install.unchangedTitle": [],
+  "web.update.install.stage.checking": [],
+} as const;
+
+describe("catalogs · release update strings", () => {
+  const langs = Object.keys(allCatalogs) as (keyof typeof allCatalogs)[];
+  const cases = langs.flatMap((lang) =>
+    Object.entries(RELEASE_KEYS).map(([key, placeholders]) => ({
+      lang,
+      key,
+      placeholders,
+    })),
+  );
+
+  it.each(cases)(
+    "$lang: $key is a translated text with its placeholders",
+    ({ lang, key, placeholders }) => {
+      const text = lookup(allCatalogs[lang], key);
+      expect(typeof text).toBe("string");
+      expect((text as string).length).toBeGreaterThan(0);
+      for (const p of placeholders) expect(text).toContain(p);
+      // A copy of the English text is a missing translation.
+      if (lang !== "en") expect(text).not.toBe(lookup(en, key));
+    },
+  );
+
+  it.each(langs)(
+    "%s: the release confirmation names the version and no branch",
+    async (lang) => {
+      const i18n = i18next.createInstance();
+      await i18n.init({
+        lng: lang,
+        resources: { [lang]: { translation: allCatalogs[lang] } },
+        interpolation: { escapeValue: false },
+      });
+      const shown = i18n.t("web.update.install.confirmReleaseMessage", {
+        version: "4.0.35-web.2",
+      });
+      expect(shown).toContain("4.0.35-web.2");
+      expect(shown).not.toContain("{{");
+    },
+  );
+});
+
 describe("self-update confirmation · real catalog render", () => {
   const webUpdate: WebUpdateCheck = {
     status: "behind",
@@ -92,6 +155,10 @@ describe("self-update confirmation · real catalog render", () => {
     checkedAt: "2026-11-04T10:30:00Z",
     branch: "web-parity",
     instructions: { systemd: "s", docker: "d" },
+    mode: "commit",
+    latestVersion: null,
+    releaseUrl: null,
+    publishedAt: null,
   };
 
   it("the dialog shows the branch name, not a placeholder", async () => {
@@ -120,5 +187,141 @@ describe("self-update confirmation · real catalog render", () => {
     expect(
       within(dialog).getByText(/may migrate the database/),
     ).toBeInTheDocument();
+  });
+
+  it("in release mode the dialog shows the version, no branch and no commit list", async () => {
+    const i18n = i18next.createInstance();
+    await i18n.init({
+      lng: "en",
+      resources: { en: { translation: en } },
+      interpolation: { escapeValue: false },
+    });
+    render(
+      <I18nextProvider i18n={i18n}>
+        <SelfUpdateButton
+          webUpdate={{
+            ...webUpdate,
+            mode: "release",
+            latestSha: null,
+            latestVersion: "4.0.35-web.2",
+          }}
+          state={{ kind: "idle" }}
+          onStart={async () => {}}
+        />
+      </I18nextProvider>,
+    );
+    fireEvent.click(screen.getByText("Update now"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(
+      "Install version 4.0.35-web.2? The server restarts and the page reloads by itself.",
+    );
+    expect(dialog).not.toHaveTextContent("web-parity");
+    expect(dialog).not.toHaveTextContent("feat: newest");
+    expect(dialog).not.toHaveTextContent("{{");
+    expect(
+      within(dialog).getByText(/may migrate the database/),
+    ).toBeInTheDocument();
+  });
+
+  it("in release mode the confirm button says install, not rebuild", async () => {
+    const i18n = await enInstance();
+    render(
+      <I18nextProvider i18n={i18n}>
+        <SelfUpdateButton
+          webUpdate={{
+            ...webUpdate,
+            mode: "release",
+            latestSha: null,
+            latestVersion: "4.0.35-web.2",
+          }}
+          state={{ kind: "idle" }}
+          onStart={async () => {}}
+        />
+      </I18nextProvider>,
+    );
+    fireEvent.click(screen.getByText("Update now"));
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog).getByRole("button", { name: "Install and restart" }),
+    ).toBeInTheDocument();
+    expect(dialog.textContent).not.toMatch(FORBIDDEN_IN_RELEASE);
+  });
+});
+
+// Release mode says nothing of a branch, a checkout, a commit or a rebuild: an install from a
+// release has none of them.
+const FORBIDDEN_IN_RELEASE = /branch|checkout|commit|rebuild/i;
+
+async function enInstance() {
+  const i18n = i18next.createInstance();
+  await i18n.init({
+    lng: "en",
+    resources: { en: { translation: en } },
+    interpolation: { escapeValue: false },
+  });
+  return i18n;
+}
+
+describe("release mode copy · real catalog render", () => {
+  // The keys a release install can show; the component tests pin which key each state picks.
+  const RELEASE_MODE_KEYS = [
+    "web.update.upToDateTitle",
+    "web.update.releaseUnknownTitle",
+    "web.update.releaseUnknownHint",
+    "web.update.releaseBehindTitle",
+    "web.update.releaseNotes",
+    "web.update.install.confirmReleaseMessage",
+    "web.update.install.releaseConfirmButton",
+    "web.update.install.stage.checking",
+    "web.update.install.stage.downloading",
+    "web.update.install.stage.verifying",
+    "web.update.install.unchangedTitle",
+  ];
+
+  it.each(RELEASE_MODE_KEYS)(
+    "en %s has no branch, checkout, commit or rebuild",
+    (key) => {
+      expect(lookup(en, key) as string).not.toMatch(FORBIDDEN_IN_RELEASE);
+    },
+  );
+
+  it("a release run that found nothing to install reads 'up to date'", async () => {
+    const i18n = await enInstance();
+    render(
+      <I18nextProvider i18n={i18n}>
+        <SelfUpdateNotice
+          state={{
+            kind: "ended",
+            outcome: "unchanged",
+            message: "already up to date",
+            finishedAt: null,
+          }}
+        />
+      </I18nextProvider>,
+    );
+    const notice = screen.getByRole("status");
+    expect(notice).toHaveTextContent(
+      "Nothing to update: the server is already up to date",
+    );
+    expect(notice.textContent).not.toMatch(FORBIDDEN_IN_RELEASE);
+  });
+
+  it("the first stage of a run reads 'checking for updates'", async () => {
+    const i18n = await enInstance();
+    render(
+      <I18nextProvider i18n={i18n}>
+        <SelfUpdateNotice
+          state={{
+            kind: "running",
+            stage: "checking",
+            branch: null,
+            waiting: false,
+          }}
+        />
+      </I18nextProvider>,
+    );
+    const notice = screen.getByRole("status");
+    expect(notice).toHaveTextContent("Checking for updates...");
+    expect(notice.textContent).not.toMatch(FORBIDDEN_IN_RELEASE);
   });
 });

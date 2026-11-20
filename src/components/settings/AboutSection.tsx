@@ -119,8 +119,20 @@ function WebUpdateStatus({
   if (webUpdate.status === "unknown") {
     return (
       <div className="space-y-1 px-5 py-4 text-body">
-        <p className="font-medium text-fg-1">{t("web.update.unknownTitle")}</p>
-        <p className="text-fg-2">{t("web.update.unknownHint")}</p>
+        <p className="font-medium text-fg-1">
+          {t(
+            webUpdate.mode === "release"
+              ? "web.update.releaseUnknownTitle"
+              : "web.update.unknownTitle",
+          )}
+        </p>
+        <p className="text-fg-2">
+          {t(
+            webUpdate.mode === "release"
+              ? "web.update.releaseUnknownHint"
+              : "web.update.unknownHint",
+          )}
+        </p>
         {footer}
       </div>
     );
@@ -143,9 +155,24 @@ function WebUpdateStatus({
     <div className="space-y-3 px-5 py-4 text-body">
       <div className="space-y-1">
         <p className="font-medium text-fg-1">
-          {t("web.update.behindTitle", { count: webUpdate.behindBy })}
+          {webUpdate.mode === "release"
+            ? t("web.update.releaseBehindTitle", {
+                version: webUpdate.latestVersion ?? "",
+              })
+            : t("web.update.behindTitle", { count: webUpdate.behindBy })}
         </p>
         {footer}
+        {webUpdate.mode === "release" && webUpdate.releaseUrl && (
+          <a
+            href={webUpdate.releaseUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-caption text-primary underline-offset-2 hover:underline"
+          >
+            <ExternalLink className="h-3 w-3" />
+            {t("web.update.releaseNotes")}
+          </a>
+        )}
       </div>
 
       {selfUpdate && (
@@ -156,10 +183,12 @@ function WebUpdateStatus({
         />
       )}
 
-      <WebCommitList
-        commits={webUpdate.commits}
-        behindBy={webUpdate.behindBy}
-      />
+      {webUpdate.mode !== "release" && (
+        <WebCommitList
+          commits={webUpdate.commits}
+          behindBy={webUpdate.behindBy}
+        />
+      )}
 
       <div className="space-y-2">
         <p className="text-caption font-medium text-fg-2">
@@ -400,7 +429,9 @@ export function AboutSection({
     updateInfo?.availableVersion,
   ]);
 
-  const displayVersion = version ?? t("common.unknown");
+  // web: the fork's own version when the server reports one; `version` is the upstream app's.
+  const webVersion = isWeb ? (capabilities.data?.webVersion ?? null) : null;
+  const displayVersion = webVersion ?? version ?? t("common.unknown");
 
   return (
     <div className="divide-y divide-border overflow-hidden rounded-panel border border-border bg-surface">

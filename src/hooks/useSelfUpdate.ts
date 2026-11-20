@@ -175,8 +175,9 @@ export function useSelfUpdate(
           case "done":
             if (
               !rebuilt &&
-              status.fromSha !== null &&
-              status.fromSha === status.toSha
+              ((status.fromSha !== null && status.fromSha === status.toSha) ||
+                (status.fromVersion !== null &&
+                  status.fromVersion === status.toVersion))
             ) {
               end({
                 kind: "ended",

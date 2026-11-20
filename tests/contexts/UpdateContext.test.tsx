@@ -124,6 +124,53 @@ describe("updater · checkForUpdate (web)", () => {
     expect(mocks.check).not.toHaveBeenCalled();
   });
 
+  it("release mode behind: the available version is the latest release, dated by its publication", async () => {
+    answer(
+      webCheck({
+        mode: "release",
+        currentVersion: "4.0.35-web.1",
+        latestSha: null,
+        latestVersion: "4.0.35-web.2",
+        releaseUrl: "https://example.test/r",
+        publishedAt: "2026-11-20T09:00:00Z",
+        behindBy: 0,
+        commits: [],
+      }),
+    );
+    await expect(checkForUpdate()).resolves.toMatchObject({
+      status: "available",
+      info: {
+        currentVersion: "4.0.35-web.1",
+        availableVersion: "4.0.35-web.2",
+        pubDate: "2026-11-20T09:00:00Z",
+      },
+      web: { mode: "release", latestVersion: "4.0.35-web.2" },
+    });
+  });
+
+  it.each([
+    ["the latest release is older", "4.0.34-web.1"],
+    ["the tag is not a fork version", null],
+  ])(
+    "release mode unknown (%s) is unknown, never available",
+    async (_n, latestVersion) => {
+      answer(
+        webCheck({
+          mode: "release",
+          status: "unknown",
+          latestSha: null,
+          latestVersion,
+          behindBy: 0,
+          commits: [],
+        }),
+      );
+      await expect(checkForUpdate()).resolves.toMatchObject({
+        status: "unknown",
+        web: { mode: "release", status: "unknown", latestVersion },
+      });
+    },
+  );
+
   it("up-to-date and unknown keep the server's data and never become an update", async () => {
     answer(webCheck({ status: "up-to-date", behindBy: 0, commits: [] }));
     await expect(checkForUpdate()).resolves.toMatchObject({
