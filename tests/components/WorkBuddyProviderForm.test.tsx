@@ -253,6 +253,26 @@ describe("WorkBuddyProviderForm", () => {
     expect(
       screen.queryByRole("button", { name: "authCenter.workbuddy.openApp" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("workbuddy.official.addAnotherBody"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the add-another hint on desktop", async () => {
+    setWeb(false);
+    render(
+      <WorkBuddyProviderForm
+        appId="workbuddy"
+        providerId="workbuddy-official"
+        initialData={officialCard("u-1")}
+        submitLabel="Save"
+        onSubmit={vi.fn()}
+        onCancel={() => {}}
+      />,
+    );
+    expect(
+      await screen.findByText("workbuddy.official.addAnotherBody"),
+    ).toBeInTheDocument();
   });
 
   it("edits fields while keeping the key and unknown settings", async () => {

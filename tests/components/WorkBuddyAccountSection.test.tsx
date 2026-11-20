@@ -350,6 +350,13 @@ describe("WorkBuddyAccountSection", () => {
       ).not.toBeInTheDocument();
     });
 
+    it("does not show the hint that points at the hidden button", async () => {
+      setWeb(true);
+      await addAnother();
+
+      expect(screen.queryByText(/登录另一个账号/)).not.toBeInTheDocument();
+    });
+
     it("keeps both buttons on desktop", async () => {
       setWeb(false);
       await addAnother();

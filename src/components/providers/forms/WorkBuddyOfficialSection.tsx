@@ -198,11 +198,14 @@ export function WorkBuddyOfficialSection({
           </>
         }
       >
-        {live?.running
-          ? t("workbuddy.official.addAnotherRunning")
-          : isSuccess && accounts.length === 0
-            ? t("workbuddy.official.emptyBody")
-            : t("workbuddy.official.addAnotherBody")}
+        {isSuccess && accounts.length === 0 && !live?.running
+          ? t("workbuddy.official.emptyBody")
+          : // both sentences point at the desktop-only "sign in to another account" button
+            isWeb
+            ? null
+            : live?.running
+              ? t("workbuddy.official.addAnotherRunning")
+              : t("workbuddy.official.addAnotherBody")}
       </Notice>
     </div>
   );

@@ -363,10 +363,13 @@ export function WorkBuddyAccountSection({
         }
       >
         {addHint === "already"
-          ? t("authCenter.workbuddy.alreadyBody", {
-              defaultValue:
-                "要添加另一个账号：先完全退出 WorkBuddy，点「登录另一个账号」（CC Switch 只在本机让 WorkBuddy 停在登录页，不会在服务端登出当前账号），在 WorkBuddy 里登录另一个账号，再回来点「添加账号」。",
-            })
+          ? // the sentence walks through the desktop-only "sign in to another account" button
+            isWeb
+            ? null
+            : t("authCenter.workbuddy.alreadyBody", {
+                defaultValue:
+                  "要添加另一个账号：先完全退出 WorkBuddy，点「登录另一个账号」（CC Switch 只在本机让 WorkBuddy 停在登录页，不会在服务端登出当前账号），在 WorkBuddy 里登录另一个账号，再回来点「添加账号」。",
+              })
           : t("authCenter.workbuddy.signedOutBody", {
               defaultValue:
                 "在 WorkBuddy 里登录后，回到这里点「添加账号」收录。",

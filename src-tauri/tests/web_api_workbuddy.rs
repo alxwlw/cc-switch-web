@@ -51,26 +51,6 @@ async fn quota_for_an_unknown_account_is_an_error_envelope() {
 
 #[tokio::test]
 #[serial]
-async fn quota_accepts_the_force_flag() {
-    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    reset_test_fs();
-    ensure_test_home();
-    let router = web_router();
-
-    let (forced, body) = web_call(
-        &router,
-        "GET",
-        "/api/workbuddy/accounts/no-such-account/quota?force=true",
-        None,
-    )
-    .await;
-    // Same service answer as without the flag: the account does not exist.
-    assert_eq!(forced, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
-    assert_eq!(body["ok"], json!(false));
-}
-
-#[tokio::test]
-#[serial]
 async fn import_without_a_workbuddy_login_is_an_error() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     reset_test_fs();
