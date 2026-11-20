@@ -12,7 +12,24 @@ last_sync = "2026-11-19: merged 6da70837 (v4.0.35) into main; dropped web routes
 product_branch = "main"
 mirror_branch = "upstream-main"
 
+# Fork-owned paths: after a merge of upstream, scripts/sync-upstream.sh puts them back to the
+# fork's version (and removes the ones the fork does not have). `*` matches any characters, `/` too.
+fork_owned = [
+  "README.md",
+  "README_*.md",
+  "SECURITY.md",
+  "SUPPORT.md",
+  "CONTRIBUTING.md",
+  "CODE_OF_CONDUCT.md",
+  "CHANGELOG.md",
+  "LICENSE",
+  "docs/deploy.md",
+  ".github/*",
+]
+
 # Sync cadence: every 2-4 weeks.
-# 1. git fetch upstream -> upstream-main (ff-only)
-# 2. merge upstream-main into main, resolve only in fork-owned files
+# 1. scripts/sync-upstream.sh [--ref <upstream-ref>]: fetches upstream, moves `upstream-main`
+#    (ff-only), starts sync/upstream-<sha> from main, merges without committing and restores the
+#    fork-owned paths above; exit 2 means code conflicts are left to resolve by hand.
+# 2. resolve the reported conflicts only in code, review `kept fork version` lines, commit
 # 3. cargo test + stream-check + tag v*
