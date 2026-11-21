@@ -54,9 +54,6 @@ const PENDING = new Set([
   // Task 3
   // Task 5
   // Task 7
-  // Task 8
-  "start_mcp_connectivity_checks",
-  "cancel_mcp_connectivity_checks",
   // Task 9
   "diagnose_ip",
   "fetch_exchange_rates",

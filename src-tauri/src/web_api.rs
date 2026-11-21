@@ -217,6 +217,11 @@ pub fn router_with_update(
         .route("/api/mcp/config", get(mcp_config))
         .route("/api/mcp/import", post(import_mcp))
         .route("/api/mcp/resync", post(resync_mcp))
+        .route("/api/mcp/connectivity", post(mcp_connectivity))
+        .route(
+            "/api/mcp/connectivity/:batch_id/cancel",
+            post(cancel_mcp_connectivity),
+        )
         // skills (unified store)
         .route("/api/skills/installed", get(list_skills))
         .route("/api/skills/toggle", post(toggle_skill))
@@ -1725,6 +1730,63 @@ async fn import_mcp(State(state): State<SharedState>) -> ApiResult {
         Ok(n) => ok(n),
         Err(e) => fail(e.to_string()),
     }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct McpConnectivityReq {
+    server_ids: Vec<String>,
+}
+
+/// `start_mcp_connectivity_checks` over HTTP, NDJSON: line 1 is `{"batchId":"…"}`, then one
+/// serialized `ConnectivityResult` per server; the body ends when the batch ends.
+///
+/// Browser-gone path: the body stream owns the receiver `rx`. When the browser drops the
+/// connection axum drops the body, so `rx` is dropped, the next `tx.send(..)` in `on_result`
+/// fails and the closure returns `false`, which makes `mcp_connectivity::start_checks` stop
+/// the batch and drop the queued checks. The sender lives only in that closure, so the body
+/// also ends when the batch finishes or is cancelled (the closure is dropped).
+async fn mcp_connectivity(
+    State(state): State<SharedState>,
+    Json(body): Json<McpConnectivityReq>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+    let started = crate::commands::start_mcp_connectivity_checks_inner(
+        &state,
+        body.server_ids,
+        move |result| {
+            let mut line = serde_json::to_vec(&result).unwrap_or_default();
+            line.push(b'\n');
+            tx.send(line).is_ok()
+        },
+    )
+    .await;
+    let batch_id = match started {
+        Ok(id) => id,
+        Err(e) => return fail(e).into_response(),
+    };
+    // Results queued in `rx` before this point follow the batch id line.
+    let mut first = serde_json::to_vec(&json!({ "batchId": batch_id })).unwrap_or_default();
+    first.push(b'\n');
+    let results = futures::stream::unfold(rx, |mut rx| async move {
+        rx.recv().await.map(|line| (line, rx))
+    });
+    let stream = futures::StreamExt::map(
+        futures::StreamExt::chain(futures::stream::once(async move { first }), results),
+        |line| Ok::<_, std::io::Error>(axum::body::Bytes::from(line)),
+    );
+    (
+        [(header::CONTENT_TYPE, "application/x-ndjson")],
+        axum::body::Body::from_stream(stream),
+    )
+        .into_response()
+}
+
+/// Cancelling an unknown or already finished batch is not an error.
+async fn cancel_mcp_connectivity(Path(batch_id): Path<String>) -> ApiResult {
+    crate::services::mcp_connectivity::cancel_checks(&batch_id);
+    ok(Value::Null)
 }
 
 #[derive(Deserialize)]

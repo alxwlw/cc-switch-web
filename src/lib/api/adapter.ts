@@ -417,6 +417,11 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return { method: "GET", url: `/api/mcp/config${query({ app: a.app })}` };
     case "import_mcp_from_apps":
       return { method: "POST", url: "/api/mcp/import" };
+    case "cancel_mcp_connectivity_checks":
+      return {
+        method: "POST",
+        url: `/api/mcp/connectivity/${enc(a.batchId)}/cancel`,
+      };
     case "resync_mcp_to_apps":
       return {
         method: "POST",
@@ -1549,13 +1554,25 @@ async function streamSessionMessages(args: Args): Promise<void> {
   if (!res.ok || !res.body) {
     throw new Error(`Web API error (stream_session_messages): ${res.status}`);
   }
-  const deliver = (line: string) => {
-    if (!line.trim()) return;
-    const chunk = JSON.parse(line);
+  await readNdjson(res.body, (chunk) => {
     args.onChunk?.onmessage?.(chunk);
     if (chunk?.type === "error") throw new Error(String(chunk.message));
+  });
+}
+
+/**
+ * Reads an NDJSON body, calling `onLine` with each parsed non-blank line in order
+ * (a line may arrive split across chunks). A throw from `onLine` stops the read.
+ */
+async function readNdjson(
+  body: ReadableStream<Uint8Array>,
+  onLine: (parsed: any) => void,
+): Promise<void> {
+  const deliver = (line: string) => {
+    if (!line.trim()) return;
+    onLine(JSON.parse(line));
   };
-  const reader = res.body.getReader();
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let tail = "";
   for (;;) {
@@ -1572,6 +1589,68 @@ async function streamSessionMessages(args: Args): Promise<void> {
   }
   tail += decoder.decode();
   deliver(tail);
+}
+
+/**
+ * `start_mcp_connectivity_checks` over `POST /api/mcp/connectivity` (NDJSON). Line 1 is
+ * `{batchId}`; the promise resolves with it as soon as it arrives, and every further line
+ * (a `ConnectivityResult`) goes to `args.onResult.onmessage` until the server ends the
+ * stream. A read error after the batch id is logged and ends delivery.
+ */
+async function startMcpConnectivityChecks(args: Args): Promise<string> {
+  const url = "/api/mcp/connectivity";
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serverIds: args.serverIds }),
+    });
+  } catch (e) {
+    throw new Error(`Web API unavailable (POST ${url}): ${String(e)}`);
+  }
+  if (!res.ok || !res.body) {
+    let message = `Web API error (start_mcp_connectivity_checks): ${res.status}`;
+    try {
+      const envelope = await res.json();
+      if (typeof envelope?.error === "string") message = envelope.error;
+    } catch {
+      // keep the status message
+    }
+    throw new Error(message);
+  }
+  const body = res.body;
+  return new Promise<string>((resolve, reject) => {
+    let batchId: string | null = null;
+    readNdjson(body, (line) => {
+      if (batchId === null) {
+        const id = line?.batchId;
+        if (typeof id !== "string" || !id) {
+          throw new Error(
+            "Web API error (start_mcp_connectivity_checks): no batch id",
+          );
+        }
+        batchId = id;
+        resolve(id);
+        return;
+      }
+      args.onResult?.onmessage?.(line);
+    }).then(
+      () => {
+        if (batchId === null) {
+          reject(
+            new Error(
+              "Web API error (start_mcp_connectivity_checks): empty stream",
+            ),
+          );
+        }
+      },
+      (e) => {
+        if (batchId === null) reject(e);
+        else console.warn("MCP connectivity stream ended with an error", e);
+      },
+    );
+  });
 }
 
 const TOOL_POLL_INTERVAL_MS = 2000;
@@ -1670,6 +1749,7 @@ const BROWSER_COMMANDS: ReadonlySet<string> = new Set([
   "open_external",
   "copy_text_to_clipboard",
   "stream_session_messages",
+  "start_mcp_connectivity_checks",
   "run_tool_lifecycle_action",
   "export_session_markdown",
 ]);
@@ -1716,6 +1796,9 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
   }
   if (cmd === "stream_session_messages") {
     return (await streamSessionMessages(args)) as T;
+  }
+  if (cmd === "start_mcp_connectivity_checks") {
+    return (await startMcpConnectivityChecks(args)) as T;
   }
   if (cmd === "run_tool_lifecycle_action") {
     return (await runToolLifecycleAction(args)) as T;
