@@ -99,6 +99,7 @@
   },
   "provider": {
     "connectivityCheck": "Connectivity check",
+    "connectivityCheckServerNote": "The check runs from the server",
     "tabProvider": "Provider",
     "tabUniversal": "Universal",
     "noProviders": "No providers yet",
@@ -231,7 +232,8 @@
         "account": "Account",
         "accountFollow": "Follow agy's current sign-in",
         "accountMissing": "An account not on this computer",
-        "accountHelp": "With an account selected, Open Terminal first switches agy's sign-in to it (this applies globally: agy sessions started afterwards use it). Add accounts in the Auth Center."
+        "accountHelp": "With an account selected, Open Terminal first switches agy's sign-in to it (this applies globally: agy sessions started afterwards use it). Add accounts in the Auth Center.",
+        "cliServerNote": "The list comes from the CLI on the server"
       },
       "gemini": {
         "model": "Model",
@@ -416,6 +418,7 @@
       "title": "Turn off unified session history",
       "message": "When turned off, official and third-party sessions split into two groups again: newer Codex can only continue the current provider's group, and the other group becomes read-only. Sessions created while this was on can't be told apart, so they stay in the third-party group.",
       "restoreBackup": "Restore the migrated official sessions to the official group (exact restore from backup)",
+      "restoreBackupWeb": "Restore the migrated official sessions to the official group on the server (exact restore from backup)",
       "confirm": "Turn off"
     },
     "usage": {
@@ -540,6 +543,15 @@
         "enabledDescription": "Controls cc-switch.log; request usage records and crash.log are unaffected",
         "openLog": "Open log",
         "openLogFailed": "Failed to open the log location: {{error}}",
+        "viewer": {
+          "title": "Server log",
+          "serverNote": "This is the log of the machine running cc-switch-web, not of this browser.",
+          "path": "Path on the server",
+          "unavailable": "No log yet or it cannot be read.",
+          "empty": "The log file is empty.",
+          "refresh": "Refresh",
+          "download": "Download"
+        },
         "level": "Log Level",
         "levelDescription": "Set the minimum log level to output",
         "levels": {
@@ -578,6 +590,10 @@
     "importPartialSuccess": "Config imported, but failed to sync to the current provider.",
     "importPartialHint": "Please manually reselect the provider to refresh the live configuration.",
     "configExported": "Config exported to:",
+    "configDownloaded": "Config downloaded:",
+    "importFileReadFailed": "Failed to read the file: {{message}}",
+    "importFileTooLarge": "File is too large to import (limit {{limit}} MiB)",
+    "importFileNotUtf8": "The file is not valid UTF-8 text. Export the configuration again from CC Switch and import that file.",
     "exportFailed": "Export failed",
     "selectFileFailed": "Please choose a valid SQL backup file",
     "configCorrupted": "SQL file may be corrupted or invalid",
@@ -1062,6 +1078,7 @@
     "toolActionBinCollision": "A file already exists at {{path}}, probably from another installation method, and npm won't overwrite it. Check what it is, rename it as a backup, then try again. Don't use npm's --force: it overwrites the file outright.",
     "toolActionInProgress": "An app operation is still running",
     "toolActionInProgressDetail": "{{tool}} already has an installation, update or uninstall running in the background. Please wait for it to finish.",
+    "toolActionTimeout": "{{tool}} did not finish within 15 minutes; the process was stopped",
     "toolNotRunnable": "Installed but not runnable (no version detected)",
     "toolActionVersionUnchangedTitle": "Version did not change",
     "toolActionVersionUnchanged": "Still on {{version}} (latest: {{latest}}). The updater may have reported success without applying the update.",
@@ -1106,6 +1123,7 @@
     "globalProxy": {
       "label": "Global Proxy",
       "hint": "Proxy all requests (API, Skills download, etc.). When local routing is enabled, app traffic is also routed through this proxy. Leave empty for direct connection.",
+      "serverSideNote": "The proxy applies to outgoing requests of the cc-switch-web server, not to this browser. Scan looks for proxies on the server itself (its 127.0.0.1).",
       "username": "Username (optional)",
       "password": "Password (optional)",
       "test": "Test Connection",
@@ -2158,7 +2176,9 @@
     "pleaseAddEndpoint": "Please add an endpoint first",
     "noResult": "No result returned",
     "testFailed": "Speed test failed: {{error}}",
-    "empty": "No endpoints"
+    "empty": "No endpoints",
+    "serverSideNote": "Latency is measured from the cc-switch-web server, not from this browser, and may differ from what you get. URLs such as http://127.0.0.1 or localhost point to services on the server itself.",
+    "savePartial": "Saved before the error: {{saved}}. Error: {{error}}"
   },
   "codexConfig": {
     "authJson": "auth.json (JSON) *",
@@ -3248,6 +3268,9 @@
     "saveFailed": "Failed to save",
     "loadFailed": "Failed to load",
     "openDirectory": "Open in file manager",
+    "copyPath": "Copy path",
+    "pathCopied": "Path copied",
+    "pathCopyFailed": "Failed to copy path",
     "dailyMemory": {
       "title": "Daily Memory",
       "cardTitle": "Daily Memory Files",
@@ -3406,6 +3429,7 @@
       "open": "Open Hermes Web UI",
       "offline": "Hermes Web UI is not running. Start it with `hermes dashboard` first.",
       "openFailed": "Failed to open Hermes Web UI",
+      "unreachableRemote": "Hermes Web UI is not responding on the server (port {{port}}). If it listens only on localhost, open it via tailscale serve or start it on 0.0.0.0.",
       "launchConfirmTitle": "Hermes Dashboard is not running",
       "launchConfirmMessage": "Open a terminal and start it now with `hermes dashboard`?\n\nThe browser will open automatically once startup completes.\n\nIf the terminal reports that `hermes` cannot be found or the web extras are missing, run first:\npip install hermes-agent[web]",
       "launchConfirmAction": "Open terminal & launch",
@@ -3473,6 +3497,7 @@
       "title": "Confirm Delete Environment Variables",
       "message": "Are you sure you want to delete {{count}} environment variable(s)?",
       "backupNotice": "A backup will be created automatically before deletion. You can restore it later. Changes take effect after restarting the application or terminal.",
+      "webHostWarning": "Web mode: the variables are removed from the OS user environment (shell rc files) of the machine running the cc-switch server, not of the computer this browser is on.",
       "confirm": "Confirm Delete"
     },
     "error": {
@@ -3677,6 +3702,9 @@
       "locationUnified": "Shared folder",
       "openFolder": "Open",
       "openFolderAria": "Open {{path}}",
+      "copyPath": "Copy path",
+      "copyPathAria": "Copy server path {{path}}",
+      "pathCopied": "Path copied",
       "unifiedWarning": "Codex, Gemini CLI, OpenCode and others read this folder directly, so the per-app switches no longer fully apply to them.",
       "move": "Move and switch",
       "moving": "Moving…",
@@ -3696,6 +3724,15 @@
     "updatesIncomplete": "No updates found, but {{count}} repositories couldn't be read"
   },
   "deeplink": {
+    "paste": {
+      "title": "Import from a ccswitch:// link",
+      "placeholder": "Paste a ccswitch://… link",
+      "open": "Open",
+      "upload": "Choose file",
+      "noLink": "No ccswitch:// link found.",
+      "fileTooLarge": "File is too large for a deep link (limit {{limit}} KiB).",
+      "fileReadFailed": "Could not read the file."
+    },
     "confirmImport": "Confirm Import Provider",
     "confirmImportDescription": "The following configuration will be imported from deep link into CC Switch",
     "importPrompt": "Import Prompt",
@@ -4338,7 +4375,9 @@
     "expiredHint": "Run the {{tool}} command to refresh your login",
     "expiredHintAccounts": "Sign in to this account again in Accounts",
     "queryFailed": "Query failed",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "serverNote": "Data is fetched on the server",
+    "cliServerNote": "Based on the CLI's credentials on the server"
   },
   "nav": {
     "mainLabel": "Main navigation",
@@ -4368,6 +4407,8 @@
     "plugins": "Plugins"
   },
   "appsPage": {
+    "webServerNote": "CLI tools are installed on the cc-switch-web server, not on this computer.",
+    "webLifecycleSlow": "Install and update can take up to 15 minutes.",
     "showInSidebar": "Show {{name}} in the sidebar",
     "lastChecked": "Last checked {{time}}",
     "neverChecked": "Not checked for updates yet",
@@ -4389,6 +4430,8 @@
     "desktopUnsupported": "Not supported on this system",
     "desktopConnected": "Connected",
     "desktopNotConnected": "Not connected",
+    "desktopServerNote": "Claude Desktop on the cc-switch-web server",
+    "desktopNotFoundOnServer": "Claude Desktop was not found on the server; settings will apply once it appears there.",
     "newVersion": "{{version}} available",
     "notRunnable": "Can't run",
     "updateNeedsNode": "{{version}} requires Node {{required}}, but this installation runs on Node {{current}}. Upgrade Node first.",
@@ -5219,7 +5262,8 @@
       "loading": "Checking quota…",
       "refresh": "Refresh quota",
       "refreshAria": "Refresh quota for {{login}}",
-      "refreshAll": "Refresh all"
+      "refreshAll": "Refresh all",
+      "serverNote": "Data is fetched on the server"
     },
     "agy": {
       "reauthNote": "Sign-in expired, can't switch to it",
@@ -5228,7 +5272,8 @@
       "empty": "No Antigravity accounts yet. The account agy is signed in with appears here automatically.",
       "removeNote": "agy stays signed in: if agy is using this account, it keeps working after removal.",
       "switched": "Switched. New agy sessions will use this account.",
-      "switchedWhileRunning": "Switched. agy is running: open agy sessions keep using the previous account and may write it back. Quit agy and open it again."
+      "switchedWhileRunning": "Switched. agy is running: open agy sessions keep using the previous account and may write it back. Quit agy and open it again.",
+      "webLoginUnavailable": "Antigravity sign-in runs a loopback callback on the server, so sign in from the desktop app there. Switching and removing accounts work here."
     },
     "workbuddy": {
       "addedOn": "Added {{date}}",
@@ -5302,6 +5347,7 @@
       "cancelled": "This sign-in was cancelled or replaced. Please sign in again.",
       "success": "Signed in to Kimi Code and added the official models.",
       "removeConfirm": "Remove {{name}}? Its provider and models are removed from Kimi Code, along with its local credentials and card. Other accounts are not affected.",
+      "removeConfirmWeb": "The server's Kimi Code credentials are shared with Kimi Code CLI on the server: removing this account signs the CLI out too.",
       "dismissConfirm": "Hide {{name}} from the list? This is Kimi Code's own login; CC Switch will not sign it out and keeps its credentials and models. To sign out, run /logout in Kimi Code. Signing in again brings it back to the list.",
       "primaryHidden": "Kimi Code's own login was removed from the list; sign in to the same account to bring it back",
       "removeCurrentHint": "This account is in use. Switch to another account before removing it.",
@@ -5376,6 +5422,97 @@
       "renameProvider": "Oh My Pi provider keys cannot be renamed.",
       "providerMissing": "This Oh My Pi provider is no longer saved.",
       "legacyModelsJson": "Oh My Pi still has a legacy models.json, which omp migrates to models.yml on its next start. Run omp once, then add the provider again."
+    }
+  },
+  "web": {
+    "unavailable": "Unavailable in web mode",
+    "serverPath": "Paths are entered manually and refer to the server host, not this device",
+    "dataDir": {
+      "current": "In use now: {{path}} ({{source}})",
+      "source": {
+        "env": "set by the CC_SWITCH_CONFIG_DIR environment variable",
+        "override": "the directory saved in this console",
+        "default": "the default directory"
+      },
+      "envLocked": "The directory is fixed by CC_SWITCH_CONFIG_DIR in the server's unit, so it cannot be changed from this page. The server operator changes it by editing the unit (see docs/deploy.md).",
+      "scope": "A new directory gets its own database, logs, skills, database backups, model prices and the other app files. The existing database is not copied. settings.json, live-state.json, device backups and other device files stay in ~/.cc-switch on the server. The change applies after the server restarts.",
+      "applyFailed": "The other settings were saved, but the data directory was not changed: {{error}}",
+      "restartRequiredMessage": "The new data directory applies after the server restarts. This console is unavailable for a few seconds and reloads when the server is back. Restart now?",
+      "restarting": "Restarting…",
+      "restartTimeout": "The server did not come back within a minute. Check its status on the host (for example systemctl --user status cc-switch-web), then reload this page."
+    },
+    "update": {
+      "unsupported": "Updates are unavailable in web mode: the server operator updates the app",
+      "behindTitle": "This build is {{count}} commit(s) behind the branch",
+      "shown": "Showing {{shown}} of {{total}}",
+      "commitsTitle": "New commits on the branch",
+      "upToDateTitle": "This build is up to date",
+      "unknownTitle": "The build version cannot be determined",
+      "unknownHint": "The server was built without a recorded commit, from a checkout with local changes, or from a commit that is not on the branch, so it cannot be compared with the branch.",
+      "buildSha": "Build {{sha}}",
+      "checkedAt": "Checked {{time}}",
+      "instructionsTitle": "How to update (run on the server host)",
+      "systemd": "systemd service",
+      "docker": "Docker",
+      "copy": "Copy",
+      "copied": "Copied to clipboard",
+      "copyFailed": "Could not copy to the clipboard",
+      "checkFailedTitle": "Update check failed",
+      "releaseBehindTitle": "Version {{version}} is available",
+      "releaseNotes": "Release notes",
+      "releaseUnknownTitle": "This build cannot be compared with the latest release",
+      "releaseUnknownHint": "The latest published release is older than this build, or its tag is not a fork version, so there is nothing newer to install.",
+      "install": {
+        "button": "Update now",
+        "confirmTitle": "Update the server?",
+        "confirmMessage": "The server will pull the branch {{branch}} (up to {{sha}}, {{behind}} new commit(s)), rebuild itself and restart. It is unreachable while it builds, which can take several minutes. If the new build does not start, the server returns to the previous one.",
+        "confirmReleaseMessage": "Install version {{version}}? The server restarts and the page reloads by itself.",
+        "confirmDbWarning": "The new version may migrate the database. Rolling the binary back does not roll the database back.",
+        "confirmButton": "Rebuild and restart",
+        "releaseConfirmButton": "Install and restart",
+        "runningTitle": "Updating the server",
+        "starting": "Starting the update...",
+        "reloading": "Updated. Reloading the page...",
+        "branch": "Branch: {{branch}}",
+        "waiting": "The server is not answering (it is probably restarting). Waiting...",
+        "stage": {
+          "checking": "Checking for updates...",
+          "fetching": "Fetching the branch...",
+          "merging": "Fast-forwarding the checkout...",
+          "downloading": "Downloading the release",
+          "verifying": "Checking the download",
+          "building": "Building the web console and the server (this takes minutes)...",
+          "installing": "Replacing the binary and the web console...",
+          "restarting": "Restarting the service and checking that it answers...",
+          "rolling-back": "The new build did not come up. Restoring the previous one..."
+        },
+        "refusedTitle": "The update was not started",
+        "failedTitle": "The update failed",
+        "rolledBackTitle": "The update was rolled back",
+        "finishedAt": "Finished {{time}}",
+        "rollbackFailedTitle": "The rollback failed: the server may not be working",
+        "rollbackFailedHint": "Restore the previous files on the server host by hand, as described above, then restart the service.",
+        "unchangedTitle": "Nothing to update: the server is already up to date",
+        "stuckTitle": "No result from the update",
+        "stuckStalled": "The update has not changed its stage for a long time, or the server does not answer. Read its log on the server host:",
+        "stuckNoStatus": "The update did not report any progress; it may have failed to start. Read its log on the server host:"
+      }
+    },
+    "proxyCaption": "The proxy runs on the server and reconfigures the CLIs on the server; it does not touch CLIs on your machine.",
+    "desktopRouteHost": "Claude Desktop connects to the proxy on the server at the connection address and port. If Claude Desktop runs on another machine, set the connection address (client host) to a host that machine can reach in Settings → Local routing.",
+    "syncHost": "Connection tests, uploads and downloads run on the cc-switch-web server, not in this browser. The server must be able to reach the WebDAV or S3 endpoint, and downloads replace the server's data.",
+    "syncDownloadWarning": "This will overwrite all data and skill configurations on the cc-switch-web server",
+    "proxyListenWarning": "Listening on {{address}} makes the proxy reachable from the whole network (including the tailnet) without authentication. Prefer 127.0.0.1.",
+    "liveUnknownTitle": "Providers (live config state is unknown in web mode)",
+    "sessionResumeCopied": "Resume command copied. Run it in a terminal on the server host, in the project folder.",
+    "hostNotice": "Files, CLI tools and the proxy live on the server host, not on the computer running this browser.",
+    "hostNoticeDismiss": "Dismiss",
+    "initError": {
+      "message": "Unable to read configuration file:\n{{path}}\n\nError details:\n{{detail}}\n\nFix the problem on the server host (check the JSON, or restore a backup such as config.json.bak from the same directory), then restart the server."
+    },
+    "mode": {
+      "title": "Web mode",
+      "basedOn": "Based on CC Switch"
     }
   },
   "dsh": {

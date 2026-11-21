@@ -7,9 +7,8 @@ use crate::database::FailoverQueueItem;
 use crate::provider::Provider;
 use crate::store::AppState;
 use std::str::FromStr;
-use tauri::Emitter;
 
-fn require_failover_app(app_type: &str) -> Result<AppType, String> {
+pub(crate) fn require_failover_app(app_type: &str) -> Result<AppType, String> {
     let app = AppType::from_str(app_type).map_err(|error| format!("无效的应用类型: {error}"))?;
     if !app.spec().local_proxy {
         return Err(format!("{app} 不支持故障转移"));
@@ -76,7 +75,15 @@ pub async fn get_failover_queue(
     state: tauri::State<'_, AppState>,
     app_type: String,
 ) -> Result<Vec<FailoverQueueItem>, String> {
-    let app_enum = require_failover_app(&app_type)?;
+    get_failover_queue_inner(state.inner(), &app_type)
+}
+
+/// 不依赖 tauri::State 的队列读取（web 路由共用）。
+pub(crate) fn get_failover_queue_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<Vec<FailoverQueueItem>, String> {
+    let app_enum = require_failover_app(app_type)?;
     let queue = state.db.get_failover_queue(&app_enum)?;
     if app_enum != AppType::Codex {
         return Ok(queue);
@@ -92,6 +99,26 @@ pub async fn get_failover_queue(
         .collect())
 }
 
+/// 获取可添加到故障转移队列的供应商（不在队列中的）。
+///
+/// Upstream deleted the Tauri command and the `Database::get_available_providers_for_failover`
+/// helper (nothing on the desktop frontend calls them). The fork keeps this web-only helper for
+/// the `/failover/.../available` route and derives the list from `get_all_providers`.
+pub(crate) fn get_available_providers_for_failover_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<Vec<Provider>, String> {
+    let app_enum = require_failover_app(app_type)?;
+    let providers = state.db.get_all_providers(&app_enum)?;
+    Ok(providers
+        .into_values()
+        .filter(|provider| {
+            !provider.in_failover_queue
+                && crate::proxy::provider_router::provider_supports_failover(&app_enum, provider)
+        })
+        .collect())
+}
+
 /// 添加供应商到故障转移队列。托盘的故障转移子菜单只列队列成员：队列一变就重建。
 #[tauri::command]
 pub async fn add_to_failover_queue(
@@ -100,10 +127,20 @@ pub async fn add_to_failover_queue(
     app_type: String,
     provider_id: String,
 ) -> Result<(), String> {
-    let app_enum = require_failover_app(&app_type)?;
-    require_failover_provider(&state.db, &app_enum, &provider_id)?;
-    state.db.add_to_failover_queue(&app_enum, &provider_id)?;
+    add_to_failover_queue_inner(state.inner(), &app_type, &provider_id)?;
     crate::tray::refresh_tray_menu(&app);
+    Ok(())
+}
+
+/// 不依赖 AppHandle 的入队逻辑（web 路由共用）。
+pub(crate) fn add_to_failover_queue_inner(
+    state: &AppState,
+    app_type: &str,
+    provider_id: &str,
+) -> Result<(), String> {
+    let app_enum = require_failover_app(app_type)?;
+    require_failover_provider(&state.db, &app_enum, provider_id)?;
+    state.db.add_to_failover_queue(&app_enum, provider_id)?;
     Ok(())
 }
 
@@ -115,11 +152,21 @@ pub async fn remove_from_failover_queue(
     app_type: String,
     provider_id: String,
 ) -> Result<(), String> {
-    let app_enum = require_failover_app(&app_type)?;
+    remove_from_failover_queue_inner(state.inner(), &app_type, &provider_id)?;
+    crate::tray::refresh_tray_menu(&app);
+    Ok(())
+}
+
+/// 不依赖 AppHandle 的出队逻辑（web 路由共用）。
+pub(crate) fn remove_from_failover_queue_inner(
+    state: &AppState,
+    app_type: &str,
+    provider_id: &str,
+) -> Result<(), String> {
+    let app_enum = require_failover_app(app_type)?;
     state
         .db
-        .remove_from_failover_queue(&app_enum, &provider_id)?;
-    crate::tray::refresh_tray_menu(&app);
+        .remove_from_failover_queue(&app_enum, provider_id)?;
     Ok(())
 }
 
@@ -129,7 +176,15 @@ pub async fn get_auto_failover_enabled(
     state: tauri::State<'_, AppState>,
     app_type: String,
 ) -> Result<bool, String> {
-    let app_enum = require_failover_app(&app_type)?;
+    get_auto_failover_enabled_inner(state.inner(), &app_type).await
+}
+
+/// 不依赖 tauri::State 的开关读取（web 路由共用）。
+pub(crate) async fn get_auto_failover_enabled_inner(
+    state: &AppState,
+    app_type: &str,
+) -> Result<bool, String> {
+    let app_enum = require_failover_app(app_type)?;
     Ok(state
         .db
         .get_proxy_config_for_app(&app_enum)
@@ -144,6 +199,18 @@ pub async fn get_auto_failover_enabled(
 pub async fn set_auto_failover_enabled(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
+    app_type: String,
+    enabled: bool,
+) -> Result<(), String> {
+    set_auto_failover_enabled_inner(state.inner(), app_type, enabled).await?;
+    // 刷新托盘，确保状态同步（Linux 重建原生菜单，其它平台通知托盘面板，不挂原生菜单）
+    crate::tray::refresh_tray_menu(&app);
+    Ok(())
+}
+
+/// 不依赖 AppHandle 的开关逻辑（web 路由共用）；`provider-switched` 走 `state.events`。
+pub(crate) async fn set_auto_failover_enabled_inner(
+    state: &AppState,
     app_type: String,
     enabled: bool,
 ) -> Result<(), String> {
@@ -222,12 +289,9 @@ pub async fn set_auto_failover_enabled(
     // 避免 P1 不可切换（例如 official provider）时留下“开关已开但目标未切”的脏状态。
     // Stack 模式不做故障转移，切换在锁内拒绝（见 `switch_route_for_failover`）。
     if enabled {
-        if let Err(e) = crate::mode::controller::switch_route_for_failover(
-            state.inner(),
-            &app_enum,
-            &p1_provider_id,
-        )
-        .await
+        if let Err(e) =
+            crate::mode::controller::switch_route_for_failover(state, &app_enum, &p1_provider_id)
+                .await
         {
             if let Some(provider_id) = auto_added_provider_id {
                 let _ = state.db.remove_from_failover_queue(&app_enum, &provider_id);
@@ -250,11 +314,8 @@ pub async fn set_auto_failover_enabled(
             "providerId": p1_provider_id,
             "source": "failoverEnabled"
         });
-        let _ = app.emit("provider-switched", event_data);
+        state.events.emit("provider-switched", event_data);
     }
-
-    // 刷新托盘，确保状态同步（Linux 重建原生菜单，其它平台通知托盘面板，不挂原生菜单）
-    crate::tray::refresh_tray_menu(&app);
 
     Ok(())
 }

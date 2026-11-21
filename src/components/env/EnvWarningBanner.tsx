@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { EnvConflict } from "@/types/env";
 import { deleteEnvVars } from "@/lib/api/env";
 import { toast } from "@/lib/toast";
+import { isWeb } from "@/lib/api/adapter";
 import {
   Dialog,
   DialogContent,
@@ -259,6 +260,14 @@ export function EnvWarningBanner({
               <p className="text-sm text-fg-2">
                 {t("env.confirm.backupNotice")}
               </p>
+              {isWeb && (
+                <p
+                  className="text-sm text-warning-text"
+                  data-testid="env-web-host-warning"
+                >
+                  {t("env.confirm.webHostWarning")}
+                </p>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

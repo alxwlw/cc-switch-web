@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { authApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { useManagedAuth } from "@/components/providers/forms/hooks/useManagedAuth";
@@ -314,7 +315,8 @@ export function WorkBuddyAccountSection({
     />
   ) : null;
 
-  const addHintPanel = addHint && (
+  // in web the "already added" hint has no body and no buttons: show nothing
+  const addHintPanel = addHint && !(isWeb && addHint === "already") && (
     <div className="mx-3 mb-3">
       <Notice
         tone="neutral"
@@ -331,7 +333,7 @@ export function WorkBuddyAccountSection({
         dismissLabel={t("common.close", { defaultValue: "关闭" })}
         actions={
           <>
-            {addHint === "already" && (
+            {!isWeb && addHint === "already" && (
               <Button
                 type="button"
                 variant="neutral"
@@ -344,26 +346,31 @@ export function WorkBuddyAccountSection({
                 })}
               </Button>
             )}
-            <Button
-              type="button"
-              variant="quiet"
-              size="compact"
-              className="gap-1"
-              onClick={() => void openApp()}
-            >
-              <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
-              {t("authCenter.workbuddy.openApp", {
-                defaultValue: "打开 WorkBuddy",
-              })}
-            </Button>
+            {!isWeb && (
+              <Button
+                type="button"
+                variant="quiet"
+                size="compact"
+                className="gap-1"
+                onClick={() => void openApp()}
+              >
+                <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
+                {t("authCenter.workbuddy.openApp", {
+                  defaultValue: "打开 WorkBuddy",
+                })}
+              </Button>
+            )}
           </>
         }
       >
         {addHint === "already"
-          ? t("authCenter.workbuddy.alreadyBody", {
-              defaultValue:
-                "要添加另一个账号：先完全退出 WorkBuddy，点「登录另一个账号」（CC Switch 只在本机让 WorkBuddy 停在登录页，不会在服务端登出当前账号），在 WorkBuddy 里登录另一个账号，再回来点「添加账号」。",
-            })
+          ? // the sentence walks through the desktop-only "sign in to another account" button
+            isWeb
+            ? null
+            : t("authCenter.workbuddy.alreadyBody", {
+                defaultValue:
+                  "要添加另一个账号：先完全退出 WorkBuddy，点「登录另一个账号」（CC Switch 只在本机让 WorkBuddy 停在登录页，不会在服务端登出当前账号），在 WorkBuddy 里登录另一个账号，再回来点「添加账号」。",
+              })
           : t("authCenter.workbuddy.signedOutBody", {
               defaultValue:
                 "在 WorkBuddy 里登录后，回到这里点「添加账号」收录。",
@@ -409,7 +416,7 @@ export function WorkBuddyAccountSection({
           accountId;
         void switchToAccount(accountId, login);
       }}
-      canReauth
+      canReauth={!isWeb}
       onReauth={(accountId) => {
         if (!reauthMutation.isPending) reauthMutation.mutate(accountId);
       }}

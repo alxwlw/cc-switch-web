@@ -8,6 +8,7 @@ import {
 } from "@/components/providers/OpenTerminalDialog";
 import type { Provider } from "@/types";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 const openTerminalMock = vi.fn();
 const pickDirectoryMock = vi.fn();
@@ -111,6 +112,15 @@ describe("OpenTerminalDialog", () => {
     agyStatusMock.mockClear();
     renderDialog(vi.fn(), agyOfficial(), "agy");
     expect(agyStatusMock).not.toHaveBeenCalled();
+  });
+
+  it("web: never asks for the agy account status", async () => {
+    setWeb(true);
+    renderDialog(vi.fn(), agyOfficial("b"), "agy");
+    // wait for the dialog to mount, otherwise a missing call proves nothing
+    await screen.findByRole("dialog");
+    expect(agyStatusMock).not.toHaveBeenCalled();
+    expect(agyRunningMock).not.toHaveBeenCalled();
   });
 
   it("explains first and only opens the folder picker on request", async () => {

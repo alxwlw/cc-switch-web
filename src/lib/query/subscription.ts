@@ -116,6 +116,7 @@ export function useSubscriptionQuota(
   const query = useQuery({
     queryKey: subscriptionKeys.quota(appId),
     queryFn: () => subscriptionApi.getQuota(appId),
+    // WEB-04: quota queries work in web (the CLI reads files on the server)
     enabled: enabled && appHas(appId, "officialSubscription"),
     ...autoRefetch(autoQuery, autoQueryIntervalMinutes),
     staleTime:
@@ -155,6 +156,7 @@ export function useCodexOauthQuotaByAccountId(
   const query = useQuery({
     queryKey: ["codex_oauth", "quota", accountId ?? "default"],
     queryFn: () => subscriptionApi.getCodexOauthQuota(accountId),
+    // WEB-04: works in web via GET /api/subscription/codex-oauth/:accountId/quota
     enabled,
     ...autoRefetch(autoQuery, autoQueryIntervalMinutes),
     staleTime:
@@ -209,7 +211,8 @@ export function useXaiOauthQuotaByAccountId(
   const query = useQuery({
     queryKey: ["xai_oauth", "quota", accountId ?? "default"],
     queryFn: () => subscriptionApi.getXaiOauthQuota(accountId),
-    enabled,
+    // WEB-04: works in web via GET /api/subscription/xai-oauth/:accountId/quota
+    enabled: enabled,
     refetchInterval: autoQuery ? REFETCH_INTERVAL : false,
     refetchIntervalInBackground: autoQuery,
     refetchOnWindowFocus: autoQuery,
@@ -236,6 +239,7 @@ export function useAgyAccountQuota(
   const query = useQuery({
     queryKey: ["agy_oauth", "quota", accountId],
     queryFn: () => subscriptionApi.getAgyAccountQuota(accountId),
+    // WEB-04: works in web via GET /api/subscription/agy/:accountId/quota
     enabled,
     ...autoRefetch(autoQuery, autoQueryIntervalMinutes),
     staleTime: REFETCH_INTERVAL,

@@ -4,31 +4,42 @@
 //! 熔断器（熔断器由真实转发流量驱动）。详见 `services::stream_check`。
 
 use crate::app_config::AppType;
-use crate::commands::copilot::CopilotAuthState;
 use crate::error::AppError;
+use crate::proxy::providers::copilot_auth::CopilotAuthManager;
 use crate::services::stream_check::{StreamCheckConfig, StreamCheckResult, StreamCheckService};
 use crate::store::AppState;
+use std::sync::Arc;
 use tauri::State;
+use tokio::sync::RwLock;
 
 /// 连通性检查（单个供应商）
 #[tauri::command]
 pub async fn stream_check_provider(
     state: State<'_, AppState>,
-    copilot_state: State<'_, CopilotAuthState>,
     app_type: String,
     provider_id: String,
 ) -> Result<StreamCheckResult, AppError> {
     let app_type: AppType = app_type.parse()?;
-    let providers = state.db.get_all_providers(&app_type)?;
+    stream_check_provider_inner(&state, &app_type, &provider_id).await
+}
+
+/// Shared with the headless web route: handle-free, manager from `AppState`.
+pub(crate) async fn stream_check_provider_inner(
+    state: &AppState,
+    app_type: &AppType,
+    provider_id: &str,
+) -> Result<StreamCheckResult, AppError> {
+    let providers = state.db.get_all_providers(app_type)?;
     let provider = providers
-        .get(&provider_id)
+        .get(provider_id)
         .ok_or_else(|| AppError::Message(format!("供应商 {provider_id} 不存在")))?;
 
     // Copilot 端点是动态的（随 OAuth token 解析），需预先取出 host 再探测；
     // 其余供应商传 None，由服务层从 settings_config 提取 base_url。无需鉴权。
-    let base_url_override = resolve_copilot_base_url_override(provider, &copilot_state).await?;
+    let base_url_override =
+        resolve_copilot_base_url_override(provider, &state.copilot_auth).await?;
     StreamCheckService::check_with_retry(
-        &app_type,
+        app_type,
         provider,
         &StreamCheckConfig::default(),
         base_url_override,
@@ -37,10 +48,11 @@ pub async fn stream_check_provider(
 }
 
 /// Copilot 供应商的 base_url 需要从 OAuth 管理器动态解析（按账号或默认端点）。
-/// `is_full_url` 的供应商已是完整地址，无需解析。
+/// `is_full_url` 的供应商已是完整地址，无需解析。管理器直接取自 `AppState`
+/// （与 `managed_auth_states().copilot` 同一个 `Arc`），桌面与 web 共用一路。
 async fn resolve_copilot_base_url_override(
     provider: &crate::provider::Provider,
-    copilot_state: &State<'_, CopilotAuthState>,
+    copilot_auth: &Arc<RwLock<CopilotAuthManager>>,
 ) -> Result<Option<String>, AppError> {
     let is_copilot = provider.is_github_copilot();
     let is_full_url = provider
@@ -53,7 +65,7 @@ async fn resolve_copilot_base_url_override(
         return Ok(None);
     }
 
-    let auth_manager = copilot_state.0.read().await;
+    let auth_manager = copilot_auth.read().await;
     let account_id = provider
         .meta
         .as_ref()
@@ -69,15 +81,15 @@ async fn resolve_copilot_base_url_override(
 
 #[cfg(test)]
 mod tests {
+    use super::resolve_copilot_base_url_override;
     use std::sync::Arc;
 
     use serde_json::json;
+    use serial_test::serial;
 
-    use super::CopilotAuthState;
     use crate::app_config::AppType;
     use crate::database::Database;
     use crate::provider::Provider;
-    use crate::proxy::providers::copilot_auth::CopilotAuthManager;
     use crate::store::AppState;
 
     /// The frontend reaches this command over IPC with `appType`, so it must
@@ -103,12 +115,8 @@ mod tests {
             provider.category = Some("official".into());
             db.save_provider(&app, &provider).unwrap();
         }
-        let home = tempfile::tempdir().unwrap();
         let app = tauri::test::mock_builder()
             .manage(AppState::new(db))
-            .manage(CopilotAuthState(Arc::new(tokio::sync::RwLock::new(
-                CopilotAuthManager::new(home.path().to_path_buf()),
-            ))))
             .invoke_handler(tauri::generate_handler![super::stream_check_provider])
             .build(tauri::test::mock_context(tauri::test::noop_assets()))
             .unwrap();
@@ -152,5 +160,41 @@ mod tests {
             unknown.contains("Unsupported app id: 'open-code'"),
             "{unknown}"
         );
+    }
+
+    /// The `AppState`-based resolve short-circuits non-Copilot providers to
+    /// `None` without touching the manager or the network.
+    #[tokio::test]
+    #[serial]
+    async fn appstate_resolve_returns_none_for_non_copilot() {
+        struct EnvGuard(Option<std::ffi::OsString>);
+        impl EnvGuard {
+            fn set(path: &std::path::Path) -> Self {
+                let prev = std::env::var_os("CC_SWITCH_TEST_HOME");
+                std::env::set_var("CC_SWITCH_TEST_HOME", path);
+                Self(prev)
+            }
+        }
+        impl Drop for EnvGuard {
+            fn drop(&mut self) {
+                match &self.0 {
+                    Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
+                    None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+                }
+            }
+        }
+
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        let plain = Provider::with_id("plain".into(), "plain".into(), json!({}), None);
+        let resolved = resolve_copilot_base_url_override(&plain, &state.copilot_auth)
+            .await
+            .expect("non-copilot never errors");
+        assert_eq!(resolved, None);
+        assert!(Arc::ptr_eq(
+            &state.copilot_auth,
+            &state.managed_auth_states().copilot.0
+        ));
     }
 }

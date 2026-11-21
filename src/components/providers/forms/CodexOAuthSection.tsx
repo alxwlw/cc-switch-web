@@ -1,4 +1,5 @@
 import React from "react";
+import { isWeb } from "@/lib/api/adapter";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -476,27 +477,30 @@ export const CodexOAuthSection: React.FC<CodexOAuthSectionProps> = ({
         service: "ChatGPT",
       })}
       onAdd={addAccount}
+      // WEB-02: web logs in by device code only — no method choice
       loginControl={
-        <Select
-          value={loginMethod}
-          onValueChange={(value) => setLoginMethod(value as CodexLoginMethod)}
-          disabled={isAddingAccount}
-        >
-          <SelectTrigger
-            aria-label={t("codexOauth.loginMethod")}
-            className="h-7 w-[136px]"
+        isWeb ? undefined : (
+          <Select
+            value={loginMethod}
+            onValueChange={(value) => setLoginMethod(value as CodexLoginMethod)}
+            disabled={isAddingAccount}
           >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent align="end">
-            <SelectItem value="browser">
-              {t("codexOauth.browserLogin")}
-            </SelectItem>
-            <SelectItem value="device_code">
-              {t("codexOauth.deviceCodeLogin")}
-            </SelectItem>
-          </SelectContent>
-        </Select>
+            <SelectTrigger
+              aria-label={t("codexOauth.loginMethod")}
+              className="h-7 w-[136px]"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="browser">
+                {t("codexOauth.browserLogin")}
+              </SelectItem>
+              <SelectItem value="device_code">
+                {t("codexOauth.deviceCodeLogin")}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        )
       }
       canReauth
       onReauth={reauthAccount}

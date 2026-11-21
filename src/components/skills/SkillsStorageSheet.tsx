@@ -6,6 +6,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { useCcSwitchSkillsDir, useInstalledSkills } from "@/hooks/useSkills";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { isWeb } from "@/lib/api/adapter";
 import {
   RADIO_CLASS,
   V7ConfirmDialog,
@@ -134,6 +135,21 @@ export function SkillsStorageSheet({
     }
   };
 
+  // web: the browser cannot open a folder on the server — show the path, copy it
+  const handleCopyPath = async () => {
+    const path = ccSwitchDirRaw ?? ccSwitchDir;
+    try {
+      await navigator.clipboard.writeText(path);
+      toast.success(t("skills.storageSheet.pathCopied"), {
+        closeButton: true,
+      });
+    } catch (error) {
+      toast.error(t("common.error"), {
+        description: extractErrorMessage(error) || String(error),
+      });
+    }
+  };
+
   const handleSyncMethod = (method: SkillSyncMethod) => {
     if (method === syncMethod) return;
     updateSettings({ skillSyncMethod: method });
@@ -181,13 +197,23 @@ export function SkillsStorageSheet({
                   </code>
                   <button
                     type="button"
-                    aria-label={t("skills.storageSheet.openFolderAria", {
-                      path: ccSwitchDir,
-                    })}
-                    onClick={() => void handleOpenFolder()}
-                    className="shrink-0 whitespace-nowrap text-caption font-medium text-fg-1 underline decoration-border-strong underline-offset-[3px] hover:decoration-fg-1"
+                    aria-label={
+                      isWeb
+                        ? t("skills.storageSheet.copyPathAria", {
+                            path: ccSwitchDirRaw ?? ccSwitchDir,
+                          })
+                        : t("skills.storageSheet.openFolderAria", {
+                            path: ccSwitchDir,
+                          })
+                    }
+                    onClick={() =>
+                      void (isWeb ? handleCopyPath() : handleOpenFolder())
+                    }
+                    className="shrink-0 whitespace-nowrap text-caption font-medium text-fg-1 underline decoration-border-strong underline-offset-[3px] hover:decoration-fg-1 disabled:opacity-60"
                   >
-                    {t("skills.storageSheet.openFolder")}
+                    {isWeb
+                      ? t("skills.storageSheet.copyPath")
+                      : t("skills.storageSheet.openFolder")}
                   </button>
                 </div>
               </div>

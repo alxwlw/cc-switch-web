@@ -3,6 +3,7 @@
 //! 提供获取、设置和测试全局代理的 Tauri 命令。
 
 use super::run_db_task;
+use crate::database::Database;
 use crate::proxy::http_client;
 use crate::store::AppState;
 use serde::Serialize;
@@ -45,6 +46,13 @@ pub async fn set_global_proxy_url(
     state: tauri::State<'_, AppState>,
     url: String,
 ) -> Result<(), String> {
+    // Run on the blocking pool (DB write can wait on the connection lock); the body is shared
+    // with the web route via `apply_global_proxy_url`.
+    run_db_task(&state, move |state| apply_global_proxy_url(&state.db, &url)).await
+}
+
+/// `set_global_proxy_url` 的实现体，桌面命令与 web 路由共用。
+pub(crate) fn apply_global_proxy_url(db: &Database, url: &str) -> Result<(), String> {
     // 调试：显示接收到的 URL 信息（不包含敏感内容）
     let has_auth = url.contains('@') && (url.starts_with("http://") || url.starts_with("socks"));
     log::debug!(
@@ -56,18 +64,15 @@ pub async fn set_global_proxy_url(
     let url_opt = if url.trim().is_empty() {
         None
     } else {
-        Some(url.as_str())
+        Some(url)
     };
 
     // 1. 先验证代理配置是否有效（不应用）
     http_client::validate_proxy(url_opt)?;
 
     // 2. 验证成功后保存到数据库
-    let stored = url_opt.map(str::to_owned);
-    run_db_task(&state, move |state| {
-        state.db.set_global_proxy_url(stored.as_deref())
-    })
-    .await?;
+    db.set_global_proxy_url(url_opt)
+        .map_err(|e| e.to_string())?;
 
     // 3. DB 写入成功后再应用到运行态
     http_client::apply_proxy(url_opt)?;
@@ -80,6 +85,20 @@ pub async fn set_global_proxy_url(
     );
 
     Ok(())
+}
+
+static TEST_TARGETS_OVERRIDE: std::sync::OnceLock<std::sync::Mutex<Option<Vec<String>>>> =
+    std::sync::OnceLock::new();
+
+fn test_targets_override() -> &'static std::sync::Mutex<Option<Vec<String>>> {
+    TEST_TARGETS_OVERRIDE.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+/// Test seam: replace the public probe targets of `test_proxy_url`. Production never sets it.
+pub(crate) fn set_test_targets_override(targets: Option<Vec<String>>) {
+    if let Ok(mut g) = test_targets_override().lock() {
+        *g = targets;
+    }
 }
 
 /// 代理测试结果
@@ -118,16 +137,19 @@ pub async fn test_proxy_url(url: String) -> Result<ProxyTestResult, String> {
 
     // 使用多个测试目标，提高兼容性
     // 优先使用 httpbin（专门用于 HTTP 测试），回退到其他公共端点
-    let test_urls = [
-        "https://httpbin.org/get",
-        "https://www.google.com",
-        "https://api.anthropic.com",
-    ];
+    let test_urls: Vec<String> = match test_targets_override().lock() {
+        Ok(g) if g.is_some() => g.clone().unwrap_or_default(),
+        _ => vec![
+            "https://httpbin.org/get".to_string(),
+            "https://www.google.com".to_string(),
+            "https://api.anthropic.com".to_string(),
+        ],
+    };
 
     let mut last_error = None;
 
     for test_url in test_urls {
-        match client.head(test_url).send().await {
+        match client.head(&test_url).send().await {
             Ok(resp) => {
                 let latency = start.elapsed().as_millis() as u64;
                 log::debug!(
@@ -168,6 +190,19 @@ pub async fn test_proxy_url(url: String) -> Result<ProxyTestResult, String> {
         latency_ms: latency,
         error: Some(error_msg),
     })
+}
+
+/// 获取当前出站代理状态
+///
+/// 返回当前是否启用了出站代理以及代理 URL。
+/// Not a Tauri command (upstream dropped it from the desktop build); the web API's
+/// `GET /api/global-proxy/status` route still calls it.
+pub fn get_upstream_proxy_status() -> UpstreamProxyStatus {
+    let url = http_client::get_current_proxy_url();
+    UpstreamProxyStatus {
+        enabled: url.is_some(),
+        proxy_url: url,
+    }
 }
 
 /// 出站代理状态信息

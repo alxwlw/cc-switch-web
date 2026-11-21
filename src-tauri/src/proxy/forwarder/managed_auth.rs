@@ -9,15 +9,14 @@ impl RequestForwarder {
         &self,
         provider: &Provider,
     ) -> Result<String, ProxyError> {
-        let Some(app_handle) = &self.app_handle else {
-            log::error!("[Copilot] AppHandle 不可用");
+        let Some(proxy_auth) = &self.auth else {
+            log::error!("[Copilot] OAuth 管理器不可用");
             return Err(ProxyError::AuthError(
-                "GitHub Copilot 认证不可用（无 AppHandle）".to_string(),
+                "GitHub Copilot 认证不可用（无 OAuth 管理器）".to_string(),
             ));
         };
-        let copilot_state = app_handle.state::<CopilotAuthState>();
         let copilot_auth: tokio::sync::RwLockReadGuard<'_, CopilotAuthManager> =
-            copilot_state.0.read().await;
+            proxy_auth.copilot.read().await;
 
         // 从 provider.meta 获取关联的 GitHub 账号 ID（多账号支持）
         let account_id = provider
@@ -64,14 +63,13 @@ impl RequestForwarder {
         &self,
         provider: &Provider,
     ) -> Result<(String, Option<String>), ProxyError> {
-        let Some(app_handle) = &self.app_handle else {
-            log::error!("[CodexOAuth] AppHandle 不可用");
+        let Some(proxy_auth) = &self.auth else {
+            log::error!("[CodexOAuth] OAuth 管理器不可用");
             return Err(ProxyError::AuthError(
-                "Codex OAuth 认证不可用（无 AppHandle）".to_string(),
+                "Codex OAuth 认证不可用（无 OAuth 管理器）".to_string(),
             ));
         };
-        let codex_state = app_handle.state::<CodexOAuthState>();
-        let codex_auth = &codex_state.0;
+        let codex_auth = &proxy_auth.codex;
 
         // 从 provider.meta 获取关联的 ChatGPT 账号 ID
         let account_id = provider
@@ -130,13 +128,13 @@ impl RequestForwarder {
         &self,
         provider: &Provider,
     ) -> Result<String, ProxyError> {
-        let Some(app_handle) = &self.app_handle else {
+        let Some(proxy_auth) = &self.auth else {
             return Err(ProxyError::AuthError(
-                "xAI OAuth 认证不可用（无 AppHandle）".to_string(),
+                "xAI OAuth 认证不可用（无 OAuth 管理器）".to_string(),
             ));
         };
-        let xai_state = app_handle.state::<XaiOAuthState>();
-        let xai_auth: tokio::sync::RwLockReadGuard<'_, XaiOAuthManager> = xai_state.0.read().await;
+        let xai_auth: tokio::sync::RwLockReadGuard<'_, XaiOAuthManager> =
+            proxy_auth.xai.read().await;
         let account_id = provider
             .meta
             .as_ref()

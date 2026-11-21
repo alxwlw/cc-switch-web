@@ -220,11 +220,10 @@ impl RequestForwarder {
         };
         let model_id = model_id.to_string();
 
-        let Some(app_handle) = &self.app_handle else {
+        let Some(proxy_auth) = &self.auth else {
             return;
         };
-        let copilot_state = app_handle.state::<CopilotAuthState>();
-        let copilot_auth = copilot_state.0.read().await;
+        let copilot_auth = proxy_auth.copilot.read().await;
         let account_id = provider
             .meta
             .as_ref()
@@ -267,14 +266,13 @@ impl RequestForwarder {
                     "Codex Copilot requests require a non-empty string model".to_string(),
                 )
             })?;
-        let app_handle = self.app_handle.as_ref().ok_or_else(|| {
+        let proxy_auth = self.auth.as_ref().ok_or_else(|| {
             ProxyError::ConfigError(format!(
-                "GitHub Copilot capabilities for model {model_id} cannot be resolved: AppHandle unavailable"
+                "GitHub Copilot capabilities for model {model_id} cannot be resolved: OAuth manager unavailable"
             ))
         })?;
 
-        let copilot_state = app_handle.state::<CopilotAuthState>();
-        let copilot_auth = copilot_state.0.read().await;
+        let copilot_auth = proxy_auth.copilot.read().await;
         let account_id = provider
             .meta
             .as_ref()
@@ -296,13 +294,12 @@ impl RequestForwarder {
         provider: &Provider,
         model_id: &str,
     ) -> Option<crate::proxy::providers::copilot_auth::CopilotModel> {
-        let Some(app_handle) = &self.app_handle else {
-            log::debug!("[Copilot] AppHandle unavailable, fallback to chat/completions");
+        let Some(proxy_auth) = &self.auth else {
+            log::debug!("[Copilot] OAuth manager unavailable, fallback to chat/completions");
             return None;
         };
 
-        let copilot_state = app_handle.state::<CopilotAuthState>();
-        let copilot_auth = copilot_state.0.read().await;
+        let copilot_auth = proxy_auth.copilot.read().await;
         let account_id = provider
             .meta
             .as_ref()

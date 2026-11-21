@@ -13,15 +13,15 @@ mod deeplink;
 mod dsh;
 mod env;
 mod failover;
-mod global_proxy;
+pub(crate) mod global_proxy;
 mod hermes;
-mod import_export;
+pub(crate) mod import_export;
 mod kimi_oauth;
 mod mcp;
-mod misc;
+pub(crate) mod misc;
 mod model_fetch;
 mod omo;
-mod omp;
+pub(crate) mod omp;
 mod openclaw;
 mod pi;
 mod plugin;
@@ -31,7 +31,7 @@ mod prompt;
 mod provider;
 mod proxy;
 mod session_manager;
-mod settings;
+pub(crate) mod settings;
 pub mod skill;
 mod stream_check;
 mod subscription;
@@ -97,16 +97,13 @@ pub use workspace::*;
 /// 同步命令在 Tauri 2 里跑在主线程上：要等数据库连接锁（或等切换锁，切换时要拿库）的
 /// 命令放到阻塞线程池里跑，否则会话同步占着连接锁时整个窗口和托盘都跟着卡住。
 /// 同 `usage.rs` 的 `run_db_query`，只是闭包拿 `AppState`（服务层大多收它）、错误是 `String`。
-async fn run_db_task<T, E, F>(
-    state: &tauri::State<'_, crate::store::AppState>,
-    task: F,
-) -> Result<T, String>
+async fn run_db_task<T, E, F>(state: &crate::store::AppState, task: F) -> Result<T, String>
 where
     T: Send + 'static,
     E: Into<String> + Send + 'static,
     F: FnOnce(&crate::store::AppState) -> Result<T, E> + Send + 'static,
 {
-    let state = state.inner().clone();
+    let state = state.clone();
     tauri::async_runtime::spawn_blocking(move || task(&state))
         .await
         .map_err(|error| format!("数据库任务失败: {error}"))?

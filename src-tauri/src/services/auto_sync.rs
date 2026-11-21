@@ -10,12 +10,12 @@ use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::database::Database;
 use crate::error::AppError;
+use crate::events::EventHub;
 use crate::services::sync_protocol::{run_with_sync_lock, should_trigger_auto_sync_for_table};
 use crate::settings::WebDavSyncStatus;
 
@@ -108,8 +108,8 @@ fn persist_auto_sync_error<B: AutoSyncBackend>(settings: &mut B::Settings, error
     let _ = B::store_status(status.clone());
 }
 
-fn emit_auto_sync_status_updated<B: AutoSyncBackend, R: Runtime>(
-    app: &AppHandle<R>,
+fn emit_auto_sync_status_updated<B: AutoSyncBackend>(
+    events: &EventHub,
     status: &str,
     error: Option<&str>,
 ) {
@@ -125,43 +125,39 @@ fn emit_auto_sync_status_updated<B: AutoSyncBackend, R: Runtime>(
         }),
     };
 
-    if let Err(err) = app.emit(B::STATUS_EVENT, payload) {
-        log::debug!(
-            "[{}] failed to emit sync status update event: {err}",
-            B::NAME
-        );
-    }
+    events.emit(B::STATUS_EVENT, payload);
 }
 
-async fn run_auto_sync_upload<B: AutoSyncBackend, R: Runtime>(
+/// The settings are read inside the sync lock, not before waiting for it: a
+/// worker queued behind another sync must see what that sync (or the user)
+/// saved meanwhile. Reading first let it upload after auto-sync was switched
+/// off, and write back a status snapshot that erased a parallel success.
+async fn run_auto_sync_upload<B: AutoSyncBackend>(
     db: &Database,
-    app: &AppHandle<R>,
+    events: &EventHub,
 ) -> Result<(), AppError> {
     if load_if_auto_sync::<B>().is_none() {
         return Ok(());
     }
-    // Re-read the settings under the sync lock so a "clear config" or "turn
-    // off auto sync" that got the lock first is honoured instead of uploading
-    // with the stale credentials captured before waiting.
-    let outcome = run_with_sync_lock(async {
+    let result = run_with_sync_lock(async {
         let Some(mut sync_settings) = load_if_auto_sync::<B>() else {
-            return Ok(None);
+            return Ok(false);
         };
-        let result = B::upload(db, &mut sync_settings).await;
-        Ok(Some((sync_settings, result)))
+        let uploaded = B::upload(db, &mut sync_settings).await;
+        if let Err(err) = &uploaded {
+            persist_auto_sync_error::<B>(&mut sync_settings, err);
+        }
+        uploaded.map(|_| true)
     })
-    .await?;
-    let Some((mut sync_settings, result)) = outcome else {
-        return Ok(());
-    };
+    .await;
     match result {
-        Ok(_) => {
-            emit_auto_sync_status_updated::<B, R>(app, "success", None);
+        Ok(true) => {
+            emit_auto_sync_status_updated::<B>(events, "success", None);
             Ok(())
         }
+        Ok(false) => Ok(()),
         Err(err) => {
-            persist_auto_sync_error::<B>(&mut sync_settings, &err);
-            emit_auto_sync_status_updated::<B, R>(app, "error", Some(&err.to_string()));
+            emit_auto_sync_status_updated::<B>(events, "error", Some(&err.to_string()));
             Err(err)
         }
     }
@@ -180,7 +176,7 @@ pub fn notify_db_changed<B: AutoSyncBackend>(table: &str) {
     let _ = enqueue_change_signal(tx, table);
 }
 
-pub fn start_worker<B: AutoSyncBackend>(db: Arc<Database>, app: AppHandle) {
+pub fn start_worker<B: AutoSyncBackend>(db: Arc<Database>, events: EventHub) {
     if B::state().tx.get().is_some() {
         return;
     }
@@ -192,14 +188,14 @@ pub fn start_worker<B: AutoSyncBackend>(db: Arc<Database>, app: AppHandle) {
     }
 
     tauri::async_runtime::spawn(async move {
-        run_worker_loop::<B, _>(db, rx, app).await;
+        run_worker_loop::<B>(db, rx, events).await;
     });
 }
 
-async fn run_worker_loop<B: AutoSyncBackend, R: Runtime>(
+async fn run_worker_loop<B: AutoSyncBackend>(
     db: Arc<Database>,
     mut rx: Receiver<String>,
-    app: AppHandle<R>,
+    events: EventHub,
 ) {
     while let Some(first_table) = rx.recv().await {
         let started_at = Instant::now();
@@ -220,7 +216,7 @@ async fn run_worker_loop<B: AutoSyncBackend, R: Runtime>(
             B::NAME
         );
 
-        if let Err(err) = run_auto_sync_upload::<B, R>(&db, &app).await {
+        if let Err(err) = run_auto_sync_upload::<B>(&db, &events).await {
             log::warn!("[{}][AutoSync] Upload failed: {err}", B::NAME);
         }
     }
@@ -234,6 +230,7 @@ mod tests {
     };
     use crate::database::Database;
     use crate::error::AppError;
+    use crate::events::EventHub;
     use crate::services::s3_auto_sync::S3AutoSync;
     use crate::services::sync_protocol::sync_mutex;
     use crate::services::webdav_auto_sync::WebDavAutoSync;
@@ -251,6 +248,54 @@ mod tests {
         let started = Instant::now();
         let later = started + Duration::from_millis(MAX_AUTO_SYNC_WAIT_MS + 1);
         assert!(auto_sync_wait_duration(started, later).is_none());
+    }
+
+    #[test]
+    fn worker_does_not_depend_on_the_tauri_app_handle() {
+        // Built from parts so this test's own text is not what it finds.
+        let needle = ["Ap", "pHandle"].join("");
+        for source in [
+            include_str!("auto_sync.rs"),
+            include_str!("webdav_auto_sync.rs"),
+            include_str!("s3_auto_sync.rs"),
+        ] {
+            assert!(
+                !source.contains(&needle),
+                "the worker talks to the event hub, not to `{needle}`"
+            );
+        }
+    }
+
+    #[test]
+    fn auto_sync_status_goes_to_the_hub_with_and_without_error() {
+        for (hub_event, emit) in [
+            (
+                "webdav-sync-status-updated",
+                super::emit_auto_sync_status_updated::<WebDavAutoSync>
+                    as fn(&EventHub, &str, Option<&str>),
+            ),
+            (
+                S3AutoSync::STATUS_EVENT,
+                super::emit_auto_sync_status_updated::<S3AutoSync>,
+            ),
+        ] {
+            let hub = EventHub::new();
+            let mut rx = hub.subscribe();
+            emit(&hub, "success", None);
+            emit(&hub, "error", Some("boom"));
+            let first = rx.try_recv().unwrap();
+            assert_eq!(first.name, hub_event);
+            assert_eq!(
+                first.payload,
+                serde_json::json!({ "source": "auto", "status": "success" })
+            );
+            let second = rx.try_recv().unwrap();
+            assert_eq!(second.name, hub_event);
+            assert_eq!(
+                second.payload,
+                serde_json::json!({ "source": "auto", "status": "error", "error": "boom" })
+            );
+        }
     }
 
     #[test]
@@ -368,11 +413,11 @@ mod tests {
         store(Some(settings_for(&remote, true, true))).expect("seed settings");
 
         let db = Arc::new(Database::memory().expect("memory db"));
-        let app = tauri::test::mock_app();
+        let hub = EventHub::new();
         let (tx, rx) = channel::<String>(1);
 
         let other_sync = sync_mutex().lock().await;
-        let worker = tokio::spawn(run_worker_loop::<B, _>(db, rx, app.handle().clone()));
+        let worker = tokio::spawn(run_worker_loop::<B>(db, rx, hub));
         tx.send("providers".to_string())
             .await
             .expect("queue change");
@@ -451,4 +496,143 @@ mod tests {
         webdav_settings
     );
     queued_upload_tests!(s3, S3AutoSync, settings::set_s3_sync_settings, s3_settings);
+}
+
+#[cfg(test)]
+mod lock_order_tests {
+    use super::{run_auto_sync_upload, AutoSyncBackend};
+    use crate::database::Database;
+    use crate::error::AppError;
+    use crate::events::EventHub;
+    use crate::services::sync_protocol::sync_mutex;
+    use crate::services::webdav_auto_sync::WebDavAutoSync;
+    use crate::settings::{
+        get_webdav_sync_settings, set_webdav_sync_settings, update_webdav_sync_status,
+        WebDavSyncSettings, WebDavSyncStatus,
+    };
+    use serial_test::serial;
+    use std::sync::Arc;
+    use tokio::sync::broadcast::error::TryRecvError;
+
+    /// Points the settings file at a temp home and puts `initial` into the
+    /// store; clears the store and restores the env on drop.
+    struct IsolatedSettings {
+        previous_test_home: Option<std::ffi::OsString>,
+        _dir: tempfile::TempDir,
+    }
+
+    impl IsolatedSettings {
+        fn new(initial: WebDavSyncSettings) -> Self {
+            let dir = tempfile::tempdir().expect("temp home");
+            let previous_test_home = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", dir.path());
+            set_webdav_sync_settings(Some(initial)).expect("seed settings");
+            Self {
+                previous_test_home,
+                _dir: dir,
+            }
+        }
+    }
+
+    impl Drop for IsolatedSettings {
+        fn drop(&mut self) {
+            let _ = set_webdav_sync_settings(None);
+            match &self.previous_test_home {
+                Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
+
+    /// Enabled with auto-sync on and one credential field set (an all-blank
+    /// block is dropped by the store), with the username missing: an upload
+    /// that reaches `upload()` fails at `validate()` without touching the
+    /// network, so the error path is observable and deterministic.
+    fn auto_sync_settings() -> WebDavSyncSettings {
+        WebDavSyncSettings {
+            enabled: true,
+            auto_sync: true,
+            base_url: "http://127.0.0.1:1".to_string(),
+            ..WebDavSyncSettings::default()
+        }
+    }
+
+    /// Starts `run_auto_sync_upload` while the global sync lock is held by the
+    /// caller and lets it run until it parks on that lock (current-thread
+    /// runtime: one yield is enough).
+    async fn spawn_upload_behind_the_lock(
+        db: Arc<Database>,
+        hub: EventHub,
+    ) -> tokio::task::JoinHandle<Result<(), AppError>> {
+        let worker =
+            tokio::spawn(async move { run_auto_sync_upload::<WebDavAutoSync>(&db, &hub).await });
+        tokio::task::yield_now().await;
+        assert!(!worker.is_finished(), "the worker must wait for the lock");
+        worker
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn upload_queued_behind_the_lock_sees_auto_sync_switched_off_meanwhile() {
+        let _settings = IsolatedSettings::new(auto_sync_settings());
+        let db = Arc::new(Database::memory().expect("memory db"));
+        let hub = EventHub::new();
+        let mut events = hub.subscribe();
+
+        let lock = sync_mutex().lock().await;
+        let worker = spawn_upload_behind_the_lock(db, hub.clone()).await;
+        let mut off = get_webdav_sync_settings().expect("seeded");
+        off.auto_sync = false;
+        set_webdav_sync_settings(Some(off)).expect("switch auto-sync off");
+        drop(lock);
+
+        worker
+            .await
+            .expect("worker task")
+            .expect("a switched-off auto-sync is not an error");
+        assert!(
+            matches!(events.try_recv(), Err(TryRecvError::Empty)),
+            "no status event when nothing was uploaded"
+        );
+        let status = get_webdav_sync_settings().expect("settings").status;
+        assert_eq!(status.last_error, None);
+        assert_eq!(status.last_error_source, None);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn failed_upload_keeps_the_status_a_parallel_sync_saved_while_it_waited() {
+        let _settings = IsolatedSettings::new(auto_sync_settings());
+        let db = Arc::new(Database::memory().expect("memory db"));
+        let hub = EventHub::new();
+        let mut events = hub.subscribe();
+
+        let lock = sync_mutex().lock().await;
+        let worker = spawn_upload_behind_the_lock(db, hub.clone()).await;
+        // A manual sync that held the lock before us finishes and records success.
+        update_webdav_sync_status(WebDavSyncStatus {
+            last_sync_at: Some(1_234),
+            last_remote_etag: Some("etag-from-the-parallel-sync".to_string()),
+            ..WebDavSyncStatus::default()
+        })
+        .expect("record the parallel success");
+        drop(lock);
+
+        let err = worker
+            .await
+            .expect("worker task")
+            .expect_err("upload fails validation");
+        let status = get_webdav_sync_settings().expect("settings").status;
+        assert_eq!(status.last_sync_at, Some(1_234));
+        assert_eq!(
+            status.last_remote_etag.as_deref(),
+            Some("etag-from-the-parallel-sync")
+        );
+        assert_eq!(status.last_error, Some(err.to_string()));
+        assert_eq!(status.last_error_source.as_deref(), Some("auto"));
+        let event = events.try_recv().expect("error event");
+        assert_eq!(event.name, WebDavAutoSync::STATUS_EVENT);
+        assert_eq!(event.payload["status"], "error");
+        assert_eq!(event.payload["source"], "auto");
+    }
 }

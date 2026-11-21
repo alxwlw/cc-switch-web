@@ -42,13 +42,13 @@ use super::{
     },
     ProxyError,
 };
-use crate::commands::{CodexOAuthState, CopilotAuthState, XaiOAuthState};
 use crate::provider_kind::{is_copilot_url, ProviderKind};
 use crate::proxy::providers::copilot_auth::{CopilotAuthError, CopilotAuthManager};
 use crate::proxy::providers::copilot_model_map::{
     transport_for, CopilotProtocol, CopilotTransport, ResolvedCopilotModel,
 };
 use crate::proxy::providers::xai_oauth_auth::XaiOAuthManager;
+use crate::proxy::server::OAuthManagers;
 use crate::{
     app_config::AppType,
     provider::{CodexCopilotApiFormat, LocalProxyRequestOverrides, Provider},
@@ -67,7 +67,6 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::borrow::Cow;
 use std::sync::Arc;
-use tauri::Manager;
 use tokio::sync::RwLock;
 
 const PROXY_AUTH_PLACEHOLDER: &str = "PROXY_MANAGED";
@@ -175,6 +174,10 @@ pub struct RequestForwarder {
     failover_manager: Arc<FailoverSwitchManager>,
     /// AppHandle，用于发射事件和更新托盘
     app_handle: Option<tauri::AppHandle>,
+    /// OAuth 管理器（桌面与 headless 同源）
+    auth: Option<OAuthManagers>,
+    /// 应用状态：故障转移切换的路由记录与事件总线（未绑定则不切换）
+    app_state: Option<crate::store::AppState>,
     /// 请求开始时的"当前供应商 ID"（用于判断是否需要同步 UI/托盘）
     current_provider_id_at_start: String,
     /// 代理会话 ID（用于 Gemini Native shadow replay）
@@ -317,6 +320,8 @@ impl RequestForwarder {
         codex_chat_history: Arc<CodexChatHistoryStore>,
         failover_manager: Arc<FailoverSwitchManager>,
         app_handle: Option<tauri::AppHandle>,
+        auth: Option<OAuthManagers>,
+        app_state: Option<crate::store::AppState>,
         current_provider_id_at_start: String,
         session_id: String,
         session_client_provided: bool,
@@ -338,6 +343,8 @@ impl RequestForwarder {
             codex_chat_history,
             failover_manager,
             app_handle,
+            auth,
+            app_state,
             current_provider_id_at_start,
             session_id,
             session_client_provided,
@@ -611,14 +618,16 @@ impl RequestForwarder {
             if self.current_provider_id_at_start.as_str() != provider.id.as_str() {
                 status.failover_count += 1;
 
-                let fm = self.failover_manager.clone();
-                let ah = self.app_handle.clone();
-                let pid = provider.id.clone();
-                let pname = provider.name.clone();
-                let at = app_type.to_string();
-                tokio::spawn(async move {
-                    let _ = fm.try_switch(ah.as_ref(), &at, &pid, &pname).await;
-                });
+                if let Some(state) = self.app_state.clone() {
+                    let fm = self.failover_manager.clone();
+                    let ah = self.app_handle.clone();
+                    let pid = provider.id.clone();
+                    let pname = provider.name.clone();
+                    let at = app_type.to_string();
+                    tokio::spawn(async move {
+                        let _ = fm.try_switch(&state, ah.as_ref(), &at, &pid, &pname).await;
+                    });
+                }
             }
             refresh_success_rate(&mut status);
         }
@@ -1392,12 +1401,13 @@ impl RequestForwarder {
                 .and_then(|meta| meta.managed_account_id_for("codex_oauth"))
             {
                 Some(local_account_id) => {
-                    let app_handle = self.app_handle.as_ref().ok_or_else(|| {
-                        ProxyError::AuthError("Codex OAuth 认证不可用（无 AppHandle）".to_string())
+                    let auth = self.auth.as_ref().ok_or_else(|| {
+                        ProxyError::AuthError(
+                            "Codex OAuth 认证不可用（无 OAuth 管理器）".to_string(),
+                        )
                     })?;
-                    let codex_state = app_handle.state::<CodexOAuthState>();
-                    let chatgpt_account_id = codex_state
-                        .0
+                    let chatgpt_account_id = auth
+                        .codex
                         .chatgpt_account_id_for_account(&local_account_id)
                         .await
                         .map_err(|error| {
@@ -1657,9 +1667,8 @@ impl RequestForwarder {
         // GitHub Copilot 动态 endpoint 路由
         // 从 CopilotAuthManager 获取缓存的 API endpoint（支持企业版等非默认 endpoint）
         if is_copilot && !is_full_url {
-            if let Some(app_handle) = &self.app_handle {
-                let copilot_state = app_handle.state::<CopilotAuthState>();
-                let copilot_auth = copilot_state.0.read().await;
+            if let Some(auth) = &self.auth {
+                let copilot_auth = auth.copilot.read().await;
 
                 // 从 provider.meta 获取关联的 GitHub 账号 ID
                 let account_id = provider

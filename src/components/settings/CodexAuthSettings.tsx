@@ -5,6 +5,7 @@ import type { SettingsFormState } from "@/hooks/useSettings";
 import { SettingsSwitchRow } from "@/components/settings/SettingsLayout";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { settingsApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { formatBytes } from "@/components/settings/BackupStorageSection";
 import { CodexQuotaProtectionSettings } from "./CodexQuotaProtectionSettings";
 
@@ -196,7 +197,11 @@ export function CodexAuthSettings({
         message={t("confirm.unifyCodexHistoryOff.message")}
         checkboxLabel={
           showRestoreOption
-            ? t("confirm.unifyCodexHistoryOff.restoreBackup")
+            ? t(
+                isWeb
+                  ? "confirm.unifyCodexHistoryOff.restoreBackupWeb"
+                  : "confirm.unifyCodexHistoryOff.restoreBackup",
+              )
             : undefined
         }
         checkboxDefaultChecked

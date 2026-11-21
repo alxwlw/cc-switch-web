@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
+  Copy,
   Download,
   ExternalLink,
   Github,
@@ -22,7 +23,18 @@ import { Badge } from "@/components/ui/badge";
 import { WhatsNewDialog } from "@/components/WhatsNewDialog";
 import { WHATS_NEW_ENTRIES, entriesUpTo } from "@/lib/whatsNew";
 import ccswitchLogo from "@/assets/icons/logo.svg";
+import { WebModeInfo } from "@/components/web/WebModeInfo";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { isWeb } from "@/lib/api/adapter";
+import { copyText } from "@/lib/clipboard";
+import type { WebUpdateCheck } from "@/lib/updater";
+import { useServerCapabilities } from "@/hooks/useServerCapabilities";
+import { useSelfUpdate } from "@/hooks/useSelfUpdate";
+import { WebCommitList } from "@/components/settings/WebCommitList";
+import {
+  SelfUpdateButton,
+  SelfUpdateNotice,
+} from "@/components/settings/SelfUpdatePanel";
 import { Switch } from "@/components/ui/switch";
 import { SettingsRow } from "./SettingsLayout";
 
@@ -44,6 +56,169 @@ function readStarPromptDismissed(): boolean {
   } catch {
     return false;
   }
+}
+
+/** web: the result of the server's update check — how far behind, what is new, how to update. */
+function WebUpdateStatus({
+  webUpdate,
+  error,
+  selfUpdate,
+}: {
+  webUpdate: WebUpdateCheck | null;
+  error: string | null;
+  /** Set when the server accepts self-update; the button shows only for `behind`. */
+  selfUpdate: ReturnType<typeof useSelfUpdate> | null;
+}) {
+  const { t } = useTranslation();
+
+  const handleCopy = useCallback(
+    async (text: string) => {
+      try {
+        await copyText(text);
+        toast.success(t("web.update.copied"), { closeButton: true });
+      } catch (copyError) {
+        console.error("[AboutSection] Failed to copy instructions", copyError);
+        toast.error(t("web.update.copyFailed"), {
+          description: extractErrorMessage(copyError) || undefined,
+          closeButton: true,
+        });
+      }
+    },
+    [t],
+  );
+
+  // The server's own text (rate limit, no network), as it came: not "up to date".
+  if (error) {
+    return (
+      <div role="alert" className="space-y-1 px-5 py-4 text-body">
+        <p className="font-medium text-fg-1">
+          {t("web.update.checkFailedTitle")}
+        </p>
+        <p className="break-words text-fg-2">{error}</p>
+      </div>
+    );
+  }
+  if (!webUpdate) return null;
+
+  const checked = new Date(webUpdate.checkedAt);
+  const checkedAt = Number.isNaN(checked.getTime())
+    ? webUpdate.checkedAt
+    : checked.toLocaleString();
+  const footer = (
+    <p className="text-caption text-fg-2">
+      {webUpdate.currentSha && (
+        <span className="tabular-nums">
+          {t("web.update.buildSha", { sha: webUpdate.currentSha.slice(0, 7) })}
+          {" · "}
+        </span>
+      )}
+      {t("web.update.checkedAt", { time: checkedAt })}
+    </p>
+  );
+
+  if (webUpdate.status === "unknown") {
+    return (
+      <div className="space-y-1 px-5 py-4 text-body">
+        <p className="font-medium text-fg-1">
+          {t(
+            webUpdate.mode === "release"
+              ? "web.update.releaseUnknownTitle"
+              : "web.update.unknownTitle",
+          )}
+        </p>
+        <p className="text-fg-2">
+          {t(
+            webUpdate.mode === "release"
+              ? "web.update.releaseUnknownHint"
+              : "web.update.unknownHint",
+          )}
+        </p>
+        {footer}
+      </div>
+    );
+  }
+
+  if (webUpdate.status === "up-to-date") {
+    return (
+      <div className="space-y-1 px-5 py-4 text-body">
+        <p className="font-medium text-fg-1">{t("web.update.upToDateTitle")}</p>
+        {footer}
+      </div>
+    );
+  }
+
+  const instructions = [
+    { key: "systemd", text: webUpdate.instructions.systemd },
+    { key: "docker", text: webUpdate.instructions.docker },
+  ];
+  return (
+    <div className="space-y-3 px-5 py-4 text-body">
+      <div className="space-y-1">
+        <p className="font-medium text-fg-1">
+          {webUpdate.mode === "release"
+            ? t("web.update.releaseBehindTitle", {
+                version: webUpdate.latestVersion ?? "",
+              })
+            : t("web.update.behindTitle", { count: webUpdate.behindBy })}
+        </p>
+        {footer}
+        {webUpdate.mode === "release" && webUpdate.releaseUrl && (
+          <a
+            href={webUpdate.releaseUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-caption text-primary underline-offset-2 hover:underline"
+          >
+            <ExternalLink className="h-3 w-3" />
+            {t("web.update.releaseNotes")}
+          </a>
+        )}
+      </div>
+
+      {selfUpdate && (
+        <SelfUpdateButton
+          webUpdate={webUpdate}
+          state={selfUpdate.state}
+          onStart={selfUpdate.start}
+        />
+      )}
+
+      {webUpdate.mode !== "release" && (
+        <WebCommitList
+          commits={webUpdate.commits}
+          behindBy={webUpdate.behindBy}
+        />
+      )}
+
+      <div className="space-y-2">
+        <p className="text-caption font-medium text-fg-2">
+          {t("web.update.instructionsTitle")}
+        </p>
+        {instructions.map(({ key, text }) => (
+          <div key={key} className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-caption text-fg-1">
+                {t(`web.update.${key}`)}
+              </span>
+              <Button
+                type="button"
+                variant="neutral"
+                size="compact"
+                onClick={() => void handleCopy(text)}
+                aria-label={`${t("web.update.copy")}: ${t(`web.update.${key}`)}`}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                {t("web.update.copy")}
+              </Button>
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-control bg-subtle p-2 text-caption text-fg-1">
+              {text}
+            </pre>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -78,12 +253,29 @@ export function AboutSection({
     checkUpdate,
     resetDismiss,
     isChecking,
+    webUpdate,
+    error: checkError,
     autoUpdateSupported,
     autoUpdateDownloading,
     readyUpdate,
     refreshAutoUpdate,
     startAutoDownload,
   } = useUpdate();
+
+  // web: the server says whether the install route would accept a request now.
+  const capabilities = useServerCapabilities();
+  const selfUpdateEnabled = isWeb && capabilities.data?.selfUpdate === true;
+  // web: the fork's own version when the server reports one; `version` is the upstream app's.
+  const webVersion = isWeb ? (capabilities.data?.webVersion ?? null) : null;
+  const projectUrl = isWeb ? (capabilities.data?.projectUrl ?? null) : null;
+  const selfUpdate = useSelfUpdate(selfUpdateEnabled, {
+    // Nothing was merged: the server's cached `behind` is stale, ask again past its cache.
+    onNothingToUpdate: () => {
+      checkUpdate({ force: true }).catch((error) =>
+        console.error("[AboutSection] Re-check after the update failed", error),
+      );
+    },
+  });
 
   const handleAutoUpdateChange = useCallback(
     async (enabled: boolean) => {
@@ -128,6 +320,18 @@ export function AboutSection({
 
   const handleOpenReleaseNotes = useCallback(async () => {
     try {
+      // web: `availableVersion` is the build string `<version>+<sha>`, not a release tag;
+      // the link is the running version's page, as when up to date.
+      if (isWeb) {
+        // web: the fork's own releases, not the upstream app's.
+        if (!projectUrl) return;
+        await settingsApi.openExternal(
+          webVersion
+            ? `${projectUrl}/releases/tag/v${webVersion}`
+            : `${projectUrl}/releases`,
+        );
+        return;
+      }
       const targetVersion = updateInfo?.availableVersion ?? version ?? "";
       const displayVersion = targetVersion.startsWith("v")
         ? targetVersion
@@ -149,11 +353,15 @@ export function AboutSection({
       console.error("[AboutSection] Failed to open release notes", error);
       toast.error(t("settings.openReleaseNotesFailed"));
     }
-  }, [t, updateInfo?.availableVersion, version]);
+  }, [t, updateInfo?.availableVersion, version, projectUrl, webVersion]);
 
   const handleOpenGithub = useCallback(() => {
-    void settingsApi.openExternal("https://github.com/farion1231/cc-switch");
-  }, []);
+    void settingsApi.openExternal(
+      isWeb && projectUrl
+        ? projectUrl
+        : "https://github.com/farion1231/cc-switch",
+    );
+  }, [projectUrl]);
 
   const handleDismissStarPrompt = useCallback(() => {
     setStarPromptDismissed(true);
@@ -165,6 +373,17 @@ export function AboutSection({
   }, []);
 
   const handleCheckUpdate = useCallback(async () => {
+    if (isWeb) {
+      // The button is the only caller that forces past the server's cache; the result
+      // (or the server's error text) is shown by WebUpdateStatus.
+      try {
+        await checkUpdate({ force: true });
+      } catch (error) {
+        console.error("[AboutSection] Check update failed", error);
+      }
+      return;
+    }
+
     if (hasUpdate) {
       if (isPortable) {
         try {
@@ -225,7 +444,7 @@ export function AboutSection({
     updateInfo?.availableVersion,
   ]);
 
-  const displayVersion = version ?? t("common.unknown");
+  const displayVersion = webVersion ?? version ?? t("common.unknown");
 
   return (
     <div className="divide-y divide-border overflow-hidden rounded-panel border border-border bg-surface">
@@ -255,9 +474,10 @@ export function AboutSection({
             )}
           </div>
         </div>
+        {/* web: the button only checks; installing is the "Update now" button of the behind block */}
         <Button
           type="button"
-          variant={hasUpdate ? "solid" : "neutral"}
+          variant={hasUpdate && !isWeb ? "solid" : "neutral"}
           size="regular"
           onClick={handleCheckUpdate}
           disabled={isChecking || isDownloading}
@@ -267,7 +487,7 @@ export function AboutSection({
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               {t("settings.updating")}
             </>
-          ) : hasUpdate ? (
+          ) : hasUpdate && !isWeb ? (
             <>
               <Download className="h-3.5 w-3.5" />
               {t("settings.updateTo", {
@@ -288,7 +508,18 @@ export function AboutSection({
         </Button>
       </div>
 
-      {hasUpdate && updateInfo && (
+      {isWeb && (
+        <WebUpdateStatus
+          webUpdate={webUpdate}
+          error={checkError}
+          selfUpdate={selfUpdateEnabled ? selfUpdate : null}
+        />
+      )}
+      {isWeb && selfUpdateEnabled && (
+        <SelfUpdateNotice state={selfUpdate.state} />
+      )}
+
+      {!isWeb && hasUpdate && updateInfo && (
         <div className="space-y-1 px-5 py-4 text-body">
           <p className="font-medium text-fg-1">
             {t("settings.updateAvailable", {
@@ -320,7 +551,10 @@ export function AboutSection({
         </div>
       )}
 
-      {onAutoSave && (
+      <WebModeInfo />
+
+      {/* web: the server updates itself (see the "behind" block); no desktop auto-download */}
+      {!isWeb && onAutoSave && (
         // 关于页的其它行是 px-5，这里用 SettingsRow 对齐（SettingsSwitchRow 固定 px-4）
         <SettingsRow
           className="px-5 py-4"
@@ -345,7 +579,7 @@ export function AboutSection({
       )}
 
       <div className="flex flex-wrap items-center gap-2 px-5 py-4">
-        {starPromptDismissed && (
+        {(isWeb ? projectUrl !== null : starPromptDismissed) && (
           <Button
             type="button"
             variant="neutral"
@@ -356,24 +590,28 @@ export function AboutSection({
             {t("settings.github")}
           </Button>
         )}
-        <Button
-          type="button"
-          variant="neutral"
-          size="compact"
-          onClick={() => settingsApi.openExternal("https://ccswitch.io")}
-        >
-          <Globe className="h-3.5 w-3.5" />
-          {t("settings.officialWebsite")}
-        </Button>
-        <Button
-          type="button"
-          variant="neutral"
-          size="compact"
-          onClick={handleOpenReleaseNotes}
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          {t("settings.releaseNotes")}
-        </Button>
+        {!isWeb && (
+          <Button
+            type="button"
+            variant="neutral"
+            size="compact"
+            onClick={() => settingsApi.openExternal("https://ccswitch.io")}
+          >
+            <Globe className="h-3.5 w-3.5" />
+            {t("settings.officialWebsite")}
+          </Button>
+        )}
+        {(!isWeb || projectUrl !== null) && (
+          <Button
+            type="button"
+            variant="neutral"
+            size="compact"
+            onClick={handleOpenReleaseNotes}
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            {t("settings.releaseNotes")}
+          </Button>
+        )}
         {recentEntries.length > 0 && (
           <Button
             type="button"
@@ -389,7 +627,7 @@ export function AboutSection({
 
       {/* 下载与更新都走 ccswitch.io，用户不再经过仓库页，邀 Star 单独占一行；按钮即 GitHub 入口。
           关掉后链接行补回 GitHub 按钮 */}
-      {!starPromptDismissed && (
+      {!isWeb && !starPromptDismissed && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 bg-action-soft py-3.5 ps-5 pe-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <Star

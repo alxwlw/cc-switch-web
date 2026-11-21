@@ -42,19 +42,23 @@ pub async fn workbuddy_model_owners(
         .map_err(|error| error.to_string())
 }
 
+pub(crate) async fn workbuddy_live_state_inner(
+    manager: &Arc<WorkBuddyAccountManager>,
+) -> Result<WorkBuddyLiveState, String> {
+    run_workbuddy(manager, |manager| Ok(manager.live_state())).await
+}
+
 #[tauri::command]
 pub async fn workbuddy_account_live_state(
     state: tauri::State<'_, WorkBuddyAccountState>,
 ) -> Result<WorkBuddyLiveState, String> {
-    run_workbuddy(&state.0, |manager| Ok(manager.live_state())).await
+    workbuddy_live_state_inner(&state.0).await
 }
 
-/// 收录 WorkBuddy 当前登录的账号（已收录的就更新副本）。
-#[tauri::command]
-pub async fn workbuddy_account_import_current(
-    state: tauri::State<'_, WorkBuddyAccountState>,
+pub(crate) async fn workbuddy_import_current_inner(
+    manager: &Arc<WorkBuddyAccountManager>,
 ) -> Result<WorkBuddyImportResult, String> {
-    run_workbuddy(&state.0, |manager| {
+    run_workbuddy(manager, |manager| {
         let outcome = manager.import_current()?;
         let current = manager.status()?.current_account_id;
         Ok(WorkBuddyImportResult {
@@ -63,6 +67,14 @@ pub async fn workbuddy_account_import_current(
         })
     })
     .await
+}
+
+/// 收录 WorkBuddy 当前登录的账号（已收录的就更新副本）。
+#[tauri::command]
+pub async fn workbuddy_account_import_current(
+    state: tauri::State<'_, WorkBuddyAccountState>,
+) -> Result<WorkBuddyImportResult, String> {
+    workbuddy_import_current_inner(&state.0).await
 }
 
 /// 收录当前账号后在本机写登出标记，WorkBuddy 下次打开停在登录页（不调用服务端登出）。
@@ -136,6 +148,16 @@ fn open_workbuddy() -> Result<(), String> {
     .to_string())
 }
 
+pub(crate) async fn workbuddy_quota_inner(
+    manager: &Arc<WorkBuddyAccountManager>,
+    account_id: String,
+    force: bool,
+) -> Result<WorkBuddyQuota, String> {
+    crate::services::workbuddy_account::account_quota(Arc::clone(manager), account_id, force)
+        .await
+        .map_err(|error| error.to_string())
+}
+
 /// 这个 WorkBuddy 账号的套餐与积分。只有 WorkBuddy 正在运行、且它就是当前登着的号时才经
 /// WorkBuddy 的本地 IPC 只读查一次（5 分钟内走缓存，`force` 跳过）；其他情况给上次缓存的结果
 /// 和没刷新的原因。
@@ -145,11 +167,5 @@ pub async fn workbuddy_account_quota(
     force: Option<bool>,
     state: tauri::State<'_, WorkBuddyAccountState>,
 ) -> Result<WorkBuddyQuota, String> {
-    crate::services::workbuddy_account::account_quota(
-        Arc::clone(&state.0),
-        account_id,
-        force.unwrap_or(false),
-    )
-    .await
-    .map_err(|error| error.to_string())
+    workbuddy_quota_inner(&state.0, account_id, force.unwrap_or(false)).await
 }

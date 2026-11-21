@@ -1,5 +1,7 @@
 import { fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createTestQueryClient } from "../utils/testQueryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
 
 vi.mock("@/components/providers/forms/ClaudeOfficialSection", () => ({
@@ -44,8 +46,12 @@ const renderInPanel = () => {
   Object.defineProperty(container, "scrollHeight", { value: 2000 });
   container.getBoundingClientRect = () => rect(100);
 
+  const queryClient = createTestQueryClient();
   const result = render(<AuthCenterPanel authScrollTarget="codex_oauth" />, {
     container,
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
   });
   return { ...result, outer, container };
 };

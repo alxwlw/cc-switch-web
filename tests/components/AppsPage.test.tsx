@@ -27,6 +27,7 @@ import type { DndContextProps, DragEndEvent } from "@dnd-kit/core";
 import { emitTauriEvent } from "../msw/tauriMocks";
 import { APP_IDS } from "@/config/appSpecs";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 type ToolVersions = Awaited<ReturnType<typeof settingsApi.getToolVersions>>;
 
@@ -50,12 +51,23 @@ const mocks = vi.hoisted(() => ({
   autoSaveSettings: vi.fn(async () => null),
   dragEndHandlers: [] as ((event: DragEndEvent) => void)[],
   desktopStatus: { supported: true, installed: true, configured: true },
+  desktopStatusCalls: 0,
+  desktopStatusMode: "ok" as "ok" | "error" | "pending",
 }));
 
 vi.mock("@/lib/api", () => ({ settingsApi: mocks }));
 vi.mock("@/lib/api/providers", () => ({
   providersApi: {
-    getClaudeDesktopStatus: async () => mocks.desktopStatus,
+    getClaudeDesktopStatus: async () => {
+      mocks.desktopStatusCalls += 1;
+      if (mocks.desktopStatusMode === "error") {
+        throw new Error("status unavailable");
+      }
+      if (mocks.desktopStatusMode === "pending") {
+        return new Promise(() => {});
+      }
+      return mocks.desktopStatus;
+    },
   },
 }));
 vi.mock("@/hooks/useSettings", () => ({
@@ -244,6 +256,8 @@ describe("AppsPage concurrent CLI upgrades", () => {
       installed: true,
       configured: true,
     };
+    mocks.desktopStatusMode = "ok";
+    mocks.desktopStatusCalls = 0;
     mocks.updateSettings.mockReset();
     mocks.autoSaveSettings.mockReset().mockResolvedValue(null);
     mocks.copyText.mockReset().mockResolvedValue(undefined);
@@ -708,6 +722,304 @@ describe("AppsPage concurrent CLI upgrades", () => {
     expect(
       card("Claude Desktop").getByText("appsPage.desktopNotConnected"),
     ).toBeInTheDocument();
+  });
+
+  it("web: polls the Claude Desktop status on the server and groups by installed", async () => {
+    setWeb(true);
+    mocks.desktopStatus = {
+      supported: true,
+      installed: true,
+      configured: false,
+    };
+    await renderApps();
+    await waitFor(() => expect(mocks.desktopStatusCalls).toBeGreaterThan(0));
+    await waitFor(() =>
+      expect(rowApps("appsPage.sectionInstalled")).toContain("claude-desktop"),
+    );
+    expect(
+      card("Claude Desktop").getByText("appsPage.desktopNotConnected"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("apps-web-desktop-note")).toHaveTextContent(
+      "appsPage.desktopServerNote",
+    );
+    // installed on the server: no alarming "not found" caption
+    expect(screen.queryByTestId("apps-web-desktop-not-found")).toBeNull();
+  });
+
+  it("web: installed:false shows the \"not found on the server\" caption and the \"not installed\" group, no error", async () => {
+    setWeb(true);
+    mocks.desktopStatus = {
+      supported: true,
+      installed: false,
+      configured: false,
+    };
+    await renderApps();
+    await waitFor(() =>
+      expect(rowApps("appsPage.sectionNotInstalled")).toContain(
+        "claude-desktop",
+      ),
+    );
+    const note = screen.getByTestId("apps-web-desktop-note");
+    expect(note).toHaveTextContent("appsPage.desktopServerNote");
+    expect(screen.getByTestId("apps-web-desktop-not-found")).toHaveTextContent(
+      "appsPage.desktopNotFoundOnServer",
+    );
+    // neutral look: not role=alert and no danger colour
+    expect(note.closest("[role=alert]")).toBeNull();
+    expect(note.className).not.toMatch(/danger/);
+  });
+
+  it.each(["pending", "error"] as const)(
+    "web: Claude Desktop status %s is a neutral state, flat list, no \"not installed\"",
+    async (mode) => {
+      setWeb(true);
+      mocks.desktopStatusMode = mode;
+      const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        await renderApps();
+        await waitFor(() =>
+          expect(mocks.desktopStatusCalls).toBeGreaterThan(0),
+        );
+        // WEB-25: installs load on mount in web too (the server probes its own CLIs)
+        await waitFor(() =>
+          expect(mocks.listToolInstallations).toHaveBeenCalled(),
+        );
+        // status unknown: flat list without groups, Desktop is not declared "not installed"
+        expect(
+          screen.queryByRole("region", {
+            name: "appsPage.sectionNotInstalled",
+          }),
+        ).toBeNull();
+        expect(
+          screen.queryByRole("region", { name: "appsPage.sectionInstalled" }),
+        ).toBeNull();
+        const desktop = card("Claude Desktop");
+        expect(desktop.getByText("Claude Desktop")).toBeInTheDocument();
+        expect(desktop.queryByText("appsPage.desktopNotConnected")).toBeNull();
+        expect(desktop.queryByText("appsPage.desktopConnected")).toBeNull();
+        expect(screen.getByTestId("apps-web-desktop-note")).toHaveTextContent(
+          "appsPage.desktopServerNote",
+        );
+        expect(screen.queryByTestId("apps-web-desktop-not-found")).toBeNull();
+        expect(screen.queryByRole("alert")).toBeNull();
+      } finally {
+        errorLog.mockRestore();
+      }
+    },
+  );
+
+  it.each([true, false])(
+    "a failed re-read of the Desktop status (web=%s) does not erase the groups: data of the first response stays",
+    async (web) => {
+      setWeb(web);
+      const { AppsPage } = await import("@/components/apps/AppsPage");
+      const client = createTestQueryClient();
+      render(
+        <QueryClientProvider client={client}>
+          <AppsPage />
+        </QueryClientProvider>,
+      );
+      await waitFor(() =>
+        expect(rowApps("appsPage.sectionInstalled")).toContain(
+          "claude-desktop",
+        ),
+      );
+      const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        mocks.desktopStatusMode = "error";
+        const callsBefore = mocks.desktopStatusCalls;
+        await client.refetchQueries({ queryKey: ["claude-desktop-status"] });
+        await waitFor(() =>
+          expect(client.getQueryState(["claude-desktop-status"])?.status).toBe(
+            "error",
+          ),
+        );
+        expect(mocks.desktopStatusCalls).toBe(callsBefore + 1);
+        // data of the previous response is kept, rows did not move
+        expect(client.getQueryData(["claude-desktop-status"])).toEqual({
+          supported: true,
+          installed: true,
+          configured: true,
+        });
+        expect(rowApps("appsPage.sectionInstalled")).toContain(
+          "claude-desktop",
+        );
+        expect(
+          screen.getByRole("region", { name: "appsPage.sectionInstalled" }),
+        ).toBeInTheDocument();
+        expect(
+          card("Claude Desktop").getByText("appsPage.desktopConnected"),
+        ).toBeInTheDocument();
+      } finally {
+        errorLog.mockRestore();
+      }
+    },
+  );
+
+  it("desktop: Claude Desktop status error shows \"not installed\" and \"not connected\", as before WEB-19", async () => {
+    mocks.desktopStatusMode = "error";
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await renderApps();
+      await waitFor(() => expect(mocks.desktopStatusCalls).toBeGreaterThan(0));
+      await waitFor(() =>
+        expect(rowApps("appsPage.sectionNotInstalled")).toContain(
+          "claude-desktop",
+        ),
+      );
+      expect(rowApps("appsPage.sectionInstalled")).not.toContain(
+        "claude-desktop",
+      );
+      expect(
+        card("Claude Desktop").getByText("appsPage.desktopNotConnected"),
+      ).toBeInTheDocument();
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+
+  it("desktop: Claude Desktop status pending is a flat list with the \"not connected\" caption, as before WEB-19", async () => {
+    mocks.desktopStatusMode = "pending";
+    await renderApps();
+    await waitFor(() => expect(mocks.desktopStatusCalls).toBeGreaterThan(0));
+    await waitFor(() => expect(mocks.listToolInstallations).toHaveBeenCalled());
+    expect(
+      screen.queryByRole("region", { name: "appsPage.sectionNotInstalled" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "appsPage.sectionInstalled" }),
+    ).toBeNull();
+    expect(
+      card("Claude Desktop").getByText("appsPage.desktopNotConnected"),
+    ).toBeInTheDocument();
+  });
+
+  it("desktop: the server captions are not shown", async () => {
+    mocks.desktopStatus = {
+      supported: true,
+      installed: false,
+      configured: false,
+    };
+    await renderApps();
+    expect(rowApps("appsPage.sectionNotInstalled")).toEqual(["claude-desktop"]);
+    expect(screen.queryByTestId("apps-web-desktop-note")).toBeNull();
+    expect(screen.queryByTestId("apps-web-desktop-not-found")).toBeNull();
+  });
+
+  it.each([true, false])(
+    "lifecycle actions are enabled in both modes (web=%s) and versions and update check keep working",
+    async (web) => {
+      setWeb(web);
+      missing.add("hermes");
+      const user = userEvent.setup();
+      await renderApps();
+
+      expect(card("Claude Code").getByText("1.0.0")).toBeInTheDocument();
+
+      expect(updateButton("Claude Code")).toBeEnabled();
+      expect(
+        card("Hermes").getByRole("button", { name: "settings.toolInstall" }),
+      ).toBeEnabled();
+      expect(updateAllButton()).toBeEnabled();
+
+      await user.click(rowMenu("Claude Code"));
+      expect(
+        (
+          await screen.findByRole("menuitem", {
+            name: "settings.toolUninstall",
+          })
+        ).getAttribute("aria-disabled"),
+      ).not.toBe("true");
+      await user.keyboard("{Escape}");
+
+      await user.click(
+        screen.getByRole("button", { name: "appsPage.moreActions" }),
+      );
+      expect(
+        (
+          await screen.findByRole("menuitem", { name: "settings.toolDiagnose" })
+        ).getAttribute("aria-disabled"),
+      ).not.toBe("true");
+      await user.keyboard("{Escape}");
+
+      // installs load on mount in both modes
+      expect(mocks.listToolInstallations).toHaveBeenCalled();
+
+      await user.click(updateButton("Claude Code"));
+      await waitFor(() =>
+        expect(mocks.runToolLifecycleAction).toHaveBeenCalledWith(
+          ["claude"],
+          "update",
+          {},
+        ),
+      );
+
+      const before = mocks.getToolVersions.mock.calls.length;
+      await user.click(
+        screen.getByRole("button", { name: /appsPage\.checkUpdates/ }),
+      );
+      await waitFor(() =>
+        expect(mocks.getToolVersions.mock.calls.length).toBeGreaterThan(before),
+      );
+    },
+  );
+
+  it.each([true, false])(
+    "shows the server-side install note only in web (web=%s)",
+    async (web) => {
+      setWeb(web);
+      await renderApps();
+      const note = screen.queryByTestId("apps-web-server-note");
+      if (web) {
+        expect(note).toHaveTextContent("appsPage.webServerNote");
+        expect(note).not.toHaveTextContent("appsPage.webLifecycleSlow");
+      } else {
+        expect(note).toBeNull();
+      }
+    },
+  );
+
+  it("web: the note adds the 15-minute hint while a lifecycle action runs", async () => {
+    setWeb(true);
+    const running = deferred<void>();
+    mocks.runToolLifecycleAction.mockImplementationOnce(() => running.promise);
+    await renderApps();
+    fireEvent.click(updateButton("Claude Code"));
+    await waitFor(() =>
+      expect(screen.getByTestId("apps-web-server-note")).toHaveTextContent(
+        "appsPage.webLifecycleSlow",
+      ),
+    );
+    await act(async () => running.resolve());
+    await waitFor(() =>
+      expect(screen.getByTestId("apps-web-server-note")).not.toHaveTextContent(
+        "appsPage.webLifecycleSlow",
+      ),
+    );
+  });
+
+  it("shows the localized timeout text instead of the raw TOOL_ACTION_TIMEOUT code", async () => {
+    mocks.runToolLifecycleAction.mockRejectedValueOnce(
+      new Error("TOOL_ACTION_TIMEOUT: tool_update exceeded 900 s"),
+    );
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await renderApps();
+      fireEvent.click(updateButton("Claude Code"));
+      await waitFor(() =>
+        expect(mocks.error).toHaveBeenCalledWith(
+          "settings.toolActionFailed",
+          expect.objectContaining({
+            description: "settings.toolActionTimeout",
+          }),
+        ),
+      );
+      expect(JSON.stringify(mocks.error.mock.calls)).not.toContain(
+        "TOOL_ACTION_TIMEOUT",
+      );
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 
   it("puts Claude Desktop under not installed when it is not on this machine", async () => {

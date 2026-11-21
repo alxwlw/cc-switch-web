@@ -117,6 +117,7 @@ import { GeminiFormFields } from "./GeminiFormFields";
 import { KimiProviderForm } from "./KimiProviderForm";
 import { CopilotProviderForm } from "./CopilotProviderForm";
 import { AgyAccountSelect } from "./AgyOAuthSection";
+import { useAgyAccountsAvailable } from "@/hooks/useServerCapabilities";
 import { ClaudeAccountSelect } from "./ClaudeOfficialSection";
 import { McodeProviderForm } from "./McodeProviderForm";
 import { WorkBuddyProviderForm } from "./WorkBuddyProviderForm";
@@ -157,10 +158,7 @@ import {
   isNativeOpencodeConfig,
 } from "./helpers/opencodeFormUtils";
 import { HERMES_DEFAULT_CONFIG } from "./hooks/useHermesFormState";
-import {
-  canSwitchAgyAccount,
-  resolveManagedAccountId,
-} from "@/lib/authBinding";
+import { resolveManagedAccountId } from "@/lib/authBinding";
 import { useOpenClawLiveProviderIds } from "@/hooks/useOpenClaw";
 import { useHermesLiveProviderIds } from "@/hooks/useHermes";
 import { resolveCodexOfficialIdentity } from "@/utils/providerCapabilities";
@@ -734,6 +732,7 @@ function ProviderFormFull({
     string | null
   >(() => resolveManagedAccountId(initialData?.meta, "xai_oauth"));
   // Antigravity 官方卡绑定的授权中心账号；null = 跟着 agy 当前的登录
+  const agyAccountsAvailable = useAgyAccountsAvailable();
   const [selectedAgyAccountId, setSelectedAgyAccountId] = useState<
     string | null
   >(() => resolveManagedAccountId(initialData?.meta, "agy_oauth"));
@@ -3021,7 +3020,7 @@ function ProviderFormFull({
           {/* 切号只实现了 macOS、Windows；别的平台上不显示，卡上已有的绑定原样保留 */}
           {appId === "agy" &&
             category === "official" &&
-            canSwitchAgyAccount() && (
+            agyAccountsAvailable && (
               <AgyAccountSelect
                 value={selectedAgyAccountId}
                 onChange={setSelectedAgyAccountId}

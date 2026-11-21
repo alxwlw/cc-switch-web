@@ -7,9 +7,10 @@ import React, {
   useRef,
 } from "react";
 import { listen } from "@tauri-apps/api/event";
-import type { ReadyUpdate, UpdateInfo } from "../lib/updater";
+import type { ReadyUpdate, UpdateInfo, WebUpdateCheck } from "../lib/updater";
 import { UPDATE_READY_EVENT, checkForUpdate } from "../lib/updater";
 import { settingsApi } from "../lib/api/settings";
+import { isWeb } from "../lib/api/adapter";
 import { extractErrorMessage } from "../utils/errorUtils";
 
 interface UpdateContextValue {
@@ -18,13 +19,22 @@ interface UpdateContextValue {
   updateInfo: UpdateInfo | null;
   isChecking: boolean;
   error: string | null;
+  /**
+   * web: last answer of the server's update check (status, commits, instructions).
+   * `null` on desktop, before the first check and after a failed one.
+   */
+  webUpdate: WebUpdateCheck | null;
 
   // 提示状态
   isDismissed: boolean;
   dismissUpdate: () => void;
 
   // 操作方法
-  checkUpdate: () => Promise<boolean>;
+  /**
+   * `force` (web) skips the server's cache and spends the shared GitHub quota:
+   * only the manual button passes it, never the automatic check.
+   */
+  checkUpdate: (opts?: { force?: boolean }) => Promise<boolean>;
   resetDismiss: () => void;
 
   // 自动更新（下载状态在后端，主窗口重建后从后端取回）
@@ -53,6 +63,7 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
   const [isChecking, setIsChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDismissed, setIsDismissed] = useState(false);
+  const [webUpdate, setWebUpdate] = useState<WebUpdateCheck | null>(null);
 
   // 从 localStorage 读取已关闭的版本
   useEffect(() => {
@@ -81,6 +92,9 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
   const [downloadRequested, setDownloadRequested] = useState(false);
 
   const refreshAutoUpdate = useCallback(async () => {
+    // web: the server updates itself (self-update); the desktop auto-download
+    // commands have no web route
+    if (isWeb) return;
     try {
       const status = await settingsApi.getAutoUpdateStatus();
       setAutoUpdateSupported(status.supported);
@@ -95,7 +109,7 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
 
   const downloadInFlightRef = useRef(false);
   const startAutoDownload = useCallback(async () => {
-    if (downloadInFlightRef.current) return;
+    if (isWeb || downloadInFlightRef.current) return;
     downloadInFlightRef.current = true;
     setDownloadRequested(true);
     try {
@@ -133,14 +147,18 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
 
   const isCheckingRef = useRef(false);
 
-  const checkUpdate = useCallback(async () => {
+  const checkUpdate = useCallback(async (opts?: { force?: boolean }) => {
     if (isCheckingRef.current) return false;
     isCheckingRef.current = true;
     setIsChecking(true);
     setError(null);
 
     try {
-      const result = await checkForUpdate({ timeout: 30000 });
+      const result = await checkForUpdate({
+        timeout: 30000,
+        force: opts?.force === true,
+      });
+      setWebUpdate(result.web ?? null);
 
       if (result.status === "available") {
         setHasUpdate(true);
@@ -162,12 +180,13 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
         setHasUpdate(false);
         setUpdateInfo(null);
         setIsDismissed(false);
-        return false; // 已是最新
+        return false; // 已是最新；web 的 unknown 也走这里，AboutSection 按 webUpdate.status 区分
       }
     } catch (err) {
       console.error("检查更新失败:", err);
       setError(extractErrorMessage(err) || "检查更新失败");
       setHasUpdate(false);
+      setWebUpdate(null);
       throw err; // 抛出错误让调用方处理
     } finally {
       setIsChecking(false);
@@ -236,7 +255,7 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
 
   // 应用启动时自动检查更新
   useEffect(() => {
-    // 延迟1秒后检查，避免影响启动体验
+    // 延迟1秒后检查，避免影响启动体验。web：不带 force，走服务器一小时缓存
     const timer = setTimeout(() => {
       checkUpdate().catch(console.error);
     }, 1000);
@@ -261,6 +280,7 @@ export function UpdateProvider({ children }: { children: React.ReactNode }) {
     updateInfo: effectiveUpdateInfo,
     isChecking,
     error,
+    webUpdate,
     isDismissed,
     dismissUpdate,
     checkUpdate,

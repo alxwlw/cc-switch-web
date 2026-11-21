@@ -6,6 +6,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import UsageScriptModal from "@/components/UsageScriptModal";
 import type { Provider, UsageScript } from "@/types";
 import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 vi.mock("@/components/common/FullScreenPanel", () => ({
   FullScreenPanel: ({
@@ -241,6 +242,29 @@ describe("UsageScriptModal Oh My Pi credentials", () => {
       "https://api.deepseek.com/v1",
       "sk-omp",
     );
+  });
+});
+
+describe("UsageScriptModal — web", () => {
+  it("keeps the test button enabled in web (WEB-04, runs on the server) and keeps saving", async () => {
+    setWeb(true);
+    const onSave = vi.fn();
+    renderModal(onSave);
+
+    expect(
+      screen.getByRole("button", { name: "usageScript.testScript" }),
+    ).toBeEnabled();
+    await userEvent.click(
+      screen.getByRole("button", { name: "usageScript.saveConfig" }),
+    );
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the test button enabled on desktop", () => {
+    renderModal(vi.fn());
+    expect(
+      screen.getByRole("button", { name: "usageScript.testScript" }),
+    ).toBeEnabled();
   });
 });
 

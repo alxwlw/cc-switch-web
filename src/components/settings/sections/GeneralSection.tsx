@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { isLinux, isMac } from "@/lib/platform";
+import { isWeb } from "@/lib/api/adapter";
+import { WebUnavailableTip } from "@/components/ui/web-unavailable";
 import {
   setDensity,
   setZoom,
@@ -233,6 +235,8 @@ export function GeneralSection({
         <SettingsCard>
           <SettingsSwitchRow
             label={t("settings.launchOnStartup")}
+            // WEB-00: set_auto_launch is the OS autostart (desktop-only), not served in web
+            unavailableInWeb
             checked={!!settings.launchOnStartup}
             onCheckedChange={(value) =>
               void onAutoSave({ launchOnStartup: value })
@@ -241,6 +245,8 @@ export function GeneralSection({
           {settings.launchOnStartup && (
             <SettingsSwitchRow
               label={t("settings.silentStartup")}
+              // WEB-00: depends on autostart (set_auto_launch), not served in web
+              unavailableInWeb
               help={{
                 title: t("settings.silentStartup"),
                 body: t("settings.silentStartupDescription"),
@@ -253,6 +259,8 @@ export function GeneralSection({
           )}
           <SettingsSwitchRow
             label={t("settings.minimizeToTray")}
+            // WEB-00: the tray is desktop-only, in a browser the setting affects nothing; WEB-28 lifts this
+            unavailableInWeb
             help={{
               title: t("settings.minimizeToTray"),
               body: t("settings.general.minimizeToTrayHelp"),
@@ -271,30 +279,35 @@ export function GeneralSection({
                 body: t("settings.general.trayStyleHelp"),
               }}
               control={
-                <SegmentedControl
-                  size="sm"
-                  aria-label={t("settings.general.trayStyle")}
-                  value={settings.nativeTrayMenu ? "menu" : "panel"}
-                  onValueChange={(value) =>
-                    void onAutoSave({ nativeTrayMenu: value === "menu" })
-                  }
-                  items={[
-                    {
-                      value: "panel",
-                      label: t("settings.general.trayStylePanel"),
-                    },
-                    {
-                      value: "menu",
-                      label: t("settings.general.trayStyleMenu"),
-                    },
-                  ]}
-                />
+                // WEB-00: the tray is desktop-only; the control is disabled with a hint; WEB-28 lifts this
+                <WebUnavailableTip active={isWeb}>
+                  <SegmentedControl
+                    size="sm"
+                    aria-label={t("settings.general.trayStyle")}
+                    value={settings.nativeTrayMenu ? "menu" : "panel"}
+                    onValueChange={(value) =>
+                      void onAutoSave({ nativeTrayMenu: value === "menu" })
+                    }
+                    items={[
+                      {
+                        value: "panel",
+                        label: t("settings.general.trayStylePanel"),
+                      },
+                      {
+                        value: "menu",
+                        label: t("settings.general.trayStyleMenu"),
+                      },
+                    ].map((item) => ({ ...item, disabled: isWeb }))}
+                  />
+                </WebUnavailableTip>
               }
             />
           )}
           {isLinux() && (
             <SettingsSwitchRow
               label={t("settings.useAppWindowControls")}
+              // WEB-00: in web useAppWindowControls is forced to false (no app window)
+              unavailableInWeb
               help={{
                 title: t("settings.useAppWindowControls"),
                 body: t("settings.useAppWindowControlsDescription"),
@@ -312,13 +325,17 @@ export function GeneralSection({
               body: t("settings.general.terminalHelp"),
             }}
             control={
-              <TerminalSelect
-                className="h-8 w-[160px]"
-                value={settings.preferredTerminal}
-                onChange={(terminal) =>
-                  void onAutoSave({ preferredTerminal: terminal })
-                }
-              />
+              // WEB-00: terminal launch is desktop-only (resume in web is a copy-command; a terminal cannot be opened on the server)
+              <WebUnavailableTip active={isWeb}>
+                <TerminalSelect
+                  className="h-8 w-[160px]"
+                  disabled={isWeb}
+                  value={settings.preferredTerminal}
+                  onChange={(terminal) =>
+                    void onAutoSave({ preferredTerminal: terminal })
+                  }
+                />
+              </WebUnavailableTip>
             }
           />
         </SettingsCard>

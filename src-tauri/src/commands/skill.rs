@@ -6,6 +6,7 @@
 
 use super::run_db_task;
 use crate::app_config::{AppType, InstalledSkill, UnmanagedSkill};
+use crate::database::Database;
 use crate::error::AppError;
 use crate::services::skill::{
     DiscoverableSkill, ImportSkillSelection, MigrationResult, SkillAppSyncOutcome,
@@ -178,14 +179,24 @@ pub async fn discover_repo_skills(
     service: State<'_, SkillServiceState>,
     app_state: State<'_, AppState>,
 ) -> Result<SkillDiscoveryResult, String> {
-    let repos = app_state.db.get_skill_repos()?;
+    discover_repo_skills_inner(&service.0, &app_state.db, &owner, &name).await
+}
+
+/// The body of `discover_repo_skills`, shared with the web route.
+pub(crate) async fn discover_repo_skills_inner(
+    service: &SkillService,
+    db: &Database,
+    owner: &str,
+    name: &str,
+) -> Result<SkillDiscoveryResult, String> {
+    let repos = db.get_skill_repos()?;
     let Some(repo) = repos
         .into_iter()
         .find(|repo| repo.owner == owner && repo.name == name)
     else {
         return Ok(SkillDiscoveryResult::default());
     };
-    Ok(service.0.discover_repo(&repo).await)
+    Ok(service.discover_repo(&repo).await)
 }
 
 /// 检查 Skills 更新，并逐仓库报告没读到的仓库
@@ -236,7 +247,7 @@ pub async fn migrate_skill_storage(
 }
 
 /// CC Switch 目录下放 Skill 主副本的位置（改过配置目录就是改后的）
-fn cc_switch_skills_dir() -> std::path::PathBuf {
+pub(crate) fn cc_switch_skills_dir() -> std::path::PathBuf {
     crate::config::get_app_config_dir().join("skills")
 }
 

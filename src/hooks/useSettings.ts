@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { providersApi, settingsApi } from "@/lib/api";
+import type { AppConfigDirStatus } from "@/lib/api/settings";
+import { isWeb } from "@/lib/api/adapter";
 import { syncCurrentProvidersLiveSafe } from "@/utils/postChangeSync";
 import {
   invalidatePiDirectoryCaches,
@@ -36,6 +38,8 @@ export interface UseSettingsResult {
   appConfigDir?: string;
   /** 已保存的 CC Switch 数据目录（没覆盖时为空），用来判断有没有改动没保存 */
   initialAppConfigDir?: string;
+  /** Web: the server's data directory status; `envLocked` means it cannot be changed here */
+  appConfigDirStatus?: AppConfigDirStatus | null;
   resolvedDirs: ResolvedDirectories;
   requiresRestart: boolean;
   updateSettings: (updates: Partial<SettingsFormState>) => void;
@@ -87,6 +91,7 @@ export function useSettings(): UseSettingsResult {
     resolvedDirs,
     isLoading: isDirectoryLoading,
     initialAppConfigDir,
+    appConfigDirStatus,
     commitAppConfigDir,
     updateDirectory,
     updateAppConfigDir,
@@ -218,7 +223,9 @@ export function useSettings(): UseSettingsResult {
         await saveMutation.mutateAsync(payload);
 
         // 如果开机自启状态改变，调用系统 API
+        // WEB-00: set_auto_launch is not supported (OS autostart is desktop-only, not served in web)
         if (
+          !isWeb &&
           payload.launchOnStartup !== undefined &&
           payload.launchOnStartup !== data?.launchOnStartup
         ) {
@@ -315,6 +322,12 @@ export function useSettings(): UseSettingsResult {
       try {
         const sanitizedAppDir = sanitizeDir(appConfigDir);
         const previousAppDir = initialAppConfigDir;
+        // Web: a directory fixed by CC_SWITCH_CONFIG_DIR answers every PUT with 409, so no save
+        // may send one. The server also validates the path on each PUT, so only a changed
+        // directory is sent (a stale stored value must not fail unrelated saves).
+        const appDirLocked = appConfigDirStatus?.envLocked === true;
+        const webAppDirChanged =
+          isWeb && !appDirLocked && sanitizedAppDir !== previousAppDir;
         const {
           webdavSync: _ignoredWebdavSync,
           s3Sync: _ignoredS3Sync,
@@ -335,12 +348,38 @@ export function useSettings(): UseSettingsResult {
 
         await saveMutation.mutateAsync(payload);
 
-        await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
-        // 基准值换成刚存的：设置页不卸载，下次比较和「需要重启」都只跟真正没保存的改动走
-        commitAppConfigDir(sanitizedAppDir);
+        // The data dir goes after save_settings on both targets, and nothing undoes it. Web: the
+        // server refuses a bad directory (400 with the reason), but the other settings are
+        // already stored, so the refusal is its own toast, the remaining steps still run, the
+        // draft stays dirty and no restart is offered. Desktop keeps its throw.
+        let appDirFailed = false;
+        if (!isWeb || webAppDirChanged) {
+          try {
+            await settingsApi.setAppConfigDirOverride(sanitizedAppDir ?? null);
+          } catch (error) {
+            if (!isWeb) throw error;
+            appDirFailed = true;
+            console.error(
+              "[useSettings] Failed to save the data directory",
+              error,
+            );
+            toast.error(
+              t("web.dataDir.applyFailed", {
+                defaultValue: "其他设置已保存，但数据目录没有更改：{{error}}",
+                error: (error as Error)?.message ?? String(error),
+              }),
+            );
+          }
+        }
+        if (!appDirFailed) {
+          // 基准值换成刚存的：设置页不卸载，下次比较和「需要重启」都只跟真正没保存的改动走
+          commitAppConfigDir(sanitizedAppDir);
+        }
 
         // 只在开机自启状态真正改变时调用系统 API
+        // WEB-00: set_auto_launch is not supported (OS autostart is desktop-only, not served in web)
         if (
+          !isWeb &&
           payload.launchOnStartup !== undefined &&
           payload.launchOnStartup !== data?.launchOnStartup
         ) {
@@ -444,10 +483,13 @@ export function useSettings(): UseSettingsResult {
           ]);
         }
 
-        const appDirChanged = sanitizedAppDir !== (previousAppDir ?? undefined);
+        const appDirChanged =
+          !appDirLocked &&
+          !appDirFailed &&
+          sanitizedAppDir !== (previousAppDir ?? undefined);
         setRequiresRestart(appDirChanged);
 
-        if (!options?.silent) {
+        if (!options?.silent && !appDirFailed) {
           toast.success(
             t("notifications.settingsSaved", {
               defaultValue: "设置已保存",
@@ -470,6 +512,7 @@ export function useSettings(): UseSettingsResult {
     },
     [
       appConfigDir,
+      appConfigDirStatus,
       commitAppConfigDir,
       data,
       initialAppConfigDir,
@@ -494,6 +537,7 @@ export function useSettings(): UseSettingsResult {
     isPortable,
     appConfigDir,
     initialAppConfigDir,
+    appConfigDirStatus,
     resolvedDirs,
     requiresRestart,
     updateSettings,

@@ -99,6 +99,7 @@
   },
   "provider": {
     "connectivityCheck": "Verbindungsprüfung",
+    "connectivityCheckServerNote": "Die Prüfung läuft auf dem Server",
     "tabProvider": "Anbieter",
     "tabUniversal": "Universal",
     "noProviders": "Noch keine Anbieter",
@@ -231,7 +232,8 @@
         "account": "Konto",
         "accountFollow": "Aktueller Anmeldung von agy folgen",
         "accountMissing": "Ein Konto, das nicht auf diesem Computer vorhanden ist",
-        "accountHelp": "Bei ausgewähltem Konto wechselt „Terminal öffnen“ zuerst die Anmeldung von agy zu diesem Konto (das gilt global: danach gestartete agy-Sitzungen verwenden es). Konten fügen Sie in der Kontoverwaltung hinzu."
+        "accountHelp": "Bei ausgewähltem Konto wechselt „Terminal öffnen“ zuerst die Anmeldung von agy zu diesem Konto (das gilt global: danach gestartete agy-Sitzungen verwenden es). Konten fügen Sie in der Kontoverwaltung hinzu.",
+        "cliServerNote": "Die Liste stammt von der CLI auf dem Server"
       },
       "gemini": {
         "model": "Modell",
@@ -416,6 +418,7 @@
       "title": "Einheitlichen Sitzungsverlauf deaktivieren",
       "message": "Nach dem Deaktivieren werden offizielle und Drittanbieter-Sitzungen wieder in zwei Gruppen getrennt: Neuere Codex-Versionen können nur die Gruppe des aktuellen Anbieters fortsetzen, die andere Gruppe wird schreibgeschützt. Sitzungen, die bei aktivierter Option erstellt wurden, lassen sich nicht unterscheiden und bleiben deshalb in der Drittanbieter-Gruppe.",
       "restoreBackup": "Migrierte offizielle Sitzungen in die offizielle Gruppe zurückführen (exakte Wiederherstellung aus dem Backup)",
+      "restoreBackupWeb": "Die migrierten offiziellen Sitzungen auf dem Server wieder der offiziellen Gruppe zuordnen (exakte Wiederherstellung aus dem Backup)",
       "confirm": "Deaktivieren"
     },
     "usage": {
@@ -540,6 +543,15 @@
         "enabledDescription": "Steuert cc-switch.log; Nutzungsdaten von Anfragen und crash.log sind nicht betroffen",
         "openLog": "Protokoll öffnen",
         "openLogFailed": "Der Speicherort des Protokolls konnte nicht geöffnet werden: {{error}}",
+        "viewer": {
+          "title": "Server-Log",
+          "serverNote": "Dies ist das Log des Rechners, auf dem cc-switch-web läuft, nicht dieses Browsers.",
+          "path": "Pfad auf dem Server",
+          "unavailable": "Noch kein Log vorhanden oder es ist nicht lesbar.",
+          "empty": "Die Logdatei ist leer.",
+          "refresh": "Aktualisieren",
+          "download": "Herunterladen"
+        },
         "level": "Protokollstufe",
         "levelDescription": "Die niedrigste auszugebende Protokollstufe festlegen",
         "levels": {
@@ -578,6 +590,10 @@
     "importPartialSuccess": "Konfiguration importiert, aber die Synchronisierung mit dem aktuellen Anbieter ist fehlgeschlagen.",
     "importPartialHint": "Bitte wählen Sie den Anbieter manuell erneut aus, um die Live-Konfiguration zu aktualisieren.",
     "configExported": "Konfiguration exportiert nach:",
+    "configDownloaded": "Konfiguration heruntergeladen:",
+    "importFileReadFailed": "Datei konnte nicht gelesen werden: {{message}}",
+    "importFileTooLarge": "Datei ist zu groß für den Import (Limit {{limit}} MiB)",
+    "importFileNotUtf8": "Die Datei ist kein gültiger UTF-8-Text. Exportieren Sie die Konfiguration erneut aus CC Switch und importieren Sie diese Datei.",
     "exportFailed": "Export fehlgeschlagen",
     "selectFileFailed": "Bitte wählen Sie eine gültige SQL-Sicherungsdatei",
     "configCorrupted": "Die SQL-Datei ist möglicherweise beschädigt oder ungültig",
@@ -1062,6 +1078,7 @@
     "toolActionBinCollision": "Unter {{path}} existiert bereits eine Datei, vermutlich von einer anderen Installationsmethode, und npm überschreibt sie nicht. Prüfen Sie, was es ist, benennen Sie sie als Sicherung um und versuchen Sie es erneut. Verwenden Sie nicht npm --force: Es überschreibt die Datei kurzerhand.",
     "toolActionInProgress": "Ein App-Vorgang läuft noch",
     "toolActionInProgressDetail": "Für {{tool}} läuft bereits eine Installation, ein Update oder eine Deinstallation im Hintergrund. Bitte warten Sie, bis sie abgeschlossen ist.",
+    "toolActionTimeout": "{{tool}} wurde innerhalb von 15 Minuten nicht abgeschlossen; der Prozess wurde beendet",
     "toolNotRunnable": "Installiert, aber nicht ausführbar (keine Version erkannt)",
     "toolActionVersionUnchangedTitle": "Version hat sich nicht geändert",
     "toolActionVersionUnchanged": "Weiterhin {{version}} (neueste: {{latest}}). Der Updater hat möglicherweise Erfolg gemeldet, ohne das Update anzuwenden.",
@@ -1106,6 +1123,7 @@
     "globalProxy": {
       "label": "Globaler Proxy",
       "hint": "Alle Anfragen über den Proxy leiten (API, Skills-Download usw.). Ist das lokale Routing aktiviert, läuft auch der App-Verkehr über diesen Proxy. Leer lassen für eine direkte Verbindung.",
+      "serverSideNote": "Der Proxy gilt für ausgehende Anfragen des cc-switch-web-Servers, nicht für diesen Browser. Der Scan sucht Proxys auf dem Server selbst (dessen 127.0.0.1).",
       "username": "Benutzername (optional)",
       "password": "Passwort (optional)",
       "test": "Verbindung testen",
@@ -2158,7 +2176,9 @@
     "pleaseAddEndpoint": "Fügen Sie zuerst einen Endpunkt hinzu",
     "noResult": "Kein Ergebnis zurückgegeben",
     "testFailed": "Geschwindigkeitstest fehlgeschlagen: {{error}}",
-    "empty": "Keine Endpunkte"
+    "empty": "Keine Endpunkte",
+    "serverSideNote": "Die Latenz wird vom cc-switch-web-Server aus gemessen, nicht von diesem Browser, und kann von Ihrem Wert abweichen. URLs wie http://127.0.0.1 oder localhost verweisen auf Dienste auf dem Server selbst.",
+    "savePartial": "Vor dem Fehler gespeichert: {{saved}}. Fehler: {{error}}"
   },
   "codexConfig": {
     "authJson": "auth.json (JSON) *",
@@ -3248,6 +3268,9 @@
     "saveFailed": "Speichern fehlgeschlagen",
     "loadFailed": "Laden fehlgeschlagen",
     "openDirectory": "Im Dateimanager öffnen",
+    "copyPath": "Pfad kopieren",
+    "pathCopied": "Pfad kopiert",
+    "pathCopyFailed": "Pfad konnte nicht kopiert werden",
     "dailyMemory": {
       "title": "Tägliches Gedächtnis",
       "cardTitle": "Dateien des täglichen Gedächtnisses",
@@ -3406,6 +3429,7 @@
       "open": "Hermes Web UI öffnen",
       "offline": "Hermes Web UI läuft nicht. Starten Sie es zuerst mit `hermes dashboard`.",
       "openFailed": "Hermes Web UI konnte nicht geöffnet werden",
+      "unreachableRemote": "Hermes Web UI antwortet auf dem Server nicht (Port {{port}}). Wenn es nur auf localhost lauscht, öffnen Sie es über tailscale serve oder starten Sie es auf 0.0.0.0.",
       "launchConfirmTitle": "Hermes Dashboard läuft nicht",
       "launchConfirmMessage": "Ein Terminal öffnen und es jetzt mit `hermes dashboard` starten?\n\nDer Browser öffnet sich automatisch, sobald der Start abgeschlossen ist.\n\nMeldet das Terminal, dass `hermes` nicht gefunden wird oder die Web-Extras fehlen, führen Sie zuerst aus:\npip install hermes-agent[web]",
       "launchConfirmAction": "Terminal öffnen und starten",
@@ -3473,6 +3497,7 @@
       "title": "Löschen von Umgebungsvariablen bestätigen",
       "message": "Möchten Sie {{count}} Umgebungsvariable(n) wirklich löschen?",
       "backupNotice": "Vor dem Löschen wird automatisch eine Sicherung erstellt, die Sie später wiederherstellen können. Die Änderungen werden nach einem Neustart der Anwendung oder des Terminals wirksam.",
+      "webHostWarning": "Web-Modus: Die Variablen werden aus der Betriebssystem-Benutzerumgebung (Shell-rc-Dateien) des Rechners entfernt, auf dem der cc-switch-Server läuft, nicht des Computers, auf dem dieser Browser läuft.",
       "confirm": "Löschen bestätigen"
     },
     "error": {
@@ -3677,6 +3702,9 @@
       "locationUnified": "Gemeinsamer Ordner",
       "openFolder": "Öffnen",
       "openFolderAria": "{{path}} öffnen",
+      "copyPath": "Pfad kopieren",
+      "copyPathAria": "Serverpfad {{path}} kopieren",
+      "pathCopied": "Pfad kopiert",
       "unifiedWarning": "Codex, Gemini CLI, OpenCode und andere lesen diesen Ordner direkt, daher gelten die Schalter der einzelnen Apps für sie nicht mehr vollständig.",
       "move": "Verschieben und umstellen",
       "moving": "Wird verschoben …",
@@ -3696,6 +3724,15 @@
     "updatesIncomplete": "Keine Updates gefunden, aber {{count}} Repositories konnten nicht gelesen werden"
   },
   "deeplink": {
+    "paste": {
+      "title": "Aus einem ccswitch://-Link importieren",
+      "placeholder": "Einen ccswitch://…-Link einfügen",
+      "open": "Öffnen",
+      "upload": "Datei auswählen",
+      "noLink": "Kein ccswitch://-Link gefunden.",
+      "fileTooLarge": "Datei ist zu groß für einen Deep Link (Limit {{limit}} KiB).",
+      "fileReadFailed": "Die Datei konnte nicht gelesen werden."
+    },
     "confirmImport": "Anbieter-Import bestätigen",
     "confirmImportDescription": "Die folgende Konfiguration wird aus dem Deep Link in CC Switch importiert",
     "importPrompt": "Prompt importieren",
@@ -4338,7 +4375,9 @@
     "expiredHint": "Führen Sie den Befehl {{tool}} aus, um Ihre Anmeldung zu erneuern",
     "expiredHintAccounts": "Melden Sie sich in den Konten erneut bei diesem Konto an",
     "queryFailed": "Abfrage fehlgeschlagen",
-    "refresh": "Aktualisieren"
+    "refresh": "Aktualisieren",
+    "serverNote": "Daten werden auf dem Server abgerufen",
+    "cliServerNote": "Basiert auf den Zugangsdaten der CLI auf dem Server"
   },
   "nav": {
     "mainLabel": "Hauptnavigation",
@@ -4368,6 +4407,8 @@
     "plugins": "Plugins"
   },
   "appsPage": {
+    "webServerNote": "CLI-Tools werden auf dem cc-switch-web-Server installiert, nicht auf diesem Computer.",
+    "webLifecycleSlow": "Installation und Aktualisierung können bis zu 15 Minuten dauern.",
     "showInSidebar": "{{name}} in der Seitenleiste anzeigen",
     "lastChecked": "Zuletzt geprüft {{time}}",
     "neverChecked": "Noch nicht auf Updates geprüft",
@@ -4389,6 +4430,8 @@
     "desktopUnsupported": "Auf diesem System nicht unterstützt",
     "desktopConnected": "Verbunden",
     "desktopNotConnected": "Nicht verbunden",
+    "desktopServerNote": "Claude Desktop auf dem cc-switch-web-Server",
+    "desktopNotFoundOnServer": "Claude Desktop wurde auf dem Server nicht gefunden; die Einstellungen gelten, sobald es dort vorhanden ist.",
     "newVersion": "{{version}} verfügbar",
     "notRunnable": "Nicht ausführbar",
     "updateNeedsNode": "{{version}} erfordert Node {{required}}, diese Installation läuft aber mit Node {{current}}. Aktualisieren Sie zuerst Node.",
@@ -5219,7 +5262,8 @@
       "loading": "Kontingent wird geprüft …",
       "refresh": "Kontingent aktualisieren",
       "refreshAria": "Kontingent für {{login}} aktualisieren",
-      "refreshAll": "Alle aktualisieren"
+      "refreshAll": "Alle aktualisieren",
+      "serverNote": "Daten werden auf dem Server abgerufen"
     },
     "agy": {
       "reauthNote": "Anmeldung abgelaufen, Wechsel dorthin nicht möglich",
@@ -5228,7 +5272,8 @@
       "empty": "Noch keine Antigravity-Konten. Das Konto, mit dem agy angemeldet ist, erscheint hier automatisch.",
       "removeNote": "agy bleibt angemeldet: Wenn agy dieses Konto verwendet, funktioniert es nach dem Entfernen weiter.",
       "switched": "Gewechselt. Neue agy-Sitzungen verwenden dieses Konto.",
-      "switchedWhileRunning": "Gewechselt. agy läuft: Geöffnete agy-Sitzungen verwenden weiter das vorherige Konto und schreiben es möglicherweise zurück. Beenden Sie agy und öffnen Sie es erneut."
+      "switchedWhileRunning": "Gewechselt. agy läuft: Geöffnete agy-Sitzungen verwenden weiter das vorherige Konto und schreiben es möglicherweise zurück. Beenden Sie agy und öffnen Sie es erneut.",
+      "webLoginUnavailable": "Die Antigravity-Anmeldung nutzt einen Loopback-Callback auf dem Server, melden Sie sich daher in der Desktop-App dort an. Das Wechseln und Entfernen von Konten funktioniert hier."
     },
     "workbuddy": {
       "addedOn": "Hinzugefügt am {{date}}",
@@ -5302,6 +5347,7 @@
       "cancelled": "Diese Anmeldung wurde abgebrochen oder ersetzt. Bitte melden Sie sich erneut an.",
       "success": "Bei Kimi Code angemeldet und die offiziellen Modelle hinzugefügt.",
       "removeConfirm": "{{name}} entfernen? Der zugehörige Anbieter und die Modelle werden aus Kimi Code entfernt, ebenso die lokalen Zugangsdaten und die Karte. Andere Konten sind nicht betroffen.",
+      "removeConfirmWeb": "Die Kimi-Code-Zugangsdaten des Servers werden mit der Kimi Code CLI auf dem Server geteilt: Das Entfernen dieses Kontos meldet auch die CLI ab.",
       "dismissConfirm": "{{name}} aus der Liste ausblenden? Dies ist die eigene Anmeldung von Kimi Code; CC Switch meldet sie nicht ab und behält Zugangsdaten und Modelle. Zum Abmelden führen Sie /logout in Kimi Code aus. Bei erneuter Anmeldung erscheint sie wieder in der Liste.",
       "primaryHidden": "Die eigene Anmeldung von Kimi Code wurde aus der Liste entfernt; melden Sie sich beim selben Konto an, um sie zurückzuholen",
       "removeCurrentHint": "Dieses Konto ist in Verwendung. Wechseln Sie zu einem anderen Konto, bevor Sie es entfernen.",
@@ -5376,6 +5422,97 @@
       "renameProvider": "Oh-My-Pi-Anbieterschlüssel können nicht umbenannt werden.",
       "providerMissing": "Dieser Oh-My-Pi-Anbieter ist nicht mehr gespeichert.",
       "legacyModelsJson": "Oh My Pi hat noch eine alte models.json, die omp beim nächsten Start nach models.yml migriert. Führen Sie omp einmal aus und fügen Sie den Anbieter dann erneut hinzu."
+    }
+  },
+  "web": {
+    "unavailable": "Im Web-Modus nicht verfügbar",
+    "serverPath": "Pfade werden manuell eingegeben und beziehen sich auf den Server-Host, nicht auf dieses Gerät",
+    "dataDir": {
+      "current": "Aktuell in Verwendung: {{path}} ({{source}})",
+      "source": {
+        "env": "durch die Umgebungsvariable CC_SWITCH_CONFIG_DIR festgelegt",
+        "override": "das in dieser Konsole gespeicherte Verzeichnis",
+        "default": "das Standardverzeichnis"
+      },
+      "envLocked": "Das Verzeichnis ist durch CC_SWITCH_CONFIG_DIR in der Unit des Servers festgelegt und kann daher auf dieser Seite nicht geändert werden. Der Server-Betreiber ändert es, indem er die Unit bearbeitet (siehe docs/deploy.md).",
+      "scope": "Ein neues Verzeichnis erhält eine eigene Datenbank, eigene Logs, Skills, Datenbank-Backups, Modellpreise und die übrigen App-Dateien. Die bestehende Datenbank wird nicht kopiert. settings.json, live-state.json, Geräte-Backups und andere Gerätedateien bleiben in ~/.cc-switch auf dem Server. Die Änderung wird nach dem Neustart des Servers wirksam.",
+      "applyFailed": "Die übrigen Einstellungen wurden gespeichert, das Datenverzeichnis wurde jedoch nicht geändert: {{error}}",
+      "restartRequiredMessage": "Das neue Datenverzeichnis wird nach dem Neustart des Servers wirksam. Diese Konsole ist einige Sekunden nicht erreichbar und lädt neu, sobald der Server wieder läuft. Jetzt neu starten?",
+      "restarting": "Neustart läuft …",
+      "restartTimeout": "Der Server ist innerhalb einer Minute nicht zurückgekehrt. Prüfen Sie seinen Status auf dem Host (zum Beispiel systemctl --user status cc-switch-web) und laden Sie dann diese Seite neu."
+    },
+    "update": {
+      "unsupported": "Updates sind im Web-Modus nicht verfügbar: Der Server-Betreiber aktualisiert die App",
+      "behindTitle": "Dieser Build liegt {{count}} Commit(s) hinter dem Branch",
+      "shown": "{{shown}} von {{total}} angezeigt",
+      "commitsTitle": "Neue Commits im Branch",
+      "upToDateTitle": "Dieser Build ist aktuell",
+      "unknownTitle": "Die Build-Version kann nicht ermittelt werden",
+      "unknownHint": "Der Server wurde ohne erfassten Commit gebaut, aus einem Checkout mit lokalen Änderungen oder aus einem Commit, der nicht im Branch liegt, und kann daher nicht mit dem Branch verglichen werden.",
+      "buildSha": "Build {{sha}}",
+      "checkedAt": "Geprüft {{time}}",
+      "instructionsTitle": "So aktualisieren Sie (auf dem Server-Host ausführen)",
+      "systemd": "systemd-Dienst",
+      "docker": "Docker",
+      "copy": "Kopieren",
+      "copied": "In die Zwischenablage kopiert",
+      "copyFailed": "Kopieren in die Zwischenablage nicht möglich",
+      "checkFailedTitle": "Update-Prüfung fehlgeschlagen",
+      "releaseBehindTitle": "Version {{version}} ist verfügbar",
+      "releaseNotes": "Versionshinweise",
+      "releaseUnknownTitle": "Dieser Build lässt sich nicht mit dem neuesten Release vergleichen",
+      "releaseUnknownHint": "Das neueste veröffentlichte Release ist älter als dieser Build oder sein Tag ist keine Fork-Version; es gibt also nichts Neueres zu installieren.",
+      "install": {
+        "button": "Jetzt aktualisieren",
+        "confirmTitle": "Server aktualisieren?",
+        "confirmMessage": "Der Server holt den Branch {{branch}} (bis {{sha}}, {{behind}} neue(r) Commit(s)), baut sich neu und startet neu. Während des Builds ist er nicht erreichbar, was mehrere Minuten dauern kann. Startet der neue Build nicht, kehrt der Server zum vorherigen zurück.",
+        "confirmReleaseMessage": "Version {{version}} installieren? Der Server startet neu und die Seite lädt sich selbst neu.",
+        "confirmDbWarning": "Die neue Version kann die Datenbank migrieren. Ein Rollback der Binärdatei setzt die Datenbank nicht zurück.",
+        "confirmButton": "Neu bauen und neu starten",
+        "releaseConfirmButton": "Installieren und neu starten",
+        "runningTitle": "Server wird aktualisiert",
+        "starting": "Update wird gestartet ...",
+        "reloading": "Aktualisiert. Seite wird neu geladen ...",
+        "branch": "Branch: {{branch}}",
+        "waiting": "Der Server antwortet nicht (er startet wahrscheinlich neu). Warte ...",
+        "stage": {
+          "checking": "Suche nach Updates ...",
+          "fetching": "Branch wird geholt ...",
+          "merging": "Checkout wird vorgespult (Fast-Forward) ...",
+          "downloading": "Release wird heruntergeladen ...",
+          "verifying": "Download wird geprüft ...",
+          "building": "Web-Konsole und Server werden gebaut (das dauert Minuten) ...",
+          "installing": "Binärdatei und Web-Konsole werden ersetzt ...",
+          "restarting": "Dienst wird neu gestartet und die Antwort geprüft ...",
+          "rolling-back": "Der neue Build ist nicht hochgefahren. Der vorherige wird wiederhergestellt ..."
+        },
+        "refusedTitle": "Das Update wurde nicht gestartet",
+        "failedTitle": "Das Update ist fehlgeschlagen",
+        "rolledBackTitle": "Das Update wurde zurückgerollt",
+        "finishedAt": "Abgeschlossen {{time}}",
+        "rollbackFailedTitle": "Das Rollback ist fehlgeschlagen: Der Server funktioniert möglicherweise nicht",
+        "rollbackFailedHint": "Stellen Sie die vorherigen Dateien auf dem Server-Host wie oben beschrieben von Hand wieder her und starten Sie dann den Dienst neu.",
+        "unchangedTitle": "Nichts zu aktualisieren: Der Server ist bereits aktuell",
+        "stuckTitle": "Kein Ergebnis vom Update",
+        "stuckStalled": "Das Update hat seine Phase lange nicht gewechselt oder der Server antwortet nicht. Lesen Sie sein Log auf dem Server-Host:",
+        "stuckNoStatus": "Das Update hat keinen Fortschritt gemeldet; möglicherweise ließ es sich nicht starten. Lesen Sie sein Log auf dem Server-Host:"
+      }
+    },
+    "proxyCaption": "Der Proxy läuft auf dem Server und konfiguriert die CLIs auf dem Server neu; CLIs auf Ihrem Rechner bleiben unberührt.",
+    "desktopRouteHost": "Claude Desktop verbindet sich unter der Verbindungsadresse und dem Port mit dem Proxy auf dem Server. Läuft Claude Desktop auf einem anderen Rechner, legen Sie unter Einstellungen → Lokales Routing als Verbindungsadresse (Client-Host) einen Host fest, den dieser Rechner erreichen kann.",
+    "syncHost": "Verbindungstests, Uploads und Downloads laufen auf dem cc-switch-web-Server, nicht in diesem Browser. Der Server muss den WebDAV- oder S3-Endpunkt erreichen können, und Downloads ersetzen die Daten des Servers.",
+    "syncDownloadWarning": "Dadurch werden alle Daten und Skill-Konfigurationen auf dem cc-switch-web-Server überschrieben",
+    "proxyListenWarning": "Das Lauschen auf {{address}} macht den Proxy ohne Authentifizierung aus dem gesamten Netzwerk (einschließlich Tailnet) erreichbar. Bevorzugen Sie 127.0.0.1.",
+    "liveUnknownTitle": "Anbieter (der Live-Konfigurationsstatus ist im Web-Modus unbekannt)",
+    "sessionResumeCopied": "Resume-Befehl kopiert. Führen Sie ihn in einem Terminal auf dem Server-Host im Projektordner aus.",
+    "hostNotice": "Dateien, CLI-Tools und der Proxy befinden sich auf dem Server-Host, nicht auf dem Computer, auf dem dieser Browser läuft.",
+    "hostNoticeDismiss": "Schließen",
+    "initError": {
+      "message": "Konfigurationsdatei kann nicht gelesen werden:\n{{path}}\n\nFehlerdetails:\n{{detail}}\n\nBeheben Sie das Problem auf dem Server-Host (prüfen Sie das JSON oder stellen Sie ein Backup wie config.json.bak aus demselben Verzeichnis wieder her) und starten Sie dann den Server neu."
+    },
+    "mode": {
+      "title": "Web-Modus",
+      "basedOn": "Basiert auf CC Switch"
     }
   },
   "dsh": {

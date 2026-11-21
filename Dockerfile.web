@@ -1,0 +1,71 @@
+# syntax=docker/dockerfile:1.7
+# Release image of cc-switch-web. CI (.github/workflows/release-web.yml) builds it for linux/amd64 and
+# linux/arm64 and publishes it to ghcr.io/alxwlw/cc-switch-web; the main way to run it is deploy/compose.yml
+# (host network, your UID, your home directory). The other validated path is scripts/install.sh + systemd.
+#
+# The image listens on 127.0.0.1:18766 and does not set TRUSTED_TAILNET: it is meant for `network_mode: host`.
+# In a bridge network with `-p`, set HOST=0.0.0.0 and TRUSTED_TAILNET=1 yourself, and publish the port on a
+# loopback or tailnet address only:
+#   docker run -p 127.0.0.1:18766:18766 -e HOST=0.0.0.0 -e TRUSTED_TAILNET=1 ghcr.io/alxwlw/cc-switch-web
+#
+# Build from the repo root: `docker build -f Dockerfile.web .` (docs/deploy.md). Dockerfile.web.dockerignore
+# keeps node_modules, build output and .git out of the context.
+
+# Console. Node is .node-version; pnpm is the packageManager of package.json, installed with npm because
+# the corepack of Node 22.12 rejects npm's current signing keys.
+FROM node:22.12.0-bookworm AS web
+RUN npm install -g pnpm@10.12.3
+WORKDIR /build
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm build:web
+
+# Server. Rust is the channel of rust-toolchain.toml.
+FROM rust:1.95-bookworm AS server
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential file libssl-dev libgtk-3-dev libayatana-appindicator3-dev \
+      librsvg2-dev libwebkit2gtk-4.1-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY . .
+# The builder has no git: pass the commit in, `--build-arg CC_SWITCH_WEB_GIT_SHA=$(git diff --quiet HEAD && git rev-parse HEAD)`
+# (docs/deploy.md). Empty means an unknown build. The ARG sits after `COPY . .` so that a different value of it
+# alone reuses every layer above.
+ARG CC_SWITCH_WEB_GIT_SHA=
+# The fork version of a release build, `--build-arg CC_SWITCH_WEB_VERSION=4.0.35-web.1`. Empty means the build is
+# not from a release. After `COPY . .` for the same reason as the SHA.
+ARG CC_SWITCH_WEB_VERSION=
+# tauri.conf.json's frontendDist (../dist) must exist at compile time; the server does not serve it, so an empty
+# directory is enough. The target dir is a cache mount, so the binary is copied out in the same step.
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/build/src-tauri/target \
+    mkdir -p dist && cd src-tauri && cargo build --release --example server \
+    && cp target/release/examples/server /usr/local/bin/cc-switch-web
+
+FROM debian:bookworm-slim
+# curl is for the health check.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl libssl3 libgtk-3-0 libayatana-appindicator3-1 \
+      librsvg2-2 libwebkit2gtk-4.1-0 \
+    && rm -rf /var/lib/apt/lists/*
+RUN useradd -m ccswitch
+# The console lives outside any home directory: compose runs the container as the host UID, and a home
+# directory can be closed to other users (HOME_MODE), which would stop the console being served.
+COPY --from=web /build/dist-web /opt/cc-switch-web/dist-web
+COPY --from=server /usr/local/bin/cc-switch-web /usr/local/bin/cc-switch-web
+RUN chmod -R a+rX /opt/cc-switch-web
+USER ccswitch
+WORKDIR /home/ccswitch
+ENV HOST=127.0.0.1 PORT=18766 \
+    CC_SWITCH_CONFIG_DIR=/home/ccswitch/.cc-switch-web \
+    WEB_DIST=/opt/cc-switch-web/dist-web
+LABEL org.opencontainers.image.source="https://github.com/alxwlw/cc-switch-web" \
+      org.opencontainers.image.licenses="MIT"
+EXPOSE 18766
+# The probe goes to the address the server listens on: HOST can be a tailnet address, where
+# 127.0.0.1 answers nothing. A wildcard HOST is probed on loopback.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=4 \
+  CMD h="${HOST:-127.0.0.1}"; case "$h" in 0.0.0.0|::) h=127.0.0.1;; *:*) h="[$h]";; esac; \
+      curl -fsS -o /dev/null "http://$h:${PORT}/api/health" || exit 1
+CMD ["cc-switch-web"]

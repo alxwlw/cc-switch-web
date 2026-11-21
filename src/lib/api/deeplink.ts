@@ -109,6 +109,14 @@ export const deeplinkApi = {
   },
 
   /**
+   * Web only: parse a pasted `ccswitch://` URL on the server (`parse_deeplink` route).
+   * Upstream dropped the desktop command; the web route is kept in `web_api.rs`.
+   */
+  parseDeeplink: async (url: string): Promise<DeepLinkImportRequest> => {
+    return invoke("parse_deeplink", { url });
+  },
+
+  /**
    * Merge configuration from Base64/URL into a deep link request
    * This is used to show the complete configuration in the confirmation dialog
    * @param request The deep link import request

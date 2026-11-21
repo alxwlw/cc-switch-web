@@ -1,5 +1,8 @@
 node_modules/
 dist/
+dist-web/
+dist-web.new/
+dist-web.prev/
 release/
 .DS_Store
 *.log
@@ -10,7 +13,8 @@ release/
 CLAUDE.md
 AGENTS.md
 GEMINI.md
-/.claude
+/.claude/*
+!/.claude/verify.json
 /.codex
 /.gemini
 /.cc-switch

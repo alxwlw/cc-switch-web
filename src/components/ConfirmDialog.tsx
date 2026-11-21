@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,8 @@ interface ConfirmDialogProps {
   checkboxLabel?: string;
   checkboxDefaultChecked?: boolean;
   pending?: boolean;
+  /** 可选的正文下方内容（如待更新的提交列表），在勾选项之前渲染 */
+  children?: ReactNode;
   onConfirm: (checkboxChecked: boolean) => void;
   onCancel: () => void;
 }
@@ -39,6 +41,7 @@ export function ConfirmDialog({
   checkboxLabel,
   checkboxDefaultChecked = false,
   pending = false,
+  children,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -76,6 +79,9 @@ export function ConfirmDialog({
             {message}
           </DialogDescription>
         </DialogHeader>
+        {children ? (
+          <div className="min-h-0 overflow-y-auto px-6 pt-3">{children}</div>
+        ) : null}
         {checkboxLabel ? (
           <label className="flex cursor-pointer select-none items-start gap-2 px-6 pt-3">
             <Checkbox

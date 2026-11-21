@@ -9,6 +9,7 @@ import { HermesFormFields } from "@/components/providers/forms/HermesFormFields"
 import type { HermesModel } from "@/config/hermesProviderPresets";
 import { Form } from "@/components/ui/form";
 import { server } from "../msw/server";
+import { setWeb } from "../helpers/web";
 
 type HermesFormFieldsProps = ComponentProps<typeof HermesFormFields>;
 
@@ -50,6 +51,14 @@ const renderHermesForm = (overrides: Partial<HermesFormFieldsProps> = {}) => {
 };
 
 describe("HermesFormFields", () => {
+  it("web: fetch models works (fetch_models_for_config is supported)", () => {
+    setWeb(true);
+    renderHermesForm();
+    expect(
+      screen.getByRole("button", { name: "providerForm.fetchModels" }),
+    ).toBeEnabled();
+  });
+
   it("fills the context length of a model picked from the fetched list", async () => {
     Element.prototype.scrollIntoView = vi.fn();
     const user = userEvent.setup();

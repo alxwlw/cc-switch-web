@@ -29,6 +29,7 @@ import {
   quotaRows,
 } from "@/components/SubscriptionQuotaFooter";
 import type { SubscriptionQuota } from "@/types/subscription";
+import { isWeb } from "@/lib/api/adapter";
 import { useCopilotQuota } from "@/lib/query/copilot";
 import { copilotQuotaRows } from "@/components/CopilotQuotaFooter";
 import {
@@ -353,6 +354,22 @@ export function CopilotAccountQuota({
   );
 }
 
+/** WEB-04: in web the quota is read from the server: the caption comes after the neighbouring authCenter.quota.* keys. */
+function WebAuthQuotaServerNote() {
+  const { t } = useTranslation();
+  if (!isWeb) return null;
+  return (
+    <span
+      className="self-end text-caption text-fg-3"
+      data-testid="quota-server-note"
+    >
+      {t("authCenter.quota.serverNote", {
+        defaultValue: "Data is fetched on the server",
+      })}
+    </span>
+  );
+}
+
 /** 按账号查的订阅额度列：xAI、Antigravity、Claude 只是查询 hook 不同 */
 function subscriptionAccountQuota(
   useQuota: (
@@ -379,19 +396,22 @@ function subscriptionAccountQuota(
       refetch,
     } = useQuota(accountId, { enabled: true, autoQuery: false });
     return (
-      <AccountQuotaColumn
-        login={login}
-        state={subscriptionQuotaState(
-          t,
-          quota,
-          loading,
-          i18n.language,
-          display,
-        )}
-        queriedAt={quota?.queriedAt ?? null}
-        loading={loading}
-        onRefresh={() => void refetch()}
-      />
+      <>
+        <AccountQuotaColumn
+          login={login}
+          state={subscriptionQuotaState(
+            t,
+            quota,
+            loading,
+            i18n.language,
+            display,
+          )}
+          queriedAt={quota?.queriedAt ?? null}
+          loading={loading}
+          onRefresh={() => void refetch()}
+        />
+        <WebAuthQuotaServerNote />
+      </>
     );
   };
 }
@@ -544,12 +564,15 @@ export function WorkBuddyAccountQuota({
           planInLabel,
         );
   return (
-    <AccountQuotaColumn
-      login={login}
-      state={state}
-      queriedAt={quota?.snapshot?.queriedAt ?? null}
-      loading={loading}
-      onRefresh={() => void refresh()}
-    />
+    <>
+      <AccountQuotaColumn
+        login={login}
+        state={state}
+        queriedAt={quota?.snapshot?.queriedAt ?? null}
+        loading={loading}
+        onRefresh={() => void refresh()}
+      />
+      <WebAuthQuotaServerNote />
+    </>
   );
 }

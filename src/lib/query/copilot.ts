@@ -6,6 +6,7 @@ import {
   type QuotaDetail,
 } from "@/lib/api/copilot";
 import type { QuotaTier } from "@/types/subscription";
+import { isWeb } from "@/lib/api/adapter";
 
 const REFETCH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
@@ -116,7 +117,8 @@ export function useCopilotQuota(
         queriedAt: Date.now(),
       };
     },
-    enabled,
+    // WEB-00: copilot_get_usage* is not supported; WEB-02/04 lift this
+    enabled: enabled && !isWeb,
     refetchInterval: autoQuery ? REFETCH_INTERVAL : false,
     refetchIntervalInBackground: autoQuery,
     refetchOnWindowFocus: autoQuery,

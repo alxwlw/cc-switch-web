@@ -5,6 +5,7 @@
 use crate::proxy::providers::copilot_auth::{
     CopilotAuthManager, CopilotModel, CopilotUsageResponse, GitHubAccount,
 };
+use crate::store::AppState;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::RwLock;
@@ -24,24 +25,32 @@ pub struct CopilotAuthState(pub Arc<RwLock<CopilotAuthManager>>);
 
 /// 获取 Copilot 可用模型列表（向后兼容：使用第一个账号）
 #[tauri::command]
-pub async fn copilot_get_models(
-    state: State<'_, CopilotAuthState>,
-) -> Result<Vec<CopilotModel>, String> {
-    let auth_manager = state.0.read().await;
-    auth_manager.fetch_models().await.map_err(|e| e.to_string())
+pub async fn copilot_get_models(state: State<'_, AppState>) -> Result<Vec<CopilotModel>, String> {
+    copilot_get_models_inner(&state, None).await
 }
 
 /// 获取指定账号的 Copilot 可用模型列表
 #[tauri::command(rename_all = "camelCase")]
 pub async fn copilot_get_models_for_account(
     account_id: String,
-    state: State<'_, CopilotAuthState>,
+    state: State<'_, AppState>,
 ) -> Result<Vec<CopilotModel>, String> {
-    let auth_manager = state.0.read().await;
-    auth_manager
-        .fetch_models_for_account(&account_id)
-        .await
-        .map_err(|e| e.to_string())
+    copilot_get_models_inner(&state, Some(account_id)).await
+}
+
+/// Shared by the desktop commands and the web route.
+pub(crate) async fn copilot_get_models_inner(
+    state: &AppState,
+    account_id: Option<String>,
+) -> Result<Vec<CopilotModel>, String> {
+    let auth_manager = state.copilot_auth.read().await;
+    match account_id {
+        Some(id) => auth_manager
+            .fetch_models_for_account(&id)
+            .await
+            .map_err(|e| e.to_string()),
+        None => auth_manager.fetch_models().await.map_err(|e| e.to_string()),
+    }
 }
 
 /// 获取 Copilot 使用量信息（向后兼容：使用第一个账号）
@@ -120,12 +129,19 @@ fn match_signed_in_account(
 /// Copilot CLI 没登录时返回 `None`。
 #[tauri::command]
 pub async fn copilot_cli_signed_in_account(
-    state: State<'_, CopilotAuthState>,
+    state: State<'_, AppState>,
+) -> Result<Option<CopilotCliSignedInAccount>, String> {
+    copilot_cli_signed_in_account_inner(&state).await
+}
+
+/// Shared by the desktop command and the web route.
+pub(crate) async fn copilot_cli_signed_in_account_inner(
+    state: &AppState,
 ) -> Result<Option<CopilotCliSignedInAccount>, String> {
     let Some((login, github_domain)) = copilot_cli_login() else {
         return Ok(None);
     };
-    let accounts = state.0.read().await.list_accounts().await;
+    let accounts = state.copilot_auth.read().await.list_accounts().await;
     Ok(Some(match_signed_in_account(
         login,
         github_domain,
@@ -161,5 +177,48 @@ mod copilot_cli_login_tests {
         let missing = match_signed_in_account("other".into(), "github.com".into(), &accounts);
         assert_eq!(missing.account_id, None);
         assert_eq!(missing.login, "other");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::Database;
+    use serial_test::serial;
+    use std::sync::Arc;
+
+    struct EnvGuard(Option<std::ffi::OsString>);
+    impl EnvGuard {
+        fn set(path: &std::path::Path) -> Self {
+            let prev = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", path);
+            Self(prev)
+        }
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.0 {
+                Some(v) => std::env::set_var("CC_SWITCH_TEST_HOME", v),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn models_inner_resolves_manager_from_appstate() {
+        let home = tempfile::tempdir().unwrap();
+        let _env = EnvGuard::set(home.path());
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        assert!(Arc::ptr_eq(
+            &state.managed_auth_states().copilot.0,
+            &state.copilot_auth
+        ));
+        let err = copilot_get_models_inner(&state, None).await.unwrap_err();
+        assert_eq!(err, "GitHub 令牌无效或已过期");
+        let err = copilot_get_models_inner(&state, Some("missing".to_string()))
+            .await
+            .unwrap_err();
+        assert_eq!(err, "账号不存在: missing");
     }
 }

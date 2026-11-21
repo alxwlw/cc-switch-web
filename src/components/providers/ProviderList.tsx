@@ -23,6 +23,7 @@ import type { OpenClawProviderConfig, Provider } from "@/types";
 import { getOpencodeDeclaredModels } from "@/components/providers/forms/helpers/opencodeFormUtils";
 import type { AppId } from "@/lib/api";
 import { providersApi } from "@/lib/api/providers";
+import { isWeb } from "@/lib/api/adapter";
 import {
   extractErrorMessage,
   translatePiProviderMutationError,
@@ -72,6 +73,9 @@ import { appHas } from "@/config/appSpecs";
 
 /** 切换式应用（Claude Code / Codex / Gemini CLI / Grok Build）的模式状态和动作，由供应商页传入。 */
 export type SwitchModeProps = Omit<SwitchModeInput, "app" | "t" | "providers">;
+
+/** Apps whose "is it in the config" comes from a live config that web cannot read. There are none now: opencode was opened by WEB-14 (openclaw/hermes use their own hooks). */
+const WEB_LIVE_MEMBERSHIP_APPS: AppId[] = [];
 
 const verticalDragModifiers: Modifier[] = [
   ({ transform }) => ({ ...transform, x: 0 }),
@@ -188,10 +192,11 @@ export function ProviderList({
   // 累加式应用要等 live 里有哪些供应商读回来（成功或失败）才知道卡片该进哪个分区；
   // 在那之前按加载中画骨架，不然卡片先全落进「可添加」，读回来再整体搬到「已添加」。
   // 一张卡都没有时不用等，直接出空状态
+  // In web opencode also waits for live ids (read from the server, WEB-14)
   const isLiveMembershipPending =
-    (appId === "opencode" && isOpencodeLiveIdsPending) ||
-    (appId === "openclaw" && isOpenclawLiveIdsPending) ||
     (appId === "hermes" && isHermesLiveIdsPending) ||
+    (appId === "openclaw" && isOpenclawLiveIdsPending) ||
+    (appId === "opencode" && isOpencodeLiveIdsPending) ||
     (appHas(appId, "piFamily") && isPiCurrentStatePending);
 
   const isInConfig = useCallback(
@@ -383,6 +388,8 @@ export function ProviderList({
         t,
         providers: filteredProviders,
         openTerminal: (provider) => onOpenTerminal?.(provider),
+        // WEB-00: open_provider_terminal: desktop-only (a terminal cannot be opened on the server)
+        terminalUnavailableReason: isWeb ? t("web.unavailable") : undefined,
       });
     }
     const defaultPrimary =
@@ -429,6 +436,8 @@ export function ProviderList({
           hermesLiveIds.includes(provider.id)),
       piStateUnavailable: appHas(appId, "piFamily") && !isPiStateReady,
       kimiCurrentId: currentProviderId,
+      // opencode in web reads the live config (WEB-14): membership is known; the list is empty, a branch for future live-membership apps
+      membershipUnknown: isWeb && WEB_LIVE_MEMBERSHIP_APPS.includes(appId),
       workbuddyOfficial,
       copilotDefaultId: appId === "copilot" ? currentProviderId : null,
       extraAdded: showDshAccountCard ? 1 : 0,

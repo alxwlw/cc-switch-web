@@ -650,6 +650,8 @@ export interface LaunchInput {
   t: TFunction;
   providers: Provider[];
   openTerminal: (provider: Provider) => void;
+  /** WEB-00: a terminal cannot be opened on the server, so this is the reason text (web only), the button is disabled (desktop-only) */
+  terminalUnavailableReason?: string;
 }
 
 /**
@@ -678,6 +680,7 @@ export function buildLaunchSections(input: LaunchInput): ProviderSection[] {
               key: "openTerminal",
               label: t("provider.openTerminalWithProvider"),
               onClick: () => openTerminal(p),
+              disabledReason: input.terminalUnavailableReason,
             },
           ],
         },
@@ -707,6 +710,12 @@ export interface AdditiveInput {
   piStateUnavailable?: boolean;
   /** Kimi：原生 default_model 别名所属的供应商。 */
   kimiCurrentId?: string | null;
+  /**
+   * WEB-00: web does not read the live config (get_*_live_provider_ids), so "is it in the config" is unknown. We do not
+   * split into "added/available" (otherwise all would falsely be "not in config"): one section, each
+   * card has both "add" and "remove"; WEB-14 lifts this (openclaw was opened by WEB-15, hermes by WEB-16)
+   */
+  membershipUnknown?: boolean;
   /** WorkBuddy 官方登录卡：已收录账号、当前登录、是否在运行 */
   workbuddyOfficial?: WorkBuddyOfficialState;
   /** Copilot CLI：settings.json 的 `model`（`<卡片 id>/<模型>`）所属的自带模型卡。 */
@@ -801,6 +810,7 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
   const { app, t, providers, actions } = input;
   const added: ProviderSection["items"] = [];
   const available: ProviderSection["items"] = [];
+  const unknownMembership: ProviderSection["items"] = [];
   // Copilot CLI 的官方卡：仍是启动式（只有「打开终端」），并进「已添加」排在最前
   const official: ProviderSection["items"] = [];
   const piBlocked =
@@ -993,6 +1003,34 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
       ? t("provider.managedByHermesHint")
       : undefined;
 
+    if (input.membershipUnknown) {
+      unknownMembership.push({
+        provider: p,
+        presentation: {
+          chips,
+          dim: managed,
+          editDisabledReason: readOnlyReason,
+          deleteDisabledReason: readOnlyReason,
+          buttons: [
+            {
+              key: "add",
+              label: t("providerCard.action.add"),
+              onClick: () => actions.add(p),
+            },
+            {
+              key: "remove",
+              label: t("providerCard.action.remove"),
+              onClick: () => actions.remove(p),
+              // The "membership unknown" section in web is left only for opencode (openclaw is WEB-15,
+              // hermes is WEB-16; they read the live config); opencode has no guard against deleting "default"
+              disabledReason: readOnlyReason,
+            },
+          ],
+        },
+      });
+      continue;
+    }
+
     if (!input.isInConfig(p)) {
       available.push({
         provider: p,
@@ -1104,6 +1142,33 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
         menuItems: menuItems.length ? menuItems : undefined,
       },
     });
+  }
+
+  if (unknownMembership.length > 0) {
+    // OMO cards (state known: get_current_omo_*) stay in their own sections, if there are any
+    return [
+      {
+        key: "unknownMembership",
+        title: t("web.liveUnknownTitle"),
+        items: unknownMembership,
+      },
+      ...[
+        {
+          key: "added",
+          title: t("providerCard.section.added", {
+            count: official.length + added.length + (input.extraAdded ?? 0),
+          }),
+          items: [...official, ...added],
+        },
+        {
+          key: "available",
+          title: t("providerCard.section.available", {
+            count: available.length,
+          }),
+          items: available,
+        },
+      ].filter((section) => section.items.length > 0),
+    ];
   }
 
   return [

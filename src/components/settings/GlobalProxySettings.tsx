@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { HoverTip } from "@/components/ui/hover-tip";
+import { isWeb } from "@/lib/api/adapter";
 import { Loader2, TestTube2, Search, Eye, EyeOff, X } from "lucide-react";
 import {
   useGlobalProxyUrl,
@@ -152,6 +153,14 @@ export function GlobalProxySettings() {
     <div className="space-y-3">
       {/* 描述 */}
       <p className="text-sm text-fg-2">{t("settings.globalProxy.hint")}</p>
+      {isWeb && (
+        <p
+          className="text-xs text-fg-3"
+          data-testid="global-proxy-server-side-note"
+        >
+          {t("settings.globalProxy.serverSideNote")}
+        </p>
+      )}
 
       {/* 代理地址输入框和按钮 */}
       <div className="flex gap-2">

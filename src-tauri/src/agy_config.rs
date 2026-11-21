@@ -342,13 +342,24 @@ pub(crate) fn background_command(bin: &Path) -> tokio::process::Command {
     command
 }
 
-/// 定位真实的 `agy`：先 PATH，再常见安装目录，最后问一次登录 shell。
-/// 从 Dock / Finder 启动时 PATH 只有系统目录，所以后两步不可省。
-/// 旧版测试装的包装脚本永远不会被返回。
-pub(crate) fn real_agy_bin() -> Option<PathBuf> {
-    let path_var = std::env::var_os("PATH").unwrap_or_default();
-    // install.ps1 installs to %LOCALAPPDATA%\agy\bin, which a GUI process's PATH may lack.
-    let system_dirs: Vec<PathBuf> = if cfg!(windows) {
+/// Env override for the hardcoded system dirs below. Same test-seam pattern as
+/// `CC_SWITCH_MODEL_FETCH_TIMEOUT_SECS` (services/model_fetch.rs): read at call
+/// time, unset = current behaviour exactly. When present — even empty — its
+/// `split_paths` value replaces the hardcoded list (empty = no system dirs), so
+/// tests can redirect the search to a fake bin dir or an empty dir regardless of
+/// what the host has in `/opt/homebrew/bin` / `/usr/local/bin`. The desktop
+/// never sets it. Only the dir list is overridden; PATH, `~/.local/bin` and the
+/// login-shell probe are untouched.
+const AGY_SYSTEM_DIRS_ENV: &str = "CC_SWITCH_AGY_SYSTEM_DIRS";
+
+fn agy_system_dirs() -> Vec<PathBuf> {
+    if let Some(raw) = std::env::var_os(AGY_SYSTEM_DIRS_ENV) {
+        if raw.is_empty() {
+            return Vec::new();
+        }
+        return std::env::split_paths(&raw).collect();
+    }
+    if cfg!(windows) {
         dirs::data_local_dir()
             .map(|dir| dir.join("agy").join("bin"))
             .into_iter()
@@ -358,7 +369,16 @@ pub(crate) fn real_agy_bin() -> Option<PathBuf> {
             PathBuf::from("/opt/homebrew/bin"),
             PathBuf::from("/usr/local/bin"),
         ]
-    };
+    }
+}
+
+/// 定位真实的 `agy`：先 PATH，再常见安装目录，最后问一次登录 shell。
+/// 从 Dock / Finder 启动时 PATH 只有系统目录，所以后两步不可省。
+/// 旧版测试装的包装脚本永远不会被返回。
+pub(crate) fn real_agy_bin() -> Option<PathBuf> {
+    let path_var = std::env::var_os("PATH").unwrap_or_default();
+    // install.ps1 installs to %LOCALAPPDATA%\agy\bin, which a GUI process's PATH may lack.
+    let system_dirs = agy_system_dirs();
     resolve_real_agy(
         &path_var,
         &get_home_dir(),

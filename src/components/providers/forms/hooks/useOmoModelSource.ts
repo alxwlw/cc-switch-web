@@ -80,6 +80,7 @@ export function useOmoModelSource({
 
   useEffect(() => {
     let active = true;
+    // Live ids are read from the server in web too (WEB-14)
     if (!isOmoCategory) {
       setEnabledOpencodeProviderIds(null);
       setOmoLiveIdsLoadFailed(false);

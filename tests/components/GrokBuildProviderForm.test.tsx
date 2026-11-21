@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { parse as parseToml } from "smol-toml";
 import { describe, expect, it, vi } from "vitest";
 import { GrokBuildProviderForm } from "@/components/providers/forms/GrokBuildProviderForm";
+import { setWeb } from "../helpers/web";
 
 vi.mock("@/components/JsonEditor", () => ({
   default: ({
@@ -45,6 +46,26 @@ describe("GrokBuildProviderForm", () => {
     expect(baseUrlInput?.value).toBe("https://api.pateway.ai/v1");
     expect(nameInput?.value).toBe("PatewayAI");
   });
+
+  it.each([
+    ["web", true],
+    ["desktop", false],
+  ])(
+    "official preset is offered in %s (seeded via ensure_grokbuild)",
+    (_label, web) => {
+      setWeb(web);
+      render(
+        <GrokBuildProviderForm
+          submitLabel="Save"
+          onSubmit={() => {}}
+          onCancel={() => {}}
+        />,
+      );
+      expect(
+        screen.getByRole("button", { name: /Grok Official/ }),
+      ).toBeInTheDocument();
+    },
+  );
 
   it("points the get-API-key link at the preset's apiKeyUrl", async () => {
     const user = userEvent.setup();

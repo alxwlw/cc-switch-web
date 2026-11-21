@@ -14,6 +14,7 @@ import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 import { piApi } from "@/lib/api/pi";
 import { sessionsApi } from "@/lib/api/sessions";
 import { settingsApi } from "@/lib/api/settings";
+import { setWeb } from "../helpers/web";
 import type { SessionMessage, SessionMeta } from "@/types";
 import { setSessionFixtures, setSettings } from "../msw/state";
 
@@ -300,6 +301,31 @@ describe("SessionManagerPage", () => {
 
     expect(await screen.findByText(".pi/sessions")).toBeInTheDocument();
     expect(discovery).toHaveBeenCalledTimes(1);
+    discovery.mockRestore();
+  });
+
+  it("web: calls get_pi_session_discovery for Pi (WEB-17)", async () => {
+    setWeb(true);
+    const discovery = vi.spyOn(piApi, "getSessionDiscovery").mockResolvedValue({
+      status: "requires_project_context",
+      configuredPath: ".pi/web-sessions",
+    });
+
+    renderPage("pi");
+
+    expect(await screen.findByText(".pi/web-sessions")).toBeInTheDocument();
+    expect(discovery).toHaveBeenCalledTimes(1);
+    discovery.mockRestore();
+  });
+
+  it("does not probe Pi session discovery for other apps", async () => {
+    setWeb(true);
+    const discovery = vi.spyOn(piApi, "getSessionDiscovery");
+
+    renderPage("codex");
+    await screen.findByRole("button", { name: "Alpha Session" });
+
+    expect(discovery).not.toHaveBeenCalled();
     discovery.mockRestore();
   });
 
@@ -752,6 +778,51 @@ describe("SessionManagerPage", () => {
         "codex resume codex-session-1",
       ),
     );
+  });
+
+  it("web: resume on a macOS browser still only copies the command and never launches a terminal", async () => {
+    setWeb(true);
+    platform.mac = true;
+    setSettings({ preferredTerminal: "iterm2" });
+    const launch = vi
+      .spyOn(sessionsApi, "launchTerminal")
+      .mockResolvedValue(true);
+    renderPage("codex");
+    await screen.findByText("Alpha Session");
+    openRow("Alpha Session");
+
+    await screen.findByRole("button", { name: "复制恢复命令" });
+    expect(screen.queryByRole("button", { name: /中恢复$/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "复制恢复命令" }));
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        "codex resume codex-session-1",
+      ),
+    );
+    await waitFor(() =>
+      expect(toastSuccessMock).toHaveBeenCalledWith("web.sessionResumeCopied"),
+    );
+    expect(launch).not.toHaveBeenCalled();
+    launch.mockRestore();
+  });
+
+  it("web: the list row's copy-resume button explains where to run the command", async () => {
+    setWeb(true);
+    platform.mac = true;
+    renderPage("codex");
+    await screen.findByText("Alpha Session");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "复制「Alpha Session」的恢复命令" }),
+    );
+
+    await waitFor(() =>
+      expect(toastSuccessMock).toHaveBeenCalledWith("web.sessionResumeCopied"),
+    );
+    expect(
+      screen.queryByRole("button", { name: /中恢复 Alpha Session$/ }),
+    ).toBeNull();
   });
 
   it("deletes the open session after confirming and returns to the list", async () => {

@@ -54,6 +54,29 @@ describe("entriesSince", () => {
   });
 });
 
+describe("a version recorded by the web console before WEB-28 (`<version>-web`)", () => {
+  it("is not older than the same release: nothing is shown again", () => {
+    expect(isNewerThanSeen("4.0.2", "4.0.2-web")).toBe(false);
+    expect(entriesSince(ENTRIES, "4.0.2-web", "4.0.2")).toEqual([]);
+  });
+
+  it("still lets a later release through, from the recorded version on", () => {
+    expect(isNewerThanSeen("4.0.4", "4.0.2-web")).toBe(true);
+    expect(versions(entriesSince(ENTRIES, "4.0.1-web", "4.0.4"))).toEqual([
+      "4.0.4",
+      "4.0.2",
+    ]);
+  });
+
+  it("a real prerelease is still older than its release", () => {
+    expect(isNewerThanSeen("4.0.2", "4.0.2-beta.1")).toBe(true);
+  });
+
+  it("the recorded version moves up to the plain one", () => {
+    expect(markSeen("4.0.2-web", "4.0.2")).toBe("4.0.2");
+  });
+});
+
 describe("entriesUpTo", () => {
   it("lists non-empty versions up to the current one", () => {
     expect(versions(entriesUpTo(ENTRIES, "4.0.4"))).toEqual([

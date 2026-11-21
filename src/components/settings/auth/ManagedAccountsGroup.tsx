@@ -85,6 +85,11 @@ interface ManagedAccountsGroupProps {
   emptyText: string;
   /** 标题行的「添加账号」，有没有账号都在（Copilot 先打开部署类型选择） */
   onAdd: () => void;
+  /**
+   * Sign-in is impossible here (Antigravity in web: the loopback callback runs on
+   * the server): no add / sign-in buttons, this line is shown instead.
+   */
+  loginUnavailableText?: string;
   /** Copilot 选部署类型的那块；有它时不显示空状态那行 */
   chooser?: React.ReactNode;
   /** 放在「添加账号」左边的控件（ChatGPT 的登录方式） */
@@ -129,6 +134,7 @@ export function ManagedAccountsGroup({
   loginDisabledReason,
   emptyText,
   onAdd,
+  loginUnavailableText,
   chooser,
   loginControl,
   defaultLabel,
@@ -150,6 +156,8 @@ export function ManagedAccountsGroup({
   const busy = login.starting || login.polling;
   const blockedId = `auth-blocked-${slug}`;
   const loginBlocked = Boolean(loginDisabledReason);
+  // web: sign-in cannot run at all (see loginUnavailableText), buttons are hidden
+  const loginUnavailable = loginUnavailableText !== undefined;
 
   const targetAccount = reauthTarget
     ? accounts.find((account) => account.id === reauthTarget)
@@ -266,8 +274,8 @@ export function ManagedAccountsGroup({
             {help}
           </HelpTip>
         </div>
-        {ready && loginControl}
-        {ready && (
+        {ready && !loginUnavailable && loginControl}
+        {ready && !loginUnavailable && (
           <Button
             type="button"
             id={`auth-add-${slug}`}
@@ -330,7 +338,9 @@ export function ManagedAccountsGroup({
             defaultLabel={defaultLabel}
             setDefaultLabel={setDefaultLabel}
             canReauth={
-              canReauth && (!reauthOnlyWhenExpired || account.needsReauth)
+              canReauth &&
+              !loginUnavailable &&
+              (!reauthOnlyWhenExpired || account.needsReauth)
             }
             busy={busy}
             pendingId={pendingId}
@@ -347,6 +357,15 @@ export function ManagedAccountsGroup({
         <div className="border-t border-border py-3.5 pe-3 ps-4 text-caption text-fg-2">
           {emptyText}
         </div>
+      )}
+
+      {ready && loginUnavailable && (
+        <p
+          role="note"
+          className="m-0 border-t border-border py-3 pe-3 ps-4 text-caption text-fg-2"
+        >
+          {loginUnavailableText}
+        </p>
       )}
 
       {chooser}

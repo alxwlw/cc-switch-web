@@ -38,6 +38,7 @@ import {
   type ProviderSwitchEvent,
 } from "@/lib/api";
 import { checkAllEnvConflicts, checkEnvConflicts } from "@/lib/api/env";
+import { isWeb } from "@/lib/api/adapter";
 import { useProviderActions } from "@/hooks/useProviderActions";
 import { openclawKeys, useOpenClawHealth } from "@/hooks/useOpenClaw";
 import { hermesKeys, useOpenHermesWebUI } from "@/hooks/useHermes";
@@ -50,6 +51,8 @@ import {
   useTrayNavigation,
 } from "@/hooks/useTrayNavigation";
 import { useTauriEvent } from "@/hooks/useTauriEvent";
+import { useSyncStatusEvents } from "@/hooks/useSyncStatusEvents";
+import { useProxyOfficialWarning } from "@/hooks/useProxyOfficialWarning";
 import {
   CODEX_UNIFY_MIGRATION_FINISHED_EVENT,
   showCodexUnifyMigrationFinished,
@@ -105,6 +108,7 @@ import {
   checkToolUpdatesInBackground,
   useToolUpdatesAvailable,
 } from "@/components/apps/useToolManagement";
+import { WebHostBanner } from "@/components/web/WebHostBanner";
 import { EnvWarningBanner } from "@/components/env/EnvWarningBanner";
 import { SwitchModePanel } from "@/components/providers/mode/SwitchModePanel";
 import { proxyApi } from "@/lib/api/proxy";
@@ -214,12 +218,6 @@ function PageLoading() {
   );
 }
 
-interface SyncStatusUpdatedPayload {
-  source?: string;
-  status?: string;
-  error?: string;
-}
-
 type OpenClawConfigTab = "env" | "tools" | "agents";
 
 const getInitialApp = (): AppId => {
@@ -289,7 +287,10 @@ function App() {
   const { data: settingsData } = useSettingsQuery();
   // Windows 一律去掉系统标题栏，用页头里的应用内窗口按钮；Linux 由设置决定
   const useAppWindowControls =
-    isWindows() || (isLinux() && (settingsData?.useAppWindowControls ?? false));
+    // WEB-00: a browser has no app window, so min/max/close do nothing
+    !isWeb &&
+    (isWindows() ||
+      (isLinux() && (settingsData?.useAppWindowControls ?? false)));
   const visibleApps = useMemo<VisibleApps>(
     () => ({
       ...DEFAULT_VISIBLE_APPS,
@@ -597,50 +598,9 @@ function App() {
     });
   });
 
-  useTauriEvent<SyncStatusUpdatedPayload | null | undefined>(
-    "webdav-sync-status-updated",
-    async (payload) => {
-      const statusPayload = payload ?? {};
-      await queryClient.invalidateQueries({ queryKey: ["settings"] });
-      if (statusPayload.source !== "auto" || statusPayload.status !== "error") {
-        return;
-      }
-      toast.error(
-        t("settings.webdavSync.autoSyncFailedToast", {
-          error: statusPayload.error || t("common.unknown"),
-        }),
-      );
-    },
-  );
+  useSyncStatusEvents();
 
-  useTauriEvent<SyncStatusUpdatedPayload | null | undefined>(
-    "s3-sync-status-updated",
-    async (payload) => {
-      const statusPayload = payload ?? {};
-      await queryClient.invalidateQueries({ queryKey: ["settings"] });
-      if (statusPayload.source !== "auto" || statusPayload.status !== "error") {
-        return;
-      }
-      toast.error(
-        t("settings.s3Sync.autoSyncFailedToast", {
-          error: statusPayload.error || t("common.unknown"),
-        }),
-      );
-    },
-  );
-
-  useTauriEvent<{ appType: string; providerName: string }>(
-    "proxy-official-warning",
-    (payload) => {
-      toast.warning(
-        t("notifications.proxyOfficialWarning", {
-          name: payload.providerName,
-          defaultValue: `当前供应商 ${payload.providerName} 是官方供应商，建议切换到第三方供应商后再使用代理接管`,
-        }),
-        { duration: 8000 },
-      );
-    },
-  );
+  useProxyOfficialWarning();
 
   // Codex / Grok Build 跟随系统代理发请求：发往本地路由的请求被系统代理接走时客户端只看到
   // 空正文 502，CC Switch 这边没有日志（#9221），进入路由时后端自检一次，没回来就提示。
@@ -661,6 +621,8 @@ function App() {
   useEffect(() => {
     // settingsData 未加载时跳过，避免用 fallback false 覆盖 Rust 侧已设好的装饰状态
     if (!settingsData) return;
+    // WEB-00: the window shim has no setDecorations, so there is nothing to sync in web
+    if (isWeb) return;
 
     const syncWindowDecorations = async () => {
       try {
@@ -1266,6 +1228,9 @@ function App() {
     ) {
       let liveProviderIds: string[] = [];
       try {
+        // The step checks whether the copy's key collides with entries of the live config; in web the copy gets a key
+        // that is free among the DB providers (addToLive=false, nothing is written to the live config). opencode live ids work in web (WEB-14).
+        // Hermes (WEB-16), openclaw (WEB-15) and pi/omp (WEB-17) live ids work in web
         liveProviderIds =
           activeApp === "opencode"
             ? await queryClient.ensureQueryData({
@@ -1603,6 +1568,9 @@ function App() {
   // OpenClaw / Hermes 没有模式 tab，那一行放它们自己的页面导航。
   // 换整块内容的是页面导航，用下划线页签；分段控件只留给模式和页内筛选。
   const renderAppSegments = () => {
+    // Web: only openclaw (WEB-15) and hermes (WEB-16) have tabs
+    if (isWeb && activeApp !== "hermes" && activeApp !== "openclaw")
+      return null;
     if (activeApp === "openclaw") {
       return (
         <div className="shrink-0 px-6 pt-2">
@@ -1941,6 +1909,7 @@ function App() {
           id="content-area"
           className="relative isolate flex min-w-0 flex-1 flex-col overflow-hidden bg-app"
         >
+          <WebHostBanner />
           {showEnvBanner && envConflicts.length > 0 && (
             <EnvWarningBanner
               conflicts={envConflicts}

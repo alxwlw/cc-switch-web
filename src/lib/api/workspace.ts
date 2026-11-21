@@ -50,6 +50,13 @@ export const workspaceApi = {
     });
   },
 
+  /** Web only: absolute paths of the workspace dirs on the server. */
+  async getPaths(): Promise<{ workspace: string; memory: string }> {
+    return invoke<{ workspace: string; memory: string }>(
+      "get_openclaw_workspace_paths",
+    );
+  },
+
   async openDirectory(subdir: "workspace" | "memory"): Promise<void> {
     await invoke("open_workspace_directory", { subdir });
   },

@@ -44,10 +44,8 @@ import {
   copilotEnvOf,
   isCopilotByok,
 } from "@/config/copilotConfig";
-import {
-  canSwitchAgyAccount,
-  resolveManagedAccountId,
-} from "@/lib/authBinding";
+import { resolveManagedAccountId } from "@/lib/authBinding";
+import { useAgyAccountsAvailable } from "@/hooks/useServerCapabilities";
 import {
   isOfficialAccount,
   resolveCodexOfficialIdentity,
@@ -303,6 +301,7 @@ export function ProviderCard({
   }, [provider.notes, displayUrl, fallbackUrlText]);
 
   const isOfficial = isOfficialProvider(provider, appId);
+  const agyAccountsAvailable = useAgyAccountsAvailable();
   // Claude 官方卡绑了 Claude 官方账号：副标题写账号，额度按这个号查
   const claudeBoundAccountId =
     appId === "claude" && isOfficial
@@ -375,7 +374,7 @@ export function ProviderCard({
   const isXaiOauth = provider.meta?.providerType === PROVIDER_TYPES.XAI_OAUTH;
   // Antigravity 官方卡绑了授权中心的账号：额度查绑定的号（只有 macOS、Windows 能切号，其他平台忽略绑定）
   const agyBoundAccountId =
-    appId === "agy" && isOfficial && canSwitchAgyAccount()
+    appId === "agy" && isOfficial && agyAccountsAvailable
       ? resolveManagedAccountId(provider.meta, "agy_oauth")?.trim() || null
       : null;
   // 副标题末尾的套餐：读右边额度那个查询的缓存（键和各额度 footer 一致），额度查到才有。

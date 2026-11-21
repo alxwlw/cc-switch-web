@@ -4,6 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CodexOAuthSection } from "@/components/providers/forms/CodexOAuthSection";
 import { AuthCenterPanel } from "@/components/settings/AuthCenterPanel";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { createTestQueryClient } from "../utils/testQueryClient";
+import { setWeb } from "../helpers/web";
 
 const mocks = vi.hoisted(() => ({
   useCodexOauth: vi.fn(),
@@ -127,6 +130,17 @@ describe("CodexOAuthSection", () => {
     }
   });
 
+  it.each([
+    ["desktop", false, true],
+    ["web (device code only, WEB-02)", true, false],
+  ])("login method picker: %s", (_label, web, shown) => {
+    setWeb(web);
+    render(<CodexOAuthSection />);
+    expect(screen.queryByLabelText("codexOauth.loginMethod") !== null).toBe(
+      shown,
+    );
+  });
+
   it("does not render account quota by default", () => {
     render(<CodexOAuthSection />);
 
@@ -135,7 +149,11 @@ describe("CodexOAuthSection", () => {
   });
 
   it("renders account quota in Auth Center", () => {
-    render(<AuthCenterPanel />);
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <AuthCenterPanel />
+      </QueryClientProvider>,
+    );
 
     expect(mocks.renderAccountQuota).toHaveBeenCalledWith("account-1");
     expect(mocks.renderAccountQuota).toHaveBeenCalledWith("account-2");

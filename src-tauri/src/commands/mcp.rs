@@ -18,7 +18,21 @@ pub async fn start_mcp_connectivity_checks(
     server_ids: Vec<String>,
     on_result: tauri::ipc::Channel<crate::services::mcp_connectivity::ConnectivityResult>,
 ) -> Result<String, String> {
-    let servers = run_db_task(&state, McpService::get_all_servers).await?;
+    start_mcp_connectivity_checks_inner(&state, server_ids, move |result| {
+        on_result.send(result).is_ok()
+    })
+    .await
+}
+
+/// Shared by the Tauri command and the web route. `on_result` returns `false` once the
+/// consumer is gone (a closed channel, a dropped HTTP body): the service then stops the
+/// batch (`mcp_connectivity::start_checks`).
+pub(crate) async fn start_mcp_connectivity_checks_inner(
+    state: &AppState,
+    server_ids: Vec<String>,
+    on_result: impl Fn(crate::services::mcp_connectivity::ConnectivityResult) -> bool + Send + 'static,
+) -> Result<String, String> {
+    let servers = run_db_task(state, McpService::get_all_servers).await?;
     Ok(crate::services::mcp_connectivity::start_checks(
         // Use the page's enabled selection: app toggles update it optimistically,
         // so the database's enablement flags can still lag behind the UI.
@@ -27,7 +41,7 @@ pub async fn start_mcp_connectivity_checks(
             .filter(|(id, _)| server_ids.contains(id))
             .map(|(_, server)| server)
             .collect(),
-        move |result| on_result.send(result).is_ok(),
+        on_result,
     ))
 }
 

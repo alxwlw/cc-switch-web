@@ -22,7 +22,7 @@ struct CodexUnifyMigrationFinished {
     error: Option<String>,
 }
 
-fn merge_settings_for_save(
+pub(crate) fn merge_settings_for_save(
     mut incoming: crate::settings::AppSettings,
     existing: &crate::settings::AppSettings,
 ) -> crate::settings::AppSettings {
@@ -882,7 +882,15 @@ pub async fn set_privacy_filter_config(
     state: tauri::State<'_, crate::AppState>,
     config: crate::proxy::types::PrivacyFilterConfig,
 ) -> Result<bool, String> {
-    state.db.set_privacy_filter_config(&config)?;
+    set_privacy_filter_config_inner(&state.db, &config)
+}
+
+/// Tauri-free body of `set_privacy_filter_config`, shared with the web API.
+pub(crate) fn set_privacy_filter_config_inner(
+    db: &crate::database::Database,
+    config: &crate::proxy::types::PrivacyFilterConfig,
+) -> Result<bool, String> {
+    db.set_privacy_filter_config(config)?;
     if config.enabled {
         // 规则编译有一次性耗时，开关打开时在后台预热，不压到第一个请求上
         std::thread::spawn(crate::proxy::privacy_filter::warm_up);
@@ -902,12 +910,7 @@ pub async fn set_log_config(
     state: tauri::State<'_, crate::AppState>,
     config: crate::proxy::types::LogConfig,
 ) -> Result<bool, String> {
-    state.db.set_log_config(&config)?;
-    log::set_max_level(config.to_level_filter());
-    log::info!(
-        "日志配置已更新: enabled={}, level={}",
-        config.enabled,
-        config.level
-    );
+    crate::services::ConfigService::set_log_config(&state.db, &config)
+        .map_err(|e| e.to_string())?;
     Ok(true)
 }
