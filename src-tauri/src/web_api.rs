@@ -361,6 +361,14 @@ pub fn router_with_update(
             get(workbuddy_quota),
         )
         .route("/api/workbuddy/model-owners", get(workbuddy_model_owners))
+        // DeepSeek account login (device-style: the browser opens `authUrl`, the UI polls) and
+        // the account the Copilot CLI is signed in as
+        .route("/api/dsh/status", get(dsh_status))
+        .route("/api/dsh/sign-out", post(dsh_sign_out))
+        .route("/api/dsh/login", post(dsh_login_start))
+        .route("/api/dsh/login/:flow_id/poll", post(dsh_login_poll))
+        .route("/api/dsh/login/:flow_id/cancel", post(dsh_login_cancel))
+        .route("/api/copilot/cli-account", get(copilot_cli_account))
         // Kimi Code OAuth (WEB-02 stage 2): same manager and remove path as the desktop commands
         .route("/api/kimi/oauth/status", get(kimi_status))
         .route("/api/kimi/oauth/start", post(kimi_start))
@@ -2973,6 +2981,46 @@ async fn workbuddy_quota(
 
 async fn workbuddy_model_owners() -> ApiResult {
     match crate::commands::workbuddy_model_owners().await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn dsh_status() -> ApiResult {
+    match crate::commands::dsh_account_status().await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn dsh_sign_out() -> ApiResult {
+    match crate::commands::dsh_account_sign_out().await {
+        Ok(()) => ok(serde_json::Value::Null),
+        Err(e) => fail(e),
+    }
+}
+
+async fn dsh_login_start() -> ApiResult {
+    match crate::commands::dsh_account_login_start().await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn dsh_login_poll(Path(flow_id): Path<String>) -> ApiResult {
+    match crate::commands::dsh_account_login_poll(flow_id) {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn dsh_login_cancel(Path(flow_id): Path<String>) -> ApiResult {
+    crate::commands::dsh_account_login_cancel(flow_id);
+    ok(serde_json::Value::Null)
+}
+
+async fn copilot_cli_account(State(state): State<SharedState>) -> ApiResult {
+    match crate::commands::copilot_cli_signed_in_account_inner(&state).await {
         Ok(r) => ok(r),
         Err(e) => fail(e),
     }

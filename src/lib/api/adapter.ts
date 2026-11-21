@@ -249,6 +249,20 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         body: { flowId: a.flowId, pasted: a.pasted },
       };
 
+    // ---------- DeepSeek account login and the Copilot CLI account ----------
+    case "dsh_account_status":
+      return { method: "GET", url: "/api/dsh/status" };
+    case "dsh_account_sign_out":
+      return { method: "POST", url: "/api/dsh/sign-out" };
+    case "dsh_account_login_start":
+      return { method: "POST", url: "/api/dsh/login" };
+    case "dsh_account_login_poll":
+      return { method: "POST", url: `/api/dsh/login/${enc(a.flowId)}/poll` };
+    case "dsh_account_login_cancel":
+      return { method: "POST", url: `/api/dsh/login/${enc(a.flowId)}/cancel` };
+    case "copilot_cli_signed_in_account":
+      return { method: "GET", url: "/api/copilot/cli-account" };
+
     // ---------- Kimi Code OAuth (WEB-02 stage 2) ----------
     case "kimi_oauth_status":
       return { method: "GET", url: "/api/kimi/oauth/status" };

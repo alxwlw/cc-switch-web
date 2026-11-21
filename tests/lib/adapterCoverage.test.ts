@@ -52,13 +52,6 @@ const DESKTOP_ONLY = new Set([
 /** v4.0.35 commands still to be mapped; each task removes the names it maps. */
 const PENDING = new Set([
   // Task 3
-  // Task 4
-  "dsh_account_login_start",
-  "dsh_account_login_poll",
-  "dsh_account_login_cancel",
-  "dsh_account_sign_out",
-  "dsh_account_status",
-  "copilot_cli_signed_in_account",
   // Task 5
   "get_privacy_filter_config",
   "set_privacy_filter_config",
