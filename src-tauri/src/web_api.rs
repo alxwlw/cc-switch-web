@@ -1738,6 +1738,21 @@ struct McpConnectivityReq {
     server_ids: Vec<String>,
 }
 
+/// The `on_result` callback and the receiver that feeds the response body. The callback
+/// returns `false` once `rx` is dropped (the body is gone), which stops the batch.
+fn mcp_result_channel() -> (
+    impl Fn(crate::services::mcp_connectivity::ConnectivityResult) -> bool + Send + 'static,
+    tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
+) {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+    let on_result = move |result| {
+        let mut line = serde_json::to_vec(&result).unwrap_or_default();
+        line.push(b'\n');
+        tx.send(line).is_ok()
+    };
+    (on_result, rx)
+}
+
 /// `start_mcp_connectivity_checks` over HTTP, NDJSON: line 1 is `{"batchId":"…"}`, then one
 /// serialized `ConnectivityResult` per server; the body ends when the batch ends.
 ///
@@ -1751,17 +1766,10 @@ async fn mcp_connectivity(
     Json(body): Json<McpConnectivityReq>,
 ) -> axum::response::Response {
     use axum::response::IntoResponse;
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
-    let started = crate::commands::start_mcp_connectivity_checks_inner(
-        &state,
-        body.server_ids,
-        move |result| {
-            let mut line = serde_json::to_vec(&result).unwrap_or_default();
-            line.push(b'\n');
-            tx.send(line).is_ok()
-        },
-    )
-    .await;
+    let (on_result, rx) = mcp_result_channel();
+    let started =
+        crate::commands::start_mcp_connectivity_checks_inner(&state, body.server_ids, on_result)
+            .await;
     let batch_id = match started {
         Ok(id) => id,
         Err(e) => return fail(e).into_response(),
@@ -5854,5 +5862,30 @@ mod tests {
             web_oauth_account_param("  acc-123  "),
             Some("acc-123".to_string())
         );
+    }
+}
+
+#[cfg(test)]
+mod mcp_result_channel_tests {
+    use super::mcp_result_channel;
+    use crate::services::mcp_connectivity::{ConnectivityResult, ConnectivityStatus};
+
+    fn result() -> ConnectivityResult {
+        ConnectivityResult {
+            server_id: "s".into(),
+            status: ConnectivityStatus::Failed,
+        }
+    }
+
+    #[test]
+    fn callback_declines_once_the_body_is_dropped() {
+        let (on_result, mut rx) = mcp_result_channel();
+        assert!(on_result(result()));
+        assert_eq!(
+            rx.try_recv().unwrap(),
+            b"{\"serverId\":\"s\",\"status\":\"failed\"}\n".to_vec()
+        );
+        drop(rx); // axum dropped the body: the browser is gone
+        assert!(!on_result(result()));
     }
 }

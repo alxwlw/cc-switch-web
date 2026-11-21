@@ -90,7 +90,31 @@ describe("adapter · MCP connectivity checks", () => {
     });
     expect(id).toBe("b-2");
     await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
+    expect(onmessage.mock.calls).toEqual([
+      [{ serverId: "a", status: "failed" }],
+    ]);
     warn.mockRestore();
+  });
+
+  const start = () =>
+    invoke("start_mcp_connectivity_checks", {
+      serverIds: ["a"],
+      onResult: { onmessage: vi.fn() },
+    });
+
+  it("rejects when the stream breaks before any line", async () => {
+    fetchSpy.mockResolvedValue(streamOf([], new Error("connection reset")));
+    await expect(start()).rejects.toThrow("connection reset");
+  });
+
+  it("rejects when the stream ends without a line", async () => {
+    fetchSpy.mockResolvedValue(streamOf([]));
+    await expect(start()).rejects.toThrow("empty stream");
+  });
+
+  it("rejects when the first line has no batch id", async () => {
+    fetchSpy.mockResolvedValue(streamOf(["{}\n"]));
+    await expect(start()).rejects.toThrow("no batch id");
   });
 
   it("cancel maps to the batch route", async () => {
