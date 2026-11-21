@@ -53,10 +53,6 @@ const DESKTOP_ONLY = new Set([
 const PENDING = new Set([
   // Task 3
   // Task 5
-  // Task 6
-  "sync_session_index",
-  "search_session_content",
-  "clear_session_index",
   // Task 7
   "get_skill_repo_tokens",
   "set_skill_repo_token",

@@ -608,6 +608,16 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: "/api/sessions",
         body: { items: a.items },
       };
+    case "sync_session_index":
+      return { method: "POST", url: "/api/sessions/index/sync" };
+    case "search_session_content":
+      return {
+        method: "POST",
+        url: "/api/sessions/search",
+        body: { query: a.query, providerIds: a.providerIds, limit: a.limit },
+      };
+    case "clear_session_index":
+      return { method: "DELETE", url: "/api/sessions/index" };
 
     // ---------- usage ----------
     case "get_usage_summary":

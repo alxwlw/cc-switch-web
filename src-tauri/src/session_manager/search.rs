@@ -30,6 +30,8 @@ use super::content;
 use super::model::{SessionBlock, SessionMessage};
 
 const INDEX_FILE: &str = "session-index.db";
+/// Event carrying the `IndexStatus` progress of a background index sync.
+pub const INDEX_STATUS_EVENT: &str = "session-index-status";
 /// 索引格式版本；表结构或收录规则变了就加一，旧索引整体重建
 const INDEX_VERSION: i64 = 2;
 /// rowid 里留给消息序号的位数（单个会话最多 1600 万条消息，超出部分不收）

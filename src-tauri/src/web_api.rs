@@ -273,6 +273,9 @@ pub fn router_with_update(
         .route("/api/sessions/stream", get(session_stream))
         .route("/api/sessions/image", post(session_image))
         .route("/api/sessions/block", post(session_block))
+        .route("/api/sessions/index/sync", post(session_index_sync))
+        .route("/api/sessions/search", post(session_search))
+        .route("/api/sessions/index", delete(session_index_clear))
         // usage
         .route("/api/usage/summary", get(usage_summary))
         .route("/api/usage/by-app", get(usage_by_app))
@@ -2184,6 +2187,44 @@ async fn delete_session(Json(body): Json<DeleteOneSessionReq>) -> ApiResult {
         Ok(Ok(v)) => ok(v),
         Ok(Err(e)) => fail(e.to_string()),
         Err(e) => fail(format!("delete session failed: {e}")),
+    }
+}
+
+/// `POST /api/sessions/index/sync`: starts the background index sync and answers the current
+/// progress; later progress is published as `session-index-status` on the event hub.
+async fn session_index_sync(State(state): State<SharedState>) -> ApiResult {
+    let events = state.events.clone();
+    let started = tokio::task::spawn_blocking(move || {
+        session_manager::search::start_sync(move |status| {
+            events.emit(session_manager::search::INDEX_STATUS_EVENT, status)
+        })
+    })
+    .await;
+    match started {
+        Ok(status) => ok(status),
+        Err(e) => fail(format!("sync session index failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionSearchReq {
+    query: String,
+    provider_ids: Option<Vec<String>>,
+    limit: Option<usize>,
+}
+
+async fn session_search(Json(body): Json<SessionSearchReq>) -> ApiResult {
+    match crate::commands::search_session_content(body.query, body.provider_ids, body.limit).await {
+        Ok(result) => ok(result),
+        Err(e) => fail(e),
+    }
+}
+
+async fn session_index_clear() -> ApiResult {
+    match crate::commands::clear_session_index().await {
+        Ok(v) => ok(v),
+        Err(e) => fail(e),
     }
 }
 

@@ -28,7 +28,7 @@ pub async fn sync_session_index<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<session_manager::search::IndexStatus, String> {
     Ok(session_manager::search::start_sync(move |status| {
-        let _ = app.emit("session-index-status", status);
+        let _ = app.emit(session_manager::search::INDEX_STATUS_EVENT, status);
     }))
 }
 
