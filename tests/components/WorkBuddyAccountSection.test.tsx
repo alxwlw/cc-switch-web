@@ -326,7 +326,7 @@ describe("WorkBuddyAccountSection", () => {
       });
       renderWithClient(<WorkBuddyAccountSection />);
       await userEvent.click(screen.getByRole("button", { name: /添加账号/ }));
-      await screen.findByText("当前登录的账号已在列表里（副本已更新）");
+      await waitFor(() => expect(mocks.importCurrent).toHaveBeenCalledOnce());
     };
 
     it("hides the buttons that drive the WorkBuddy app and offers no re-login", async () => {
@@ -357,9 +357,21 @@ describe("WorkBuddyAccountSection", () => {
       expect(screen.queryByText(/登录另一个账号/)).not.toBeInTheDocument();
     });
 
+    it("does not show the empty add-another notice, only desktop does", async () => {
+      setWeb(true);
+      await addAnother();
+      await waitFor(() => expect(mocks.importCurrent).toHaveBeenCalled());
+      expect(
+        screen.queryByText("当前登录的账号已在列表里（副本已更新）"),
+      ).not.toBeInTheDocument();
+    });
+
     it("keeps both buttons on desktop", async () => {
       setWeb(false);
       await addAnother();
+      expect(
+        await screen.findByText("当前登录的账号已在列表里（副本已更新）"),
+      ).toBeInTheDocument();
 
       expect(
         screen.getByRole("button", { name: "打开 WorkBuddy" }),

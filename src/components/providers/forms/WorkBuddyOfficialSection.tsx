@@ -95,6 +95,16 @@ export function WorkBuddyOfficialSection({
       ? `${account.login} · ${workbuddyPlanLabel(t, account.account_kind)}`
       : account.login;
 
+  const noticeBody =
+    isSuccess && accounts.length === 0 && !live?.running
+      ? t("workbuddy.official.emptyBody")
+      : // both sentences point at the desktop-only "sign in to another account" button
+        isWeb
+        ? null
+        : live?.running
+          ? t("workbuddy.official.addAnotherRunning")
+          : t("workbuddy.official.addAnotherBody");
+
   return (
     <div className="space-y-3">
       <div className="space-y-2">
@@ -163,50 +173,46 @@ export function WorkBuddyOfficialSection({
         )}
       </div>
 
-      <Notice
-        tone="neutral"
-        title={
-          isSuccess && accounts.length === 0
-            ? t("workbuddy.official.emptyTitle")
-            : t("workbuddy.official.addAnotherTitle")
-        }
-        actions={
-          <>
-            {!isWeb && (
-              <>
-                <Button
-                  type="button"
-                  variant="neutral"
-                  size="compact"
-                  disabled={prepare.isPending || live?.running === true}
-                  onClick={() => prepare.mutate()}
-                >
-                  {t("authCenter.workbuddy.prepareNewLogin")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="quiet"
-                  size="compact"
-                  className="gap-1"
-                  onClick={() => void openWorkBuddyApp()}
-                >
-                  <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  {t("authCenter.workbuddy.openApp")}
-                </Button>
-              </>
-            )}
-          </>
-        }
-      >
-        {isSuccess && accounts.length === 0 && !live?.running
-          ? t("workbuddy.official.emptyBody")
-          : // both sentences point at the desktop-only "sign in to another account" button
-            isWeb
-            ? null
-            : live?.running
-              ? t("workbuddy.official.addAnotherRunning")
-              : t("workbuddy.official.addAnotherBody")}
-      </Notice>
+      {/* in web the add-another notice has no body and no buttons: show nothing */}
+      {(!isWeb || noticeBody !== null) && (
+        <Notice
+          tone="neutral"
+          title={
+            isSuccess && accounts.length === 0
+              ? t("workbuddy.official.emptyTitle")
+              : t("workbuddy.official.addAnotherTitle")
+          }
+          actions={
+            <>
+              {!isWeb && (
+                <>
+                  <Button
+                    type="button"
+                    variant="neutral"
+                    size="compact"
+                    disabled={prepare.isPending || live?.running === true}
+                    onClick={() => prepare.mutate()}
+                  >
+                    {t("authCenter.workbuddy.prepareNewLogin")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="quiet"
+                    size="compact"
+                    className="gap-1"
+                    onClick={() => void openWorkBuddyApp()}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    {t("authCenter.workbuddy.openApp")}
+                  </Button>
+                </>
+              )}
+            </>
+          }
+        >
+          {noticeBody}
+        </Notice>
+      )}
     </div>
   );
 }

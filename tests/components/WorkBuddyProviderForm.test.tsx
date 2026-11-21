@@ -242,9 +242,12 @@ describe("WorkBuddyProviderForm", () => {
         onCancel={() => {}}
       />,
     );
+    // the notice would be a bare title: the web build renders none of it
+    await waitFor(() => expect(authMocks.getStatus).toHaveBeenCalled());
+    await screen.findByRole("combobox");
     expect(
-      await screen.findByText("workbuddy.official.addAnotherTitle"),
-    ).toBeInTheDocument();
+      screen.queryByText("workbuddy.official.addAnotherTitle"),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
         name: "authCenter.workbuddy.prepareNewLogin",
@@ -270,6 +273,9 @@ describe("WorkBuddyProviderForm", () => {
         onCancel={() => {}}
       />,
     );
+    expect(
+      await screen.findByText("workbuddy.official.addAnotherTitle"),
+    ).toBeInTheDocument();
     expect(
       await screen.findByText("workbuddy.official.addAnotherBody"),
     ).toBeInTheDocument();

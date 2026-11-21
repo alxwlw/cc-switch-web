@@ -315,7 +315,8 @@ export function WorkBuddyAccountSection({
     />
   ) : null;
 
-  const addHintPanel = addHint && (
+  // in web the "already added" hint has no body and no buttons: show nothing
+  const addHintPanel = addHint && !(isWeb && addHint === "already") && (
     <div className="mx-3 mb-3">
       <Notice
         tone="neutral"
