@@ -1,6 +1,7 @@
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
+import { APP_IDS_WITH } from "@/config/appSpecs";
 import { isWebHandled } from "@/lib/api/adapter";
 import { frontendFiles, walk } from "./support/frontendSources";
 
@@ -49,12 +50,41 @@ const DESKTOP_ONLY = new Set([
   "copilot_get_usage_for_account",
 ]);
 
-/** Every `invoke("name")` / `x.invoke<T>("name")` under src/, minus the adapter itself. */
-function invokedCommands(): Set<string> {
+/**
+ * `invoke` calls whose first argument is not a plain string literal, so the
+ * walker cannot read the command name. Each entry names the file and the exact
+ * expression, and lists the concrete commands that site can produce; they are
+ * checked like the literal names. A new computed call fails the guard until it
+ * is added here (or rewritten with a literal).
+ */
+const COMPUTED_INVOKES: {
+  file: string;
+  expression: string;
+  /** Where the values come from, then the names they give. */
+  names: () => string[];
+}[] = [
+  {
+    file: "src/lib/api/pi.ts",
+    expression: "`get_${app}_current_state`",
+    // `app` is an AppIdWith<"piFamily">: every app with the piFamily capability
+    names: () => APP_IDS_WITH.piFamily.map((app) => `get_${app}_current_state`),
+  },
+];
+
+interface Invocations {
+  literals: Set<string>;
+  /** "<repo-relative file>: <first argument source text>" */
+  computed: Set<string>;
+}
+
+/** Every `invoke(...)` / `x.invoke<T>(...)` under src/, minus the adapter itself. */
+function invocations(): Invocations {
   const adapter = path.join(ROOT, "src", "lib", "api", "adapter.ts");
-  const names = new Set<string>();
+  const literals = new Set<string>();
+  const computed = new Set<string>();
   for (const file of frontendFiles(path.join(ROOT, "src"))) {
     if (path.resolve(file.fileName) === adapter) continue;
+    const rel = path.relative(ROOT, file.fileName).split(path.sep).join("/");
     walk(file, (node) => {
       if (!ts.isCallExpression(node)) return;
       const callee = node.expression;
@@ -63,15 +93,22 @@ function invokedCommands(): Set<string> {
         (ts.isPropertyAccessExpression(callee) &&
           callee.name.text === "invoke");
       const first = node.arguments[0];
-      if (isInvoke && first && ts.isStringLiteralLike(first)) {
-        names.add(first.text);
-      }
+      if (!isInvoke || !first) return;
+      if (ts.isStringLiteralLike(first)) literals.add(first.text);
+      else computed.add(`${rel}: ${first.getText(file)}`);
     });
   }
-  return names;
+  return { literals, computed };
 }
 
-const invoked = invokedCommands();
+const found = invocations();
+const allowedComputed = COMPUTED_INVOKES.map(
+  (c) => `${c.file}: ${c.expression}`,
+);
+const invoked = new Set([
+  ...found.literals,
+  ...COMPUTED_INVOKES.flatMap((c) => c.names()),
+]);
 const listed = [...DESKTOP_ONLY];
 
 describe("web coverage of invoked commands", () => {
@@ -79,6 +116,15 @@ describe("web coverage of invoked commands", () => {
     expect(invoked.size).toBeGreaterThan(300);
     expect(isWebHandled("get_providers")).toBe(true);
     expect(isWebHandled("tray_panel_state")).toBe(false);
+  });
+
+  it("every computed invoke call is allowlisted, and every allowlist entry exists", () => {
+    expect([...found.computed].sort()).toEqual([...allowedComputed].sort());
+  });
+
+  it("expands the allowlisted call to every piFamily app", () => {
+    expect(COMPUTED_INVOKES[0].names()).toContain("get_omp_current_state");
+    expect(invoked.has("get_pi_current_state")).toBe(true);
   });
 
   it("every invoked command works in web mode or is listed", () => {
