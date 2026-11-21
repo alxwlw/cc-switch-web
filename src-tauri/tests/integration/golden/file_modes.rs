@@ -20,6 +20,29 @@ use crate::support::{create_test_state, reset_test_fs, test_mutex};
 
 const CLIENT_ROOTS: &[&str] = &[".claude", ".claude.json", ".codex", ".gemini", ".grok"];
 
+/// `base` with the bits of the process umask cleared: the mode a file gets when the app creates it
+/// without asking for one (`0o666` for a regular file). The umask is read by setting it, then restored at once.
+fn umask_mode(base: u32) -> u32 {
+    // SAFETY: `umask` only swaps the process-wide mask and cannot fail; the old value is put back below.
+    let mask = unsafe {
+        let mask = libc::umask(0o022);
+        libc::umask(mask);
+        mask
+    };
+    base & !(mask as u32)
+}
+
+/// The snapshots record `644` for files the app writes without an explicit mode, which is what umask 022
+/// gives. Under another umask the same file has another mode, so a mode equal to the default one for this
+/// umask is written as `644`. Explicit modes (`600`) are kept literally.
+fn snapshot_mode(mode: u32) -> u32 {
+    if mode != 0o600 && mode == umask_mode(0o666) {
+        0o644
+    } else {
+        mode
+    }
+}
+
 fn inventory() -> String {
     let home = home();
     let mut lines = Vec::new();
@@ -44,7 +67,10 @@ fn collect(home: &Path, path: &Path, lines: &mut Vec<String>) {
         .strip_prefix(home)
         .expect("under home")
         .to_string_lossy();
-    lines.push(format!("{rel} {:o}", meta.permissions().mode() & 0o777));
+    lines.push(format!(
+        "{rel} {:o}",
+        snapshot_mode(meta.permissions().mode() & 0o777)
+    ));
 }
 
 fn seed_all_providers(state: &cc_switch_lib::AppState) {
@@ -182,4 +208,22 @@ fn switch_keeps_private_modes_of_existing_files() {
             );
         }
     }
+}
+
+/// The default mode follows the umask, so the snapshots must not depend on it.
+#[test]
+fn umask_mode_clears_the_umask_bits() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    // SAFETY: restores the mask it replaced; the mutex keeps other tests in this binary from observing it.
+    let old = unsafe { libc::umask(0o027) };
+    let (file, dir, kept) = (umask_mode(0o666), umask_mode(0o777), umask_mode(0o600));
+    unsafe { libc::umask(old) };
+    assert_eq!(format!("{file:o}"), "640");
+    assert_eq!(format!("{dir:o}"), "750");
+    assert_eq!(format!("{kept:o}"), "600");
+    assert_eq!(
+        snapshot_mode(0o640),
+        0o640,
+        "only the default mode is renamed"
+    );
 }

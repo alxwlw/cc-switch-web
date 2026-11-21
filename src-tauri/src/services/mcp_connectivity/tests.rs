@@ -283,6 +283,24 @@ async fn batches_skip_empty_selections_limit_concurrency_and_cancel_queued_check
 
 #[tokio::test]
 #[serial(mcp_check_permits)]
+async fn start_checks_stops_when_on_result_declines() {
+    // A command name that exists on no OS's PATH: every check fails fast.
+    let spec = json!({"type": "stdio", "command": "cc-switch-web-test-no-such-mcp-command"});
+    let calls = Arc::new(AtomicUsize::new(0));
+    let seen = calls.clone();
+    let batch = start_checks(
+        (0..3).map(|id| server(id, spec.clone(), true)).collect(),
+        move |_| {
+            seen.fetch_add(1, Ordering::SeqCst);
+            false // the consumer is gone: the service must stop the batch
+        },
+    );
+    wait_until(|| !BATCHES.lock().unwrap().contains_key(&batch)).await;
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+#[serial(mcp_check_permits)]
 async fn checks_still_start_and_cancel_after_a_panic_while_the_batch_registry_was_held() {
     if !crate::sync_utils::in_isolated_process(
         "services::mcp_connectivity::tests::checks_still_start_and_cancel_after_a_panic_while_the_batch_registry_was_held",

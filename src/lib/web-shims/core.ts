@@ -8,7 +8,10 @@ export function isTauri(): boolean {
 }
 
 /** Minimal `Channel` stub: construction and handler assignment work, but the
- *  streaming commands that need a real channel are unsupported in web mode. */
+ *  stub itself never fires. Streaming commands that take a channel are handled
+ *  in `adapter.ts` `invoke`, which reads an NDJSON response and calls
+ *  `onmessage` itself (`stream_session_messages`, `start_mcp_connectivity_checks`);
+ *  the others are unsupported in web mode. */
 export class Channel<T = unknown> {
   onmessage: ((message: T) => void) | null = null;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

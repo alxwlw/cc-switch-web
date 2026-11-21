@@ -39,7 +39,7 @@ pub(super) struct ToolLifecycleProgressPayload {
     pub line: Option<String>,
 }
 
-type Sink = Arc<dyn Fn(ToolLifecycleProgressPayload) + Send + Sync>;
+pub(super) type Sink = Arc<dyn Fn(ToolLifecycleProgressPayload) + Send + Sync>;
 
 /// 给一次操作涉及的工具发进度事件。克隆开销很小，可以分别交给排队回调和执行闭包。
 #[derive(Clone)]
@@ -105,6 +105,12 @@ impl ToolLifecycleProgress {
     pub fn output(&self, line: String) {
         self.send(ToolLifecycleStage::Output, Some(line));
     }
+}
+
+/// Sink for the web build: publishes each payload on the event hub under the same event name
+/// and with the same JSON shape as the desktop `app.emit`, so the browser's `listen()` sees it.
+pub(super) fn hub_sink(events: crate::events::EventHub) -> Sink {
+    Arc::new(move |payload| events.emit(TOOL_LIFECYCLE_PROGRESS_EVENT, payload))
 }
 
 /// 和 `Command::output()` 一样执行到结束并收齐 stdout / stderr，

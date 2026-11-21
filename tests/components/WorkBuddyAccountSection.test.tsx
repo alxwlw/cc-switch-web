@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setWeb } from "../helpers/web";
 import { WorkBuddyAccountSection } from "@/components/settings/auth/WorkBuddyAccountSection";
 
 const mocks = vi.hoisted(() => ({
@@ -136,7 +137,9 @@ describe("WorkBuddyAccountSection", () => {
     renderWithClient(<WorkBuddyAccountSection />);
 
     // 套餐在账号第二行（与其他服务一致），额度列只写积分，不重复套餐
-    const meter = await screen.findByRole("meter", { name: "workbuddy.quota.credits: 750" });
+    const meter = await screen.findByRole("meter", {
+      name: "workbuddy.quota.credits: 750",
+    });
     expect(await screen.findByText(/体验版/)).toBeInTheDocument();
     expect(meter.closest("[title]")?.getAttribute("title")).toContain(
       "workbuddy.quota.staleNotRunning",
@@ -306,6 +309,77 @@ describe("WorkBuddyAccountSection", () => {
     renderWithClient(<WorkBuddyAccountSection />);
 
     expect(await screen.findByText("WorkBuddy 正在运行")).toBeInTheDocument();
+  });
+
+  describe("in the web build", () => {
+    const addAnother = async () => {
+      const auth = baseAuth();
+      auth.accounts = [
+        account("u-1", { login: "Alice", requires_reauth: true }),
+        account("u-2"),
+      ];
+      auth.defaultAccountId = "u-2";
+      mocks.useManagedAuth.mockReturnValue(auth);
+      mocks.importCurrent.mockResolvedValue({
+        account: account("u-2"),
+        created: false,
+      });
+      renderWithClient(<WorkBuddyAccountSection />);
+      await userEvent.click(screen.getByRole("button", { name: /添加账号/ }));
+      await waitFor(() => expect(mocks.importCurrent).toHaveBeenCalledOnce());
+    };
+
+    it("hides the buttons that drive the WorkBuddy app and offers no re-login", async () => {
+      setWeb(true);
+      await addAnother();
+
+      expect(
+        screen.queryByRole("button", { name: "打开 WorkBuddy" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "登录另一个账号" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "重新登录" }),
+      ).not.toBeInTheDocument();
+      await userEvent.click(
+        screen.getByRole("button", { name: "u-2 的更多操作" }),
+      );
+      expect(
+        screen.queryByRole("menuitem", { name: "重新登录" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("does not show the hint that points at the hidden button", async () => {
+      setWeb(true);
+      await addAnother();
+
+      expect(screen.queryByText(/登录另一个账号/)).not.toBeInTheDocument();
+    });
+
+    it("does not show the empty add-another notice, only desktop does", async () => {
+      setWeb(true);
+      await addAnother();
+      await waitFor(() => expect(mocks.importCurrent).toHaveBeenCalled());
+      expect(
+        screen.queryByText("当前登录的账号已在列表里（副本已更新）"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("keeps both buttons on desktop", async () => {
+      setWeb(false);
+      await addAnother();
+      expect(
+        await screen.findByText("当前登录的账号已在列表里（副本已更新）"),
+      ).toBeInTheDocument();
+
+      expect(
+        screen.getByRole("button", { name: "打开 WorkBuddy" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "登录另一个账号" }),
+      ).toBeInTheDocument();
+    });
   });
 
   describe("sign in again", () => {
