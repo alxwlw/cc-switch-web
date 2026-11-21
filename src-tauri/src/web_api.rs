@@ -1164,7 +1164,7 @@ async fn set_privacy_filter_config(
     Json(body): Json<ConfigReq<crate::proxy::types::PrivacyFilterConfig>>,
 ) -> ApiResult {
     db_call!(state, "set privacy filter config", |db| {
-        crate::commands::set_privacy_filter_config_inner(&db, &body.config)
+        crate::commands::set_privacy_filter_config_inner(db, &body.config)
     })
 }
 
