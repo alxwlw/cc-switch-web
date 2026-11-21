@@ -49,13 +49,6 @@ const DESKTOP_ONLY = new Set([
   "copilot_get_usage_for_account",
 ]);
 
-/** v4.0.35 commands still to be mapped; each task removes the names it maps. */
-const PENDING = new Set<string>([
-  // Task 3
-  // Task 5
-  // Task 7
-]);
-
 /** Every `invoke("name")` / `x.invoke<T>("name")` under src/, minus the adapter itself. */
 function invokedCommands(): Set<string> {
   const adapter = path.join(ROOT, "src", "lib", "api", "adapter.ts");
@@ -79,7 +72,7 @@ function invokedCommands(): Set<string> {
 }
 
 const invoked = invokedCommands();
-const listed = [...DESKTOP_ONLY, ...PENDING];
+const listed = [...DESKTOP_ONLY];
 
 describe("web coverage of invoked commands", () => {
   it("finds the invoked commands", () => {
@@ -90,7 +83,7 @@ describe("web coverage of invoked commands", () => {
 
   it("every invoked command works in web mode or is listed", () => {
     const unlisted = [...invoked].filter(
-      (c) => !isWebHandled(c) && !DESKTOP_ONLY.has(c) && !PENDING.has(c),
+      (c) => !isWebHandled(c) && !DESKTOP_ONLY.has(c),
     );
     expect(unlisted).toEqual([]);
   });

@@ -3,6 +3,13 @@
 Changes of cc-switch-web. Changes of the cc-switch desktop app it is based on are in the upstream
 [CHANGELOG](https://github.com/farion1231/cc-switch/blob/main/CHANGELOG.md).
 
+## Unreleased
+
+- Claude, WorkBuddy and DSH accounts in the Auth Center work in the console: quota, plan and login switch, the pasted login code, WorkBuddy import and live state, and DSH sign-in.
+- The privacy filter, clearing WebDAV and S3 sync settings, session content search, private skill repo tokens, MCP connectivity checks, IP diagnostics, exchange rates and the models.dev catalogue work in the console.
+- Tool install progress is shown in the console.
+- A test now fails when an upstream sync adds a command that the console neither routes nor lists as desktop-only.
+
 ## v4.0.36-web.1 — 2026-11-20
 
 - Based on cc-switch [v4.0.36](https://github.com/farion1231/cc-switch/releases/tag/v4.0.36).
