@@ -305,6 +305,8 @@ pub fn router_with_update(
         .route("/api/usage/request-logs", post(request_logs))
         .route("/api/usage/request-detail/:id", get(request_detail))
         .route("/api/usage/model-pricing", get(model_pricing))
+        .route("/api/usage/exchange-rates", get(exchange_rates))
+        .route("/api/usage/models-dev", get(models_dev_catalogue))
         .route("/api/usage/sync", post(sync_session_usage))
         .route("/api/usage/last-sync", get(session_usage_last_sync))
         .route("/api/usage/rebuild-codex", post(rebuild_codex_usage))
@@ -336,6 +338,7 @@ pub fn router_with_update(
         .route("/api/global-proxy/test", post(test_global_proxy))
         .route("/api/global-proxy/status", get(global_proxy_status))
         .route("/api/global-proxy/scan", post(scan_global_proxy))
+        .route("/api/global-proxy/diagnose", post(diagnose_global_proxy))
         // settings & environment
         .route("/api/settings", get(get_settings).put(save_settings))
         .route("/api/paths", get(paths))
@@ -2951,6 +2954,21 @@ async fn set_pricing_model_source(
     }
 }
 
+async fn exchange_rates() -> ApiResult {
+    match crate::commands::fetch_exchange_rates().await {
+        Ok(rates) => ok(rates),
+        Err(e) => fail(e),
+    }
+}
+
+/// `data` is the catalogue's JSON text, unparsed: the frontend parses it itself.
+async fn models_dev_catalogue() -> ApiResult {
+    match crate::commands::fetch_models_dev().await {
+        Ok(text) => ok(text),
+        Err(e) => fail(e),
+    }
+}
+
 async fn model_pricing(State(state): State<SharedState>) -> ApiResult {
     let db = state.db.clone();
     match tokio::task::spawn_blocking(move || {
@@ -3526,6 +3544,14 @@ async fn global_proxy_status() -> ApiResult {
         .proxy_url
         .map(|u| crate::proxy::http_client::mask_url(&u));
     ok(status)
+}
+
+/// An empty `url` inspects the system route, as on desktop; a malformed one is `invalidProxy`.
+async fn diagnose_global_proxy(Json(body): Json<GlobalProxyBody>) -> ApiResult {
+    match crate::commands::diagnose_ip(body.url).await {
+        Ok(report) => ok(report),
+        Err(e) => bad_request(e),
+    }
 }
 
 async fn scan_global_proxy() -> ApiResult {

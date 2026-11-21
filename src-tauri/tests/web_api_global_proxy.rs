@@ -220,3 +220,24 @@ async fn scan_finds_a_listener_on_a_known_proxy_port() {
         .collect();
     assert!(ports.contains(&u64::from(port)), "{found}");
 }
+
+#[tokio::test]
+#[serial]
+async fn diagnose_with_a_malformed_proxy_url_is_an_error() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    ensure_test_home();
+    let router = web_router();
+
+    // The proxy URL is rejected while the client is built, before any request is sent.
+    let (status, resp) = web_call(
+        &router,
+        "POST",
+        "/api/global-proxy/diagnose",
+        Some(json!({ "url": "::not a url::" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{resp}");
+    assert_eq!(resp["ok"], json!(false));
+    assert_eq!(resp["error"], json!("invalidProxy"), "{resp}");
+}

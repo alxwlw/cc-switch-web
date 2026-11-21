@@ -185,6 +185,12 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return { method: "GET", url: "/api/global-proxy/status" };
     case "scan_local_proxies":
       return { method: "POST", url: "/api/global-proxy/scan" };
+    case "diagnose_ip":
+      return {
+        method: "POST",
+        url: "/api/global-proxy/diagnose",
+        body: { url: a.url },
+      };
 
     // ---------- managed OAuth accounts (WEB-02, device code only) ----------
     case "auth_start_login":
@@ -751,6 +757,11 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         method: "DELETE",
         url: `/api/usage/model-pricing/${enc(a.modelId)}`,
       };
+    case "fetch_exchange_rates":
+      return { method: "GET", url: "/api/usage/exchange-rates" };
+    case "fetch_models_dev":
+      // `data` is the catalogue's JSON text; modelsDev.ts parses it itself.
+      return { method: "GET", url: "/api/usage/models-dev" };
     case "get_models_dev_sync_config":
       return { method: "GET", url: "/api/usage/models-dev/config" };
     case "save_models_dev_sync_config":
