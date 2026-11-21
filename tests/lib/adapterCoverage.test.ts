@@ -53,11 +53,6 @@ const DESKTOP_ONLY = new Set([
 const PENDING = new Set([
   // Task 3
   // Task 5
-  "get_privacy_filter_config",
-  "set_privacy_filter_config",
-  "get_config_status",
-  "webdav_sync_clear_settings",
-  "s3_sync_clear_settings",
   // Task 6
   "sync_session_index",
   "search_session_content",

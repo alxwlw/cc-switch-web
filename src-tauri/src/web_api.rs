@@ -166,6 +166,11 @@ pub fn router_with_update(
             get(get_optimizer_config).put(set_optimizer_config),
         )
         .route("/api/settings/log", get(get_log_config).put(set_log_config))
+        .route(
+            "/api/settings/privacy-filter",
+            get(get_privacy_filter_config).put(set_privacy_filter_config),
+        )
+        .route("/api/config-status/:app", get(config_status))
         .route("/api/logs/tail", get(logs_tail))
         .route("/api/logs/download", get(logs_download))
         // universal providers (cross-app)
@@ -657,7 +662,10 @@ pub fn router_with_update(
         .route("/api/sync/:backend/test", post(sync_test))
         .route("/api/sync/:backend/upload", post(sync_upload))
         .route("/api/sync/:backend/download", post(sync_download))
-        .route("/api/sync/:backend/settings", put(sync_save_settings))
+        .route(
+            "/api/sync/:backend/settings",
+            put(sync_save_settings).delete(sync_clear_settings),
+        )
         .route("/api/sync/:backend/remote-info", get(sync_remote_info))
         // Failover queue, breaker, health (WEB-01 stage 2)
         .route(
@@ -1144,6 +1152,28 @@ async fn set_rectifier_config(
     db_call!(state, "set rectifier config", |db| db
         .set_rectifier_config(&body.config)
         .map(|()| true))
+}
+
+async fn get_privacy_filter_config(State(state): State<SharedState>) -> ApiResult {
+    db_call!(state, "get privacy filter config", |db| db
+        .get_privacy_filter_config())
+}
+
+async fn set_privacy_filter_config(
+    State(state): State<SharedState>,
+    Json(body): Json<ConfigReq<crate::proxy::types::PrivacyFilterConfig>>,
+) -> ApiResult {
+    db_call!(state, "set privacy filter config", |db| {
+        crate::commands::set_privacy_filter_config_inner(&db, &body.config)
+    })
+}
+
+async fn config_status(State(state): State<SharedState>, Path(app): Path<String>) -> ApiResult {
+    let app_type = app_type!(&app);
+    match crate::commands::get_config_status_inner(&state, app_type).await {
+        Ok(status) => ok(status),
+        Err(e) => fail(e),
+    }
 }
 
 async fn get_optimizer_config(State(state): State<SharedState>) -> ApiResult {
@@ -5344,6 +5374,14 @@ async fn sync_save_settings(
             ),
             Err(r) => r,
         },
+    }
+}
+
+async fn sync_clear_settings(Path(backend): Path<String>) -> ApiResult {
+    match parse_sync_backend(&backend) {
+        Ok(SyncBackend::Webdav) => sync_result(crate::commands::webdav_sync_clear_settings().await),
+        Ok(SyncBackend::S3) => sync_result(crate::commands::s3_sync_clear_settings().await),
+        Err(r) => r,
     }
 }
 

@@ -139,6 +139,16 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: "/api/settings/rectifier",
         body: { config: a.config },
       };
+    case "get_privacy_filter_config":
+      return { method: "GET", url: "/api/settings/privacy-filter" };
+    case "set_privacy_filter_config":
+      return {
+        method: "PUT",
+        url: "/api/settings/privacy-filter",
+        body: { config: a.config },
+      };
+    case "get_config_status":
+      return { method: "GET", url: `/api/config-status/${enc(a.app)}` };
     case "get_optimizer_config":
       return { method: "GET", url: "/api/settings/optimizer" };
     case "set_optimizer_config":
@@ -971,6 +981,9 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: `${syncBase(cmd)}/settings`,
         body: { settings: a.settings, passwordTouched: a.passwordTouched },
       };
+    case "webdav_sync_clear_settings":
+    case "s3_sync_clear_settings":
+      return { method: "DELETE", url: `${syncBase(cmd)}/settings` };
     case "webdav_sync_fetch_remote_info":
     case "s3_sync_fetch_remote_info":
       return { method: "GET", url: `${syncBase(cmd)}/remote-info` };

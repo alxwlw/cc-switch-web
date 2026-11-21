@@ -882,7 +882,15 @@ pub async fn set_privacy_filter_config(
     state: tauri::State<'_, crate::AppState>,
     config: crate::proxy::types::PrivacyFilterConfig,
 ) -> Result<bool, String> {
-    state.db.set_privacy_filter_config(&config)?;
+    set_privacy_filter_config_inner(&state.db, &config)
+}
+
+/// Tauri-free body of `set_privacy_filter_config`, shared with the web API.
+pub(crate) fn set_privacy_filter_config_inner(
+    db: &crate::database::Database,
+    config: &crate::proxy::types::PrivacyFilterConfig,
+) -> Result<bool, String> {
+    db.set_privacy_filter_config(config)?;
     if config.enabled {
         // 规则编译有一次性耗时，开关打开时在后台预热，不压到第一个请求上
         std::thread::spawn(crate::proxy::privacy_filter::warm_up);
