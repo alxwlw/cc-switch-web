@@ -1754,16 +1754,39 @@ const NOOP_COMMANDS: ReadonlySet<string> = new Set([
   "set_window_theme",
 ]);
 
-/** Browser-side commands with no HTTP endpoint, answered inside `invoke`. */
-const BROWSER_COMMANDS: ReadonlySet<string> = new Set([
-  "is_portable_mode",
-  "open_external",
-  "copy_text_to_clipboard",
-  "stream_session_messages",
-  "start_mcp_connectivity_checks",
-  "run_tool_lifecycle_action",
-  "export_session_markdown",
+/**
+ * Browser-side commands with no HTTP endpoint, answered inside `invoke`.
+ * The one place they are defined: `invoke` dispatches through this map and
+ * `BROWSER_COMMANDS` (read by `isWebHandled` and the coverage guard) is its keys.
+ */
+const BROWSER_HANDLERS: ReadonlyMap<
+  string,
+  (args: Args) => unknown | Promise<unknown>
+> = new Map<string, (args: Args) => unknown | Promise<unknown>>([
+  // WEB-26: the server is never a portable build (no portable.ini next to an exe).
+  ["is_portable_mode", () => false],
+  ["open_external", (args) => openExternalInBrowser(args.url)],
+  ["copy_text_to_clipboard", (args) => copyTextInBrowser(args.text)],
+  ["stream_session_messages", (args) => streamSessionMessages(args)],
+  ["start_mcp_connectivity_checks", (args) => startMcpConnectivityChecks(args)],
+  ["run_tool_lifecycle_action", (args) => runToolLifecycleAction(args)],
+  [
+    "export_session_markdown",
+    (args) => {
+      downloadText(
+        args.defaultName,
+        args.content,
+        "text/markdown;charset=utf-8",
+      );
+      return args.defaultName;
+    },
+  ],
 ]);
+
+/** Names of the browser-side commands. */
+export const BROWSER_COMMANDS: ReadonlySet<string> = new Set(
+  BROWSER_HANDLERS.keys(),
+);
 
 /** Every command `invoke` answers without a network round trip. */
 const LOCAL_COMMANDS: ReadonlySet<string> = new Set([
@@ -1795,29 +1818,8 @@ export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
     return null as T;
   }
   // Browser-side commands with no HTTP endpoint.
-  if (cmd === "is_portable_mode") {
-    // WEB-26: the server is never a portable build (no portable.ini next to an exe).
-    return false as T;
-  }
-  if (cmd === "open_external") {
-    return openExternalInBrowser(args.url) as T;
-  }
-  if (cmd === "copy_text_to_clipboard") {
-    return (await copyTextInBrowser(args.text)) as T;
-  }
-  if (cmd === "stream_session_messages") {
-    return (await streamSessionMessages(args)) as T;
-  }
-  if (cmd === "start_mcp_connectivity_checks") {
-    return (await startMcpConnectivityChecks(args)) as T;
-  }
-  if (cmd === "run_tool_lifecycle_action") {
-    return (await runToolLifecycleAction(args)) as T;
-  }
-  if (cmd === "export_session_markdown") {
-    downloadText(args.defaultName, args.content, "text/markdown;charset=utf-8");
-    return args.defaultName as T;
-  }
+  const browserHandler = BROWSER_HANDLERS.get(cmd);
+  if (browserHandler) return (await browserHandler(args)) as T;
   const mapped = mapCommand(cmd, args);
   if (!mapped) throw new WebUnsupportedError(cmd);
   const rawBody = mapped.body instanceof Blob;
