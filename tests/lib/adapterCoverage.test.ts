@@ -50,7 +50,7 @@ const DESKTOP_ONLY = new Set([
 ]);
 
 /** v4.0.35 commands still to be mapped; each task removes the names it maps. */
-const PENDING = new Set([
+const PENDING = new Set<string>([
   // Task 3
   // Task 5
   // Task 7
