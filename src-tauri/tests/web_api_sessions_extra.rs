@@ -267,3 +267,104 @@ async fn stream_client_drop_after_first_frame_does_not_break_router() {
     assert_eq!(headers[header::CONTENT_TYPE], "application/x-ndjson");
     assert_eq!(ndjson(&bytes).last().unwrap()["type"], "done");
 }
+
+fn enable_content_search() {
+    cc_switch_lib::update_settings(cc_switch_lib::AppSettings {
+        session_content_search_enabled: true,
+        ..Default::default()
+    })
+    .unwrap();
+}
+
+#[tokio::test]
+#[serial]
+async fn index_sync_publishes_status_on_the_event_hub() {
+    let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    prepare_session(1, "image/png");
+    enable_content_search();
+    let state = std::sync::Arc::new(support::create_test_state().unwrap());
+    let mut rx = state.events.subscribe();
+    let router = support::web_router_with(state.clone());
+
+    let (status, body) = web_call(&router, "POST", "/api/sessions/index/sync", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["ok"], true);
+    assert!(body["data"]["running"].is_boolean(), "{body}");
+
+    let event = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            match rx.recv().await {
+                Ok(e) if e.name == "session-index-status" => return e,
+                Ok(_) => continue,
+                Err(e) => panic!("event hub closed: {e}"),
+            }
+        }
+    })
+    .await
+    .expect("session-index-status arrives within 10 s");
+    assert!(event.payload["processed"].is_u64(), "{}", event.payload);
+    assert!(event.payload["total"].is_u64(), "{}", event.payload);
+}
+
+#[tokio::test]
+#[serial]
+async fn search_before_any_index_is_empty() {
+    let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    ensure_test_home();
+    let router = web_router();
+    let (status, body) = web_call(
+        &router,
+        "POST",
+        "/api/sessions/search",
+        Some(json!({"query":"hello"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["ok"], true, "{body}");
+    assert_eq!(body["data"]["hits"], json!([]));
+
+    enable_content_search();
+    let (_, body) = web_call(
+        &router,
+        "POST",
+        "/api/sessions/search",
+        Some(json!({"query":"hello","providerIds":["claude"],"limit":5})),
+    )
+    .await;
+    assert_eq!(body["ok"], true, "{body}");
+    assert_eq!(body["data"]["hits"], json!([]));
+}
+
+#[tokio::test]
+#[serial]
+async fn search_with_an_empty_query_is_empty() {
+    let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    ensure_test_home();
+    enable_content_search();
+    let router = web_router();
+    let (status, body) = web_call(
+        &router,
+        "POST",
+        "/api/sessions/search",
+        Some(json!({"query":"   "})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["ok"], true, "{body}");
+    assert_eq!(body["data"]["hits"], json!([]));
+}
+
+#[tokio::test]
+#[serial]
+async fn clear_index_succeeds_without_an_index() {
+    let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    ensure_test_home();
+    let router = web_router();
+    let (status, body) = web_call(&router, "DELETE", "/api/sessions/index", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["ok"], true, "{body}");
+}

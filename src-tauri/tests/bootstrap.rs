@@ -8,6 +8,24 @@ mod support;
 use cc_switch_lib::bootstrap::{run_headless_bootstrap, StepOutcome};
 use support::{ensure_test_home, reset_test_fs, test_mutex};
 
+/// Runs `body` as one serialized test: the lock is taken first and released last, after the runtime has
+/// been dropped. `#[tokio::test]` drops its runtime after the test body, so a guard taken inside the body
+/// is gone while an aborted task (still holding its `Arc<Database>`) or a running `spawn_blocking` job
+/// is still alive. Closing that last connection checkpoints and deletes the `-wal`/`-shm` files *by path*:
+/// they are the next test's, which has just recreated the same path, and its `Database::init` fails with
+/// "disk I/O error".
+fn serialized_async<F: std::future::Future<Output = ()>>(body: F) {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("test runtime");
+    runtime.block_on(body);
+    // Drops what the body aborted and waits for its blocking jobs, still under the lock.
+    drop(runtime);
+}
+
 #[test]
 fn first_run_creates_db_and_seeds_defaults() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
@@ -143,77 +161,78 @@ const LEGACY_CONFIG: &str = r#"{
   "codex": {"providers": {}, "current": ""}
 }"#;
 
-#[tokio::test]
-async fn legacy_config_is_migrated_once_and_archived() {
-    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    reset_test_fs();
-    let home = ensure_test_home();
-    let dir = home.join(".cc-switch");
-    std::fs::create_dir_all(&dir).expect("config dir");
-    std::fs::write(dir.join("config.json"), LEGACY_CONFIG).expect("write legacy config");
+#[test]
+fn legacy_config_is_migrated_once_and_archived() {
+    serialized_async(async {
+        let home = ensure_test_home();
+        let dir = home.join(".cc-switch");
+        std::fs::create_dir_all(&dir).expect("config dir");
+        std::fs::write(dir.join("config.json"), LEGACY_CONFIG).expect("write legacy config");
 
-    let boot = run_headless_bootstrap().expect("bootstrap with legacy config");
+        let boot = run_headless_bootstrap().expect("bootstrap with legacy config");
 
-    assert_eq!(
-        boot.report.step("legacy_config_migration"),
-        Some(&StepOutcome::Done),
-        "{:?}",
-        boot.report
-    );
-    assert!(boot.report.legacy_config_migrated);
-    assert!(
-        !boot.report.fresh_install,
-        "migrated providers are not a fresh install"
-    );
-    let providers = boot
-        .state
-        .db
-        .get_all_providers(&cc_switch_lib::AppType::Claude)
-        .expect("providers");
-    assert_eq!(providers["legacy-a"].name, "Legacy A");
-    assert_eq!(providers["legacy-b"].name, "Legacy B");
-    assert_eq!(
-        boot.state
-            .db
-            .get_current_provider(&cc_switch_lib::AppType::Claude)
-            .expect("current"),
-        Some("legacy-a".to_string())
-    );
-    assert!(!dir.join("config.json").exists());
-    // `MultiAppConfig::load` normalizes the file before the archive rename, so
-    // compare content, not bytes.
-    let archived: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(dir.join("config.json.migrated")).expect("archive"))
-            .expect("archive json");
-    assert_eq!(
-        archived["claude"]["providers"]["legacy-b"]["name"],
-        serde_json::json!("Legacy B")
-    );
-    let count = providers.len();
-
-    // The success flag is reported once.
-    let router = support::web_router();
-    let (_, body) = support::web_call(&router, "GET", "/api/migrations/status", None).await;
-    assert_eq!(body["data"]["migration"], serde_json::json!(true));
-    let (_, body) = support::web_call(&router, "GET", "/api/migrations/status", None).await;
-    assert_eq!(body["data"]["migration"], serde_json::json!(false));
-    drop(boot);
-
-    // A second start does not migrate again and does not duplicate providers.
-    let again = run_headless_bootstrap().expect("second bootstrap");
-    assert_eq!(again.report.step("legacy_config_migration"), None);
-    assert!(!again.report.legacy_config_migrated);
-    assert_eq!(
-        again
+        assert_eq!(
+            boot.report.step("legacy_config_migration"),
+            Some(&StepOutcome::Done),
+            "{:?}",
+            boot.report
+        );
+        assert!(boot.report.legacy_config_migrated);
+        assert!(
+            !boot.report.fresh_install,
+            "migrated providers are not a fresh install"
+        );
+        let providers = boot
             .state
             .db
             .get_all_providers(&cc_switch_lib::AppType::Claude)
-            .expect("providers")
-            .len(),
-        count
-    );
-    let (_, body) = support::web_call(&router, "GET", "/api/migrations/status", None).await;
-    assert_eq!(body["data"]["migration"], serde_json::json!(false));
+            .expect("providers");
+        assert_eq!(providers["legacy-a"].name, "Legacy A");
+        assert_eq!(providers["legacy-b"].name, "Legacy B");
+        assert_eq!(
+            boot.state
+                .db
+                .get_current_provider(&cc_switch_lib::AppType::Claude)
+                .expect("current"),
+            Some("legacy-a".to_string())
+        );
+        assert!(!dir.join("config.json").exists());
+        // `MultiAppConfig::load` normalizes the file before the archive rename, so
+        // compare content, not bytes.
+        let archived: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(dir.join("config.json.migrated")).expect("archive"),
+        )
+        .expect("archive json");
+        assert_eq!(
+            archived["claude"]["providers"]["legacy-b"]["name"],
+            serde_json::json!("Legacy B")
+        );
+        let count = providers.len();
+
+        // The success flag is reported once.
+        let router = support::web_router();
+        let (_, body) = support::web_call(&router, "GET", "/api/migrations/status", None).await;
+        assert_eq!(body["data"]["migration"], serde_json::json!(true));
+        let (_, body) = support::web_call(&router, "GET", "/api/migrations/status", None).await;
+        assert_eq!(body["data"]["migration"], serde_json::json!(false));
+        drop(boot);
+
+        // A second start does not migrate again and does not duplicate providers.
+        let again = run_headless_bootstrap().expect("second bootstrap");
+        assert_eq!(again.report.step("legacy_config_migration"), None);
+        assert!(!again.report.legacy_config_migrated);
+        assert_eq!(
+            again
+                .state
+                .db
+                .get_all_providers(&cc_switch_lib::AppType::Claude)
+                .expect("providers")
+                .len(),
+            count
+        );
+        let (_, body) = support::web_call(&router, "GET", "/api/migrations/status", None).await;
+        assert_eq!(body["data"]["migration"], serde_json::json!(false));
+    });
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -287,50 +306,90 @@ fn backup_dbs(home: &std::path::Path) -> Vec<std::path::PathBuf> {
         .unwrap_or_default()
 }
 
-#[tokio::test]
-async fn periodic_backup_worker_creates_a_backup_on_startup() {
-    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    reset_test_fs();
-    let home = ensure_test_home();
-    let boot = run_headless_bootstrap().expect("bootstrap on empty HOME");
-    let _ = std::fs::remove_dir_all(home.join(".cc-switch").join("backups"));
-    assert!(backup_dbs(home).is_empty());
+#[test]
+fn periodic_backup_worker_creates_a_backup_on_startup() {
+    serialized_async(async {
+        let home = ensure_test_home();
+        let boot = run_headless_bootstrap().expect("bootstrap on empty HOME");
+        let _ = std::fs::remove_dir_all(home.join(".cc-switch").join("backups"));
+        assert!(backup_dbs(home).is_empty());
 
-    let handle = cc_switch_lib::bootstrap::spawn_periodic_backup_worker(boot.state.db.clone());
-    let mut found = false;
-    for _ in 0..100 {
-        if !backup_dbs(home).is_empty() {
-            found = true;
-            break;
+        let handle = cc_switch_lib::bootstrap::spawn_periodic_backup_worker(boot.state.db.clone());
+        let mut found = false;
+        for _ in 0..100 {
+            if !backup_dbs(home).is_empty() {
+                found = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    }
-    handle.abort();
-    assert!(
-        found,
-        "worker must write a backup .db into <config>/backups"
-    );
+        handle.abort();
+        assert!(
+            found,
+            "worker must write a backup .db into <config>/backups"
+        );
+    });
 }
 
-#[tokio::test]
-async fn periodic_backup_worker_is_silent_when_interval_is_zero() {
-    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
-    reset_test_fs();
-    let home = ensure_test_home();
-    let boot = run_headless_bootstrap().expect("bootstrap on empty HOME");
-    let _ = std::fs::remove_dir_all(home.join(".cc-switch").join("backups"));
-    cc_switch_lib::update_settings(cc_switch_lib::AppSettings {
-        backup_interval_hours: Some(0),
-        ..Default::default()
-    })
-    .expect("disable auto backup");
+#[test]
+fn periodic_backup_worker_is_silent_when_interval_is_zero() {
+    serialized_async(async {
+        let home = ensure_test_home();
+        let boot = run_headless_bootstrap().expect("bootstrap on empty HOME");
+        let _ = std::fs::remove_dir_all(home.join(".cc-switch").join("backups"));
+        cc_switch_lib::update_settings(cc_switch_lib::AppSettings {
+            backup_interval_hours: Some(0),
+            ..Default::default()
+        })
+        .expect("disable auto backup");
 
-    let handle = cc_switch_lib::bootstrap::spawn_periodic_backup_worker(boot.state.db.clone());
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    handle.abort();
+        let handle = cc_switch_lib::bootstrap::spawn_periodic_backup_worker(boot.state.db.clone());
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        handle.abort();
+        assert!(
+            backup_dbs(home).is_empty(),
+            "interval 0 must not create backups"
+        );
+        let _ = cc_switch_lib::update_settings(cc_switch_lib::AppSettings::default());
+    });
+}
+
+/// What `serialized_async` is for: the task the body aborted is dropped by the runtime teardown, and that
+/// must still happen under the test lock (see its comment).
+#[test]
+fn serialized_async_drops_aborted_tasks_before_it_releases_the_lock() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::TryLockError;
+
+    static LOCK_HELD_AT_DROP: AtomicBool = AtomicBool::new(false);
+    static DROPPED: AtomicBool = AtomicBool::new(false);
+
+    struct Sentinel;
+    impl Drop for Sentinel {
+        fn drop(&mut self) {
+            LOCK_HELD_AT_DROP.store(
+                matches!(test_mutex().try_lock(), Err(TryLockError::WouldBlock)),
+                Ordering::SeqCst,
+            );
+            DROPPED.store(true, Ordering::SeqCst);
+        }
+    }
+
+    serialized_async(async {
+        let sentinel = Sentinel;
+        let task = tokio::spawn(async move {
+            let _sentinel = sentinel;
+            std::future::pending::<()>().await;
+        });
+        task.abort();
+    });
+
     assert!(
-        backup_dbs(home).is_empty(),
-        "interval 0 must not create backups"
+        DROPPED.load(Ordering::SeqCst),
+        "the aborted task is dropped"
     );
-    let _ = cc_switch_lib::update_settings(cc_switch_lib::AppSettings::default());
+    assert!(
+        LOCK_HELD_AT_DROP.load(Ordering::SeqCst),
+        "the task was dropped after the test lock was released"
+    );
 }

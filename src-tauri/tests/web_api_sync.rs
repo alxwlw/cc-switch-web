@@ -805,3 +805,30 @@ async fn concurrent_upload_and_download_are_serialised_by_the_sync_lock() {
         stub.dav_log()
     );
 }
+
+#[tokio::test]
+#[serial]
+async fn clear_settings_removes_saved_sync_settings() {
+    let router = router();
+    for (backend, key, settings) in [
+        (
+            "webdav",
+            "webdavSync",
+            webdav_settings("http://127.0.0.1:1/dav"),
+        ),
+        ("s3", "s3Sync", s3_settings()),
+    ] {
+        let uri = format!("/api/sync/{backend}/settings");
+        let (status, saved) =
+            web_call(&router, "PUT", &uri, Some(json!({ "settings": settings }))).await;
+        assert_eq!(status, StatusCode::OK, "{backend} save: {saved}");
+        let (_, before) = web_call(&router, "GET", "/api/settings", None).await;
+        assert!(before["data"].get(key).is_some(), "{backend}: {before}");
+
+        let (status, cleared) = web_call(&router, "DELETE", &uri, None).await;
+        assert_eq!(status, StatusCode::OK, "{backend} clear: {cleared}");
+        assert_eq!(cleared["data"]["success"], json!(true), "{cleared}");
+        let (_, after) = web_call(&router, "GET", "/api/settings", None).await;
+        assert!(after["data"].get(key).is_none(), "{backend}: {after}");
+    }
+}

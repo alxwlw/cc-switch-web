@@ -266,3 +266,48 @@ async fn download_streams_the_whole_file_as_a_text_attachment() {
     let bytes = resp.into_body().collect().await.unwrap().to_bytes();
     assert_eq!(bytes.as_ref(), on_disk.as_slice());
 }
+
+#[tokio::test]
+async fn privacy_filter_config_round_trips() {
+    let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let router = fixture();
+    let (status, body) = web_call(&router, "GET", "/api/settings/privacy-filter", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let default = body["data"].clone();
+    let flipped = !default["enabled"].as_bool().expect("enabled is a bool");
+    let mut config = default.clone();
+    config["enabled"] = json!(flipped);
+    let (status, put) = web_call(
+        &router,
+        "PUT",
+        "/api/settings/privacy-filter",
+        Some(json!({ "config": config })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{put}");
+    assert_eq!(put["data"], json!(true));
+    let (_, again) = web_call(&router, "GET", "/api/settings/privacy-filter", None).await;
+    assert_eq!(again["data"], config, "{again}");
+}
+
+#[tokio::test]
+async fn config_status_of_a_missing_app_config() {
+    let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let router = fixture();
+    let (status, body) = web_call(&router, "GET", "/api/config-status/claude", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["data"]["exists"], json!(false), "{body}");
+    assert!(
+        !body["data"]["path"].as_str().expect("path").is_empty(),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn config_status_of_an_unknown_app_is_400() {
+    let _g = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let router = fixture();
+    let (status, body) = web_call(&router, "GET", "/api/config-status/nope", None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(body["ok"], json!(false));
+}

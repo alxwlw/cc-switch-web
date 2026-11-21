@@ -16,7 +16,15 @@ pub async fn get_config_status(
     state: State<'_, AppState>,
     app: String,
 ) -> Result<ConfigStatus, String> {
-    match AppType::from_str(&app)? {
+    get_config_status_inner(&state, AppType::from_str(&app)?).await
+}
+
+/// Tauri-free body of `get_config_status`, shared with the web API.
+pub(crate) async fn get_config_status_inner(
+    state: &AppState,
+    app: AppType,
+) -> Result<ConfigStatus, String> {
+    match app {
         AppType::Claude => Ok(config::get_claude_config_status()),
         AppType::ClaudeDesktop => {
             let status = crate::claude_desktop_config::get_status(

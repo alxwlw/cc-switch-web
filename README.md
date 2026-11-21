@@ -54,7 +54,10 @@ What needs a desktop session is not there:
 - native file pickers and file dialogs (the console uploads and downloads files through the browser instead) and "reveal in file manager" (it shows the server path to copy);
 - opening a terminal for a provider or a session on the host, and the Hermes dashboard launcher;
 - registering the `ccswitch://` link handler in the OS (deep-link import works by paste or upload);
-- signing in to Antigravity, which needs a loopback callback on the host.
+- signing in to Antigravity, which needs a loopback callback on the host;
+- opening the WorkBuddy app and preparing it for a new login (WorkBuddy accounts are imported from the WorkBuddy app's own login on the server host).
+
+A Claude account sign-in started in the console finishes by pasting the page address or code that the Claude login page shows, because the login page cannot redirect back to the server.
 
 `GET /api/capabilities` returns a short summary of these limits in `runtime_boundaries`.
 

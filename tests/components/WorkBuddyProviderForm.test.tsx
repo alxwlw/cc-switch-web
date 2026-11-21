@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkBuddyProviderForm } from "@/components/providers/forms/WorkBuddyProviderForm";
+import { setWeb } from "../helpers/web";
 import { setProviders, setWorkBuddyModelOwners } from "../msw/state";
 import { createTestQueryClient } from "../utils/testQueryClient";
 
@@ -227,6 +228,57 @@ describe("WorkBuddyProviderForm", () => {
     );
     await waitFor(() => expect(authMocks.prepareNewLogin).toHaveBeenCalled());
     await waitFor(() => expect(authMocks.openApp).toHaveBeenCalled());
+  });
+
+  it("hides the app-driving buttons in the web build", async () => {
+    setWeb(true);
+    render(
+      <WorkBuddyProviderForm
+        appId="workbuddy"
+        providerId="workbuddy-official"
+        initialData={officialCard("u-1")}
+        submitLabel="Save"
+        onSubmit={vi.fn()}
+        onCancel={() => {}}
+      />,
+    );
+    // the notice would be a bare title: the web build renders none of it
+    await waitFor(() => expect(authMocks.getStatus).toHaveBeenCalled());
+    await screen.findByRole("combobox");
+    expect(
+      screen.queryByText("workbuddy.official.addAnotherTitle"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "authCenter.workbuddy.prepareNewLogin",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "authCenter.workbuddy.openApp" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("workbuddy.official.addAnotherBody"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the add-another hint on desktop", async () => {
+    setWeb(false);
+    render(
+      <WorkBuddyProviderForm
+        appId="workbuddy"
+        providerId="workbuddy-official"
+        initialData={officialCard("u-1")}
+        submitLabel="Save"
+        onSubmit={vi.fn()}
+        onCancel={() => {}}
+      />,
+    );
+    expect(
+      await screen.findByText("workbuddy.official.addAnotherTitle"),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("workbuddy.official.addAnotherBody"),
+    ).toBeInTheDocument();
   });
 
   it("edits fields while keeping the key and unknown settings", async () => {

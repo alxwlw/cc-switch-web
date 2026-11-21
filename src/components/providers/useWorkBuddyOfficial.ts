@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "@/lib/toast";
 import { authApi } from "@/lib/api";
+import { isWeb } from "@/lib/api/adapter";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { WORKBUDDY_ACCOUNT_AUTH_PROVIDER } from "@/config/workbuddyProviderPresets";
 import type { Provider } from "@/types";
@@ -67,10 +68,15 @@ export function useWorkBuddySwitch() {
         toast.success(t("workbuddy.official.switched", { name }), {
           duration: 8000,
           closeButton: true,
-          action: {
-            label: t("authCenter.workbuddy.openApp"),
-            onClick: () => void openWorkBuddyApp(),
-          },
+          // opening the app drives a GUI on the server host: desktop only
+          ...(isWeb
+            ? {}
+            : {
+                action: {
+                  label: t("authCenter.workbuddy.openApp"),
+                  onClick: () => void openWorkBuddyApp(),
+                },
+              }),
         });
       } catch (error) {
         toast.error(t("workbuddy.official.switchFailed"), {

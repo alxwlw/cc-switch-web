@@ -139,6 +139,16 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: "/api/settings/rectifier",
         body: { config: a.config },
       };
+    case "get_privacy_filter_config":
+      return { method: "GET", url: "/api/settings/privacy-filter" };
+    case "set_privacy_filter_config":
+      return {
+        method: "PUT",
+        url: "/api/settings/privacy-filter",
+        body: { config: a.config },
+      };
+    case "get_config_status":
+      return { method: "GET", url: `/api/config-status/${enc(a.app)}` };
     case "get_optimizer_config":
       return { method: "GET", url: "/api/settings/optimizer" };
     case "set_optimizer_config":
@@ -175,6 +185,12 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return { method: "GET", url: "/api/global-proxy/status" };
     case "scan_local_proxies":
       return { method: "POST", url: "/api/global-proxy/scan" };
+    case "diagnose_ip":
+      return {
+        method: "POST",
+        url: "/api/global-proxy/diagnose",
+        body: { url: a.url },
+      };
 
     // ---------- managed OAuth accounts (WEB-02, device code only) ----------
     case "auth_start_login":
@@ -218,6 +234,50 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return { method: "POST", url: `${authBase(a.authProvider)}/logout` };
     case "agy_account_is_running":
       return { method: "GET", url: "/api/auth/agy/running" };
+
+    // ---------- Claude official accounts (login itself goes through auth_*) ----------
+    case "get_claude_account_quota":
+      return {
+        method: "GET",
+        url: `/api/claude-account/quota/${enc(a.accountId)}`,
+      };
+    case "get_claude_default_plan":
+      return { method: "GET", url: "/api/claude-account/default-plan" };
+    case "get_claude_login_switch":
+      return { method: "GET", url: "/api/claude-account/login-switch" };
+
+    // ---------- WorkBuddy accounts (open-app / prepare-new-login are desktop-only) ----------
+    case "workbuddy_account_live_state":
+      return { method: "GET", url: "/api/workbuddy/live-state" };
+    case "workbuddy_account_import_current":
+      return { method: "POST", url: "/api/workbuddy/import-current" };
+    case "workbuddy_account_quota":
+      return {
+        method: "GET",
+        url: `/api/workbuddy/accounts/${enc(a.accountId)}/quota${query({ force: a.force })}`,
+      };
+    case "workbuddy_model_owners":
+      return { method: "GET", url: "/api/workbuddy/model-owners" };
+    case "claude_account_submit_paste":
+      return {
+        method: "POST",
+        url: "/api/claude-account/paste",
+        body: { flowId: a.flowId, pasted: a.pasted },
+      };
+
+    // ---------- DeepSeek account login and the Copilot CLI account ----------
+    case "dsh_account_status":
+      return { method: "GET", url: "/api/dsh/status" };
+    case "dsh_account_sign_out":
+      return { method: "POST", url: "/api/dsh/sign-out" };
+    case "dsh_account_login_start":
+      return { method: "POST", url: "/api/dsh/login" };
+    case "dsh_account_login_poll":
+      return { method: "POST", url: `/api/dsh/login/${enc(a.flowId)}/poll` };
+    case "dsh_account_login_cancel":
+      return { method: "POST", url: `/api/dsh/login/${enc(a.flowId)}/cancel` };
+    case "copilot_cli_signed_in_account":
+      return { method: "GET", url: "/api/copilot/cli-account" };
 
     // ---------- Kimi Code OAuth (WEB-02 stage 2) ----------
     case "kimi_oauth_status":
@@ -363,6 +423,11 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
       return { method: "GET", url: `/api/mcp/config${query({ app: a.app })}` };
     case "import_mcp_from_apps":
       return { method: "POST", url: "/api/mcp/import" };
+    case "cancel_mcp_connectivity_checks":
+      return {
+        method: "POST",
+        url: `/api/mcp/connectivity/${enc(a.batchId)}/cancel`,
+      };
     case "resync_mcp_to_apps":
       return {
         method: "POST",
@@ -499,6 +564,26 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         method: "DELETE",
         url: `/api/skills/repos/${enc(a.owner)}/${enc(a.name)}`,
       };
+    case "get_skill_repo_tokens":
+      return { method: "GET", url: "/api/skills/repo-tokens" };
+    case "set_skill_repo_token":
+      return {
+        method: "PUT",
+        url: "/api/skills/repo-tokens",
+        body: { host: a.host, token: a.token },
+      };
+    case "delete_skill_repo_token":
+      return {
+        method: "DELETE",
+        url: `/api/skills/repo-tokens/${enc(a.host)}`,
+      };
+    case "discover_repo_skills":
+      return {
+        method: "GET",
+        url: `/api/skills/repos/${enc(a.owner)}/${enc(a.name)}/discover`,
+      };
+    case "refresh_local_skill_metadata":
+      return { method: "POST", url: "/api/skills/refresh-metadata" };
     // the browser file is the raw request body; the server reads the name from the query
     case "web_install_skills_from_zip_upload":
       return {
@@ -554,6 +639,16 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: "/api/sessions",
         body: { items: a.items },
       };
+    case "sync_session_index":
+      return { method: "POST", url: "/api/sessions/index/sync" };
+    case "search_session_content":
+      return {
+        method: "POST",
+        url: "/api/sessions/search",
+        body: { query: a.query, providerIds: a.providerIds, limit: a.limit },
+      };
+    case "clear_session_index":
+      return { method: "DELETE", url: "/api/sessions/index" };
 
     // ---------- usage ----------
     case "get_usage_summary":
@@ -662,6 +757,11 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         method: "DELETE",
         url: `/api/usage/model-pricing/${enc(a.modelId)}`,
       };
+    case "fetch_exchange_rates":
+      return { method: "GET", url: "/api/usage/exchange-rates" };
+    case "fetch_models_dev":
+      // `data` is the catalogue's JSON text; modelsDev.ts parses it itself.
+      return { method: "GET", url: "/api/usage/models-dev" };
     case "get_models_dev_sync_config":
       return { method: "GET", url: "/api/usage/models-dev/config" };
     case "save_models_dev_sync_config":
@@ -927,6 +1027,9 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: `${syncBase(cmd)}/settings`,
         body: { settings: a.settings, passwordTouched: a.passwordTouched },
       };
+    case "webdav_sync_clear_settings":
+    case "s3_sync_clear_settings":
+      return { method: "DELETE", url: `${syncBase(cmd)}/settings` };
     case "webdav_sync_fetch_remote_info":
     case "s3_sync_fetch_remote_info":
       return { method: "GET", url: `${syncBase(cmd)}/remote-info` };
@@ -1462,13 +1565,25 @@ async function streamSessionMessages(args: Args): Promise<void> {
   if (!res.ok || !res.body) {
     throw new Error(`Web API error (stream_session_messages): ${res.status}`);
   }
-  const deliver = (line: string) => {
-    if (!line.trim()) return;
-    const chunk = JSON.parse(line);
+  await readNdjson(res.body, (chunk) => {
     args.onChunk?.onmessage?.(chunk);
     if (chunk?.type === "error") throw new Error(String(chunk.message));
+  });
+}
+
+/**
+ * Reads an NDJSON body, calling `onLine` with each parsed non-blank line in order
+ * (a line may arrive split across chunks). A throw from `onLine` stops the read.
+ */
+async function readNdjson(
+  body: ReadableStream<Uint8Array>,
+  onLine: (parsed: any) => void,
+): Promise<void> {
+  const deliver = (line: string) => {
+    if (!line.trim()) return;
+    onLine(JSON.parse(line));
   };
-  const reader = res.body.getReader();
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let tail = "";
   for (;;) {
@@ -1485,6 +1600,68 @@ async function streamSessionMessages(args: Args): Promise<void> {
   }
   tail += decoder.decode();
   deliver(tail);
+}
+
+/**
+ * `start_mcp_connectivity_checks` over `POST /api/mcp/connectivity` (NDJSON). Line 1 is
+ * `{batchId}`; the promise resolves with it as soon as it arrives, and every further line
+ * (a `ConnectivityResult`) goes to `args.onResult.onmessage` until the server ends the
+ * stream. A read error after the batch id is logged and ends delivery.
+ */
+async function startMcpConnectivityChecks(args: Args): Promise<string> {
+  const url = "/api/mcp/connectivity";
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ serverIds: args.serverIds }),
+    });
+  } catch (e) {
+    throw new Error(`Web API unavailable (POST ${url}): ${String(e)}`);
+  }
+  if (!res.ok || !res.body) {
+    let message = `Web API error (start_mcp_connectivity_checks): ${res.status}`;
+    try {
+      const envelope = await res.json();
+      if (typeof envelope?.error === "string") message = envelope.error;
+    } catch {
+      // keep the status message
+    }
+    throw new Error(message);
+  }
+  const body = res.body;
+  return new Promise<string>((resolve, reject) => {
+    let batchId: string | null = null;
+    readNdjson(body, (line) => {
+      if (batchId === null) {
+        const id = line?.batchId;
+        if (typeof id !== "string" || !id) {
+          throw new Error(
+            "Web API error (start_mcp_connectivity_checks): no batch id",
+          );
+        }
+        batchId = id;
+        resolve(id);
+        return;
+      }
+      args.onResult?.onmessage?.(line);
+    }).then(
+      () => {
+        if (batchId === null) {
+          reject(
+            new Error(
+              "Web API error (start_mcp_connectivity_checks): empty stream",
+            ),
+          );
+        }
+      },
+      (e) => {
+        if (batchId === null) reject(e);
+        else console.warn("MCP connectivity stream ended with an error", e);
+      },
+    );
+  });
 }
 
 const TOOL_POLL_INTERVAL_MS = 2000;
@@ -1562,43 +1739,87 @@ async function runToolLifecycleAction(args: Args): Promise<void> {
   }
 }
 
+/**
+ * Silent local noops: desktop-only fire-and-forget calls that must not
+ * spam the console in web mode (tray, window theme, deep links).
+ * `plugin:*` commands are noops too (see `isLocalCommand`).
+ */
+const NOOP_COMMANDS: ReadonlySet<string> = new Set([
+  "tray_app_page_seen",
+  "take_tray_navigation",
+  "peek_pending_deeplink",
+  "ack_pending_deeplink",
+  "check_for_updates",
+  "update_tray_menu",
+  "set_window_theme",
+]);
+
+/**
+ * Browser-side commands with no HTTP endpoint, answered inside `invoke`.
+ * The one place they are defined: `invoke` dispatches through this map and
+ * `BROWSER_COMMANDS` (read by `isWebHandled` and the coverage guard) is its keys.
+ */
+const BROWSER_HANDLERS: ReadonlyMap<
+  string,
+  (args: Args) => unknown | Promise<unknown>
+> = new Map<string, (args: Args) => unknown | Promise<unknown>>([
+  // WEB-26: the server is never a portable build (no portable.ini next to an exe).
+  ["is_portable_mode", () => false],
+  ["open_external", (args) => openExternalInBrowser(args.url)],
+  ["copy_text_to_clipboard", (args) => copyTextInBrowser(args.text)],
+  ["stream_session_messages", (args) => streamSessionMessages(args)],
+  ["start_mcp_connectivity_checks", (args) => startMcpConnectivityChecks(args)],
+  ["run_tool_lifecycle_action", (args) => runToolLifecycleAction(args)],
+  [
+    "export_session_markdown",
+    (args) => {
+      downloadText(
+        args.defaultName,
+        args.content,
+        "text/markdown;charset=utf-8",
+      );
+      return args.defaultName;
+    },
+  ],
+]);
+
+/** Names of the browser-side commands. */
+export const BROWSER_COMMANDS: ReadonlySet<string> = new Set(
+  BROWSER_HANDLERS.keys(),
+);
+
+/** Every command `invoke` answers without a network round trip. */
+const LOCAL_COMMANDS: ReadonlySet<string> = new Set([
+  ...NOOP_COMMANDS,
+  ...BROWSER_COMMANDS,
+]);
+
+function isLocalCommand(cmd: string): boolean {
+  return LOCAL_COMMANDS.has(cmd) || cmd.startsWith("plugin:");
+}
+
+/**
+ * True when `invoke(cmd)` answers without throwing `WebUnsupportedError`:
+ * a local command or a `mapCommand` case. `mapCommand` is probed with empty
+ * args; a throw from inside a case means the case exists.
+ */
+export function isWebHandled(cmd: string): boolean {
+  if (isLocalCommand(cmd)) return true;
+  try {
+    return mapCommand(cmd, {}) !== null;
+  } catch {
+    return true;
+  }
+}
+
 /** Drop-in replacement for Tauri's `invoke` used by every `src/lib/api/*` module. */
 export async function invoke<T>(cmd: string, args: Args = {}): Promise<T> {
-  // Silent local noops: desktop-only fire-and-forget calls that must not
-  // spam the console in web mode (tray, window theme, deep links, plugin internals).
-  if (
-    cmd === "tray_app_page_seen" ||
-    cmd === "take_tray_navigation" ||
-    cmd === "peek_pending_deeplink" ||
-    cmd === "ack_pending_deeplink" ||
-    cmd === "check_for_updates" ||
-    cmd === "update_tray_menu" ||
-    cmd === "set_window_theme" ||
-    cmd.startsWith("plugin:")
-  ) {
+  if (NOOP_COMMANDS.has(cmd) || cmd.startsWith("plugin:")) {
     return null as T;
   }
   // Browser-side commands with no HTTP endpoint.
-  if (cmd === "is_portable_mode") {
-    // WEB-26: the server is never a portable build (no portable.ini next to an exe).
-    return false as T;
-  }
-  if (cmd === "open_external") {
-    return openExternalInBrowser(args.url) as T;
-  }
-  if (cmd === "copy_text_to_clipboard") {
-    return (await copyTextInBrowser(args.text)) as T;
-  }
-  if (cmd === "stream_session_messages") {
-    return (await streamSessionMessages(args)) as T;
-  }
-  if (cmd === "run_tool_lifecycle_action") {
-    return (await runToolLifecycleAction(args)) as T;
-  }
-  if (cmd === "export_session_markdown") {
-    downloadText(args.defaultName, args.content, "text/markdown;charset=utf-8");
-    return args.defaultName as T;
-  }
+  const browserHandler = BROWSER_HANDLERS.get(cmd);
+  if (browserHandler) return (await browserHandler(args)) as T;
   const mapped = mapCommand(cmd, args);
   if (!mapped) throw new WebUnsupportedError(cmd);
   const rawBody = mapped.body instanceof Blob;

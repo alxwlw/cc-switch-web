@@ -166,6 +166,11 @@ pub fn router_with_update(
             get(get_optimizer_config).put(set_optimizer_config),
         )
         .route("/api/settings/log", get(get_log_config).put(set_log_config))
+        .route(
+            "/api/settings/privacy-filter",
+            get(get_privacy_filter_config).put(set_privacy_filter_config),
+        )
+        .route("/api/config-status/:app", get(config_status))
         .route("/api/logs/tail", get(logs_tail))
         .route("/api/logs/download", get(logs_download))
         // universal providers (cross-app)
@@ -212,6 +217,11 @@ pub fn router_with_update(
         .route("/api/mcp/config", get(mcp_config))
         .route("/api/mcp/import", post(import_mcp))
         .route("/api/mcp/resync", post(resync_mcp))
+        .route("/api/mcp/connectivity", post(mcp_connectivity))
+        .route(
+            "/api/mcp/connectivity/:batch_id/cancel",
+            post(cancel_mcp_connectivity),
+        )
         // skills (unified store)
         .route("/api/skills/installed", get(list_skills))
         .route("/api/skills/toggle", post(toggle_skill))
@@ -242,6 +252,19 @@ pub fn router_with_update(
         .route("/api/skills/search", get(search_skills_sh))
         .route("/api/skills/repos", get(skill_repos).post(add_skill_repo))
         .route("/api/skills/repos/:owner/:name", delete(remove_skill_repo))
+        .route(
+            "/api/skills/repos/:owner/:name/discover",
+            get(discover_repo_skills),
+        )
+        .route(
+            "/api/skills/repo-tokens",
+            get(skill_repo_tokens).put(set_skill_repo_token),
+        )
+        .route(
+            "/api/skills/repo-tokens/:host",
+            delete(delete_skill_repo_token),
+        )
+        .route("/api/skills/refresh-metadata", post(refresh_skill_metadata))
         // plugins: every call runs the app's own CLI on the server host
         .route("/api/plugins/:app/installed", get(plugins_installed))
         .route("/api/plugins/:app/catalog", get(plugins_catalog))
@@ -268,6 +291,9 @@ pub fn router_with_update(
         .route("/api/sessions/stream", get(session_stream))
         .route("/api/sessions/image", post(session_image))
         .route("/api/sessions/block", post(session_block))
+        .route("/api/sessions/index/sync", post(session_index_sync))
+        .route("/api/sessions/search", post(session_search))
+        .route("/api/sessions/index", delete(session_index_clear))
         // usage
         .route("/api/usage/summary", get(usage_summary))
         .route("/api/usage/by-app", get(usage_by_app))
@@ -279,6 +305,8 @@ pub fn router_with_update(
         .route("/api/usage/request-logs", post(request_logs))
         .route("/api/usage/request-detail/:id", get(request_detail))
         .route("/api/usage/model-pricing", get(model_pricing))
+        .route("/api/usage/exchange-rates", get(exchange_rates))
+        .route("/api/usage/models-dev", get(models_dev_catalogue))
         .route("/api/usage/sync", post(sync_session_usage))
         .route("/api/usage/last-sync", get(session_usage_last_sync))
         .route("/api/usage/rebuild-codex", post(rebuild_codex_usage))
@@ -310,6 +338,7 @@ pub fn router_with_update(
         .route("/api/global-proxy/test", post(test_global_proxy))
         .route("/api/global-proxy/status", get(global_proxy_status))
         .route("/api/global-proxy/scan", post(scan_global_proxy))
+        .route("/api/global-proxy/diagnose", post(diagnose_global_proxy))
         // settings & environment
         .route("/api/settings", get(get_settings).put(save_settings))
         .route("/api/paths", get(paths))
@@ -336,6 +365,39 @@ pub fn router_with_update(
         )
         .route("/api/auth/:provider/default", put(auth_set_default))
         .route("/api/auth/:provider/logout", post(auth_logout))
+        .route(
+            "/api/claude-account/quota/:account_id",
+            get(claude_account_quota),
+        )
+        .route(
+            "/api/claude-account/default-plan",
+            get(claude_account_default_plan),
+        )
+        .route(
+            "/api/claude-account/login-switch",
+            get(claude_account_login_switch),
+        )
+        .route("/api/claude-account/paste", post(claude_account_paste))
+        // WorkBuddy accounts: import and read what the server host's own WorkBuddy login holds;
+        // opening the app and preparing a new login drive a GUI there, so they have no route
+        .route("/api/workbuddy/live-state", get(workbuddy_live_state))
+        .route(
+            "/api/workbuddy/import-current",
+            post(workbuddy_import_current),
+        )
+        .route(
+            "/api/workbuddy/accounts/:account_id/quota",
+            get(workbuddy_quota),
+        )
+        .route("/api/workbuddy/model-owners", get(workbuddy_model_owners))
+        // DeepSeek account login (device-style: the browser opens `authUrl`, the UI polls) and
+        // the account the Copilot CLI is signed in as
+        .route("/api/dsh/status", get(dsh_status))
+        .route("/api/dsh/sign-out", post(dsh_sign_out))
+        .route("/api/dsh/login", post(dsh_login_start))
+        .route("/api/dsh/login/:flow_id/poll", post(dsh_login_poll))
+        .route("/api/dsh/login/:flow_id/cancel", post(dsh_login_cancel))
+        .route("/api/copilot/cli-account", get(copilot_cli_account))
         // Kimi Code OAuth (WEB-02 stage 2): same manager and remove path as the desktop commands
         .route("/api/kimi/oauth/status", get(kimi_status))
         .route("/api/kimi/oauth/start", post(kimi_start))
@@ -624,7 +686,10 @@ pub fn router_with_update(
         .route("/api/sync/:backend/test", post(sync_test))
         .route("/api/sync/:backend/upload", post(sync_upload))
         .route("/api/sync/:backend/download", post(sync_download))
-        .route("/api/sync/:backend/settings", put(sync_save_settings))
+        .route(
+            "/api/sync/:backend/settings",
+            put(sync_save_settings).delete(sync_clear_settings),
+        )
         .route("/api/sync/:backend/remote-info", get(sync_remote_info))
         // Failover queue, breaker, health (WEB-01 stage 2)
         .route(
@@ -1111,6 +1176,28 @@ async fn set_rectifier_config(
     db_call!(state, "set rectifier config", |db| db
         .set_rectifier_config(&body.config)
         .map(|()| true))
+}
+
+async fn get_privacy_filter_config(State(state): State<SharedState>) -> ApiResult {
+    db_call!(state, "get privacy filter config", |db| db
+        .get_privacy_filter_config())
+}
+
+async fn set_privacy_filter_config(
+    State(state): State<SharedState>,
+    Json(body): Json<ConfigReq<crate::proxy::types::PrivacyFilterConfig>>,
+) -> ApiResult {
+    db_call!(state, "set privacy filter config", |db| {
+        crate::commands::set_privacy_filter_config_inner(db, &body.config)
+    })
+}
+
+async fn config_status(State(state): State<SharedState>, Path(app): Path<String>) -> ApiResult {
+    let app_type = app_type!(&app);
+    match crate::commands::get_config_status_inner(&state, app_type).await {
+        Ok(status) => ok(status),
+        Err(e) => fail(e),
+    }
 }
 
 async fn get_optimizer_config(State(state): State<SharedState>) -> ApiResult {
@@ -1649,6 +1736,71 @@ async fn import_mcp(State(state): State<SharedState>) -> ApiResult {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct McpConnectivityReq {
+    server_ids: Vec<String>,
+}
+
+/// The `on_result` callback and the receiver that feeds the response body. The callback
+/// returns `false` once `rx` is dropped (the body is gone), which stops the batch.
+fn mcp_result_channel() -> (
+    impl Fn(crate::services::mcp_connectivity::ConnectivityResult) -> bool + Send + 'static,
+    tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
+) {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+    let on_result = move |result| {
+        let mut line = serde_json::to_vec(&result).unwrap_or_default();
+        line.push(b'\n');
+        tx.send(line).is_ok()
+    };
+    (on_result, rx)
+}
+
+/// `start_mcp_connectivity_checks` over HTTP, NDJSON: line 1 is `{"batchId":"…"}`, then one
+/// serialized `ConnectivityResult` per server; the body ends when the batch ends.
+///
+/// Browser-gone path: the body stream owns the receiver `rx`. When the browser drops the
+/// connection axum drops the body, so `rx` is dropped, the next `tx.send(..)` in `on_result`
+/// fails and the closure returns `false`, which makes `mcp_connectivity::start_checks` stop
+/// the batch and drop the queued checks. The sender lives only in that closure, so the body
+/// also ends when the batch finishes or is cancelled (the closure is dropped).
+async fn mcp_connectivity(
+    State(state): State<SharedState>,
+    Json(body): Json<McpConnectivityReq>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let (on_result, rx) = mcp_result_channel();
+    let started =
+        crate::commands::start_mcp_connectivity_checks_inner(&state, body.server_ids, on_result)
+            .await;
+    let batch_id = match started {
+        Ok(id) => id,
+        Err(e) => return fail(e).into_response(),
+    };
+    // Results queued in `rx` before this point follow the batch id line.
+    let mut first = serde_json::to_vec(&json!({ "batchId": batch_id })).unwrap_or_default();
+    first.push(b'\n');
+    let results = futures::stream::unfold(rx, |mut rx| async move {
+        rx.recv().await.map(|line| (line, rx))
+    });
+    let stream = futures::StreamExt::map(
+        futures::StreamExt::chain(futures::stream::once(async move { first }), results),
+        |line| Ok::<_, std::io::Error>(axum::body::Bytes::from(line)),
+    );
+    (
+        [(header::CONTENT_TYPE, "application/x-ndjson")],
+        axum::body::Body::from_stream(stream),
+    )
+        .into_response()
+}
+
+/// Cancelling an unknown or already finished batch is not an error.
+async fn cancel_mcp_connectivity(Path(batch_id): Path<String>) -> ApiResult {
+    crate::services::mcp_connectivity::cancel_checks(&batch_id);
+    ok(Value::Null)
+}
+
+#[derive(Deserialize)]
 struct ResyncMcpReq {
     apps: Option<Vec<String>>,
 }
@@ -2078,6 +2230,61 @@ async fn remove_skill_repo(
     }
 }
 
+async fn discover_repo_skills(
+    State(state): State<SharedState>,
+    Path((owner, name)): Path<(String, String)>,
+) -> ApiResult {
+    match crate::commands::skill::discover_repo_skills_inner(
+        &SkillService::new(),
+        &state.db,
+        &owner,
+        &name,
+    )
+    .await
+    {
+        Ok(report) => ok(report),
+        Err(e) => fail(e),
+    }
+}
+
+// Skill repo access tokens: a token goes in through the PUT body and is never part of
+// any response; the list carries host names only and the set/delete answer the host.
+
+async fn skill_repo_tokens() -> ApiResult {
+    blocking_api("skill repo token list", || {
+        SkillService::new().repo_token_list()
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct SetSkillRepoTokenReq {
+    host: String,
+    token: String,
+}
+
+async fn set_skill_repo_token(Json(body): Json<SetSkillRepoTokenReq>) -> ApiResult {
+    blocking_api("skill repo token save", move || {
+        SkillService::new().set_repo_token(&body.host, &body.token)
+    })
+    .await
+}
+
+async fn delete_skill_repo_token(Path(host): Path<String>) -> ApiResult {
+    blocking_api("skill repo token delete", move || {
+        SkillService::new().delete_repo_token(&host)
+    })
+    .await
+}
+
+async fn refresh_skill_metadata(State(state): State<SharedState>) -> ApiResult {
+    let db = state.db.clone();
+    blocking_api("skill metadata refresh", move || {
+        SkillService::refresh_local_skill_metadata(&db)
+    })
+    .await
+}
+
 /// Test seam: serve this directory as the extracted repo root for every skill repo
 /// download (discover/install/updates/update) instead of fetching from GitHub.
 /// Production never sets it and no HTTP route reaches it.
@@ -2121,6 +2328,44 @@ async fn delete_session(Json(body): Json<DeleteOneSessionReq>) -> ApiResult {
         Ok(Ok(v)) => ok(v),
         Ok(Err(e)) => fail(e.to_string()),
         Err(e) => fail(format!("delete session failed: {e}")),
+    }
+}
+
+/// `POST /api/sessions/index/sync`: starts the background index sync and answers the current
+/// progress; later progress is published as `session-index-status` on the event hub.
+async fn session_index_sync(State(state): State<SharedState>) -> ApiResult {
+    let events = state.events.clone();
+    let started = tokio::task::spawn_blocking(move || {
+        session_manager::search::start_sync(move |status| {
+            events.emit(session_manager::search::INDEX_STATUS_EVENT, status)
+        })
+    })
+    .await;
+    match started {
+        Ok(status) => ok(status),
+        Err(e) => fail(format!("sync session index failed: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionSearchReq {
+    query: String,
+    provider_ids: Option<Vec<String>>,
+    limit: Option<usize>,
+}
+
+async fn session_search(Json(body): Json<SessionSearchReq>) -> ApiResult {
+    match crate::commands::search_session_content(body.query, body.provider_ids, body.limit).await {
+        Ok(result) => ok(result),
+        Err(e) => fail(e),
+    }
+}
+
+async fn session_index_clear() -> ApiResult {
+    match crate::commands::clear_session_index().await {
+        Ok(v) => ok(v),
+        Err(e) => fail(e),
     }
 }
 
@@ -2709,6 +2954,21 @@ async fn set_pricing_model_source(
     }
 }
 
+async fn exchange_rates() -> ApiResult {
+    match crate::commands::fetch_exchange_rates().await {
+        Ok(rates) => ok(rates),
+        Err(e) => fail(e),
+    }
+}
+
+/// `data` is the catalogue's JSON text, unparsed: the frontend parses it itself.
+async fn models_dev_catalogue() -> ApiResult {
+    match crate::commands::fetch_models_dev().await {
+        Ok(text) => ok(text),
+        Err(e) => fail(e),
+    }
+}
+
 async fn model_pricing(State(state): State<SharedState>) -> ApiResult {
     let db = state.db.clone();
     match tokio::task::spawn_blocking(move || {
@@ -2800,12 +3060,23 @@ async fn auth_login(
         &provider,
         body.github_domain.as_deref(),
         body.target_account_id.as_deref(),
-        body.login_method.as_deref(),
+        web_login_method(&provider, body.login_method.as_deref()),
     )
     .await
     {
         Ok(r) => ok(r),
         Err(e) => fail(e),
+    }
+}
+
+/// Login method handed to `start_login_inner`. The browser of a web session is not on the
+/// server host, so the landing redirect of `claude auth login` cannot reach it: Claude
+/// always runs in `copy_link` mode and finishes through the pasted URL or code.
+fn web_login_method<'a>(provider: &str, requested: Option<&'a str>) -> Option<&'a str> {
+    if provider == crate::commands::AUTH_PROVIDER_CLAUDE_OFFICIAL {
+        Some("copy_link")
+    } else {
+        requested
     }
 }
 
@@ -2851,6 +3122,134 @@ async fn auth_cancel(
         Ok(r) => ok(r),
         // the only inner error is "provider has no cancellable flow"
         Err(e) => bad_request(e),
+    }
+}
+
+async fn claude_account_quota(
+    State(state): State<SharedState>,
+    Path(account_id): Path<String>,
+) -> ApiResult {
+    match crate::commands::get_claude_account_quota_inner(&state, account_id).await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn claude_account_default_plan() -> ApiResult {
+    match crate::commands::get_claude_default_plan().await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn claude_account_login_switch() -> ApiResult {
+    match crate::commands::get_claude_login_switch().await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClaudePasteBody {
+    flow_id: String,
+    pasted: String,
+}
+
+async fn claude_account_paste(
+    State(state): State<SharedState>,
+    Json(body): Json<ClaudePasteBody>,
+) -> ApiResult {
+    match state
+        .claude_account
+        .submit_paste(&body.flow_id, &body.pasted)
+        .await
+    {
+        Ok(()) => ok(serde_json::Value::Null),
+        Err(e) => fail(e),
+    }
+}
+
+async fn workbuddy_live_state(State(state): State<SharedState>) -> ApiResult {
+    match crate::commands::workbuddy_live_state_inner(&state.workbuddy_account).await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn workbuddy_import_current(State(state): State<SharedState>) -> ApiResult {
+    match crate::commands::workbuddy_import_current_inner(&state.workbuddy_account).await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct WorkBuddyQuotaQuery {
+    force: Option<bool>,
+}
+
+async fn workbuddy_quota(
+    State(state): State<SharedState>,
+    Path(account_id): Path<String>,
+    Query(q): Query<WorkBuddyQuotaQuery>,
+) -> ApiResult {
+    match crate::commands::workbuddy_quota_inner(
+        &state.workbuddy_account,
+        account_id,
+        q.force.unwrap_or(false),
+    )
+    .await
+    {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn workbuddy_model_owners() -> ApiResult {
+    match crate::commands::workbuddy_model_owners().await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn dsh_status() -> ApiResult {
+    match crate::commands::dsh_account_status().await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn dsh_sign_out() -> ApiResult {
+    match crate::commands::dsh_account_sign_out().await {
+        Ok(()) => ok(serde_json::Value::Null),
+        Err(e) => fail(e),
+    }
+}
+
+async fn dsh_login_start() -> ApiResult {
+    match crate::commands::dsh_account_login_start().await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn dsh_login_poll(Path(flow_id): Path<String>) -> ApiResult {
+    match crate::commands::dsh_account_login_poll(flow_id) {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
+    }
+}
+
+async fn dsh_login_cancel(Path(flow_id): Path<String>) -> ApiResult {
+    crate::commands::dsh_account_login_cancel(flow_id);
+    ok(serde_json::Value::Null)
+}
+
+async fn copilot_cli_account(State(state): State<SharedState>) -> ApiResult {
+    match crate::commands::copilot_cli_signed_in_account_inner(&state).await {
+        Ok(r) => ok(r),
+        Err(e) => fail(e),
     }
 }
 
@@ -3147,6 +3546,14 @@ async fn global_proxy_status() -> ApiResult {
     ok(status)
 }
 
+/// An empty `url` inspects the system route, as on desktop; a malformed one is `invalidProxy`.
+async fn diagnose_global_proxy(Json(body): Json<GlobalProxyBody>) -> ApiResult {
+    match crate::commands::diagnose_ip(body.url).await {
+        Ok(report) => ok(report),
+        Err(e) => bad_request(e),
+    }
+}
+
 async fn scan_global_proxy() -> ApiResult {
     ok(crate::commands::scan_local_proxies().await)
 }
@@ -3408,7 +3815,10 @@ fn tool_jobs() -> std::sync::MutexGuard<'static, std::collections::HashMap<Strin
 /// can outlast what a browser keeps one request open for. Answers `{jobId}`; every command
 /// error (including the stable `TOOL_ACTION_IN_PROGRESS` / `TOOL_ACTION_TIMEOUT` codes)
 /// reaches the client verbatim through `GET /api/tools/lifecycle/:job_id`.
-async fn tool_lifecycle(Json(body): Json<ToolLifecycleReq>) -> ApiResult {
+async fn tool_lifecycle(
+    State(state): State<SharedState>,
+    Json(body): Json<ToolLifecycleReq>,
+) -> ApiResult {
     let job_id = uuid::Uuid::new_v4().to_string();
     {
         let mut jobs = tool_jobs();
@@ -3426,8 +3836,10 @@ async fn tool_lifecycle(Json(body): Json<ToolLifecycleReq>) -> ApiResult {
         );
     }
     let id = job_id.clone();
+    let events = state.events.clone();
     tokio::spawn(async move {
         let result = crate::commands::misc::run_tool_lifecycle_action_headless(
+            events,
             body.tools,
             body.action,
             body.wsl_shell_by_tool,
@@ -5175,6 +5587,14 @@ async fn sync_save_settings(
     }
 }
 
+async fn sync_clear_settings(Path(backend): Path<String>) -> ApiResult {
+    match parse_sync_backend(&backend) {
+        Ok(SyncBackend::Webdav) => sync_result(crate::commands::webdav_sync_clear_settings().await),
+        Ok(SyncBackend::S3) => sync_result(crate::commands::s3_sync_clear_settings().await),
+        Err(r) => r,
+    }
+}
+
 async fn sync_upload(State(state): State<SharedState>, Path(backend): Path<String>) -> ApiResult {
     match parse_sync_backend(&backend) {
         Ok(SyncBackend::Webdav) => {
@@ -5293,14 +5713,28 @@ async fn failover_set_auto(
 #[cfg(test)]
 mod tests {
     use super::{
-        capabilities, capabilities_payload, get, update_check_with, web_oauth_account_param, Json,
-        Router,
+        capabilities, capabilities_payload, get, update_check_with, web_login_method,
+        web_oauth_account_param, Json, Router,
     };
     use crate::services::web_update::WebVersion;
     use axum::http::StatusCode;
     use std::sync::Arc;
 
     const URL: &str = "https://github.com/example/fork";
+
+    #[test]
+    fn web_login_method_forces_copy_link_for_claude() {
+        assert_eq!(web_login_method("claude_official", None), Some("copy_link"));
+        assert_eq!(
+            web_login_method("claude_official", Some("device_code")),
+            Some("copy_link")
+        );
+        assert_eq!(
+            web_login_method("github_copilot", Some("device_code")),
+            Some("device_code")
+        );
+        assert_eq!(web_login_method("codex_oauth", None), None);
+    }
 
     #[test]
     fn capabilities_payload_carries_the_given_build_sha() {
@@ -5459,5 +5893,30 @@ mod tests {
             web_oauth_account_param("  acc-123  "),
             Some("acc-123".to_string())
         );
+    }
+}
+
+#[cfg(test)]
+mod mcp_result_channel_tests {
+    use super::mcp_result_channel;
+    use crate::services::mcp_connectivity::{ConnectivityResult, ConnectivityStatus};
+
+    fn result() -> ConnectivityResult {
+        ConnectivityResult {
+            server_id: "s".into(),
+            status: ConnectivityStatus::Failed,
+        }
+    }
+
+    #[test]
+    fn callback_declines_once_the_body_is_dropped() {
+        let (on_result, mut rx) = mcp_result_channel();
+        assert!(on_result(result()));
+        assert_eq!(
+            rx.try_recv().unwrap(),
+            b"{\"serverId\":\"s\",\"status\":\"failed\"}\n".to_vec()
+        );
+        drop(rx); // axum dropped the body: the browser is gone
+        assert!(!on_result(result()));
     }
 }

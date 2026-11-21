@@ -254,6 +254,30 @@ describe("UnifiedSkillsPanel", () => {
     expect(columns()).toHaveLength(2);
   });
 
+  it.each([
+    [true, false],
+    [false, true],
+  ])(
+    "row menu offers the open-folder action only on desktop (web=%s)",
+    async (web, offered) => {
+      setWeb(web);
+      m.installed = [makeSkill()];
+      renderPanel();
+      await userEvent.click(
+        screen.getByRole("button", { name: /skillsPage.rowMoreAria/ }),
+      );
+      // the sibling item proves the menu is open before the absence is asserted
+      expect(
+        await screen.findByRole("menuitem", {
+          name: "skillsPage.uninstallEllipsis",
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("menuitem", { name: "skillsPage.openDir" }) !== null,
+      ).toBe(offered);
+    },
+  );
+
   it("distinguishes an empty list from a search miss", async () => {
     renderPanel();
     expect(screen.getByText("skillsPage.emptyTitle")).toBeInTheDocument();
