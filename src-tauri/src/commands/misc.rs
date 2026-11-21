@@ -507,15 +507,17 @@ pub async fn run_tool_lifecycle_action(
 }
 
 /// Same as the desktop command but without an `AppHandle` (web route): progress events are
-/// dropped, the lifecycle lock, timeout and error codes are shared.
+/// published on the event hub (`tool-lifecycle-progress`), the lifecycle lock, timeout and error codes are shared.
 pub async fn run_tool_lifecycle_action_headless(
+    events: crate::events::EventHub,
     tools: Vec<String>,
     action: String,
     wsl_shell_by_tool: Option<HashMap<String, WslShellPreferenceInput>>,
     uninstall_plan: Option<ToolUninstallPlan>,
 ) -> Result<(), String> {
     let requested = normalize_requested_tools(&tools);
-    let progress = ToolLifecycleProgress::with_sink(&requested, Arc::new(|_| {}));
+    let progress =
+        ToolLifecycleProgress::with_sink(&requested, tool_lifecycle_progress::hub_sink(events));
     run_tool_lifecycle_action_with_progress(
         progress,
         tools,

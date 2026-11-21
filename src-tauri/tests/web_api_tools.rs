@@ -118,6 +118,40 @@ async fn install_runs_the_overridden_script_and_the_job_ends_done() {
 
 #[tokio::test]
 #[serial]
+async fn install_publishes_progress_on_the_event_hub() {
+    let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
+    reset_test_fs();
+    let _reset = set_script("echo hello-progress");
+    let state = std::sync::Arc::new(support::create_test_state().unwrap());
+    let mut rx = state.events.subscribe();
+    let router = support::web_router_with(state.clone());
+
+    let (job_state, error) = run_job(&router, install_body("claude")).await;
+    assert_eq!(job_state, "done", "{error}");
+
+    let mut payloads = Vec::new();
+    while let Ok(event) = rx.try_recv() {
+        if event.name == "tool-lifecycle-progress" {
+            payloads.push(event.payload);
+        }
+    }
+    assert!(!payloads.is_empty(), "no tool-lifecycle-progress event");
+    for payload in &payloads {
+        assert_eq!(payload["tools"], json!(["claude"]), "{payload}");
+    }
+    assert!(
+        payloads.iter().any(|p| {
+            p["stage"] == json!("output")
+                && p["line"]
+                    .as_str()
+                    .is_some_and(|l| l.contains("hello-progress"))
+        }),
+        "no output event carrying the script line: {payloads:?}"
+    );
+}
+
+#[tokio::test]
+#[serial]
 async fn failing_script_fails_the_job_with_its_stderr() {
     let _guard = test_mutex().lock().unwrap_or_else(|e| e.into_inner());
     reset_test_fs();

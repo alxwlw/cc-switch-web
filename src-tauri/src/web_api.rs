@@ -3815,7 +3815,10 @@ fn tool_jobs() -> std::sync::MutexGuard<'static, std::collections::HashMap<Strin
 /// can outlast what a browser keeps one request open for. Answers `{jobId}`; every command
 /// error (including the stable `TOOL_ACTION_IN_PROGRESS` / `TOOL_ACTION_TIMEOUT` codes)
 /// reaches the client verbatim through `GET /api/tools/lifecycle/:job_id`.
-async fn tool_lifecycle(Json(body): Json<ToolLifecycleReq>) -> ApiResult {
+async fn tool_lifecycle(
+    State(state): State<SharedState>,
+    Json(body): Json<ToolLifecycleReq>,
+) -> ApiResult {
     let job_id = uuid::Uuid::new_v4().to_string();
     {
         let mut jobs = tool_jobs();
@@ -3833,8 +3836,10 @@ async fn tool_lifecycle(Json(body): Json<ToolLifecycleReq>) -> ApiResult {
         );
     }
     let id = job_id.clone();
+    let events = state.events.clone();
     tokio::spawn(async move {
         let result = crate::commands::misc::run_tool_lifecycle_action_headless(
+            events,
             body.tools,
             body.action,
             body.wsl_shell_by_tool,
