@@ -247,6 +247,19 @@ pub fn router_with_update(
         .route("/api/skills/search", get(search_skills_sh))
         .route("/api/skills/repos", get(skill_repos).post(add_skill_repo))
         .route("/api/skills/repos/:owner/:name", delete(remove_skill_repo))
+        .route(
+            "/api/skills/repos/:owner/:name/discover",
+            get(discover_repo_skills),
+        )
+        .route(
+            "/api/skills/repo-tokens",
+            get(skill_repo_tokens).put(set_skill_repo_token),
+        )
+        .route(
+            "/api/skills/repo-tokens/:host",
+            delete(delete_skill_repo_token),
+        )
+        .route("/api/skills/refresh-metadata", post(refresh_skill_metadata))
         // plugins: every call runs the app's own CLI on the server host
         .route("/api/plugins/:app/installed", get(plugins_installed))
         .route("/api/plugins/:app/catalog", get(plugins_catalog))
@@ -2142,6 +2155,61 @@ async fn remove_skill_repo(
         Ok(()) => ok(true),
         Err(e) => fail(e.to_string()),
     }
+}
+
+async fn discover_repo_skills(
+    State(state): State<SharedState>,
+    Path((owner, name)): Path<(String, String)>,
+) -> ApiResult {
+    match crate::commands::skill::discover_repo_skills_inner(
+        &SkillService::new(),
+        &state.db,
+        &owner,
+        &name,
+    )
+    .await
+    {
+        Ok(report) => ok(report),
+        Err(e) => fail(e),
+    }
+}
+
+// Skill repo access tokens: a token goes in through the PUT body and is never part of
+// any response; the list carries host names only and the set/delete answer the host.
+
+async fn skill_repo_tokens() -> ApiResult {
+    blocking_api("skill repo token list", || {
+        SkillService::new().repo_token_list()
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct SetSkillRepoTokenReq {
+    host: String,
+    token: String,
+}
+
+async fn set_skill_repo_token(Json(body): Json<SetSkillRepoTokenReq>) -> ApiResult {
+    blocking_api("skill repo token save", move || {
+        SkillService::new().set_repo_token(&body.host, &body.token)
+    })
+    .await
+}
+
+async fn delete_skill_repo_token(Path(host): Path<String>) -> ApiResult {
+    blocking_api("skill repo token delete", move || {
+        SkillService::new().delete_repo_token(&host)
+    })
+    .await
+}
+
+async fn refresh_skill_metadata(State(state): State<SharedState>) -> ApiResult {
+    let db = state.db.clone();
+    blocking_api("skill metadata refresh", move || {
+        SkillService::refresh_local_skill_metadata(&db)
+    })
+    .await
 }
 
 /// Test seam: serve this directory as the extracted repo root for every skill repo

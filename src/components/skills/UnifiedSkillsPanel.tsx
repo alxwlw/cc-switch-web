@@ -1359,7 +1359,10 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
                     onUpdate={() => void updateIds([skill.id])}
                     onOpenDocs={() => void openDocs(skill)}
                     onCopyName={() => void copyName(skill)}
-                    onOpenDir={() => void openDirectory(skill)}
+                    // desktop only: the server host's file manager is not the viewer's
+                    onOpenDir={
+                      isWeb ? undefined : () => void openDirectory(skill)
+                    }
                     onUninstall={() => {
                       if (writeLockRef.current || interactionBlocked) return;
                       setConfirm({ kind: "uninstall", ids: [skill.id] });
@@ -1844,7 +1847,8 @@ interface InstalledRowProps {
   onUpdate: () => void;
   onOpenDocs: () => void;
   onCopyName: () => void;
-  onOpenDir: () => void;
+  /** Absent in web: the folder lives on the server host, not on the viewer's machine. */
+  onOpenDir?: () => void;
   onUninstall: () => void;
 }
 
@@ -2040,9 +2044,11 @@ function InstalledRow({
                 {t("mcpPage.openDocs")}
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onSelect={onOpenDir}>
-              {t("skillsPage.openDir")}
-            </DropdownMenuItem>
+            {onOpenDir && (
+              <DropdownMenuItem onSelect={onOpenDir}>
+                {t("skillsPage.openDir")}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-danger-text focus:text-danger-text"

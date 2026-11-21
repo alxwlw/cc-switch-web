@@ -554,6 +554,26 @@ function mapCommand(cmd: string, a: Args): Endpoint | null {
         url: `/api/skills/repos/${enc(a.owner)}/${enc(a.name)}`,
       };
     // the browser file is the raw request body; the server reads the name from the query
+    case "get_skill_repo_tokens":
+      return { method: "GET", url: "/api/skills/repo-tokens" };
+    case "set_skill_repo_token":
+      return {
+        method: "PUT",
+        url: "/api/skills/repo-tokens",
+        body: { host: a.host, token: a.token },
+      };
+    case "delete_skill_repo_token":
+      return {
+        method: "DELETE",
+        url: `/api/skills/repo-tokens/${enc(a.host)}`,
+      };
+    case "discover_repo_skills":
+      return {
+        method: "GET",
+        url: `/api/skills/repos/${enc(a.owner)}/${enc(a.name)}/discover`,
+      };
+    case "refresh_local_skill_metadata":
+      return { method: "POST", url: "/api/skills/refresh-metadata" };
     case "web_install_skills_from_zip_upload":
       return {
         method: "POST",

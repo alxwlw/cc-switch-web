@@ -54,11 +54,6 @@ const PENDING = new Set([
   // Task 3
   // Task 5
   // Task 7
-  "get_skill_repo_tokens",
-  "set_skill_repo_token",
-  "delete_skill_repo_token",
-  "discover_repo_skills",
-  "refresh_local_skill_metadata",
   // Task 8
   "start_mcp_connectivity_checks",
   "cancel_mcp_connectivity_checks",
